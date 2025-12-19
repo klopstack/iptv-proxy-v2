@@ -3,7 +3,7 @@ Channel sync service for synchronizing channels from IPTV providers to local dat
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 
 from models import Account, Category, Channel, db
@@ -28,7 +28,7 @@ class ChannelSyncService:
         Returns:
             Dict with sync statistics
         """
-        account = Account.query.get(account_id)
+        account = db.session.get(Account, account_id)
         if not account:
             return {"success": False, "error": "Account not found"}
 
@@ -71,7 +71,7 @@ class ChannelSyncService:
 
             # Mark channels not seen in this sync as inactive
             if stats["success"]:
-                cutoff_time = datetime.utcnow() - timedelta(minutes=5)
+                cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=5)
                 deactivated = Channel.query.filter(
                     Channel.account_id == account_id, Channel.is_active, Channel.last_seen < cutoff_time
                 ).update({"is_active": False})
@@ -109,7 +109,7 @@ class ChannelSyncService:
     @staticmethod
     def _sync_categories(account_id: int, categories: List[Dict], stats: Dict) -> Dict:
         """Sync categories for an account"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Build lookup of existing categories
         existing = {(cat.category_id): cat for cat in Category.query.filter_by(account_id=account_id).all()}
@@ -148,10 +148,10 @@ class ChannelSyncService:
     @staticmethod
     def _sync_channels(account_id: int, channels: List[Dict], stats: Dict) -> Dict:
         """Sync channels for an account"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Get account for tag rules
-        account = Account.query.get(account_id)
+        account = db.session.get(Account, account_id)
         if not account:
             return stats
 

@@ -5,7 +5,7 @@ Background scheduler for periodic channel synchronization
 import logging
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from models import Account
 from services.sync_service import ChannelSyncService
@@ -68,7 +68,7 @@ class SyncScheduler:
     def _sync_all(self):
         """Sync all enabled accounts"""
         with self.app.app_context():
-            logger.info(f"Starting scheduled sync at {datetime.utcnow()}")
+            logger.info(f"Starting scheduled sync at {datetime.now(timezone.utc)}")
 
             accounts = Account.query.filter_by(enabled=True).all()
             for account in accounts:
@@ -84,4 +84,4 @@ class SyncScheduler:
                 except Exception as e:
                     logger.error(f"Error syncing account {account.name}: {e}")
 
-            logger.info(f"Scheduled sync completed at {datetime.utcnow()}")
+            logger.info(f"Scheduled sync completed at {datetime.now(timezone.utc)}")

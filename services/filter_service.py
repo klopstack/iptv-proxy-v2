@@ -28,7 +28,7 @@ class FilterService:
         Returns:
             Dict with statistics
         """
-        account = Account.query.get(account_id)
+        account = db.session.get(Account, account_id)
         if not account:
             return {"success": False, "error": "Account not found"}
 

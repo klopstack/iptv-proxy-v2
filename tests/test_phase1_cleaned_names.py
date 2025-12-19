@@ -136,7 +136,7 @@ def test_cleaned_name_stored_in_database(app, test_account, test_ruleset):
         db.session.expire_all()
 
         # Verify cleaned name persisted
-        reloaded = Channel.query.get(channel_id)
+        reloaded = db.session.get(Channel, channel_id)
         assert reloaded is not None
         assert reloaded.cleaned_name == "ESPN Sports"
         assert reloaded.name == "US| ESPN Sports ᴴᴰ"

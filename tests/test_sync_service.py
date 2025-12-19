@@ -3,7 +3,7 @@ Tests for Channel Sync Service
 """
 
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 import pytest
@@ -238,7 +238,7 @@ class TestChannelSyncService:
                 name="Old ESPN Name",
                 category_id="1",
                 is_active=True,
-                last_seen=datetime.utcnow(),
+                last_seen=datetime.now(timezone.utc),
             )
             db.session.add(existing_channel)
             db.session.commit()
@@ -282,7 +282,7 @@ class TestChannelSyncService:
                 name="Old Channel",
                 category_id="1",
                 is_active=True,
-                last_seen=datetime.utcnow() - timedelta(hours=1),  # Old timestamp
+                last_seen=datetime.now(timezone.utc) - timedelta(hours=1),  # Old timestamp
             )
             db.session.add(old_channel)
             db.session.commit()

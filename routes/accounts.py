@@ -2,6 +2,7 @@
 Account management routes
 """
 import logging
+from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 
@@ -175,7 +176,7 @@ def get_account_categories(account_id):
 
 def _process_tags_for_account(account_id, streams, categories):
     """Helper function to process tags for an account (internal use)"""
-    account = Account.query.get(account_id)
+    account = db.session.get(Account, account_id)
     if not account:
         return
 
@@ -306,7 +307,7 @@ def get_sync_status(account_id):
     # Get channel count and last sync time from database
     channel_count = Channel.query.filter_by(account_id=account_id, is_active=True).count()
 
-    account = Account.query.get(account_id)
+    account = db.session.get(Account, account_id)
     last_sync = account.updated_at if account else None
 
     return jsonify(
@@ -326,9 +327,8 @@ def get_sync_status(account_id):
 @accounts_bp.route("/api/accounts/<int:account_id>/process-tags", methods=["POST"])
 def process_account_tags(account_id):
     """Process tags for an account's channels"""
-    from datetime import datetime
 
-    account = Account.query.get_or_404(account_id)
+    account = db.session.get(Account, account_id)
 
     # Check if channels are synced to database
     db_channels = Channel.query.filter_by(account_id=account_id, is_active=True).all()
@@ -337,7 +337,7 @@ def process_account_tags(account_id):
         return jsonify({"success": False, "error": "Account not synced. Please sync channels first."}), 503
 
     # Mark start time for this processing run
-    processing_start = datetime.utcnow()
+    processing_start = datetime.now(timezone.utc)
 
     # Get tag rules for this account
     tag_rules = TagService.get_rules_for_account(account)

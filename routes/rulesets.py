@@ -246,7 +246,7 @@ def create_tag_rule():
     data = request.validated_data
 
     # Verify ruleset exists (already validated by schema, but check existence)
-    ruleset = RuleSet.query.get(data["ruleset_id"])
+    ruleset = db.session.get(RuleSet, data["ruleset_id"])
     if not ruleset:
         return jsonify({"error": f"RuleSet {data['ruleset_id']} not found"}), 404
 

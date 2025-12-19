@@ -162,7 +162,7 @@ class TestRulesetRetrieval:
     def test_get_rules_for_account_with_assigned_ruleset(self, test_app, sample_account, sample_ruleset):
         """Test getting rules for account with assigned ruleset"""
         with app.app_context():
-            account = Account.query.get(sample_account)
+            account = db.session.get(Account, sample_account)
             rules = TagService.get_rules_for_account(account)
 
             # Should have 3 rules from the test ruleset
