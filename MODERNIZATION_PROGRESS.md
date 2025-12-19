@@ -179,4 +179,3 @@ After refactoring each template:
 - [ ] No JavaScript errors in console
 - [ ] ESLint shows no unused function errors
 - [ ] All event handlers fire correctly
-

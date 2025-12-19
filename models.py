@@ -123,7 +123,7 @@ class Category(db.Model):
     category_id = db.Column(db.String(50), nullable=False)  # External category ID from provider
     category_name = db.Column(db.String(200), nullable=False)
     parent_id = db.Column(db.Integer, nullable=True)
-    
+
     # Sync metadata
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
     is_active = db.Column(db.Boolean, default=True)

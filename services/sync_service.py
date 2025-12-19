@@ -77,14 +77,17 @@ class ChannelSyncService:
                 ).update({"is_active": False})
                 db.session.commit()
                 stats["channels_deactivated"] = deactivated
-                
+
                 # Compute filter visibility after sync
                 try:
                     from services.filter_service import FilterService
+
                     filter_stats = FilterService.compute_visibility_for_account(account_id)
                     stats["channels_visible"] = filter_stats.get("channels_visible", 0)
                     stats["channels_hidden"] = filter_stats.get("channels_hidden", 0)
-                    logger.info(f"Filter visibility computed: {stats['channels_visible']} visible, {stats['channels_hidden']} hidden")
+                    logger.info(
+                        f"Filter visibility computed: {stats['channels_visible']} visible, {stats['channels_hidden']} hidden"
+                    )
                 except Exception as e:
                     logger.error(f"Error computing filter visibility after sync: {e}")
                     stats["errors"].append(f"Filter visibility error: {str(e)}")
@@ -109,10 +112,7 @@ class ChannelSyncService:
         now = datetime.utcnow()
 
         # Build lookup of existing categories
-        existing = {
-            (cat.category_id): cat
-            for cat in Category.query.filter_by(account_id=account_id).all()
-        }
+        existing = {(cat.category_id): cat for cat in Category.query.filter_by(account_id=account_id).all()}
 
         for cat_data in categories:
             category_id = str(cat_data.get("category_id", ""))
@@ -154,25 +154,18 @@ class ChannelSyncService:
         account = Account.query.get(account_id)
         if not account:
             return stats
-        
+
         # Get tag rules for name cleaning
         tag_rules = TagService.get_rules_for_account(account)
 
         # Build lookup of existing channels
-        existing = {
-            (chan.stream_id): chan
-            for chan in Channel.query.filter_by(account_id=account_id).all()
-        }
+        existing = {(chan.stream_id): chan for chan in Channel.query.filter_by(account_id=account_id).all()}
 
         # Build lookup of categories (both ID mapping and name mapping)
-        categories = {
-            cat.category_id: cat.id
-            for cat in Category.query.filter_by(account_id=account_id).all()
-        }
-        
+        categories = {cat.category_id: cat.id for cat in Category.query.filter_by(account_id=account_id).all()}
+
         category_names = {
-            cat.category_id: cat.category_name
-            for cat in Category.query.filter_by(account_id=account_id).all()
+            cat.category_id: cat.category_name for cat in Category.query.filter_by(account_id=account_id).all()
         }
 
         for chan_data in channels:
@@ -189,7 +182,7 @@ class ChannelSyncService:
             if cat_id_str and cat_id_str in categories:
                 category_id = categories[cat_id_str]
                 category_name = category_names.get(cat_id_str, "")
-            
+
             # Compute cleaned name using tag rules
             _, cleaned_name = TagService.extract_tags(name, category_name, tag_rules)
 

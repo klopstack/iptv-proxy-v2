@@ -124,7 +124,7 @@ class TestFilters:
         if response.status_code != 201:
             print(f"Response status: {response.status_code}")
             print(f"Response data: {response.get_json()}")
-        
+
         assert response.status_code == 201
         data = response.json
         assert data["name"] == "UK Only"
@@ -178,6 +178,7 @@ class TestFilters:
         # Verify it's gone
         response = client.get("/api/filters")
         assert len(response.json) == 0
+
 
 class TestAPI:
     """Test API endpoints"""

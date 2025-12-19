@@ -73,7 +73,9 @@ def get_tags():
             else:
                 count = ChannelTag.query.filter_by(tag_id=tag.id).count()
 
-            result.append({"id": tag.id, "name": tag.name, "created_at": tag.created_at.isoformat(), "channel_count": count})
+            result.append(
+                {"id": tag.id, "name": tag.name, "created_at": tag.created_at.isoformat(), "channel_count": count}
+            )
         return jsonify(result)
     else:
         return jsonify([{"id": t.id, "name": t.name, "created_at": t.created_at.isoformat()} for t in tags])
@@ -165,4 +167,13 @@ def preview_channels():
             }
         )
 
-    return jsonify({"total": total, "offset": offset, "limit": limit, "showing": len(result), "channels": result, "has_more": offset + limit < total})
+    return jsonify(
+        {
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "showing": len(result),
+            "channels": result,
+            "has_more": offset + limit < total,
+        }
+    )

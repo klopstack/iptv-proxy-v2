@@ -306,7 +306,7 @@ def generate_playlist_from_config(config_id):
     Requires accounts to be synced before playlist generation.
     """
     config = PlaylistConfig.query.get_or_404(config_id)
-    
+
     if not config.enabled:
         raise PermissionError("Playlist configuration is disabled")
 
@@ -365,7 +365,9 @@ def generate_playlist_from_config(config_id):
                 if config.tag_match_mode == "all":
                     # Must have ALL include tags
                     tag_counts = (
-                        db.session.query(ChannelTag.stream_id, db.func.count(db.func.distinct(Tag.id)).label("tag_count"))
+                        db.session.query(
+                            ChannelTag.stream_id, db.func.count(db.func.distinct(Tag.id)).label("tag_count")
+                        )
                         .join(Tag, ChannelTag.tag_id == Tag.id)
                         .filter(ChannelTag.account_id == account.id, Tag.name.in_(include_tags))
                         .group_by(ChannelTag.stream_id)
@@ -411,7 +413,9 @@ def generate_playlist_from_config(config_id):
             m3u_lines.append(stream_url)
             total_channels += 1
 
-    logger.info(f"Generated playlist from config {config_id} ({config.name}): {total_channels} channels from {len(accounts)} accounts")
+    logger.info(
+        f"Generated playlist from config {config_id} ({config.name}): {total_channels} channels from {len(accounts)} accounts"
+    )
     return Response("\n".join(m3u_lines), mimetype="application/x-mpegurl")
 
 
@@ -420,7 +424,7 @@ def generate_playlist_from_config(config_id):
 def proxy_epg(account_id):
     """Proxy EPG/XMLTV for account"""
     account = Account.query.get_or_404(account_id)
-    
+
     if not account.enabled:
         raise PermissionError("Account is disabled")
 

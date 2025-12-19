@@ -13,25 +13,26 @@ def get_description():
 def migrate(db_path):
     """
     Add channels and categories tables.
-    
+
     Args:
         db_path: Path to the SQLite database
-        
+
     Returns:
         tuple: (success: bool, message: str)
     """
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        
+
         # Check if already applied
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='channels'")
         if cursor.fetchone():
             conn.close()
             return (True, "Tables already exist, skipping")
-        
+
         # Create categories table
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS categories (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 account_id INTEGER NOT NULL,
@@ -45,12 +46,14 @@ def migrate(db_path):
                 FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
                 CONSTRAINT _account_category_uc UNIQUE (account_id, category_id)
             )
-        """)
-        
+        """
+        )
+
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_category_account ON categories(account_id)")
-        
+
         # Create channels table
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS channels (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 account_id INTEGER NOT NULL,
@@ -73,17 +76,18 @@ def migrate(db_path):
                 FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
                 CONSTRAINT _account_stream_uc UNIQUE (account_id, stream_id)
             )
-        """)
-        
+        """
+        )
+
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_channel_account ON channels(account_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_channel_name ON channels(name)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_channel_category ON channels(category_id)")
-        
+
         conn.commit()
         conn.close()
-        
+
         return (True, "Created channels and categories tables successfully")
-        
+
     except Exception as e:
         if conn:
             conn.close()

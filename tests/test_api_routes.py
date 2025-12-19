@@ -28,11 +28,7 @@ def test_channel_with_tags(app, test_account):
     """Create a test channel with tags"""
     with app.app_context():
         # Create category
-        category = Category(
-            account_id=test_account.id,
-            category_id="100",
-            category_name="Test Category"
-        )
+        category = Category(account_id=test_account.id, category_id="100", category_name="Test Category")
         db.session.add(category)
         db.session.flush()
 
@@ -44,7 +40,7 @@ def test_channel_with_tags(app, test_account):
             cleaned_name="Test Channel",
             category_id=category.id,
             is_active=True,
-            is_visible=True
+            is_visible=True,
         )
         db.session.add(channel)
         db.session.flush()
@@ -56,16 +52,8 @@ def test_channel_with_tags(app, test_account):
         db.session.flush()
 
         # Link tags to channel
-        channel_tag1 = ChannelTag(
-            account_id=test_account.id,
-            stream_id="ch1",
-            tag_id=tag1.id
-        )
-        channel_tag2 = ChannelTag(
-            account_id=test_account.id,
-            stream_id="ch1",
-            tag_id=tag2.id
-        )
+        channel_tag1 = ChannelTag(account_id=test_account.id, stream_id="ch1", tag_id=tag1.id)
+        channel_tag2 = ChannelTag(account_id=test_account.id, stream_id="ch1", tag_id=tag2.id)
         db.session.add_all([channel_tag1, channel_tag2])
         db.session.commit()
 
@@ -82,9 +70,7 @@ def test_sync_all_accounts_success(app, client, test_account):
     with app.app_context():
         # Mock the sync service
         with patch("services.sync_service.ChannelSyncService.sync_all_accounts") as mock_sync:
-            mock_sync.return_value = [
-                {"account_id": test_account.id, "success": True, "channels_synced": 5}
-            ]
+            mock_sync.return_value = [{"account_id": test_account.id, "success": True, "channels_synced": 5}]
 
             response = client.post("/api/sync/all")
             assert response.status_code == 200
@@ -171,11 +157,7 @@ def test_get_tags_filtered_by_account(app, client, test_channel_with_tags, test_
         db.session.flush()
 
         # Create category for other account
-        other_category = Category(
-            account_id=other_account.id,
-            category_id="200",
-            category_name="Other Category"
-        )
+        other_category = Category(account_id=other_account.id, category_id="200", category_name="Other Category")
         db.session.add(other_category)
         db.session.flush()
 
@@ -186,7 +168,7 @@ def test_get_tags_filtered_by_account(app, client, test_channel_with_tags, test_
             name="Other Channel",
             category_id=other_category.id,
             is_active=True,
-            is_visible=True
+            is_visible=True,
         )
         db.session.add(other_channel)
         db.session.flush()
@@ -195,11 +177,7 @@ def test_get_tags_filtered_by_account(app, client, test_channel_with_tags, test_
         db.session.add(other_tag)
         db.session.flush()
 
-        other_channel_tag = ChannelTag(
-            account_id=other_account.id,
-            stream_id="ch2",
-            tag_id=other_tag.id
-        )
+        other_channel_tag = ChannelTag(account_id=other_account.id, stream_id="ch2", tag_id=other_tag.id)
         db.session.add(other_channel_tag)
         db.session.commit()
 
@@ -307,11 +285,7 @@ def test_preview_channels_with_pagination(app, client, test_account):
     """Test channel preview with pagination"""
     with app.app_context():
         # Create multiple channels
-        category = Category(
-            account_id=test_account.id,
-            category_id="100",
-            category_name="Test Category"
-        )
+        category = Category(account_id=test_account.id, category_id="100", category_name="Test Category")
         db.session.add(category)
         db.session.flush()
 
@@ -322,7 +296,7 @@ def test_preview_channels_with_pagination(app, client, test_account):
                 name=f"Channel {i}",
                 category_id=category.id,
                 is_active=True,
-                is_visible=True
+                is_visible=True,
             )
             db.session.add(channel)
         db.session.commit()
@@ -371,11 +345,7 @@ def test_preview_channels_filtered_by_account(app, client, test_channel_with_tag
         db.session.add(other_account)
         db.session.flush()
 
-        other_category = Category(
-            account_id=other_account.id,
-            category_id="200",
-            category_name="Other Category"
-        )
+        other_category = Category(account_id=other_account.id, category_id="200", category_name="Other Category")
         db.session.add(other_category)
         db.session.flush()
 
@@ -385,7 +355,7 @@ def test_preview_channels_filtered_by_account(app, client, test_channel_with_tag
             name="Other Channel",
             category_id=other_category.id,
             is_active=True,
-            is_visible=True
+            is_visible=True,
         )
         db.session.add(other_channel)
         db.session.commit()
@@ -410,11 +380,7 @@ def test_preview_channels_nonexistent_account(app, client):
 def test_preview_channels_only_visible_and_active(app, client, test_account):
     """Test channel preview only shows visible and active channels"""
     with app.app_context():
-        category = Category(
-            account_id=test_account.id,
-            category_id="100",
-            category_name="Test Category"
-        )
+        category = Category(account_id=test_account.id, category_id="100", category_name="Test Category")
         db.session.add(category)
         db.session.flush()
 
@@ -425,7 +391,7 @@ def test_preview_channels_only_visible_and_active(app, client, test_account):
             name="Visible Channel",
             category_id=category.id,
             is_active=True,
-            is_visible=True
+            is_visible=True,
         )
         # Create invisible channel
         invisible_channel = Channel(
@@ -434,7 +400,7 @@ def test_preview_channels_only_visible_and_active(app, client, test_account):
             name="Invisible Channel",
             category_id=category.id,
             is_active=True,
-            is_visible=False
+            is_visible=False,
         )
         # Create inactive channel
         inactive_channel = Channel(
@@ -443,7 +409,7 @@ def test_preview_channels_only_visible_and_active(app, client, test_account):
             name="Inactive Channel",
             category_id=category.id,
             is_active=False,
-            is_visible=True
+            is_visible=True,
         )
         db.session.add_all([visible_channel, invisible_channel, inactive_channel])
         db.session.commit()

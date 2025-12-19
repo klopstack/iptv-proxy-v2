@@ -91,7 +91,7 @@ if __name__ == "__main__":
 
     logger.info(f"Starting IPTV Proxy v2 on port {port}")
     logger.info(f"Sync scheduler running (interval: {sync_interval} hours)")
-    
+
     try:
         app.run(host="0.0.0.0", port=port, debug=debug)
     finally:
