@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}Test & Preview - IPTV Proxy{% endblock %}
+{% block title %}Preview Channels - IPTV Proxy{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
-    <h1 class="h2">Test & Preview</h1>
+    <h1 class="h2">Preview Channels</h1>
 </div>
 
 <div class="row">
@@ -14,9 +14,17 @@
                 <h5>Select Account</h5>
             </div>
             <div class="card-body">
-                <select class="form-select mb-3" id="testAccountId" onchange="loadPreview()">
+                <select class="form-select mb-3" id="testAccountId" onchange="loadAccountTags()">
                     <option value="">Select an account...</option>
                 </select>
+                
+                <div class="mb-3">
+                    <label for="tagFilter" class="form-label">Filter by Tags</label>
+                    <select class="form-select" id="tagFilter" multiple size="5">
+                        <option value="">No tags available</option>
+                    </select>
+                    <div class="form-text">Hold Ctrl/Cmd to select multiple tags. Channels must have at least one selected tag.</div>
+                </div>
                 
                 <div class="d-grid gap-2">
                     <button class="btn btn-primary" onclick="loadPreview()">
@@ -63,6 +71,7 @@ let loadedChannels = 0;
 const CHANNELS_PER_PAGE = 50;
 let loadingMore = false;
 let hasMore = true;
+let accountTags = [];
 
 async function loadAccounts() {
     const response = await fetch('/api/accounts');
@@ -82,7 +91,35 @@ async function loadAccounts() {
     const accountId = params.get('account');
     if (accountId) {
         select.value = accountId;
+        await loadAccountTags();
         loadPreview();
+    }
+}
+
+async function loadAccountTags() {
+    const accountId = document.getElementById('testAccountId').value;
+    const tagFilterSelect = document.getElementById('tagFilter');
+    
+    if (!accountId) {
+        tagFilterSelect.innerHTML = '<option value="">No tags available</option>';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/accounts/${accountId}/tags`);
+        accountTags = await response.json();
+        
+        tagFilterSelect.innerHTML = '';
+        if (accountTags.length === 0) {
+            tagFilterSelect.innerHTML = '<option value="">No tags for this account</option>';
+        } else {
+            for (const tag of accountTags) {
+                tagFilterSelect.innerHTML += `<option value="${tag.name}">${tag.name} (${tag.channel_count})</option>`;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading tags:', error);
+        tagFilterSelect.innerHTML = '<option value="">Error loading tags</option>';
     }
 }
 
@@ -140,7 +177,10 @@ async function loadPreview() {
                     <tr>
                         <th>Icon</th>
                         <th>Channel Name</th>
+                        <th>Cleaned Name</th>
                         <th>Category</th>
+                        <th>Tags</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody id="channelsTableBody">
@@ -172,7 +212,12 @@ async function loadMoreChannels() {
     if (loadingIndicator) loadingIndicator.style.display = 'block';
     
     try {
-        const response = await fetch(`/api/accounts/${currentAccountId}/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}`);
+        // Get selected tags
+        const tagFilterSelect = document.getElementById('tagFilter');
+        const selectedTags = Array.from(tagFilterSelect.selectedOptions).map(opt => opt.value);
+        const tagParam = selectedTags.length > 0 ? `&tags=${selectedTags.join(',')}` : '';
+        
+        const response = await fetch(`/api/accounts/${currentAccountId}/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}${tagParam}`);
         const data = await response.json();
         
         if (data.error) {
@@ -189,11 +234,30 @@ async function loadMoreChannels() {
         let html = '';
         
         for (const channel of data.channels) {
+            const tagsHtml = channel.tags && channel.tags.length > 0 
+                ? channel.tags.map(tag => `<span class="badge bg-info me-1">${tag}</span>`).join('')
+                : '<span class="text-muted">No tags</span>';
+            
+            // Show cleaned name if different from original
+            const cleanedNameHtml = channel.cleaned_name && channel.cleaned_name !== channel.name
+                ? `<div class="text-muted small">${channel.cleaned_name}</div>`
+                : '';
+            
             html += `
                 <tr>
                     <td>${channel.icon ? `<img src="${channel.icon}" width="40" height="30" onerror="this.style.display='none'">` : ''}</td>
-                    <td>${channel.name}</td>
+                    <td>
+                        ${channel.name}
+                        ${cleanedNameHtml}
+                    </td>
+                    <td>${channel.cleaned_name || '<span class="text-muted">-</span>'}</td>
                     <td><span class="badge bg-secondary">${channel.category}</span></td>
+                    <td>${tagsHtml}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="createManualTagRule('${escapeHtml(channel.name)}', ${channel.id})" title="Create tag rule for this channel">
+                            <i class="bi bi-tag"></i>
+                        </button>
+                    </td>
                 </tr>
             `;
         }
@@ -257,6 +321,44 @@ function downloadPlaylist() {
     }
     
     window.open(`/playlist/${accountId}.m3u`, '_blank');
+}
+
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+function createManualTagRule(channelName, streamId) {
+    const accountId = document.getElementById('testAccountId').value;
+    if (!accountId) {
+        alert('Please select an account first');
+        return;
+    }
+    
+    // Create a regex pattern that matches this exact channel name
+    // Escape special regex characters
+    const escapedName = channelName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = `^${escapedName}$`;
+    
+    // Create URL parameters for pre-filling the tag rule form
+    const params = new URLSearchParams({
+        account_id: accountId,
+        rule_name: `Manual tag for ${channelName}`,
+        pattern: pattern,
+        pattern_type: 'regex',
+        source: 'channel_name',
+        remove_from_name: 'false',
+        from_test_page: 'true'
+    });
+    
+    // Open rulesets page in new tab with pre-filled parameters
+    window.open(`/rulesets?${params.toString()}`, '_blank');
 }
 
 loadAccounts();

@@ -1,0 +1,66 @@
+[tool.black]
+line-length = 120
+target-version = ['py38', 'py39', 'py310', 'py311']
+exclude = '''
+/(
+    \.git
+  | __pycache__
+  | \.venv
+  | venv
+  | env
+  | \.pytest_cache
+  | instance
+  | data
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 120
+skip_gitignore = true
+known_first_party = ["app", "models", "services"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--verbose --cov=. --cov-report=html --cov-report=term-missing --cov-fail-under=50"
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/env/*",
+    "*/.venv/*",
+    "*/instance/*",
+    "*/data/*",
+    "migrate_tags.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+exclude = [
+    "venv",
+    "env",
+    ".venv",
+    "tests",
+]

@@ -53,6 +53,7 @@
                             <option value="category">Category</option>
                             <option value="channel_name">Channel Name</option>
                             <option value="regex">Regular Expression</option>
+                            <option value="tag">Tag</option>
                         </select>
                         <div class="form-text" id="filterTypeHelp"></div>
                     </div>
@@ -63,10 +64,17 @@
                             <option value="blacklist">Blacklist (exclude these)</option>
                         </select>
                     </div>
-                    <div class="mb-3">
+                    <div class="mb-3" id="filterValueContainer">
                         <label for="filterValue" class="form-label">Filter Value</label>
                         <input type="text" class="form-control" id="filterValue" required>
                         <div class="form-text">Case-insensitive partial match</div>
+                    </div>
+                    <div class="mb-3" id="tagSelectorContainer" style="display: none;">
+                        <label for="tagSelector" class="form-label">Select Tags</label>
+                        <select class="form-select" id="tagSelector" multiple size="6">
+                            <option value="">Loading tags...</option>
+                        </select>
+                        <div class="form-text">Hold Ctrl/Cmd to select multiple tags. Separate multiple tags with commas.</div>
                     </div>
                     <div class="mb-3 form-check">
                         <input type="checkbox" class="form-check-input" id="filterEnabled" checked>
@@ -184,6 +192,21 @@ function editFilter(id) {
     document.getElementById('filterEnabled').checked = filter.enabled;
     
     updateFilterHelp();
+    
+    // If it's a tag filter, select the tags
+    if (filter.filter_type === 'tag') {
+        setTimeout(async () => {
+            await loadTagsForFilter();
+            const tags = filter.filter_value.split(',').map(t => t.trim());
+            const tagSelector = document.getElementById('tagSelector');
+            for (let option of tagSelector.options) {
+                if (tags.includes(option.value)) {
+                    option.selected = true;
+                }
+            }
+        }, 100);
+    }
+    
     modal.show();
 }
 
@@ -197,12 +220,30 @@ async function saveFilter() {
         return;
     }
     
+    const filterType = document.getElementById('filterType').value;
+    let filterValue;
+    
+    // Get filter value based on type
+    if (filterType === 'tag') {
+        const tagSelector = document.getElementById('tagSelector');
+        const selectedTags = Array.from(tagSelector.selectedOptions).map(opt => opt.value);
+        
+        if (selectedTags.length === 0) {
+            alert('Please select at least one tag');
+            return;
+        }
+        
+        filterValue = selectedTags.join(',');
+    } else {
+        filterValue = document.getElementById('filterValue').value;
+    }
+    
     const data = {
         account_id: parseInt(accountId),
         name: document.getElementById('filterName').value,
-        filter_type: document.getElementById('filterType').value,
+        filter_type: filterType,
         filter_action: document.getElementById('filterAction').value,
-        filter_value: document.getElementById('filterValue').value,
+        filter_value: filterValue,
         enabled: document.getElementById('filterEnabled').checked
     };
     
@@ -240,12 +281,51 @@ async function deleteFilter(id) {
 
 function updateFilterHelp() {
     const type = document.getElementById('filterType').value;
+    const filterValueContainer = document.getElementById('filterValueContainer');
+    const tagSelectorContainer = document.getElementById('tagSelectorContainer');
+    const filterValue = document.getElementById('filterValue');
+    
     const helpText = {
         'category': 'Match channels in categories containing this text (e.g., "UK", "SPORT")',
         'channel_name': 'Match channels with names containing this text (e.g., "BBC", "News")',
-        'regex': 'Advanced: Regular expression pattern (e.g., "^UK.*Sport$")'
+        'regex': 'Advanced: Regular expression pattern (e.g., "^UK.*Sport$")',
+        'tag': 'Match channels that have specific tags. Select tags from the list or enter comma-separated tag names.'
     };
+    
     document.getElementById('filterTypeHelp').textContent = helpText[type] || '';
+    
+    // Show/hide tag selector based on filter type
+    if (type === 'tag') {
+        filterValueContainer.style.display = 'none';
+        tagSelectorContainer.style.display = 'block';
+        filterValue.removeAttribute('required');
+        loadTagsForFilter();
+    } else {
+        filterValueContainer.style.display = 'block';
+        tagSelectorContainer.style.display = 'none';
+        filterValue.setAttribute('required', 'required');
+    }
+}
+
+async function loadTagsForFilter() {
+    try {
+        const response = await fetch('/api/tags');
+        const tags = await response.json();
+        
+        const tagSelector = document.getElementById('tagSelector');
+        tagSelector.innerHTML = '';
+        
+        if (tags.length === 0) {
+            tagSelector.innerHTML = '<option value="">No tags available</option>';
+        } else {
+            for (const tag of tags) {
+                tagSelector.innerHTML += `<option value="${tag.name}">${tag.name}</option>`;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading tags:', error);
+        document.getElementById('tagSelector').innerHTML = '<option value="">Error loading tags</option>';
+    }
 }
 
 loadAccounts().then(() => loadFilters());

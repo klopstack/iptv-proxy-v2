@@ -54,6 +54,14 @@
                     <option value="">All Accounts</option>
                 </select>
             </div>
+            <div class="col-md-6 text-end">
+                <button class="btn btn-sm btn-primary" id="process-all-tags-btn" onclick="processAllAccountTags()">
+                    <i class="bi bi-arrow-repeat"></i> Process All Accounts
+                </button>
+                <button class="btn btn-sm btn-outline-primary" id="process-account-tags-btn" onclick="processAccountTags()" style="display:none;">
+                    <i class="bi bi-arrow-repeat"></i> Process Selected Account
+                </button>
+            </div>
         </div>
         <div id="tags-list">
             <div class="text-center py-5">
@@ -259,6 +267,13 @@ let accounts = [];
 document.addEventListener('DOMContentLoaded', async () => {
     await loadAccounts();
     await loadRulesets();
+    
+    // Check for URL parameters (from test page manual tag rule creation)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('from_test_page') === 'true') {
+        // Pre-fill and show the tag rule modal
+        await handleManualTagRuleCreation(urlParams);
+    }
 });
 
 // Tab change handlers
@@ -496,6 +511,87 @@ async function createDefaultRuleset() {
 // Rules Management
 // ============================================================================
 
+async function handleManualTagRuleCreation(urlParams) {
+    const accountId = urlParams.get('account_id');
+    const ruleName = urlParams.get('rule_name');
+    const pattern = urlParams.get('pattern');
+    const patternType = urlParams.get('pattern_type');
+    const source = urlParams.get('source');
+    const removeFromName = urlParams.get('remove_from_name') === 'true';
+    
+    // Get or create a ruleset for this account
+    const response = await fetch(`/api/accounts/${accountId}/rulesets`);
+    const accountRulesets = await response.json();
+    
+    let rulesetId;
+    if (accountRulesets.length > 0) {
+        // Use the first ruleset
+        rulesetId = accountRulesets[0].id;
+    } else {
+        // Create a new ruleset for manual tags
+        const createResponse = await fetch('/api/rulesets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: `Manual Tags`,
+                description: 'Manually created tag rules from channel preview',
+                priority: 1000,
+                enabled: true
+            })
+        });
+        
+        if (!createResponse.ok) {
+            alert('Failed to create ruleset for manual tags');
+            return;
+        }
+        
+        const newRuleset = await createResponse.json();
+        rulesetId = newRuleset.id;
+        
+        // Assign to account
+        await fetch(`/api/accounts/${accountId}/rulesets`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ruleset_id: rulesetId,
+                priority: 1000
+            })
+        });
+        
+        await loadRulesets();
+    }
+    
+    // Open the tag rule modal with pre-filled data
+    document.getElementById('ruleModalTitle').textContent = 'New Manual Tag Rule';
+    document.getElementById('ruleForm').reset();
+    document.getElementById('rule-id').value = '';
+    document.getElementById('rule-ruleset-id').value = rulesetId;
+    document.getElementById('rule-name').value = ruleName;
+    document.getElementById('rule-pattern').value = pattern;
+    document.getElementById('rule-pattern-type').value = patternType;
+    document.getElementById('rule-source').value = source;
+    document.getElementById('rule-remove-from-name').checked = removeFromName;
+    document.getElementById('rule-priority').value = 1000;
+    document.getElementById('rule-enabled').checked = true;
+    
+    // Focus on tag name field (what user needs to fill in)
+    setTimeout(() => {
+        document.getElementById('rule-tag-name').focus();
+    }, 500);
+    
+    new bootstrap.Modal(document.getElementById('ruleModal')).show();
+    
+    // Show info message
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'alert alert-info alert-dismissible fade show';
+    alertDiv.innerHTML = `
+        <strong>Manual Tag Rule:</strong> The pattern has been pre-filled to match this specific channel.
+        Just enter the tag name(s) you want to assign and click Save.
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.querySelector('.modal-body').insertBefore(alertDiv, document.getElementById('ruleForm'));
+}
+
 function showCreateRuleModal(rulesetId) {
     document.getElementById('ruleModalTitle').textContent = 'New Tag Rule';
     document.getElementById('ruleForm').reset();
@@ -683,6 +779,14 @@ async function refreshAssignRuleset(rulesetId) {
 async function loadTags() {
     const accountId = document.getElementById('tags-account-filter').value;
     
+    // Show/hide process selected account button
+    const processAccountBtn = document.getElementById('process-account-tags-btn');
+    if (accountId) {
+        processAccountBtn.style.display = 'inline-block';
+    } else {
+        processAccountBtn.style.display = 'none';
+    }
+    
     try {
         const url = accountId ? `/api/accounts/${accountId}/tags` : '/api/tags';
         const response = await fetch(url);
@@ -705,6 +809,69 @@ async function loadTags() {
         document.getElementById('tags-list').innerHTML = `
             <div class="alert alert-danger">Error loading tags: ${error.message}</div>
         `;
+    }
+}
+
+async function processAccountTags() {
+    const accountId = document.getElementById('tags-account-filter').value;
+    if (!accountId) return;
+    
+    const btn = document.getElementById('process-account-tags-btn');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Processing...';
+    
+    try {
+        const response = await fetch(`/api/accounts/${accountId}/process-tags`, { method: 'POST' });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert(`Successfully processed ${result.processed} channels\nExtracted ${result.unique_tags} unique tags`);
+            await loadTags();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error processing tags: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    }
+}
+
+async function processAllAccountTags() {
+    if (!confirm('Process tag extraction for all accounts? This may take a while.')) return;
+    
+    const btn = document.getElementById('process-all-tags-btn');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Processing...';
+    
+    try {
+        let totalProcessed = 0;
+        let totalTags = 0;
+        
+        for (const account of accounts) {
+            try {
+                const response = await fetch(`/api/accounts/${account.id}/process-tags`, { method: 'POST' });
+                const result = await response.json();
+                
+                if (result.success) {
+                    totalProcessed += result.processed;
+                    totalTags += result.unique_tags;
+                }
+            } catch (error) {
+                console.error(`Error processing account ${account.id}:`, error);
+            }
+        }
+        
+        alert(`Processing complete!\nProcessed ${totalProcessed} total channels\nExtracted tags across all accounts`);
+        await loadTags();
+    } catch (error) {
+        alert('Error processing tags: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
     }
 }
 

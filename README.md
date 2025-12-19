@@ -100,9 +100,9 @@ services:
 6. Enter the filter value
 7. Click **Save**
 
-### 3. Test & Preview
+### 3. Preview Channels
 
-1. Navigate to the **Test & Preview** page
+1. Navigate to the **Preview Channels** page
 2. Select an account
 3. Click **Preview Channels** to see filtered results
 4. Download the M3U file when satisfied
@@ -223,18 +223,54 @@ GET /api/accounts/<account_id>/preview?limit=100
 
 ## Development
 
+### Setup Development Environment
+
+```bash
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+```
+
+Or use the Makefile:
+```bash
+make install
+```
+
 ### Run Tests
 
 ```bash
-pip install -r requirements-dev.txt
-pytest tests/ -v
+# Run tests with coverage (70% minimum required)
+pytest tests/ -v --cov=. --cov-report=html --cov-report=term-missing
+
+# Or use Makefile
+make test
+
+# Fast test without coverage
+make test-fast
 ```
 
-### Run with Coverage
+### Linting and Code Quality
 
 ```bash
-pytest tests/ --cov=. --cov-report=html
+# Run all linting checks
+make lint
+
+# Format code automatically
+make format
+
+# Individual linting tools
+flake8 .
+black --check .
+isort --check-only .
+mypy app.py models.py services/
 ```
+
+### Continuous Integration
+
+The project uses GitHub Actions to automatically run tests and linting on all pull requests and commits to main/develop branches. The CI pipeline:
+
+- **Linting**: flake8, black, isort, mypy
+- **Testing**: pytest with minimum 70% code coverage
+- **Multi-version**: Tests run on Python 3.9, 3.10, and 3.11
 
 ### Database Migrations
 
