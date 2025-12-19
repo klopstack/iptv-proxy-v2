@@ -43,7 +43,7 @@
                 <h5>Select Account</h5>
             </div>
             <div class="card-body">
-                <select class="form-select mb-3" id="testAccountId" onchange="clearSelectedTags()">
+                <select class="form-select mb-3" id="testAccountId">
                     <option value="">Select an account...</option>
                 </select>
                 
@@ -56,9 +56,7 @@
                             id="tagSearchInput" 
                             placeholder="Search tags..." 
                             autocomplete="off"
-                            oninput="searchTags()"
-                            onfocus="showTagDropdown()"
-                        />
+                        >
                         <div id="tagDropdown" class="list-group position-absolute w-100 shadow-sm" style="max-height: 200px; overflow-y: auto; z-index: 1000; display: none;"></div>
                     </div>
                     <div id="selectedTags" class="mt-2"></div>
@@ -66,10 +64,10 @@
                 </div>
                 
                 <div class="d-grid gap-2">
-                    <button class="btn btn-primary" onclick="loadPreview()">
+                    <button class="btn btn-primary" id="load-preview-btn">
                         <i class="bi bi-eye"></i> Preview Channels
                     </button>
-                    <button class="btn btn-success" onclick="downloadPlaylist()">
+                    <button class="btn btn-success" id="download-playlist-btn">
                         <i class="bi bi-download"></i> Download M3U
                     </button>
                 </div>
@@ -248,7 +246,7 @@ function renderSelectedTags() {
     container.innerHTML = selectedTags.map(tag => `
         <span class="badge bg-primary me-1 mb-1" style="font-size: 0.9rem;">
             ${tag.name} (${tag.channel_count})
-            <button type="button" class="btn-close btn-close-white ms-1" style="font-size: 0.6rem;" onclick="removeTag('${tag.name}')" aria-label="Remove"></button>
+            <button type="button" class="btn-close btn-close-white ms-1" style="font-size: 0.6rem;" data-action="remove-tag" data-tag-name="${tag.name}" aria-label="Remove"></button>
         </span>
     `).join('');
 }
@@ -306,7 +304,7 @@ async function loadPreview() {
     }
     
     // Initialize display
-    let html = `
+    const html = `
         <div class="alert alert-info" id="channelCount">
             Loading channels...
         </div>
@@ -403,7 +401,7 @@ async function loadMoreChannels() {
                     <td><span class="badge bg-secondary">${channel.category}</span></td>
                     <td>${tagsHtml}</td>
                     <td>
-                        <button class="btn btn-sm btn-outline-primary" onclick="createManualTagRule('${escapeHtml(channel.name)}', ${channel.id})" title="Create tag rule for this channel">
+                        <button class="btn btn-sm btn-outline-primary" data-action="create-tag-rule" data-channel-name="${escapeHtml(channel.name)}" data-channel-id="${channel.id}" title="Create tag rule for this channel">
                             <i class="bi bi-tag"></i>
                         </button>
                     </td>
@@ -483,7 +481,7 @@ function escapeHtml(text) {
     return text.replace(/[&<>"']/g, m => map[m]);
 }
 
-function createManualTagRule(channelName, streamId) {
+function createManualTagRule(channelName) {
     const accountId = document.getElementById('testAccountId').value;
     if (!accountId) {
         alert('Please select an account first');
@@ -511,5 +509,57 @@ function createManualTagRule(channelName, streamId) {
 }
 
 loadAccounts();
+
+// Initialize event listeners after DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    // Load Preview button
+    const loadPreviewBtn = document.getElementById('load-preview-btn');
+    if (loadPreviewBtn) {
+        loadPreviewBtn.addEventListener('click', () => loadPreview());
+    }
+
+    // Download Playlist button
+    const downloadBtn = document.getElementById('download-playlist-btn');
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', () => downloadPlaylist());
+    }
+
+    // Event delegation for tag operations
+    const selectedTagsDiv = document.getElementById('selected-tags');
+    if (selectedTagsDiv) {
+        selectedTagsDiv.addEventListener('click', (e) => {
+            const button = e.target.closest('button[data-action="remove-tag"]');
+            if (button) {
+                const tagName = button.dataset.tagName;
+                removeTag(tagName);
+            }
+        });
+    }
+
+    // Event delegation for channel operations
+    const channelsPreview = document.getElementById('channels-preview');
+    if (channelsPreview) {
+        channelsPreview.addEventListener('click', (e) => {
+            const button = e.target.closest('button[data-action="create-tag-rule"]');
+            if (button) {
+                const channelName = button.dataset.channelName;
+                createManualTagRule(channelName);
+            }
+        });
+    }
+
+    // Account selector change
+    const testAccountSelect = document.getElementById('testAccountId');
+    if (testAccountSelect) {
+        testAccountSelect.addEventListener('change', () => clearSelectedTags());
+    }
+
+    // Tag search input
+    const tagSearchInput = document.getElementById('tagSearchInput');
+    if (tagSearchInput) {
+        tagSearchInput.addEventListener('input', () => searchTags());
+        tagSearchInput.addEventListener('focus', () => showTagDropdown());
+    }
+});
 </script>
 {% endblock %}

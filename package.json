@@ -1,0 +1,39 @@
+{
+  "name": "iptv-proxy-v2",
+  "version": "2.0.0",
+  "description": "IPTV M3U Proxy with filtering and tag extraction",
+  "private": true,
+  "scripts": {
+    "lint": "eslint templates/**/*.html",
+    "lint:fix": "eslint templates/**/*.html --fix",
+    "test": "echo 'No JS tests yet' && exit 0"
+  },
+  "devDependencies": {
+    "@html-eslint/eslint-plugin": "^0.27.0",
+    "@html-eslint/parser": "^0.27.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-html": "^8.1.2"
+  },
+  "eslintConfig": {
+    "extends": [
+      "plugin:@html-eslint/recommended"
+    ],
+    "parser": "@html-eslint/parser",
+    "plugins": [
+      "@html-eslint"
+    ],
+    "rules": {
+      "@html-eslint/require-doctype": "off",
+      "@html-eslint/no-inline-styles": "off",
+      "@html-eslint/require-closing-tags": "error",
+      "@html-eslint/no-duplicate-attrs": "error",
+      "@html-eslint/no-duplicate-id": "error"
+    },
+    "overrides": [
+      {
+        "files": ["*.html"],
+        "parser": "@html-eslint/parser"
+      }
+    ]
+  }
+}

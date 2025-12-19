@@ -203,7 +203,6 @@ class TestTagRuleAPI:
         response = client.put(
             f"/api/tag-rules/{rule_id}",
             json={
-                "ruleset_id": sample_ruleset["id"],
                 "name": "Updated Rule",
                 "pattern": "UPDT",
                 "pattern_type": "prefix",

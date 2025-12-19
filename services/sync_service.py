@@ -77,6 +77,17 @@ class ChannelSyncService:
                 ).update({"is_active": False})
                 db.session.commit()
                 stats["channels_deactivated"] = deactivated
+                
+                # Compute filter visibility after sync
+                try:
+                    from services.filter_service import FilterService
+                    filter_stats = FilterService.compute_visibility_for_account(account_id)
+                    stats["channels_visible"] = filter_stats.get("channels_visible", 0)
+                    stats["channels_hidden"] = filter_stats.get("channels_hidden", 0)
+                    logger.info(f"Filter visibility computed: {stats['channels_visible']} visible, {stats['channels_hidden']} hidden")
+                except Exception as e:
+                    logger.error(f"Error computing filter visibility after sync: {e}")
+                    stats["errors"].append(f"Filter visibility error: {str(e)}")
 
             logger.info(
                 f"Sync completed for account {account.name}: "

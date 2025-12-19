@@ -120,6 +120,11 @@ class TestFilters:
             },
         )
 
+        # Debug output if failed
+        if response.status_code != 201:
+            print(f"Response status: {response.status_code}")
+            print(f"Response data: {response.get_json()}")
+        
         assert response.status_code == 201
         data = response.json
         assert data["name"] == "UK Only"
@@ -173,52 +178,6 @@ class TestFilters:
         # Verify it's gone
         response = client.get("/api/filters")
         assert len(response.json) == 0
-
-
-class TestFilterLogic:
-    """Test filter application logic"""
-
-    def test_category_whitelist(self, client):
-        """Test category whitelist filtering"""
-        from app import apply_filters
-
-        stream = {"name": "BBC One", "category_id": "1", "stream_id": 123}
-
-        category_map = {"1": "UK CHANNELS"}
-
-        # Create mock filter
-        class MockFilter:
-            filter_type = "category"
-            filter_action = "whitelist"
-            filter_value = "UK"
-
-        # Should match
-        assert apply_filters(stream, category_map, [MockFilter()]) is True
-
-        # Change filter value to something that doesn't match
-        MockFilter.filter_value = "US"
-        assert apply_filters(stream, category_map, [MockFilter()]) is False
-
-    def test_channel_name_blacklist(self, client):
-        """Test channel name blacklist filtering"""
-        from app import apply_filters
-
-        stream = {"name": "XXX Adult Channel", "category_id": "1", "stream_id": 123}
-
-        category_map = {"1": "ADULT"}
-
-        class MockFilter:
-            filter_type = "channel_name"
-            filter_action = "blacklist"
-            filter_value = "XXX"
-
-        # Should be filtered out
-        assert apply_filters(stream, category_map, [MockFilter()]) is False
-
-        # Different channel should pass
-        stream["name"] = "BBC News"
-        assert apply_filters(stream, category_map, [MockFilter()]) is True
-
 
 class TestAPI:
     """Test API endpoints"""

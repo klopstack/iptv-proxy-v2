@@ -163,6 +163,7 @@ class Channel(db.Model):
     # Sync metadata
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
     is_active = db.Column(db.Boolean, default=True)
+    is_visible = db.Column(db.Boolean, default=True)  # Pre-computed filter result
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

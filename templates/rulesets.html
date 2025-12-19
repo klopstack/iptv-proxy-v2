@@ -6,10 +6,10 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
     <h1 class="h2">Tags & Rulesets</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
-        <button class="btn btn-sm btn-primary me-2" onclick="createDefaultRuleset()">
+        <button class="btn btn-sm btn-primary me-2" id="create-default-ruleset-btn">
             <i class="bi bi-plus-circle"></i> Create Default Ruleset
         </button>
-        <button class="btn btn-sm btn-outline-primary" onclick="showCreateRulesetModal()">
+        <button class="btn btn-sm btn-outline-primary" id="create-ruleset-btn">
             <i class="bi bi-plus-circle"></i> New Ruleset
         </button>
     </div>
@@ -55,10 +55,10 @@
                 </select>
             </div>
             <div class="col-md-6 text-end">
-                <button class="btn btn-sm btn-primary" id="process-all-tags-btn" onclick="processAllAccountTags()">
+                <button class="btn btn-sm btn-primary" id="process-all-tags-btn">
                     <i class="bi bi-arrow-repeat"></i> Process All Accounts
                 </button>
-                <button class="btn btn-sm btn-outline-primary" id="process-account-tags-btn" onclick="processAccountTags()" style="display:none;">
+                <button class="btn btn-sm btn-outline-primary" id="process-account-tags-btn" style="display:none;">
                     <i class="bi bi-arrow-repeat"></i> Process Selected Account
                 </button>
             </div>
@@ -75,7 +75,7 @@
     <!-- Playlists Tab -->
     <div class="tab-pane fade" id="playlists" role="tabpanel">
         <div class="mb-3">
-            <button class="btn btn-sm btn-primary" onclick="showCreatePlaylistModal()">
+            <button class="btn btn-sm btn-primary" id="create-playlist-btn">
                 <i class="bi bi-plus-circle"></i> New Tag Playlist
             </button>
         </div>
@@ -120,7 +120,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="saveRuleset()">Save</button>
+                <button type="button" class="btn btn-primary" id="save-ruleset-btn">Save</button>
             </div>
         </div>
     </div>
@@ -194,7 +194,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="saveRule()">Save Rule</button>
+                <button type="button" class="btn btn-primary" id="save-rule-btn">Save Rule</button>
             </div>
         </div>
     </div>
@@ -251,7 +251,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="savePlaylist()">Create Playlist</button>
+                <button type="button" class="btn btn-primary" id="save-playlist-btn">Create Playlist</button>
             </div>
         </div>
     </div>
@@ -261,7 +261,6 @@
 
 {% block extra_js %}
 <script>
-let currentRuleset = null;
 let accounts = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -327,16 +326,16 @@ async function loadRulesets() {
                             <div>
                                 ${status}
                                 <div class="btn-group ms-2">
-                                    <button class="btn btn-sm btn-outline-primary" onclick="showRulesetRules(${ruleset.id})">
+                                    <button class="btn btn-sm btn-outline-primary" data-action="show-rules" data-ruleset-id="${ruleset.id}">
                                         <i class="bi bi-list"></i> Rules
                                     </button>
-                                    <button class="btn btn-sm btn-outline-info" onclick="showAssignRuleset(${ruleset.id})">
+                                    <button class="btn btn-sm btn-outline-info" data-action="show-assign" data-ruleset-id="${ruleset.id}">
                                         <i class="bi bi-link"></i> Assign
                                     </button>
-                                    <button class="btn btn-sm btn-outline-secondary" onclick="editRuleset(${ruleset.id})">
+                                    <button class="btn btn-sm btn-outline-secondary" data-action="edit" data-ruleset-id="${ruleset.id}">
                                         <i class="bi bi-pencil"></i>
                                     </button>
-                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteRuleset(${ruleset.id})" ${ruleset.is_default ? 'disabled' : ''}>
+                                    <button class="btn btn-sm btn-outline-danger" data-action="delete" data-ruleset-id="${ruleset.id}" ${ruleset.is_default ? 'disabled' : ''}>
                                         <i class="bi bi-trash"></i>
                                     </button>
                                 </div>
@@ -346,7 +345,7 @@ async function loadRulesets() {
                         <div class="card-body collapse" id="rules-${ruleset.id}">
                             <div class="d-flex justify-content-between align-items-center mb-3">
                                 <h6>Tag Extraction Rules</h6>
-                                <button class="btn btn-sm btn-success" onclick="showCreateRuleModal(${ruleset.id})">
+                                <button class="btn btn-sm btn-success" data-action="create-rule" data-ruleset-id="${ruleset.id}">
                                     <i class="bi bi-plus"></i> Add Rule
                                 </button>
                             </div>
@@ -371,7 +370,7 @@ async function loadRulesets() {
 
 async function showRulesetRules(rulesetId) {
     const rulesDiv = document.getElementById(`rules-${rulesetId}`);
-    const collapse = new bootstrap.Collapse(rulesDiv, { toggle: true });
+    new bootstrap.Collapse(rulesDiv, { toggle: true });
     
     if (rulesDiv.classList.contains('show')) {
         return;
@@ -402,10 +401,10 @@ async function showRulesetRules(rulesetId) {
                         <td>${rule.source}</td>
                         <td>${status} ${removeIcon}</td>
                         <td>
-                            <button class="btn btn-sm btn-outline-secondary" onclick="editRule(${rule.id})">
+                            <button class="btn btn-sm btn-outline-secondary" data-action="edit-rule" data-rule-id="${rule.id}">
                                 <i class="bi bi-pencil"></i>
                             </button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="deleteRule(${rule.id}, ${rulesetId})">
+                            <button class="btn btn-sm btn-outline-danger" data-action="delete-rule" data-rule-id="${rule.id}" data-ruleset-id="${rulesetId}">
                                 <i class="bi bi-trash"></i>
                             </button>
                         </td>
@@ -692,10 +691,10 @@ async function showAssignRuleset(rulesetId) {
             <div class="list-group-item d-flex justify-content-between align-items-center">
                 <span>${account.name}</span>
                 ${isAssigned ? 
-                    `<button class="btn btn-sm btn-danger" onclick="unassignRuleset(${account.id}, ${rulesetId})">
+                    `<button class="btn btn-sm btn-danger" data-action="unassign" data-account-id="${account.id}" data-ruleset-id="${rulesetId}">
                         <i class="bi bi-x-circle"></i> Unassign
                     </button>` :
-                    `<button class="btn btn-sm btn-success" onclick="assignRuleset(${account.id}, ${rulesetId})">
+                    `<button class="btn btn-sm btn-success" data-action="assign" data-account-id="${account.id}" data-ruleset-id="${rulesetId}">
                         <i class="bi bi-plus-circle"></i> Assign
                     </button>`
                 }
@@ -757,10 +756,10 @@ async function refreshAssignRuleset(rulesetId) {
             <div class="list-group-item d-flex justify-content-between align-items-center">
                 <span>${account.name}</span>
                 ${isAssigned ? 
-                    `<button class="btn btn-sm btn-danger" onclick="unassignRuleset(${account.id}, ${rulesetId})">
+                    `<button class="btn btn-sm btn-danger" data-action="unassign" data-account-id="${account.id}" data-ruleset-id="${rulesetId}">
                         <i class="bi bi-x-circle"></i> Unassign
                     </button>` :
-                    `<button class="btn btn-sm btn-success" onclick="assignRuleset(${account.id}, ${rulesetId})">
+                    `<button class="btn btn-sm btn-success" data-action="assign" data-account-id="${account.id}" data-ruleset-id="${rulesetId}">
                         <i class="bi bi-plus-circle"></i> Assign
                     </button>`
                 }
@@ -875,7 +874,7 @@ async function processAllAccountTags() {
             }
         }
         
-        alert(`Processing complete!\nProcessed ${totalProcessed} total channels\nExtracted tags across all accounts`);
+        alert(`Processing complete!\nProcessed ${totalProcessed} total channels\nExtracted ${totalTags} unique tags across all accounts`);
         await loadTags();
     } catch (error) {
         alert('Error processing tags: ' + error.message);
@@ -933,7 +932,7 @@ async function savePlaylist() {
             bootstrap.Modal.getInstance(document.getElementById('playlistModal')).hide();
             
             // Show the generated URL
-            alert(`Playlist created!\n\nURL: ${window.location.origin}/api/accounts/${accountId}/playlists/${result.id}/playlist.m3u`);
+            alert(`Playlist created!\n\nURL: ${window.location.origin}/playlist/config/${result.id}.m3u`);
             await loadPlaylists();
         } else {
             const error = await response.json();
@@ -943,5 +942,106 @@ async function savePlaylist() {
         alert('Error creating playlist: ' + error.message);
     }
 }
+
+// Initialize event listeners after DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    // Static button listeners
+    const createDefaultBtn = document.getElementById('create-default-ruleset-btn');
+    if (createDefaultBtn) {
+        createDefaultBtn.addEventListener('click', () => createDefaultRuleset());
+    }
+
+    const createRulesetBtn = document.getElementById('create-ruleset-btn');
+    if (createRulesetBtn) {
+        createRulesetBtn.addEventListener('click', () => showCreateRulesetModal());
+    }
+
+    const processAllTagsBtn = document.getElementById('process-all-tags-btn');
+    if (processAllTagsBtn) {
+        processAllTagsBtn.addEventListener('click', () => processAllAccountTags());
+    }
+
+    const processAccountTagsBtn = document.getElementById('process-account-tags-btn');
+    if (processAccountTagsBtn) {
+        processAccountTagsBtn.addEventListener('click', () => processAccountTags());
+    }
+
+    const createPlaylistBtn = document.getElementById('create-playlist-btn');
+    if (createPlaylistBtn) {
+        createPlaylistBtn.addEventListener('click', () => showCreatePlaylistModal());
+    }
+
+    const saveRulesetBtn = document.getElementById('save-ruleset-btn');
+    if (saveRulesetBtn) {
+        saveRulesetBtn.addEventListener('click', () => saveRuleset());
+    }
+
+    const saveRuleBtn = document.getElementById('save-rule-btn');
+    if (saveRuleBtn) {
+        saveRuleBtn.addEventListener('click', () => saveRule());
+    }
+
+    const savePlaylistBtn = document.getElementById('save-playlist-btn');
+    if (savePlaylistBtn) {
+        savePlaylistBtn.addEventListener('click', () => savePlaylist());
+    }
+
+    // Event delegation for ruleset operations
+    const rulesetsContainer = document.getElementById('rulesets-container');
+    if (rulesetsContainer) {
+        rulesetsContainer.addEventListener('click', async (e) => {
+            const button = e.target.closest('button[data-action]');
+            if (!button) return;
+
+            const action = button.dataset.action;
+            const rulesetId = parseInt(button.dataset.rulesetId);
+            const ruleId = parseInt(button.dataset.ruleId);
+
+            switch (action) {
+                case 'show-rules':
+                    await showRulesetRules(rulesetId);
+                    break;
+                case 'show-assign':
+                    await showAssignRuleset(rulesetId);
+                    break;
+                case 'edit':
+                    await editRuleset(rulesetId);
+                    break;
+                case 'delete':
+                    await deleteRuleset(rulesetId);
+                    break;
+                case 'create-rule':
+                    showCreateRuleModal(rulesetId);
+                    break;
+                case 'edit-rule':
+                    await editRule(ruleId);
+                    break;
+                case 'delete-rule':
+                    const rulesetIdForDel = parseInt(button.dataset.rulesetId);
+                    await deleteRule(ruleId, rulesetIdForDel);
+                    break;
+            }
+        });
+    }
+
+    // Event delegation for assign/unassign operations
+    const accountsAssignList = document.getElementById('accounts-assign-list');
+    if (accountsAssignList) {
+        accountsAssignList.addEventListener('click', async (e) => {
+            const button = e.target.closest('button[data-action]');
+            if (!button) return;
+
+            const action = button.dataset.action;
+            const accountId = parseInt(button.dataset.accountId);
+            const rulesetId = parseInt(button.dataset.rulesetId);
+
+            if (action === 'assign') {
+                await assignRuleset(accountId, rulesetId);
+            } else if (action === 'unassign') {
+                await unassignRuleset(accountId, rulesetId);
+            }
+        });
+    }
+});
 </script>
 {% endblock %}

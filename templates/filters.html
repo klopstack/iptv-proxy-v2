@@ -5,7 +5,7 @@
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
     <h1 class="h2">Filters</h1>
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#filterModal" onclick="newFilter()">
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#filterModal" id="add-filter-btn">
         <i class="bi bi-plus-circle"></i> Add Filter
     </button>
 </div>
@@ -13,7 +13,7 @@
 <div class="row mb-3">
     <div class="col-md-4">
         <label for="accountSelect" class="form-label">Select Account:</label>
-        <select class="form-select" id="accountSelect" onchange="loadFilters()">
+        <select class="form-select" id="accountSelect">
             <option value="">All Accounts</option>
         </select>
     </div>
@@ -49,7 +49,7 @@
                     </div>
                     <div class="mb-3">
                         <label for="filterType" class="form-label">Filter Type</label>
-                        <select class="form-select" id="filterType" required onchange="updateFilterHelp()">
+                        <select class="form-select" id="filterType" required>
                             <option value="category">Category</option>
                             <option value="channel_name">Channel Name</option>
                             <option value="regex">Regular Expression</option>
@@ -84,7 +84,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="saveFilter()">Save</button>
+                <button type="button" class="btn btn-primary" id="save-filter-btn">Save</button>
             </div>
         </div>
     </div>
@@ -155,10 +155,10 @@ function renderFilters() {
                 <td><code>${filter.filter_value}</code></td>
                 <td>${filter.enabled ? '<span class="badge bg-success">Enabled</span>' : '<span class="badge bg-secondary">Disabled</span>'}</td>
                 <td>
-                    <button class="btn btn-sm btn-outline-warning" onclick="editFilter(${filter.id})">
+                    <button class="btn btn-sm btn-outline-warning" data-action="edit" data-filter-id="${filter.id}">
                         <i class="bi bi-pencil"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteFilter(${filter.id})">
+                    <button class="btn btn-sm btn-outline-danger" data-action="delete" data-filter-id="${filter.id}">
                         <i class="bi bi-trash"></i>
                     </button>
                 </td>
@@ -168,115 +168,6 @@ function renderFilters() {
     
     html += '</tbody></table></div>';
     document.getElementById('filters-list').innerHTML = html;
-}
-
-function newFilter() {
-    document.getElementById('filterModalLabel').textContent = 'Add Filter';
-    document.getElementById('filterForm').reset();
-    document.getElementById('filterId').value = '';
-    document.getElementById('filterEnabled').checked = true;
-    updateFilterHelp();
-}
-
-function editFilter(id) {
-    const filter = filters.find(f => f.id === id);
-    if (!filter) return;
-    
-    document.getElementById('filterModalLabel').textContent = 'Edit Filter';
-    document.getElementById('filterId').value = filter.id;
-    document.getElementById('filterAccountId').value = filter.account_id;
-    document.getElementById('filterName').value = filter.name;
-    document.getElementById('filterType').value = filter.filter_type;
-    document.getElementById('filterAction').value = filter.filter_action;
-    document.getElementById('filterValue').value = filter.filter_value;
-    document.getElementById('filterEnabled').checked = filter.enabled;
-    
-    updateFilterHelp();
-    
-    // If it's a tag filter, select the tags
-    if (filter.filter_type === 'tag') {
-        setTimeout(async () => {
-            await loadTagsForFilter();
-            const tags = filter.filter_value.split(',').map(t => t.trim());
-            const tagSelector = document.getElementById('tagSelector');
-            for (let option of tagSelector.options) {
-                if (tags.includes(option.value)) {
-                    option.selected = true;
-                }
-            }
-        }, 100);
-    }
-    
-    modal.show();
-}
-
-async function saveFilter() {
-    const id = document.getElementById('filterId').value;
-    const accountId = document.getElementById('filterAccountId').value;
-    
-    // Validate account selection
-    if (!accountId) {
-        alert('Please select an account');
-        return;
-    }
-    
-    const filterType = document.getElementById('filterType').value;
-    let filterValue;
-    
-    // Get filter value based on type
-    if (filterType === 'tag') {
-        const tagSelector = document.getElementById('tagSelector');
-        const selectedTags = Array.from(tagSelector.selectedOptions).map(opt => opt.value);
-        
-        if (selectedTags.length === 0) {
-            alert('Please select at least one tag');
-            return;
-        }
-        
-        filterValue = selectedTags.join(',');
-    } else {
-        filterValue = document.getElementById('filterValue').value;
-    }
-    
-    const data = {
-        account_id: parseInt(accountId),
-        name: document.getElementById('filterName').value,
-        filter_type: filterType,
-        filter_action: document.getElementById('filterAction').value,
-        filter_value: filterValue,
-        enabled: document.getElementById('filterEnabled').checked
-    };
-    
-    try {
-        const url = id ? `/api/filters/${id}` : '/api/filters';
-        const method = id ? 'PUT' : 'POST';
-        
-        const response = await fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        
-        if (!response.ok) throw new Error('Failed to save filter');
-        
-        modal.hide();
-        loadFilters();
-    } catch (error) {
-        alert('Error saving filter: ' + error.message);
-    }
-}
-
-async function deleteFilter(id) {
-    if (!confirm('Delete this filter?')) return;
-    
-    try {
-        const response = await fetch(`/api/filters/${id}`, { method: 'DELETE' });
-        if (!response.ok) throw new Error('Failed to delete filter');
-        
-        loadFilters();
-    } catch (error) {
-        alert('Error deleting filter: ' + error.message);
-    }
 }
 
 function updateFilterHelp() {
@@ -329,5 +220,152 @@ async function loadTagsForFilter() {
 }
 
 loadAccounts().then(() => loadFilters());
+
+// Initialize event listeners after DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    // Add Filter button
+    const addBtn = document.getElementById('add-filter-btn');
+    if (addBtn) {
+        addBtn.addEventListener('click', () => {
+            document.getElementById('filterModalLabel').textContent = 'Add Filter';
+            document.getElementById('filterForm').reset();
+            document.getElementById('filterId').value = '';
+            document.getElementById('filterEnabled').checked = true;
+            updateFilterHelp();
+        });
+    }
+
+    // Account selector change
+    const accountSelect = document.getElementById('accountSelect');
+    if (accountSelect) {
+        accountSelect.addEventListener('change', () => loadFilters());
+    }
+
+    // Filter type change
+    const filterType = document.getElementById('filterType');
+    if (filterType) {
+        filterType.addEventListener('change', () => updateFilterHelp());
+    }
+
+    // Save Filter button
+    const saveBtn = document.getElementById('save-filter-btn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', async () => {
+            const id = document.getElementById('filterId').value;
+            const accountId = document.getElementById('filterAccountId').value;
+            
+            if (!accountId) {
+                alert('Please select an account');
+                return;
+            }
+            
+            const filterType = document.getElementById('filterType').value;
+            let filterValue;
+            
+            if (filterType === 'tag') {
+                const tagSelector = document.getElementById('tagSelector');
+                const selectedTags = Array.from(tagSelector.selectedOptions).map(opt => opt.value);
+                
+                if (selectedTags.length === 0) {
+                    alert('Please select at least one tag');
+                    return;
+                }
+                
+                filterValue = selectedTags.join(',');
+            } else {
+                filterValue = document.getElementById('filterValue').value;
+            }
+            
+            const data = {
+                account_id: parseInt(accountId),
+                name: document.getElementById('filterName').value,
+                filter_type: filterType,
+                filter_action: document.getElementById('filterAction').value,
+                filter_value: filterValue,
+                enabled: document.getElementById('filterEnabled').checked
+            };
+            
+            try {
+                const url = id ? `/api/filters/${id}` : '/api/filters';
+                const method = id ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    modal.hide();
+                    await loadFilters();
+                } else {
+                    const error = await response.json();
+                    alert('Error saving filter: ' + (error.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+    }
+
+    // Event delegation for filter action buttons
+    const filtersList = document.getElementById('filters-list');
+    if (filtersList) {
+        filtersList.addEventListener('click', async (e) => {
+            const button = e.target.closest('button[data-action]');
+            if (!button) return;
+
+            const action = button.dataset.action;
+            const filterId = parseInt(button.dataset.filterId);
+            const filter = filters.find(f => f.id === filterId);
+
+            switch (action) {
+                case 'edit':
+                    if (!filter) return;
+                    
+                    document.getElementById('filterModalLabel').textContent = 'Edit Filter';
+                    document.getElementById('filterId').value = filter.id;
+                    document.getElementById('filterAccountId').value = filter.account_id;
+                    document.getElementById('filterName').value = filter.name;
+                    document.getElementById('filterType').value = filter.filter_type;
+                    document.getElementById('filterAction').value = filter.filter_action;
+                    document.getElementById('filterValue').value = filter.filter_value;
+                    document.getElementById('filterEnabled').checked = filter.enabled;
+                    
+                    updateFilterHelp();
+                    
+                    if (filter.filter_type === 'tag') {
+                        setTimeout(async () => {
+                            await loadTagsForFilter();
+                            const tags = filter.filter_value.split(',').map(t => t.trim());
+                            const tagSelector = document.getElementById('tagSelector');
+                            for (const option of tagSelector.options) {
+                                if (tags.includes(option.value)) {
+                                    option.selected = true;
+                                }
+                            }
+                        }, 100);
+                    }
+                    
+                    modal.show();
+                    break;
+
+                case 'delete':
+                    if (!confirm('Delete this filter?')) return;
+                    try {
+                        const response = await fetch(`/api/filters/${filterId}`, { method: 'DELETE' });
+                        if (response.ok) {
+                            await loadFilters();
+                        } else {
+                            alert('Error deleting filter');
+                        }
+                    } catch (error) {
+                        alert('Error: ' + error.message);
+                    }
+                    break;
+            }
+        });
+    }
+});
 </script>
 {% endblock %}

@@ -27,7 +27,7 @@
                 <i class="bi bi-broadcast"></i> IPTV Proxy Manager v2
             </a>
             <div class="d-flex">
-                <button class="btn btn-outline-light btn-sm" onclick="clearAllCache()">
+                <button class="btn btn-outline-light btn-sm" id="clear-cache-btn">
                     <i class="bi bi-arrow-clockwise"></i> Clear Cache
                 </button>
             </div>
@@ -80,18 +80,23 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        async function clearAllCache() {
-            if (confirm('Clear all cached data?')) {
-                try {
-                    const response = await fetch('/api/cache/clear', { method: 'POST' });
-                    if (response.ok) {
-                        location.reload();
+        document.addEventListener('DOMContentLoaded', () => {
+            const clearCacheBtn = document.getElementById('clear-cache-btn');
+            if (clearCacheBtn) {
+                clearCacheBtn.addEventListener('click', async () => {
+                    if (confirm('Clear all cached data?')) {
+                        try {
+                            const response = await fetch('/api/cache/clear', { method: 'POST' });
+                            if (response.ok) {
+                                location.reload();
+                            }
+                        } catch (error) {
+                            alert('Error clearing cache: ' + error.message);
+                        }
                     }
-                } catch (error) {
-                    alert('Error clearing cache: ' + error.message);
-                }
+                });
             }
-        }
+        });
     </script>
     {% block extra_js %}{% endblock %}
 </body>

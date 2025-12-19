@@ -1,4 +1,4 @@
-.PHONY: help install test lint format clean run docker-build docker-run venv
+.PHONY: help install install-js test test-fast lint lint-js format clean run docker-build docker-run venv
 
 VENV = venv
 PYTHON = $(VENV)/bin/python
@@ -19,9 +19,12 @@ venv: ## Create virtual environment
 	python3 -m venv $(VENV)
 	$(PIP) install --upgrade pip
 
-install: venv ## Install dependencies in venv
+install: venv ## Install Python dependencies in venv
 	$(PIP) install -r requirements.txt
 	$(PIP) install -r requirements-dev.txt
+
+install-js: ## Install JavaScript dependencies
+	npm install
 
 test: venv ## Run tests with coverage in venv
 	$(PYTEST) tests/ -v --cov=. --cov-report=html --cov-report=term-missing
@@ -29,18 +32,23 @@ test: venv ## Run tests with coverage in venv
 test-fast: venv ## Run tests without coverage in venv
 	$(PYTEST) tests/ -v
 
-lint: venv ## Run linting checks in venv
+lint: venv ## Run Python linting checks in venv
 	$(FLAKE8) . --count --select=E9,F63,F7,F82 --show-source --statistics
 	$(FLAKE8) . --count --exit-zero --statistics
 	$(BLACK) --check .
 	$(ISORT) --check-only .
 	$(MYPY) app.py models.py services/ || true
 
+lint-js: ## Run JavaScript/HTML linting
+	npm run lint
+
+lint-all: lint lint-js ## Run all linting checks (Python + JavaScript)
+
 format: venv ## Format code with black and isort in venv
 	$(BLACK) .
 	$(ISORT) .
 
-clean: ## Clean up generated files
+clean: ## Clean up Python generated files
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name '*.pyc' -delete
 	find . -type f -name '*.pyo' -delete
@@ -49,6 +57,11 @@ clean: ## Clean up generated files
 	rm -rf .pytest_cache/
 	rm -rf .mypy_cache/
 	rm -rf $(VENV)/
+
+clean-js: ## Clean up JavaScript dependencies
+	rm -rf node_modules package-lock.json
+
+clean-all: clean clean-js ## Clean up all generated files
 
 run: ## Run the application locally
 	python app.py
@@ -71,4 +84,4 @@ docker-stop: ## Stop Docker containers
 docker-migrate: ## Run migrations in Docker container
 	docker exec -it iptv-proxy-v2 python run_migrations.py
 
-ci: lint test ## Run CI checks (lint + test)
+ci: lint-all test ## Run all CI checks (Python + JavaScript linting + tests)
