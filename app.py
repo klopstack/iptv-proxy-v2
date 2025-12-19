@@ -911,7 +911,7 @@ def process_account_tags(account_id):
 
 
 def _process_tags_from_channels(account, channels, processing_start):
-    """Process tags using Channel database records"""
+    """Process tags using Channel database records and update cleaned names"""
     # Get tag rules for this account
     tag_rules = TagService.get_rules_for_account(account)
     
@@ -926,12 +926,19 @@ def _process_tags_from_channels(account, channels, processing_start):
     tag_counts = {}
     tags_created = 0
     tags_updated = 0
+    channels_updated = 0
     
     for channel in channels:
         category_name = channel.category.category_name if channel.category else ""
         
-        # Extract tags
+        # Extract tags and cleaned name
         tags, cleaned_name = TagService.extract_tags(channel.name, category_name, tag_rules)
+        
+        # Update cleaned name in database if changed
+        if channel.cleaned_name != cleaned_name:
+            channel.cleaned_name = cleaned_name
+            channel.updated_at = processing_start
+            channels_updated += 1
         
         # Store tags
         for tag_name in tags:
@@ -983,7 +990,8 @@ def _process_tags_from_channels(account, channels, processing_start):
     
     logger.info(
         f"Processed tags for {processed_count} channels in account {account.id}: "
-        f"{tags_created} created, {tags_updated} updated, {tags_removed} removed"
+        f"{tags_created} created, {tags_updated} updated, {tags_removed} removed, "
+        f"{channels_updated} channel names cleaned"
     )
     
     return jsonify({
@@ -994,6 +1002,7 @@ def _process_tags_from_channels(account, channels, processing_start):
         "tags_created": tags_created,
         "tags_updated": tags_updated,
         "tags_removed": tags_removed,
+        "channels_updated": channels_updated,
         "using_database": True
     })
 
@@ -1417,94 +1426,84 @@ def preview_playlist_config(config_id):
 # TODO: Add test coverage for playlist generation (requires mocking IPTVService)
 @app.route("/playlist/<int:account_id>.m3u")
 def generate_playlist(account_id):
-    """Generate M3U playlist for account with filters applied"""
+    """Generate M3U playlist for account with filters applied (using database)"""
     account = Account.query.get_or_404(account_id)
 
     if not account.enabled:
         return Response("Account is disabled", status=403)
 
     try:
-        # Get streams
-        service = IPTVService(account.server, account.username, account.password)
-        streams = cache_service.get_cached_streams(account_id)
-        if not streams:
-            streams = service.get_live_streams()
-            cache_service.cache_streams(account_id, streams)
-
-        categories = cache_service.get_cached_categories(account_id)
-        if not categories:
-            categories = service.get_live_categories()
-            cache_service.cache_categories(account_id, categories)
-
-        # Build category map
-        category_map = {str(c["category_id"]): c["category_name"] for c in categories}
-
+        # Check if channels are synced to database
+        channel_count = Channel.query.filter_by(account_id=account_id, is_active=True).count()
+        if channel_count == 0:
+            return Response("Account not synced. Please sync channels first.", status=503)
+        
         # Get filters
         filters = Filter.query.filter_by(account_id=account_id, enabled=True).all()
-
-        # Get tag rules for name cleaning
-        tag_rules = TagRule.query.filter_by(enabled=True).order_by(TagRule.priority).all()
         
-        # Check if we have any tag filters
-        has_tag_filters = any(f.filter_type == "tag" for f in filters)
-        stream_tag_map = {}
+        # Build base query
+        query = db.session.query(Channel).filter(
+            Channel.account_id == account_id,
+            Channel.is_active == True
+        ).join(Category, Channel.category_id == Category.id, isouter=True)
         
-        if has_tag_filters:
-            # Load channel tags for this account in batches to avoid memory issues
-            # First, get stream IDs that pass non-tag filters
-            candidate_stream_ids = []
-            for stream in streams:
-                if apply_filters(stream, category_map, [f for f in filters if f.filter_type != "tag"], None):
-                    candidate_stream_ids.append(str(stream.get("stream_id")))
+        # Apply category filters
+        category_whitelist = [f.filter_value for f in filters if f.filter_type == "category" and f.filter_action == "whitelist"]
+        category_blacklist = [f.filter_value for f in filters if f.filter_type == "category" and f.filter_action == "blacklist"]
+        
+        if category_whitelist:
+            query = query.filter(Category.category_name.in_(category_whitelist))
+        if category_blacklist:
+            query = query.filter(~Category.category_name.in_(category_blacklist))
+        
+        # Apply channel name filters
+        for f in filters:
+            if f.filter_type == "channel_name":
+                if f.filter_action == "whitelist":
+                    query = query.filter(Channel.name.ilike(f"%{f.filter_value}%"))
+                elif f.filter_action == "blacklist":
+                    query = query.filter(~Channel.name.ilike(f"%{f.filter_value}%"))
+        
+        # Check if we have tag filters
+        tag_filters = [f for f in filters if f.filter_type == "tag"]
+        if tag_filters:
+            # Get tag IDs for filtering
+            tag_names = []
+            for f in tag_filters:
+                if f.filter_action == "whitelist":
+                    tag_names.append(f.filter_value)
             
-            # Load tags only for candidate streams in batches
-            batch_size = 1000
-            for i in range(0, len(candidate_stream_ids), batch_size):
-                batch = candidate_stream_ids[i:i + batch_size]
-                channel_tags_query = db.session.query(
-                    ChannelTag.stream_id, Tag.name
-                ).join(Tag, ChannelTag.tag_id == Tag.id).filter(
-                    ChannelTag.account_id == account_id,
-                    ChannelTag.stream_id.in_(batch)
-                ).all()
+            if tag_names:
+                tag_ids = db.session.query(Tag.id).filter(Tag.name.in_(tag_names)).all()
+                tag_ids = [t[0] for t in tag_ids]
                 
-                for stream_id, tag_name in channel_tags_query:
-                    if stream_id not in stream_tag_map:
-                        stream_tag_map[stream_id] = []
-                    stream_tag_map[stream_id].append(tag_name)
-
-        # Apply filters
-        filtered_streams = []
-        for stream in streams:
-            stream_id = str(stream.get("stream_id"))
-            stream_tags = stream_tag_map.get(stream_id, []) if has_tag_filters else None
-            if apply_filters(stream, category_map, filters, stream_tags):
-                filtered_streams.append(stream)
+                if tag_ids:
+                    # Only include channels that have at least one of the requested tags
+                    query = query.join(ChannelTag, Channel.stream_id == ChannelTag.stream_id).filter(
+                        ChannelTag.tag_id.in_(tag_ids),
+                        ChannelTag.account_id == account_id
+                    ).distinct()
+        
+        # Get all matching channels
+        channels = query.order_by(Channel.name).all()
 
         # Generate M3U
         m3u_lines = ["#EXTM3U"]
-        for stream in filtered_streams:
-            stream_id = stream.get("stream_id")
-            name = stream.get("name", "")
-            category_id = str(stream.get("category_id", ""))
-            category_name = category_map.get(category_id, "Unknown")
-
-            # Extract tags and clean name
-            tags, cleaned_name = TagService.extract_tags(name, category_name, tag_rules)
-
-            # Use cleaned name if available, otherwise original
-            display_name = cleaned_name if cleaned_name else name
-
-            tvg_id = stream.get("epg_channel_id", "")
-            tvg_logo = stream.get("stream_icon", "")
+        for channel in channels:
+            # Use cleaned name (pre-computed during sync)
+            display_name = channel.cleaned_name or channel.name
+            category_name = channel.category.category_name if channel.category else "Unknown"
+            
+            tvg_id = channel.epg_channel_id or ""
+            tvg_logo = channel.stream_icon or ""
 
             extinf = f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{display_name}" tvg-logo="{tvg_logo}" group-title="{category_name}",{display_name}'
-            stream_url = f"http://{account.server}/live/{account.username}/{account.password}/{stream_id}.ts"
+            stream_url = f"http://{account.server}/live/{account.username}/{account.password}/{channel.stream_id}.ts"
 
             m3u_lines.append(extinf)
             m3u_lines.append(stream_url)
 
-        logger.info(f"Generated playlist for account {account_id}: {len(filtered_streams)} channels")
+        logger.info(f"Generated playlist for account {account_id}: {len(channels)} channels")
         return Response("\n".join(m3u_lines), mimetype="application/x-mpegurl")
 
     except Exception as e:
@@ -1754,16 +1753,13 @@ def preview_playlist_from_db(account_id, limit, offset, tag_filter):
             stream_tag_map[stream_id] = []
         stream_tag_map[stream_id].append(tag_name)
     
-    # Get tag rules for name cleaning
-    tag_rules = TagService.get_rules_for_account(account)
-    
     # Build results
     results = []
     for channel in channels:
         category_name = channel.category.category_name if channel.category else "Unknown"
         
-        # Extract cleaned name
-        _, cleaned_name = TagService.extract_tags(channel.name, category_name, tag_rules)
+        # Use stored cleaned name (computed during sync or tag processing)
+        cleaned_name = channel.cleaned_name or channel.name
         
         results.append({
             "id": channel.stream_id,
@@ -2009,6 +2005,7 @@ def preview_channels_cross_account():
             results.append({
                 "stream_id": channel.stream_id,
                 "name": channel.name,
+                "cleaned_name": channel.cleaned_name or channel.name,
                 "category_name": channel.category.name if channel.category else "",
                 "account_id": channel.account_id,
                 "account_name": account_map.get(channel.account_id, "Unknown"),

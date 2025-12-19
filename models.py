@@ -149,6 +149,7 @@ class Channel(db.Model):
     account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False, index=True)
     stream_id = db.Column(db.String(50), nullable=False)  # External stream ID from provider
     name = db.Column(db.String(500), nullable=False, index=True)
+    cleaned_name = db.Column(db.String(500))  # Processed name after tag extraction
     category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), nullable=True, index=True)
     stream_type = db.Column(db.String(20))  # live, movie, series
     stream_icon = db.Column(db.String(500))

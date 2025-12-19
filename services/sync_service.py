@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Tuple
 
 from models import Account, Category, Channel, db
 from services.iptv_service import IPTVService
+from services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
 
@@ -138,15 +139,28 @@ class ChannelSyncService:
         """Sync channels for an account"""
         now = datetime.utcnow()
 
+        # Get account for tag rules
+        account = Account.query.get(account_id)
+        if not account:
+            return stats
+        
+        # Get tag rules for name cleaning
+        tag_rules = TagService.get_rules_for_account(account)
+
         # Build lookup of existing channels
         existing = {
             (chan.stream_id): chan
             for chan in Channel.query.filter_by(account_id=account_id).all()
         }
 
-        # Build lookup of categories
+        # Build lookup of categories (both ID mapping and name mapping)
         categories = {
             cat.category_id: cat.id
+            for cat in Category.query.filter_by(account_id=account_id).all()
+        }
+        
+        category_names = {
+            cat.category_id: cat.category_name
             for cat in Category.query.filter_by(account_id=account_id).all()
         }
 
@@ -157,11 +171,16 @@ class ChannelSyncService:
             if not stream_id:
                 continue
 
-            # Get category ID
+            # Get category ID and name
             category_id = None
+            category_name = ""
             cat_id_str = str(chan_data.get("category_id", ""))
             if cat_id_str and cat_id_str in categories:
                 category_id = categories[cat_id_str]
+                category_name = category_names.get(cat_id_str, "")
+            
+            # Compute cleaned name using tag rules
+            _, cleaned_name = TagService.extract_tags(name, category_name, tag_rules)
 
             if stream_id in existing:
                 # Update existing
@@ -170,6 +189,9 @@ class ChannelSyncService:
 
                 if chan.name != name:
                     chan.name = name
+                    changed = True
+                if chan.cleaned_name != cleaned_name:
+                    chan.cleaned_name = cleaned_name
                     changed = True
                 if chan.category_id != category_id:
                     chan.category_id = category_id
@@ -203,6 +225,7 @@ class ChannelSyncService:
                     account_id=account_id,
                     stream_id=stream_id,
                     name=name,
+                    cleaned_name=cleaned_name,
                     category_id=category_id,
                     stream_type=chan_data.get("stream_type"),
                     stream_icon=chan_data.get("stream_icon"),
