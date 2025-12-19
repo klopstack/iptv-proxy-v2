@@ -7,11 +7,12 @@ Provides:
 - Flask error handlers for common HTTP errors
 - Safe error logging (never exposes internal details to users)
 """
-from functools import wraps
-from flask import jsonify, Response
-from werkzeug.exceptions import HTTPException
 import logging
 import traceback
+from functools import wraps
+
+from flask import Response, jsonify
+from werkzeug.exceptions import HTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,7 @@ def handle_errors(
         def wrapper(*args, **kwargs):
             try:
                 return f(*args, **kwargs)
-            except HTTPException as e:
+            except HTTPException:
                 # Let Flask handle HTTP exceptions (abort, get_or_404, etc.)
                 raise
             except ServiceUnavailableError as e:
@@ -162,21 +163,21 @@ def handle_errors(
                 else:
                     return text_error_response(message, 404)
 
-            except Exception as e:
+            except Exception as exc:
                 # Unexpected errors (500)
                 if log_errors:
-                    logger.error(f"Unexpected error in {f.__name__}: {e}", exc_info=True)
+                    logger.error(f"Unexpected error in {f.__name__}", exc_info=True)
 
                 # Never expose internal error details in production
                 # But log them for debugging
                 from flask import current_app
 
                 if current_app.config.get("DEBUG") and include_traceback_in_dev:
-                    details = {"exception_type": type(e).__name__, "traceback": traceback.format_exc()}
+                    details = {"exception_type": type(exc).__name__, "traceback": traceback.format_exc()}
                     if return_json:
-                        return error_response(str(e), 500, details)
+                        return error_response(str(exc), 500, details)
                     else:
-                        return text_error_response(f"{str(e)}\n\n{traceback.format_exc()}", 500)
+                        return text_error_response(f"{str(exc)}\n\n{traceback.format_exc()}", 500)
                 else:
                     # Production: generic message
                     message = default_message if default_message else "An internal error occurred"

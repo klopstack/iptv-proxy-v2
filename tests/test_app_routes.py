@@ -2,8 +2,9 @@
 Tests for app.py routes that need coverage
 """
 
-import pytest
 from unittest.mock import Mock, patch
+
+import pytest
 
 
 # Use fixtures from conftest or test_app

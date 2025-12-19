@@ -26,13 +26,13 @@ install: venv ## Install Python dependencies in venv
 install-js: ## Install JavaScript dependencies
 	npm install
 
-test: venv ## Run tests with coverage in venv
+test: install ## Run tests with coverage in venv
 	$(PYTEST) tests/ -v --cov=. --cov-report=html --cov-report=term-missing
 
-test-fast: venv ## Run tests without coverage in venv
+test-fast: install ## Run tests without coverage in venv
 	$(PYTEST) tests/ -v
 
-lint: venv ## Run Python linting checks in venv
+lint: install ## Run Python linting checks in venv
 	$(FLAKE8) . --count --select=E9,F63,F7,F82 --show-source --statistics
 	$(FLAKE8) . --count --exit-zero --statistics
 	$(BLACK) --check .

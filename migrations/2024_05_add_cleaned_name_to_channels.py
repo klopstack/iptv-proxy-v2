@@ -8,8 +8,8 @@ Migration: 2024_05_add_cleaned_name_to_channels
 Created: 2024-12-19
 """
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -26,7 +26,7 @@ def upgrade():
         conn.execute(db.text("ALTER TABLE channels ADD COLUMN cleaned_name VARCHAR(500)"))
         conn.commit()
 
-        print(f"✓ Added cleaned_name column to channels table")
+        print("✓ Added cleaned_name column to channels table")
 
 
 def downgrade():

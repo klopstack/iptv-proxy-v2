@@ -5,9 +5,9 @@ Provides Flask app, database, and client fixtures for testing.
 """
 import os
 import sys
-import pytest
-import tempfile
 from pathlib import Path
+
+import pytest
 
 # Add parent directory to path so we can import app modules
 sys.path.insert(0, str(Path(__file__).parent.parent))

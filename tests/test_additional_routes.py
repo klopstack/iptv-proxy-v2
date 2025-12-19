@@ -3,7 +3,6 @@ Tests for remaining app.py routes to reach 80% coverage
 """
 
 import pytest
-from unittest.mock import Mock, patch
 
 
 @pytest.fixture

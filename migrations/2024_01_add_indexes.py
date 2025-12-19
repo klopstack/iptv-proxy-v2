@@ -6,12 +6,12 @@ queries when filtering channels by account and tags.
 
 Added indexes:
 - ix_channel_tags_account_id: Index on account_id column
-- ix_channel_tags_tag_id: Index on tag_id column  
+- ix_channel_tags_tag_id: Index on tag_id column
 - idx_channel_tags_account_tag: Composite index on (account_id, tag_id)
 """
 
-import sqlite3
 import os
+import sqlite3
 import sys
 
 
@@ -32,7 +32,7 @@ def migrate(db_path):
         # Check existing indexes
         cursor.execute(
             """
-            SELECT name FROM sqlite_master 
+            SELECT name FROM sqlite_master
             WHERE type='index' AND tbl_name='channel_tags'
         """
         )

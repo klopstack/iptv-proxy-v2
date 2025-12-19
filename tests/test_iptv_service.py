@@ -2,9 +2,10 @@
 Tests for IPTV Service
 """
 
+from unittest.mock import Mock, patch
+
 import pytest
 import requests
-from unittest.mock import Mock, patch
 
 from services.iptv_service import IPTVService
 

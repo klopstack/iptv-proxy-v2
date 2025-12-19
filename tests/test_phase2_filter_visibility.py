@@ -10,7 +10,7 @@ Tests that filter visibility is:
 """
 import pytest
 
-from models import Account, Channel, Category, Filter, Tag, ChannelTag, db
+from models import Account, Category, Channel, ChannelTag, Filter, Tag, db
 from services.filter_service import FilterService
 
 

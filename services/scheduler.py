@@ -7,7 +7,7 @@ import threading
 import time
 from datetime import datetime
 
-from models import Account, db
+from models import Account
 from services.sync_service import ChannelSyncService
 
 logger = logging.getLogger(__name__)

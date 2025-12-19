@@ -25,7 +25,7 @@ def upgrade():
         conn.execute(db.text("ALTER TABLE channels ADD COLUMN is_visible BOOLEAN DEFAULT 1"))
         conn.commit()
 
-        print(f"✓ Added is_visible column to channels table")
+        print("✓ Added is_visible column to channels table")
 
 
 def downgrade():

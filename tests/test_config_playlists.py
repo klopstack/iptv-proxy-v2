@@ -9,10 +9,11 @@ Tests that:
 5. Unsynced accounts return 503
 6. Pre-computed data (cleaned_name, is_visible) is used
 """
-import pytest
 import json
 
-from models import Account, Channel, Category, RuleSet, TagRule, Tag, ChannelTag, PlaylistConfig, db
+import pytest
+
+from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Tag, db
 
 
 @pytest.fixture

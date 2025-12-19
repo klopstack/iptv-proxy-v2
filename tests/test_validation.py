@@ -8,9 +8,7 @@ Tests that:
 4. Required fields are enforced
 5. Type and format constraints work
 """
-import pytest
 from models import Account, RuleSet, db
-
 
 # ============================================================================
 # Account Validation Tests
@@ -385,7 +383,6 @@ def test_validation_with_wrong_types(app, client):
         account = Account(name="Test", server="test.com", username="user", password="pass")
         db.session.add(account)
         db.session.commit()
-        account_id = account.id
 
     # Sending string for account_id integer
     response = client.post(

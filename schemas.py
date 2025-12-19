@@ -4,9 +4,9 @@ Marshmallow schemas for input validation
 Provides validation for all API endpoints to prevent malformed data,
 database corruption, and improve error messaging.
 """
-from marshmallow import Schema, fields, validates, validates_schema, ValidationError
 import re
 
+from marshmallow import Schema, ValidationError, fields, validates, validates_schema
 
 # ============================================================================
 # Account Schemas
@@ -228,7 +228,8 @@ def validate_request_data(schema_class):
     Returns 400 Bad Request with validation errors if data is invalid.
     """
     from functools import wraps
-    from flask import request, jsonify
+
+    from flask import jsonify, request
 
     def decorator(f):
         @wraps(f)

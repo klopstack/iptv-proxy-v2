@@ -4,7 +4,7 @@ Channel sync service for synchronizing channels from IPTV providers to local dat
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List
 
 from models import Account, Category, Channel, db
 from services.iptv_service import IPTVService
@@ -73,7 +73,7 @@ class ChannelSyncService:
             if stats["success"]:
                 cutoff_time = datetime.utcnow() - timedelta(minutes=5)
                 deactivated = Channel.query.filter(
-                    Channel.account_id == account_id, Channel.is_active == True, Channel.last_seen < cutoff_time
+                    Channel.account_id == account_id, Channel.is_active, Channel.last_seen < cutoff_time
                 ).update({"is_active": False})
                 db.session.commit()
                 stats["channels_deactivated"] = deactivated

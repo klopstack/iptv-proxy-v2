@@ -178,6 +178,22 @@ Things to Know
 
 **Regex in patterns:** When creating tag rules with regex, use raw strings in code (`r'\b4K\b'`) but stored as normal strings in DB.
 
+## Quality Assurance (Required!)
+
+**ALWAYS run these commands after making code changes:**
+
+```bash
+make lint    # Check code quality and formatting (black, flake8, isort, mypy)
+make test    # Run full test suite with 70% coverage requirement
+```
+
+Both commands must pass before considering your changes complete. These checks are enforced in CI and will prevent merges if they fail.
+
+**Quick Reference:**
+- `make format` - Auto-fix formatting issues before running `make lint`
+- `make test-fast` - Run tests without coverage checks (for rapid iteration)
+- Check `htmlcov/index.html` after `make test` to see detailed coverage report
+
 ## Contributing to This Project
 
 Since patterns are still emerging, feel free to propose refactorings or architectural changes. When making significant changes, consider:
@@ -185,3 +201,4 @@ Since patterns are still emerging, feel free to propose refactorings or architec
 - Will this scale if the codebase grows?
 - Are there tests to prevent regressions?
 - Does it maintain backward compatibility with existing data?
+- **Have you run `make lint` and `make test`?** (Required!)

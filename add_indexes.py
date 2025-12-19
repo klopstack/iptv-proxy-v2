@@ -34,7 +34,7 @@ def add_indexes():
         # Check if indexes already exist
         cursor.execute(
             """
-            SELECT name FROM sqlite_master 
+            SELECT name FROM sqlite_master
             WHERE type='index' AND tbl_name='channel_tags'
         """
         )

@@ -6,8 +6,8 @@ import logging
 
 from flask import Blueprint, Response, jsonify, request
 
-from error_handling import handle_errors, ServiceUnavailableError
-from models import Account, Channel, ChannelTag, Category, PlaylistConfig, Tag, db
+from error_handling import ServiceUnavailableError, handle_errors
+from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Tag, db
 from schemas import PlaylistConfigCreateSchema, validate_request_data
 from services.cache_service import CacheService
 from services.iptv_service import IPTVService
@@ -270,7 +270,7 @@ def generate_playlist(account_id):
     # Build base query - use pre-computed is_visible
     query = (
         db.session.query(Channel)
-        .filter(Channel.account_id == account_id, Channel.is_active == True, Channel.is_visible == True)
+        .filter(Channel.account_id == account_id, Channel.is_active, Channel.is_visible)
         .join(Category, Channel.category_id == Category.id, isouter=True)
     )
 
@@ -349,7 +349,7 @@ def generate_playlist_from_config(config_id):
         # Use pre-computed is_visible (account-level filters already applied)
         query = (
             db.session.query(Channel)
-            .filter(Channel.account_id == account.id, Channel.is_active == True, Channel.is_visible == True)
+            .filter(Channel.account_id == account.id, Channel.is_active, Channel.is_visible)
             .join(Category, Channel.category_id == Category.id, isouter=True)
         )
 

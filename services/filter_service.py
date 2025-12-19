@@ -6,7 +6,7 @@ import logging
 import re
 from typing import Dict, List
 
-from models import Account, Category, Channel, ChannelTag, Filter, Tag, db
+from models import Account, Channel, ChannelTag, Filter, Tag, db
 
 logger = logging.getLogger(__name__)
 

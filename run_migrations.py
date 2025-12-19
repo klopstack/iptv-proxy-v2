@@ -10,14 +10,14 @@ This script:
 
 Usage:
     python run_migrations.py
-    
+
 Environment Variables:
     DATABASE_URL: Path to database (default: sqlite:///data/iptv_proxy.db)
 """
 
+import importlib.util
 import os
 import sys
-import importlib.util
 from pathlib import Path
 
 
@@ -97,7 +97,7 @@ def run_migrations():
             migration_module = load_migration(migration_file)
 
             if not hasattr(migration_module, "migrate"):
-                print(f"  ⚠️  Skipping: No migrate() function found")
+                print("  ⚠️  Skipping: No migrate() function found")
                 skip_count += 1
                 continue
 

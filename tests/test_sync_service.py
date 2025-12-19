@@ -2,10 +2,11 @@
 Tests for Channel Sync Service
 """
 
-import pytest
 import os
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
+
+import pytest
 
 from models import Account, Category, Channel, db
 from services.sync_service import ChannelSyncService
@@ -15,7 +16,8 @@ from services.sync_service import ChannelSyncService
 def app():
     """Flask app fixture"""
     os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-    from app import app as flask_app, db as flask_db
+    from app import app as flask_app
+    from app import db as flask_db
 
     flask_app.config["TESTING"] = True
     flask_app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"

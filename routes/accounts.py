@@ -1,7 +1,6 @@
 """
 Account management routes
 """
-import json
 import logging
 
 from flask import Blueprint, jsonify, request
@@ -584,13 +583,12 @@ def preview_account_playlist(account_id):
     Returns:
     - JSON with total count, channel data, and using_database flag
     """
-    account = Account.query.get_or_404(account_id)
+    Account.query.get_or_404(account_id)
 
     # Check if account has been synced (database-first approach)
     # Only count ACTIVE channels
     has_synced = (
-        db.session.query(Channel.id).filter(Channel.account_id == account_id, Channel.is_active == True).first()
-        is not None
+        db.session.query(Channel.id).filter(Channel.account_id == account_id, Channel.is_active).first() is not None
     )
 
     if not has_synced:
@@ -601,8 +599,8 @@ def preview_account_playlist(account_id):
         db.session.query(Channel)
         .filter(
             Channel.account_id == account_id,
-            Channel.is_active == True,
-            Channel.is_visible == True,  # Use pre-computed filter result
+            Channel.is_active,
+            Channel.is_visible,  # Use pre-computed filter result
         )
         .join(Category, Channel.category_id == Category.id, isouter=True)
         .order_by(Channel.name)

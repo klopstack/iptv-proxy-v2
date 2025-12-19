@@ -8,8 +8,8 @@ Added index:
 - ix_tags_name: Index on tags.name column for autocomplete searches
 """
 
-import sqlite3
 import os
+import sqlite3
 import sys
 
 
@@ -30,7 +30,7 @@ def migrate(db_path):
         # Check existing indexes on tags table
         cursor.execute(
             """
-            SELECT name FROM sqlite_master 
+            SELECT name FROM sqlite_master
             WHERE type='index' AND tbl_name='tags'
         """
         )

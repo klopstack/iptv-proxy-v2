@@ -8,10 +8,8 @@ Tests that cleaned names are:
 4. Used in preview/playlist generation
 """
 import pytest
-from datetime import datetime
 
-from models import Account, Channel, Category, RuleSet, TagRule, db
-from services.sync_service import ChannelSyncService
+from models import Account, Category, Channel, RuleSet, TagRule, db
 from services.tag_service import TagService
 
 
@@ -206,7 +204,7 @@ def test_playlist_uses_cleaned_names(app, client, test_account, test_ruleset):
         # Verify cleaned name in M3U
         assert "HBO Entertainment" in playlist_text
         assert "US| HBO Entertainment ᴴᴰ" not in playlist_text
-        assert f'tvg-name="HBO Entertainment"' in playlist_text
+        assert 'tvg-name="HBO Entertainment"' in playlist_text
 
 
 def test_tag_processing_updates_cleaned_names(app, client, test_account, test_ruleset):

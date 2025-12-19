@@ -10,10 +10,18 @@ exclude =
     instance,
     data,
     migrations
-ignore = E203,E501,W503
+
+# Global ignores for legitimate cases:
+# E203: Whitespace before ':' - conflicts with black formatter in slices (e.g., list[start : end])
+# E501: Line too long - reasonable limit (120 chars), some M3U8 format strings exceed this
+ignore = E203,E501
+
+# Per-file ignores:
+# app.py E402: Flask application factory pattern requires imports after app initialization
+# test files/migrate_tags/conftest E402: Import after sys.path manipulation for test/migration setup
 per-file-ignores =
-    __init__.py:F401
-    migrate_tags.py:E402,F401
-    add_indexes.py:E402,F401
-    run_migrations.py:E402,F401
+    app.py:E402
+    migrate_tags.py:E402
     test_tags.py:E402
+    tests/conftest.py:E402
+    tests/test_*.py:E402

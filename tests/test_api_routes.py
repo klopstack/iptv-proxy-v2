@@ -1,10 +1,11 @@
 """
 Tests for API routes - sync, tags, cache, and channel preview
 """
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-from models import Account, Channel, Category, Tag, ChannelTag, db
+import pytest
+
+from models import Account, Category, Channel, ChannelTag, Tag, db
 
 
 @pytest.fixture

@@ -6,7 +6,7 @@ Application entry point with blueprint registration.
 All routes have been moved to blueprints:
   - routes/web.py - Web UI pages
   - routes/accounts.py - Account management
-  - routes/filters.py - Filter management  
+  - routes/filters.py - Filter management
   - routes/rulesets.py - Ruleset and tag rule management
   - routes/playlists.py - Playlist generation
   - routes/api.py - Misc API endpoints (sync, tags, cache)
@@ -18,9 +18,9 @@ import os
 from flask import Flask
 from flask_cors import CORS
 
+from error_handling import register_error_handlers
 from models import db
 from services.scheduler import SyncScheduler
-from error_handling import register_error_handlers
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -47,12 +47,12 @@ logger = logging.getLogger(__name__)
 # Register Blueprints
 # ============================================================================
 
-from routes.web import web_bp
 from routes.accounts import accounts_bp
-from routes.filters import filters_bp
-from routes.rulesets import rulesets_bp
-from routes.playlists import playlists_bp
 from routes.api import api_bp
+from routes.filters import filters_bp
+from routes.playlists import playlists_bp
+from routes.rulesets import rulesets_bp
+from routes.web import web_bp
 
 app.register_blueprint(web_bp)
 app.register_blueprint(accounts_bp)

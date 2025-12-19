@@ -1,17 +1,16 @@
 """
 Tests for error_handling module
 """
-import pytest
-from flask import Flask, jsonify
+from flask import Flask
 
 from error_handling import (
-    error_response,
-    text_error_response,
-    handle_errors,
-    ValidationError,
+    AuthorizationError,
     ResourceNotFoundError,
     ServiceUnavailableError,
-    AuthorizationError,
+    ValidationError,
+    error_response,
+    handle_errors,
+    text_error_response,
 )
 
 

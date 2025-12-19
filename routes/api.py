@@ -121,7 +121,7 @@ def preview_channels():
     offset = request.args.get("offset", 0, type=int)
 
     # Build base query
-    query = db.session.query(Channel).filter(Channel.is_active == True, Channel.is_visible == True)
+    query = db.session.query(Channel).filter(Channel.is_active, Channel.is_visible)
 
     # Apply account filter if specified
     if account_id:

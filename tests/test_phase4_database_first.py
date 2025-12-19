@@ -11,7 +11,7 @@ Tests that:
 """
 import pytest
 
-from models import Account, Channel, Category, db
+from models import Account, Category, Channel, db
 
 
 @pytest.fixture
