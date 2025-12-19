@@ -20,6 +20,17 @@ pip install -r requirements-dev.txt
 echo ""
 echo "✓ Dependencies installed"
 
+# Check linting tool versions
+echo ""
+echo "📋 Checking linting tool versions..."
+BLACK_VERSION=$(black --version 2>&1 | grep -oP 'version \K[0-9.]+' | head -1)
+ISORT_VERSION=$(isort --version 2>&1 | grep -oP 'VERSION \K[0-9.]+' | head -1)
+FLAKE8_VERSION=$(flake8 --version 2>&1 | grep -oP '^[0-9.]+' | head -1)
+
+echo "  black:  $BLACK_VERSION (expected: 23.12.1)"
+echo "  isort:  $ISORT_VERSION (expected: 5.13.2)"
+echo "  flake8: $FLAKE8_VERSION (expected: 7.0.0)"
+
 # Run initial format
 echo ""
 echo "🎨 Formatting code..."
