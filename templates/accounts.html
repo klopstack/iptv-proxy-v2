@@ -103,7 +103,7 @@ async function loadAccounts() {
     }
 }
 
-function renderAccounts() {
+async function renderAccounts() {
     if (accounts.length === 0) {
         document.getElementById('accounts-list').innerHTML = `
             <div class="alert alert-info">
@@ -113,19 +113,49 @@ function renderAccounts() {
         return;
     }
     
+    // Fetch sync status for all accounts
+    const syncStatuses = {};
+    for (const account of accounts) {
+        try {
+            const response = await fetch(`/api/accounts/${account.id}/sync/status`);
+            const status = await response.json();
+            syncStatuses[account.id] = status;
+        } catch (e) {
+            syncStatuses[account.id] = { synced: false };
+        }
+    }
+    
     let html = '<div class="list-group">';
     for (const account of accounts) {
+        const status = syncStatuses[account.id] || { synced: false };
+        
+        // Format sync status
+        let syncBadge = '';
+        let syncInfo = '';
+        if (status.synced) {
+            syncBadge = '<span class="badge bg-success" title="Database synced"><i class="bi bi-database-check"></i> Synced</span>';
+            if (status.last_sync) {
+                const syncDate = new Date(status.last_sync);
+                const relativeTime = getRelativeTime(syncDate);
+                syncInfo = `<br><small class="text-muted">Last sync: ${relativeTime} (${status.channel_count || 0} channels)</small>`;
+            }
+        } else {
+            syncBadge = '<span class="badge bg-warning text-dark" title="Using API (not synced)"><i class="bi bi-cloud"></i> API Only</span>';
+        }
+        
         html += `
             <div class="list-group-item">
                 <div class="d-flex w-100 justify-content-between align-items-start">
-                    <div>
+                    <div class="flex-grow-1">
                         <h5 class="mb-1">
                             ${account.name}
                             ${!account.enabled ? '<span class="badge bg-secondary">Disabled</span>' : ''}
+                            ${syncBadge}
                         </h5>
                         <p class="mb-1 text-muted">
                             <strong>Server:</strong> ${account.server}<br>
                             <strong>Username:</strong> ${account.username}
+                            ${syncInfo}
                         </p>
                         <small>
                             <a href="/playlist/${account.id}.m3u" target="_blank">
@@ -138,6 +168,9 @@ function renderAccounts() {
                         </small>
                     </div>
                     <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-info" onclick="syncAccount(${account.id})" title="Sync Channels to Database">
+                            <i class="bi bi-arrow-repeat"></i>
+                        </button>
                         <button class="btn btn-sm btn-outline-secondary" onclick="testAccount(${account.id})" title="Test Connection">
                             <i class="bi bi-activity"></i>
                         </button>
@@ -157,6 +190,20 @@ function renderAccounts() {
     }
     html += '</div>';
     document.getElementById('accounts-list').innerHTML = html;
+}
+
+// Helper function to format relative time
+function getRelativeTime(date) {
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
 }
 
 function newAccount() {
@@ -220,6 +267,47 @@ async function deleteAccount(id) {
         loadAccounts();
     } catch (error) {
         alert('Error deleting account: ' + error.message);
+    }
+}
+
+async function syncAccount(id) {
+    const account = accounts.find(a => a.id === id);
+    if (!account) return;
+    
+    if (!confirm(`Sync channels for account "${account.name}"?\n\nThis will fetch all channels from the IPTV provider and store them locally.`)) return;
+    
+    try {
+        // Show progress
+        const btn = event.target.closest('button');
+        const originalBtnContent = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        btn.disabled = true;
+        
+        const response = await fetch(`/api/accounts/${id}/sync`, { method: 'POST' });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert(
+                `Sync completed for "${account.name}"!\n\n` +
+                `Categories: ${result.categories_added} added, ${result.categories_updated} updated\n` +
+                `Channels: ${result.channels_added} added, ${result.channels_updated} updated, ${result.channels_deactivated} deactivated`
+            );
+            // Refresh the accounts list to show updated sync status
+            await loadAccounts();
+        } else {
+            alert(`Sync failed: ${result.error || result.errors.join(', ')}`);
+            // Restore button
+            btn.innerHTML = originalBtnContent;
+            btn.disabled = false;
+        }
+    } catch (error) {
+        alert('Error syncing account: ' + error.message);
+        // Restore button
+        const btn = event.target.closest('button');
+        if (btn) {
+            btn.innerHTML = '<i class="bi bi-arrow-repeat"></i>';
+            btn.disabled = false;
+        }
     }
 }
 

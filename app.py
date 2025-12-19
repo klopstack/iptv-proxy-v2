@@ -21,9 +21,10 @@ import os
 from flask import Flask, Response, jsonify, render_template, request
 from flask_cors import CORS
 
-from models import Account, AccountRuleSet, ChannelTag, Filter, PlaylistConfig, RuleSet, Tag, TagRule, db
+from models import Account, AccountRuleSet, Category, Channel, ChannelTag, Filter, PlaylistConfig, RuleSet, Tag, TagRule, db
 from services.cache_service import CacheService
 from services.iptv_service import IPTVService
+from services.scheduler import SyncScheduler
 from services.tag_service import TagService
 
 # Initialize Flask app
@@ -38,6 +39,10 @@ db.init_app(app)
 
 # Initialize services
 cache_service = CacheService()
+
+# Initialize sync scheduler (6 hours by default, configurable via SYNC_INTERVAL_HOURS env var)
+sync_interval = int(os.getenv("SYNC_INTERVAL_HOURS", "6"))
+sync_scheduler = SyncScheduler(app, interval_hours=sync_interval)
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -832,9 +837,48 @@ def create_default_tag_rules():
 # TODO: Add test coverage for tags listing endpoint
 @app.route("/api/tags", methods=["GET"])
 def get_tags():
-    """Get all tags"""
-    tags = Tag.query.order_by(Tag.name).all()
-    return jsonify([{"id": t.id, "name": t.name, "created_at": t.created_at.isoformat()} for t in tags])
+    """Get all tags with optional account filtering and usage counts
+    
+    Query parameters:
+    - account_id (optional): Filter tags to specific account
+    - with_counts (optional): Include channel counts per tag
+    """
+    account_id = request.args.get("account_id", type=int)
+    with_counts = request.args.get("with_counts", "false").lower() == "true"
+    
+    if account_id:
+        # Filter tags for specific account
+        tags_query = (
+            db.session.query(Tag)
+            .join(ChannelTag)
+            .filter(ChannelTag.account_id == account_id)
+            .distinct()
+            .order_by(Tag.name)
+        )
+    else:
+        # All tags across all accounts
+        tags_query = Tag.query.order_by(Tag.name)
+    
+    tags = tags_query.all()
+    
+    if with_counts:
+        # Build counts for each tag
+        result = []
+        for tag in tags:
+            if account_id:
+                count = ChannelTag.query.filter_by(tag_id=tag.id, account_id=account_id).count()
+            else:
+                count = ChannelTag.query.filter_by(tag_id=tag.id).count()
+            
+            result.append({
+                "id": tag.id,
+                "name": tag.name,
+                "created_at": tag.created_at.isoformat(),
+                "channel_count": count
+            })
+        return jsonify(result)
+    else:
+        return jsonify([{"id": t.id, "name": t.name, "created_at": t.created_at.isoformat()} for t in tags])
 
 
 # TODO: Add test coverage for tag processing endpoint (requires mocking IPTVService)
@@ -844,77 +888,221 @@ def process_account_tags(account_id):
     account = Account.query.get_or_404(account_id)
 
     try:
-        # Get streams
-        service = IPTVService(account.server, account.username, account.password)
-        streams = cache_service.get_cached_streams(account_id)
-        if not streams:
-            streams = service.get_live_streams()
-            cache_service.cache_streams(account_id, streams)
-
-        categories = cache_service.get_cached_categories(account_id)
-        if not categories:
-            categories = service.get_live_categories()
-            cache_service.cache_categories(account_id, categories)
-
-        # Build category map
-        category_map = {str(c["category_id"]): c["category_name"] for c in categories}
-
-        # Get tag rules for this account (account-specific rulesets or defaults)
-        tag_rules = TagService.get_rules_for_account(account)
-
-        # Clear existing channel tags for this account
-        ChannelTag.query.filter_by(account_id=account_id).delete()
-
-        # Process each stream
-        processed_count = 0
-        tag_counts = {}
-
-        for stream in streams:
-            stream_id = str(stream.get("stream_id"))
-            channel_name = stream.get("name", "")
-            category_id = str(stream.get("category_id", ""))
-            category_name = category_map.get(category_id, "")
-
-            # Extract tags
-            tags, cleaned_name = TagService.extract_tags(channel_name, category_name, tag_rules)
-
-            # Store tags
-            for tag_name in tags:
-                # Normalize tag name
-                normalized_tag = TagService.normalize_tag_name(tag_name)
-                
-                # Skip empty or too-short tags
-                if not normalized_tag or len(normalized_tag) < 2:
-                    continue
-
-                # Get or create tag
-                tag = Tag.query.filter_by(name=normalized_tag).first()
-                if not tag:
-                    tag = Tag(name=normalized_tag)
-                    db.session.add(tag)
-                    db.session.flush()  # Get the ID
-
-                # Create channel tag association
-                channel_tag = ChannelTag(account_id=account_id, stream_id=stream_id, tag_id=tag.id)
-                db.session.add(channel_tag)
-
-                # Count tags
-                tag_counts[normalized_tag] = tag_counts.get(normalized_tag, 0) + 1
-
-            processed_count += 1
-
-        db.session.commit()
-
-        logger.info(f"Processed tags for {processed_count} channels in account {account_id}")
-
-        return jsonify(
-            {"success": True, "processed": processed_count, "unique_tags": len(tag_counts), "tag_counts": tag_counts}
-        )
+        # Mark start time for this processing run
+        from datetime import datetime
+        processing_start = datetime.utcnow()
+        
+        # Check if channels are synced to database
+        db_channels = Channel.query.filter_by(account_id=account_id, is_active=True).all()
+        
+        if db_channels:
+            # Use database channels (fast path)
+            logger.info(f"Processing tags from database for account {account_id}")
+            return _process_tags_from_channels(account, db_channels, processing_start)
+        else:
+            # Fall back to API
+            logger.info(f"Processing tags from API for account {account_id} (no synced channels)")
+            return _process_tags_from_api(account, processing_start)
 
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error processing tags for account {account_id}: {e}")
         return jsonify({"success": False, "error": str(e)}), 400
+
+
+def _process_tags_from_channels(account, channels, processing_start):
+    """Process tags using Channel database records"""
+    # Get tag rules for this account
+    tag_rules = TagService.get_rules_for_account(account)
+    
+    # Build lookup of existing channel tags for efficient updates
+    existing_tags = {}
+    for ct in ChannelTag.query.filter_by(account_id=account.id).all():
+        key = (ct.stream_id, ct.tag_id)
+        existing_tags[key] = ct
+    
+    # Process each channel
+    processed_count = 0
+    tag_counts = {}
+    tags_created = 0
+    tags_updated = 0
+    
+    for channel in channels:
+        category_name = channel.category.category_name if channel.category else ""
+        
+        # Extract tags
+        tags, cleaned_name = TagService.extract_tags(channel.name, category_name, tag_rules)
+        
+        # Store tags
+        for tag_name in tags:
+            # Normalize tag name
+            normalized_tag = TagService.normalize_tag_name(tag_name)
+            
+            # Skip empty or too-short tags
+            if not normalized_tag or len(normalized_tag) < 2:
+                continue
+            
+            # Get or create tag
+            tag = Tag.query.filter_by(name=normalized_tag).first()
+            if not tag:
+                tag = Tag(name=normalized_tag)
+                db.session.add(tag)
+                db.session.flush()  # Get the ID
+            
+            # Check if channel tag association exists
+            key = (channel.stream_id, tag.id)
+            if key in existing_tags:
+                # Update existing - mark as fresh
+                existing_tags[key].updated_at = processing_start
+                tags_updated += 1
+            else:
+                # Create new channel tag association
+                channel_tag = ChannelTag(
+                    account_id=account.id,
+                    stream_id=channel.stream_id,
+                    tag_id=tag.id,
+                    created_at=processing_start,
+                    updated_at=processing_start
+                )
+                db.session.add(channel_tag)
+                tags_created += 1
+            
+            # Count tags
+            tag_counts[normalized_tag] = tag_counts.get(normalized_tag, 0) + 1
+        
+        processed_count += 1
+    
+    # Remove channel tags that weren't updated in this processing run
+    stale_tags = ChannelTag.query.filter(
+        ChannelTag.account_id == account.id,
+        ChannelTag.updated_at < processing_start
+    )
+    tags_removed = stale_tags.delete()
+    
+    db.session.commit()
+    
+    logger.info(
+        f"Processed tags for {processed_count} channels in account {account.id}: "
+        f"{tags_created} created, {tags_updated} updated, {tags_removed} removed"
+    )
+    
+    return jsonify({
+        "success": True,
+        "processed": processed_count,
+        "unique_tags": len(tag_counts),
+        "tag_counts": tag_counts,
+        "tags_created": tags_created,
+        "tags_updated": tags_updated,
+        "tags_removed": tags_removed,
+        "using_database": True
+    })
+
+
+def _process_tags_from_api(account, processing_start):
+    """Process tags using IPTV API (fallback)"""
+    # Get streams
+    service = IPTVService(account.server, account.username, account.password)
+    streams = cache_service.get_cached_streams(account.id)
+    if not streams:
+        streams = service.get_live_streams()
+        cache_service.cache_streams(account.id, streams)
+
+    categories = cache_service.get_cached_categories(account.id)
+    if not categories:
+        categories = service.get_live_categories()
+        cache_service.cache_categories(account.id, categories)
+
+    # Build category map
+    category_map = {str(c["category_id"]): c["category_name"] for c in categories}
+
+    # Get tag rules for this account (account-specific rulesets or defaults)
+    tag_rules = TagService.get_rules_for_account(account)
+    
+    # Build lookup of existing channel tags for efficient updates
+    existing_tags = {}
+    for ct in ChannelTag.query.filter_by(account_id=account.id).all():
+        key = (ct.stream_id, ct.tag_id)
+        existing_tags[key] = ct
+
+    # Process each stream
+    processed_count = 0
+    tag_counts = {}
+    tags_created = 0
+    tags_updated = 0
+
+    for stream in streams:
+        stream_id = str(stream.get("stream_id"))
+        channel_name = stream.get("name", "")
+        category_id = str(stream.get("category_id", ""))
+        category_name = category_map.get(category_id, "")
+
+        # Extract tags
+        tags, cleaned_name = TagService.extract_tags(channel_name, category_name, tag_rules)
+
+        # Store tags
+        for tag_name in tags:
+            # Normalize tag name
+            normalized_tag = TagService.normalize_tag_name(tag_name)
+            
+            # Skip empty or too-short tags
+            if not normalized_tag or len(normalized_tag) < 2:
+                continue
+
+            # Get or create tag
+            tag = Tag.query.filter_by(name=normalized_tag).first()
+            if not tag:
+                tag = Tag(name=normalized_tag)
+                db.session.add(tag)
+                db.session.flush()  # Get the ID
+
+            # Check if channel tag association exists
+            key = (stream_id, tag.id)
+            if key in existing_tags:
+                # Update existing - mark as fresh
+                existing_tags[key].updated_at = processing_start
+                tags_updated += 1
+            else:
+                # Create new channel tag association
+                channel_tag = ChannelTag(
+                    account_id=account.id, 
+                    stream_id=stream_id, 
+                    tag_id=tag.id,
+                    created_at=processing_start,
+                    updated_at=processing_start
+                )
+                db.session.add(channel_tag)
+                tags_created += 1
+
+            # Count tags
+            tag_counts[normalized_tag] = tag_counts.get(normalized_tag, 0) + 1
+
+        processed_count += 1
+
+    # Remove channel tags that weren't updated in this processing run
+    # These are tags that are no longer generated by the current rulesets
+    stale_tags = ChannelTag.query.filter(
+        ChannelTag.account_id == account.id,
+        ChannelTag.updated_at < processing_start
+    )
+    tags_removed = stale_tags.delete()
+
+    db.session.commit()
+
+    logger.info(
+        f"Processed tags for {processed_count} channels in account {account.id}: "
+        f"{tags_created} created, {tags_updated} updated, {tags_removed} removed"
+    )
+
+    return jsonify({
+        "success": True, 
+        "processed": processed_count, 
+        "unique_tags": len(tag_counts), 
+        "tag_counts": tag_counts,
+        "tags_created": tags_created,
+        "tags_updated": tags_updated,
+        "tags_removed": tags_removed,
+        "using_database": False
+    })
 
 
 # TODO: Add test coverage for account tags listing endpoint
@@ -936,6 +1124,87 @@ def get_account_tags(account_id):
     )
 
     return jsonify([{"id": r.id, "name": r.name, "channel_count": r.channel_count} for r in results])
+
+
+@app.route("/api/accounts/<int:account_id>/tags/search", methods=["GET"])
+def search_account_tags(account_id):
+    """Search tags for an account by name (autocomplete endpoint)"""
+    Account.query.get_or_404(account_id)  # Validate account exists
+    
+    query = request.args.get("q", "").strip()
+    limit = request.args.get("limit", 20, type=int)
+    
+    # Query tags matching the search term
+    from sqlalchemy import func
+    
+    search_pattern = f"%{query}%" if query else "%"
+    
+    results = (
+        db.session.query(Tag.id, Tag.name, func.count(ChannelTag.id).label("channel_count"))
+        .join(ChannelTag, Tag.id == ChannelTag.tag_id)
+        .filter(
+            ChannelTag.account_id == account_id,
+            Tag.name.ilike(search_pattern)
+        )
+        .group_by(Tag.id, Tag.name)
+        .order_by(Tag.name)
+        .limit(limit)
+        .all()
+    )
+    
+    return jsonify([{"id": r.id, "name": r.name, "channel_count": r.channel_count} for r in results])
+
+
+# ============================================================================
+# API Routes - Channel Sync
+# ============================================================================
+
+
+@app.route("/api/accounts/<int:account_id>/sync", methods=["POST"])
+def sync_account_channels(account_id):
+    """Sync channels for a specific account"""
+    from services.sync_service import ChannelSyncService
+    
+    Account.query.get_or_404(account_id)  # Validate account exists
+    
+    try:
+        stats = ChannelSyncService.sync_account(account_id)
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Error syncing account {account_id}: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/sync/all", methods=["POST"])
+def sync_all_accounts():
+    """Sync channels for all enabled accounts"""
+    from services.sync_service import ChannelSyncService
+    
+    try:
+        results = ChannelSyncService.sync_all_accounts()
+        return jsonify({
+            "success": True,
+            "accounts_synced": len(results),
+            "results": results
+        })
+    except Exception as e:
+        logger.error(f"Error syncing all accounts: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/accounts/<int:account_id>/sync/status", methods=["GET"])
+def get_sync_status(account_id):
+    """Get sync status for an account"""
+    from services.sync_service import ChannelSyncService
+    
+    Account.query.get_or_404(account_id)  # Validate account exists
+    
+    try:
+        status = ChannelSyncService.get_sync_status(account_id)
+        return jsonify(status)
+    except Exception as e:
+        logger.error(f"Error getting sync status for account {account_id}: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 # ============================================================================
@@ -1181,17 +1450,28 @@ def generate_playlist(account_id):
         stream_tag_map = {}
         
         if has_tag_filters:
-            # Load channel tags for this account
-            channel_tags_query = db.session.query(
-                ChannelTag.stream_id, Tag.name
-            ).join(Tag, ChannelTag.tag_id == Tag.id).filter(
-                ChannelTag.account_id == account_id
-            ).all()
+            # Load channel tags for this account in batches to avoid memory issues
+            # First, get stream IDs that pass non-tag filters
+            candidate_stream_ids = []
+            for stream in streams:
+                if apply_filters(stream, category_map, [f for f in filters if f.filter_type != "tag"], None):
+                    candidate_stream_ids.append(str(stream.get("stream_id")))
             
-            for stream_id, tag_name in channel_tags_query:
-                if stream_id not in stream_tag_map:
-                    stream_tag_map[stream_id] = []
-                stream_tag_map[stream_id].append(tag_name)
+            # Load tags only for candidate streams in batches
+            batch_size = 1000
+            for i in range(0, len(candidate_stream_ids), batch_size):
+                batch = candidate_stream_ids[i:i + batch_size]
+                channel_tags_query = db.session.query(
+                    ChannelTag.stream_id, Tag.name
+                ).join(Tag, ChannelTag.tag_id == Tag.id).filter(
+                    ChannelTag.account_id == account_id,
+                    ChannelTag.stream_id.in_(batch)
+                ).all()
+                
+                for stream_id, tag_name in channel_tags_query:
+                    if stream_id not in stream_tag_map:
+                        stream_tag_map[stream_id] = []
+                    stream_tag_map[stream_id].append(tag_name)
 
         # Apply filters
         filtered_streams = []
@@ -1374,13 +1654,143 @@ def proxy_epg(account_id):
 # TODO: Add test coverage for channel preview endpoint (requires mocking IPTVService)
 @app.route("/api/accounts/<int:account_id>/preview", methods=["GET"])
 def preview_playlist(account_id):
-    """Preview filtered channels (for testing) with pagination support"""
+    """
+    Preview filtered channels (for testing) with pagination support.
+    
+    Uses local database for fast query performance. Falls back to API if not synced.
+    """
     account = Account.query.get_or_404(account_id)
     limit = request.args.get("limit", 50, type=int)
     offset = request.args.get("offset", 0, type=int)
     tag_filter = request.args.get("tags", "", type=str)  # Comma-separated tag names
 
     try:
+        # Check if channels are synced to database
+        channel_count = Channel.query.filter_by(account_id=account_id, is_active=True).count()
+        
+        if channel_count == 0:
+            # No synced channels - fall back to API
+            return preview_playlist_from_api(account_id, limit, offset, tag_filter)
+        
+        # Use database for fast queries
+        return preview_playlist_from_db(account_id, limit, offset, tag_filter)
+
+    except Exception as e:
+        logger.error(f"Error previewing playlist for account {account_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+def preview_playlist_from_db(account_id, limit, offset, tag_filter):
+    """Preview channels using database (fast path)"""
+    account = Account.query.get_or_404(account_id)
+    
+    # Parse tag filter
+    filter_tags = []
+    if tag_filter:
+        filter_tags = [t.strip().upper() for t in tag_filter.split(",") if t.strip()]
+    
+    # Get filters
+    filters = Filter.query.filter_by(account_id=account_id, enabled=True).all()
+    
+    # Build base query
+    query = db.session.query(Channel).filter(
+        Channel.account_id == account_id,
+        Channel.is_active == True
+    ).join(Category, Channel.category_id == Category.id, isouter=True)
+    
+    # Apply category filters
+    category_whitelist = [f.filter_value for f in filters if f.filter_type == "category" and f.filter_action == "whitelist"]
+    category_blacklist = [f.filter_value for f in filters if f.filter_type == "category" and f.filter_action == "blacklist"]
+    
+    if category_whitelist:
+        query = query.filter(Category.category_name.in_(category_whitelist))
+    if category_blacklist:
+        query = query.filter(~Category.category_name.in_(category_blacklist))
+    
+    # Apply channel name filters
+    for f in filters:
+        if f.filter_type == "channel_name":
+            if f.filter_action == "whitelist":
+                query = query.filter(Channel.name.ilike(f"%{f.filter_value}%"))
+            elif f.filter_action == "blacklist":
+                query = query.filter(~Channel.name.ilike(f"%{f.filter_value}%"))
+        elif f.filter_type == "regex":
+            # Note: SQLite doesn't have good regex support, may need to filter in Python
+            pass
+    
+    # Apply tag filters
+    if filter_tags:
+        # Get tag IDs
+        tag_ids = db.session.query(Tag.id).filter(
+            Tag.name.in_([t for t in filter_tags])
+        ).all()
+        tag_ids = [t[0] for t in tag_ids]
+        
+        if tag_ids:
+            # Only include channels that have at least one of the requested tags
+            query = query.join(ChannelTag, Channel.stream_id == ChannelTag.stream_id).filter(
+                ChannelTag.tag_id.in_(tag_ids),
+                ChannelTag.account_id == account_id
+            ).distinct()
+    
+    # Get total count (before pagination)
+    total = query.count()
+    
+    # Apply pagination
+    channels = query.order_by(Channel.name).offset(offset).limit(limit).all()
+    
+    # Load tags for these channels
+    stream_ids = [ch.stream_id for ch in channels]
+    channel_tags_query = db.session.query(
+        ChannelTag.stream_id, Tag.name
+    ).join(Tag, ChannelTag.tag_id == Tag.id).filter(
+        ChannelTag.account_id == account_id,
+        ChannelTag.stream_id.in_(stream_ids)
+    ).all()
+    
+    stream_tag_map = {}
+    for stream_id, tag_name in channel_tags_query:
+        if stream_id not in stream_tag_map:
+            stream_tag_map[stream_id] = []
+        stream_tag_map[stream_id].append(tag_name)
+    
+    # Get tag rules for name cleaning
+    tag_rules = TagService.get_rules_for_account(account)
+    
+    # Build results
+    results = []
+    for channel in channels:
+        category_name = channel.category.category_name if channel.category else "Unknown"
+        
+        # Extract cleaned name
+        _, cleaned_name = TagService.extract_tags(channel.name, category_name, tag_rules)
+        
+        results.append({
+            "id": channel.stream_id,
+            "name": channel.name,
+            "cleaned_name": cleaned_name,
+            "category": category_name,
+            "icon": channel.stream_icon or "",
+            "tags": stream_tag_map.get(channel.stream_id, []),
+        })
+    
+    return jsonify({
+        "total": total,
+        "channels": results,
+        "using_database": True
+    })
+
+
+def preview_playlist_from_api(account_id, limit, offset, tag_filter):
+    """Preview channels using IPTV API (fallback when database not synced)"""
+    try:
+        account = Account.query.get_or_404(account_id)
+        
+        # Parse tag filter
+        filter_tags = []
+        if tag_filter:
+            filter_tags = [t.strip().upper() for t in tag_filter.split(",") if t.strip()]
+        
         service = IPTVService(account.server, account.username, account.password)
         streams = cache_service.get_cached_streams(account_id)
         if not streams:
@@ -1397,29 +1807,43 @@ def preview_playlist(account_id):
         # Get filters
         filters = Filter.query.filter_by(account_id=account_id, enabled=True).all()
 
-        # Get channel tags for this account
-        channel_tags_query = db.session.query(
-            ChannelTag.stream_id, Tag.name
-        ).join(Tag, ChannelTag.tag_id == Tag.id).filter(
-            ChannelTag.account_id == account_id
-        ).all()
-        
-        # Build a map of stream_id -> list of tag names
-        stream_tag_map = {}
-        for stream_id, tag_name in channel_tags_query:
-            if stream_id not in stream_tag_map:
-                stream_tag_map[stream_id] = []
-            stream_tag_map[stream_id].append(tag_name)
-
         # Get tag rules for name cleaning
         tag_rules = TagService.get_rules_for_account(account)
 
-        # Parse tag filter
-        filter_tags = []
-        if tag_filter:
-            filter_tags = [t.strip().upper() for t in tag_filter.split(",") if t.strip()]
+        # First pass: collect stream IDs that pass filters
+        candidate_stream_ids = []
+        
+        for stream in streams:
+            if apply_filters(stream, category_map, filters):
+                stream_id = str(stream.get("stream_id"))
+                
+                # If we have enough candidates for this page, stop collecting
+                if len(candidate_stream_ids) >= offset + limit:
+                    candidate_stream_ids.append(stream_id)
+                    break
+                    
+                candidate_stream_ids.append(stream_id)
 
-        # Apply filters and collect results with offset/limit
+        # Only load tags for candidate streams
+        stream_tag_map = {}
+        if candidate_stream_ids:
+            # Load tags in batches
+            batch_size = 500
+            for i in range(0, len(candidate_stream_ids), batch_size):
+                batch = candidate_stream_ids[i:i + batch_size]
+                channel_tags_query = db.session.query(
+                    ChannelTag.stream_id, Tag.name
+                ).join(Tag, ChannelTag.tag_id == Tag.id).filter(
+                    ChannelTag.account_id == account_id,
+                    ChannelTag.stream_id.in_(batch)
+                ).all()
+                
+                for stream_id, tag_name in channel_tags_query:
+                    if stream_id not in stream_tag_map:
+                        stream_tag_map[stream_id] = []
+                    stream_tag_map[stream_id].append(tag_name)
+
+        # Second pass: apply tag filters and build final results
         filtered_streams = []
         skipped = 0
 
@@ -1445,52 +1869,166 @@ def preview_playlist(account_id):
                 category_name = category_map.get(category_id, "Unknown")
                 _, cleaned_name = TagService.extract_tags(channel_name, category_name, tag_rules)
 
-                filtered_streams.append(
-                    {
-                        "id": stream.get("stream_id"),
-                        "name": stream.get("name"),
-                        "cleaned_name": cleaned_name,
-                        "category": category_name,
-                        "icon": stream.get("stream_icon", ""),
-                        "tags": channel_tags,
-                    }
-                )
+                filtered_streams.append({
+                    "id": stream.get("stream_id"),
+                    "name": stream.get("name"),
+                    "cleaned_name": cleaned_name,
+                    "category": category_name,
+                    "icon": stream.get("stream_icon", ""),
+                    "tags": channel_tags,
+                })
 
                 # Stop when we have enough items
                 if len(filtered_streams) >= limit:
                     break
 
-        # Calculate total (only when offset is 0 to avoid recalculating every time)
+        # Calculate total (only when offset is 0)
         if offset == 0:
             total = 0
             for s in streams:
                 if apply_filters(s, category_map, filters):
-                    stream_id = str(s.get("stream_id"))
-                    channel_tags = stream_tag_map.get(stream_id, [])
-                    
-                    # Apply tag filter if specified
+                    # If tag filter specified, need to check tags
                     if filter_tags:
+                        stream_id = str(s.get("stream_id"))
+                        channel_tags = stream_tag_map.get(stream_id, [])
                         channel_tags_upper = [t.upper() for t in channel_tags]
                         if not any(ft in channel_tags_upper for ft in filter_tags):
                             continue
                     total += 1
         else:
-            # For subsequent pages, return -1 to indicate total is unknown (client should use cached value)
             total = -1
 
-        return jsonify(
-            {
-                "total": total,
-                "offset": offset,
-                "limit": limit,
-                "showing": len(filtered_streams),
-                "channels": filtered_streams,
-                "has_more": len(filtered_streams) == limit,
-            }
-        )
+        return jsonify({
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "showing": len(filtered_streams),
+            "channels": filtered_streams,
+            "has_more": len(filtered_streams) == limit,
+            "using_database": False
+        })
     except Exception as e:
         logger.error(f"Error previewing for account {account_id}: {e}")
         return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/channels/preview", methods=["GET"])
+def preview_channels_cross_account():
+    """Preview channels across all accounts with tag filtering
+    
+    Query parameters:
+    - tags: Comma-separated list of tags to filter by
+    - account_ids: Optional comma-separated list of account IDs to limit search
+    - offset: Pagination offset (default 0)
+    - limit: Results per page (default 100)
+    - search: Optional search term for channel name
+    """
+    # Parse query parameters
+    tags_param = request.args.get("tags", "")
+    account_ids_param = request.args.get("account_ids", "")
+    offset = request.args.get("offset", 0, type=int)
+    limit = min(request.args.get("limit", 100, type=int), 500)  # Max 500
+    search_term = request.args.get("search", "").strip()
+    
+    tags = [t.strip() for t in tags_param.split(",") if t.strip()]
+    account_ids = [int(a.strip()) for a in account_ids_param.split(",") if a.strip()] if account_ids_param else None
+    
+    try:
+        # Build base query for channels
+        query = db.session.query(Channel).filter(Channel.is_active == True)
+        
+        # Filter by account IDs if specified
+        if account_ids:
+            query = query.filter(Channel.account_id.in_(account_ids))
+        
+        # Filter by tags if specified
+        if tags:
+            # Join with ChannelTag and Tag for each tag
+            for tag in tags:
+                tag_obj = Tag.query.filter(Tag.name.ilike(tag)).first()
+                if tag_obj:
+                    query = query.join(
+                        ChannelTag, 
+                        db.and_(
+                            ChannelTag.account_id == Channel.account_id,
+                            ChannelTag.stream_id == Channel.stream_id,
+                            ChannelTag.tag_id == tag_obj.id
+                        )
+                    )
+        
+        # Filter by search term if specified
+        if search_term:
+            query = query.filter(Channel.name.ilike(f"%{search_term}%"))
+        
+        # Get total count
+        total = query.distinct().count()
+        
+        # Apply pagination
+        channels = query.distinct().order_by(Channel.name).offset(offset).limit(limit).all()
+        
+        # Load tags for these channels
+        channel_keys = [(c.account_id, c.stream_id) for c in channels]
+        channel_tags_query = (
+            db.session.query(ChannelTag.account_id, ChannelTag.stream_id, Tag.name)
+            .join(Tag, ChannelTag.tag_id == Tag.id)
+        )
+        
+        # Build OR conditions for each (account_id, stream_id) pair
+        if channel_keys:
+            conditions = []
+            for account_id, stream_id in channel_keys:
+                conditions.append(
+                    db.and_(
+                        ChannelTag.account_id == account_id,
+                        ChannelTag.stream_id == stream_id
+                    )
+                )
+            channel_tags_query = channel_tags_query.filter(db.or_(*conditions))
+        
+        channel_tags_data = channel_tags_query.all()
+        
+        # Build tag map
+        tag_map = {}
+        for account_id, stream_id, tag_name in channel_tags_data:
+            key = (account_id, stream_id)
+            if key not in tag_map:
+                tag_map[key] = []
+            tag_map[key].append(tag_name)
+        
+        # Load account names
+        account_map = {}
+        if channels:
+            account_ids_used = list(set(c.account_id for c in channels))
+            accounts = Account.query.filter(Account.id.in_(account_ids_used)).all()
+            account_map = {a.id: a.name for a in accounts}
+        
+        # Format results
+        results = []
+        for channel in channels:
+            key = (channel.account_id, channel.stream_id)
+            results.append({
+                "stream_id": channel.stream_id,
+                "name": channel.name,
+                "category_name": channel.category.name if channel.category else "",
+                "account_id": channel.account_id,
+                "account_name": account_map.get(channel.account_id, "Unknown"),
+                "tags": sorted(tag_map.get(key, []))
+            })
+        
+        return jsonify({
+            "success": True,
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "showing": len(results),
+            "channels": results,
+            "has_more": offset + limit < total,
+            "using_database": True
+        })
+        
+    except Exception as e:
+        logger.error(f"Error previewing cross-account channels: {e}")
+        return jsonify({"success": False, "error": str(e)}), 400
 
 
 # ============================================================================
@@ -1640,8 +2178,17 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all()
 
+    # Start the sync scheduler
+    sync_scheduler.start()
+
     port = int(os.getenv("PORT", 8000))
     debug = os.getenv("DEBUG", "False").lower() == "true"
 
     logger.info(f"Starting IPTV Proxy v2 on port {port}")
-    app.run(host="0.0.0.0", port=port, debug=debug)
+    logger.info(f"Sync scheduler running (interval: {sync_interval} hours)")
+    
+    try:
+        app.run(host="0.0.0.0", port=port, debug=debug)
+    finally:
+        # Stop scheduler on shutdown
+        sync_scheduler.stop()

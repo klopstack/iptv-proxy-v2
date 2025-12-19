@@ -113,13 +113,80 @@ class TagRule(db.Model):
         return f"<TagRule {self.name}: {self.pattern} -> {self.tag_name}>"
 
 
+class Category(db.Model):
+    """Categories from IPTV provider, stored locally for fast access"""
+
+    __tablename__ = "categories"
+
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False, index=True)
+    category_id = db.Column(db.String(50), nullable=False)  # External category ID from provider
+    category_name = db.Column(db.String(200), nullable=False)
+    parent_id = db.Column(db.Integer, nullable=True)
+    
+    # Sync metadata
+    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Unique constraint
+    __table_args__ = (
+        db.UniqueConstraint("account_id", "category_id", name="_account_category_uc"),
+        db.Index("idx_category_account", "account_id"),
+    )
+
+    def __repr__(self):
+        return f"<Category {self.category_name} (account={self.account_id})>"
+
+
+class Channel(db.Model):
+    """Channels from IPTV provider, stored locally for fast access"""
+
+    __tablename__ = "channels"
+
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False, index=True)
+    stream_id = db.Column(db.String(50), nullable=False)  # External stream ID from provider
+    name = db.Column(db.String(500), nullable=False, index=True)
+    category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), nullable=True, index=True)
+    stream_type = db.Column(db.String(20))  # live, movie, series
+    stream_icon = db.Column(db.String(500))
+    epg_channel_id = db.Column(db.String(100))
+    added = db.Column(db.String(50))
+    custom_sid = db.Column(db.String(50))
+    tv_archive = db.Column(db.Integer)
+    direct_source = db.Column(db.String(500))
+    tv_archive_duration = db.Column(db.Integer)
+
+    # Sync metadata
+    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    category = db.relationship("Category", backref="channels")
+
+    # Unique constraint
+    __table_args__ = (
+        db.UniqueConstraint("account_id", "stream_id", name="_account_stream_uc"),
+        db.Index("idx_channel_account", "account_id"),
+        db.Index("idx_channel_name", "name"),
+        db.Index("idx_channel_category", "category_id"),
+    )
+
+    def __repr__(self):
+        return f"<Channel {self.name} (account={self.account_id})>"
+
+
 class Tag(db.Model):
     """Tags extracted from channels"""
 
     __tablename__ = "tags"
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), unique=True, nullable=False)  # Normalized tag name
+    name = db.Column(db.String(50), unique=True, nullable=False, index=True)  # Normalized tag name
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def __repr__(self):
@@ -132,16 +199,21 @@ class ChannelTag(db.Model):
     __tablename__ = "channel_tags"
 
     id = db.Column(db.Integer, primary_key=True)
-    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False, index=True)
     stream_id = db.Column(db.String(50), nullable=False)  # Stream ID from IPTV provider
-    tag_id = db.Column(db.Integer, db.ForeignKey("tags.id"), nullable=False)
+    tag_id = db.Column(db.Integer, db.ForeignKey("tags.id"), nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     tag = db.relationship("Tag", backref="channel_tags")
 
     # Unique constraint to prevent duplicate tags for same channel
-    __table_args__ = (db.UniqueConstraint("account_id", "stream_id", "tag_id", name="_channel_tag_uc"),)
+    # Composite index for common query pattern (account_id, tag_id)
+    __table_args__ = (
+        db.UniqueConstraint("account_id", "stream_id", "tag_id", name="_channel_tag_uc"),
+        db.Index("idx_channel_tags_account_tag", "account_id", "tag_id"),
+    )
 
     def __repr__(self):
         return f"<ChannelTag account={self.account_id} stream={self.stream_id} tag={self.tag_id}>"

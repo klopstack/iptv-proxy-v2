@@ -53,6 +53,9 @@ clean: ## Clean up generated files
 run: ## Run the application locally
 	python app.py
 
+migrate: ## Run database migrations
+	python run_migrations.py
+
 docker-build: ## Build Docker image
 	docker-compose build
 
@@ -64,5 +67,8 @@ docker-logs: ## View Docker logs
 
 docker-stop: ## Stop Docker containers
 	docker-compose down
+
+docker-migrate: ## Run migrations in Docker container
+	docker exec -it iptv-proxy-v2 python run_migrations.py
 
 ci: lint test ## Run CI checks (lint + test)

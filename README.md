@@ -325,6 +325,22 @@ To migrate:
 5. Update your TVHeadend/app URLs to point to v2
 6. Remove v1 when satisfied
 
+## Performance
+
+**Existing installations:** If you're experiencing slow performance when selecting accounts on the preview page, the database migrations will automatically add indexes on the next container restart. For immediate effect:
+
+```bash
+# Docker
+docker exec -it iptv-proxy-v2 python run_migrations.py
+# or just restart
+docker-compose restart iptv-proxy-v2
+
+# Manual installation
+python run_migrations.py
+```
+
+The migration system runs automatically on container startup and is completely idempotent. See [PERFORMANCE.md](PERFORMANCE.md) for details.
+
 ## Troubleshooting
 
 ### Database locked errors

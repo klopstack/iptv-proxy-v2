@@ -15,5 +15,14 @@ if [ ! -f /app/data/iptv_proxy.db ]; then
     echo "Database initialized successfully"
 fi
 
+# Run database migrations
+echo "Running database migrations..."
+python run_migrations.py
+if [ $? -ne 0 ]; then
+    echo "ERROR: Database migrations failed"
+    exit 1
+fi
+echo ""
+
 # Start gunicorn
 exec gunicorn --bind 0.0.0.0:${PORT} --workers 2 --timeout 120 app:app

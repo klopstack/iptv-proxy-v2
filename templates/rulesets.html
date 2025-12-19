@@ -799,7 +799,12 @@ async function loadTags() {
             html = '<div class="d-flex flex-wrap gap-2">';
             tags.forEach(tag => {
                 const count = tag.channel_count || '';
-                html += `<span class="badge bg-primary fs-6 py-2 px-3">${tag.name} ${count ? `<span class="badge bg-light text-dark ms-1">${count}</span>` : ''}</span>`;
+                const previewUrl = accountId 
+                    ? `/test?account=${accountId}&tag=${encodeURIComponent(tag.name)}`
+                    : '#';
+                const clickable = accountId ? 'cursor: pointer;' : 'cursor: default;';
+                const title = accountId ? 'Click to preview channels with this tag' : 'Select an account to preview';
+                html += `<a href="${previewUrl}" class="badge bg-primary fs-6 py-2 px-3 text-decoration-none" style="${clickable}" title="${title}">${tag.name} ${count ? `<span class="badge bg-light text-dark ms-1">${count}</span>` : ''}</a>`;
             });
             html += '</div>';
         }
@@ -826,7 +831,12 @@ async function processAccountTags() {
         const result = await response.json();
         
         if (result.success) {
-            alert(`Successfully processed ${result.processed} channels\nExtracted ${result.unique_tags} unique tags`);
+            const msg = `Successfully processed ${result.processed} channels\n` +
+                       `Unique tags: ${result.unique_tags}\n` +
+                       `Tags created: ${result.tags_created}\n` +
+                       `Tags updated: ${result.tags_updated}\n` +
+                       `Tags removed: ${result.tags_removed}`;
+            alert(msg);
             await loadTags();
         } else {
             alert('Error: ' + result.error);

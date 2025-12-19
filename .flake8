@@ -8,9 +8,12 @@ exclude =
     env,
     .pytest_cache,
     instance,
-    data
+    data,
+    migrations
 ignore = E203,E501,W503
 per-file-ignores =
     __init__.py:F401
     migrate_tags.py:E402,F401
+    add_indexes.py:E402,F401
+    run_migrations.py:E402,F401
     test_tags.py:E402

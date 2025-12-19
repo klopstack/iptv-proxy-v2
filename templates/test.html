@@ -2,6 +2,35 @@
 
 {% block title %}Preview Channels - IPTV Proxy{% endblock %}
 
+{% block extra_css %}
+<style>
+#tagDropdown {
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    background: white;
+}
+#tagDropdown .list-group-item {
+    border: none;
+    border-bottom: 1px solid #f0f0f0;
+}
+#tagDropdown .list-group-item:last-child {
+    border-bottom: none;
+}
+#tagDropdown .list-group-item:hover {
+    background-color: #f8f9fa;
+}
+#selectedTags .badge {
+    padding: 0.5rem 0.75rem;
+}
+#selectedTags .btn-close {
+    padding: 0;
+    margin: 0;
+    width: 0.6rem;
+    height: 0.6rem;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
     <h1 class="h2">Preview Channels</h1>
@@ -14,16 +43,26 @@
                 <h5>Select Account</h5>
             </div>
             <div class="card-body">
-                <select class="form-select mb-3" id="testAccountId" onchange="loadAccountTags()">
+                <select class="form-select mb-3" id="testAccountId" onchange="clearSelectedTags()">
                     <option value="">Select an account...</option>
                 </select>
                 
                 <div class="mb-3">
-                    <label for="tagFilter" class="form-label">Filter by Tags</label>
-                    <select class="form-select" id="tagFilter" multiple size="5">
-                        <option value="">No tags available</option>
-                    </select>
-                    <div class="form-text">Hold Ctrl/Cmd to select multiple tags. Channels must have at least one selected tag.</div>
+                    <label for="tagSearchInput" class="form-label">Filter by Tags</label>
+                    <div class="position-relative">
+                        <input 
+                            type="text" 
+                            class="form-control" 
+                            id="tagSearchInput" 
+                            placeholder="Search tags..." 
+                            autocomplete="off"
+                            oninput="searchTags()"
+                            onfocus="showTagDropdown()"
+                        />
+                        <div id="tagDropdown" class="list-group position-absolute w-100 shadow-sm" style="max-height: 200px; overflow-y: auto; z-index: 1000; display: none;"></div>
+                    </div>
+                    <div id="selectedTags" class="mt-2"></div>
+                    <div class="form-text">Type to search and click to add tags. Channels must have at least one selected tag.</div>
                 </div>
                 
                 <div class="d-grid gap-2">
@@ -71,7 +110,8 @@ let loadedChannels = 0;
 const CHANNELS_PER_PAGE = 50;
 let loadingMore = false;
 let hasMore = true;
-let accountTags = [];
+let selectedTags = [];
+let searchTimeout = null;
 
 async function loadAccounts() {
     const response = await fetch('/api/accounts');
@@ -89,39 +129,138 @@ async function loadAccounts() {
     // Check URL params
     const params = new URLSearchParams(window.location.search);
     const accountId = params.get('account');
+    const tagName = params.get('tag');
+    
     if (accountId) {
         select.value = accountId;
-        await loadAccountTags();
-        loadPreview();
+        
+        // If a tag is specified, load it first then preview
+        if (tagName) {
+            await loadTagFromUrl(accountId, tagName);
+        } else {
+            await loadPreview();
+        }
     }
 }
 
-async function loadAccountTags() {
+async function loadTagFromUrl(accountId, tagName) {
+    try {
+        // Fetch the specific tag to get its details
+        const response = await fetch(`/api/accounts/${accountId}/tags/search?q=${encodeURIComponent(tagName)}&limit=1`);
+        const tags = await response.json();
+        
+        if (tags.length > 0 && tags[0].name === tagName) {
+            selectedTags.push(tags[0]);
+            renderSelectedTags();
+        }
+        
+        // Load preview with the tag filter
+        await loadPreview();
+    } catch (error) {
+        console.error('Error loading tag from URL:', error);
+        // Still try to load preview
+        await loadPreview();
+    }
+}
+
+function clearSelectedTags() {
+    selectedTags = [];
+    renderSelectedTags();
+}
+
+function searchTags() {
     const accountId = document.getElementById('testAccountId').value;
-    const tagFilterSelect = document.getElementById('tagFilter');
+    if (!accountId) return;
     
-    if (!accountId) {
-        tagFilterSelect.innerHTML = '<option value="">No tags available</option>';
+    const query = document.getElementById('tagSearchInput').value.trim();
+    
+    // Debounce search
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(async () => {
+        try {
+            const response = await fetch(`/api/accounts/${accountId}/tags/search?q=${encodeURIComponent(query)}&limit=20`);
+            const tags = await response.json();
+            
+            const dropdown = document.getElementById('tagDropdown');
+            dropdown.innerHTML = '';
+            
+            if (tags.length === 0) {
+                dropdown.innerHTML = '<div class="list-group-item text-muted">No tags found</div>';
+            } else {
+                for (const tag of tags) {
+                    // Skip already selected tags
+                    if (selectedTags.some(t => t.name === tag.name)) continue;
+                    
+                    const item = document.createElement('a');
+                    item.href = '#';
+                    item.className = 'list-group-item list-group-item-action';
+                    item.innerHTML = `${tag.name} <span class="badge bg-secondary">${tag.channel_count}</span>`;
+                    item.onclick = (e) => {
+                        e.preventDefault();
+                        addTag(tag);
+                    };
+                    dropdown.appendChild(item);
+                }
+            }
+            
+            dropdown.style.display = 'block';
+        } catch (error) {
+            console.error('Error searching tags:', error);
+        }
+    }, 300);
+}
+
+function showTagDropdown() {
+    const accountId = document.getElementById('testAccountId').value;
+    if (accountId) {
+        searchTags();
+    }
+}
+
+function hideTagDropdown() {
+    setTimeout(() => {
+        document.getElementById('tagDropdown').style.display = 'none';
+    }, 200);
+}
+
+function addTag(tag) {
+    if (!selectedTags.some(t => t.name === tag.name)) {
+        selectedTags.push(tag);
+        renderSelectedTags();
+        document.getElementById('tagSearchInput').value = '';
+        document.getElementById('tagDropdown').innerHTML = '';
+        document.getElementById('tagDropdown').style.display = 'none';
+    }
+}
+
+function removeTag(tagName) {
+    selectedTags = selectedTags.filter(t => t.name !== tagName);
+    renderSelectedTags();
+}
+
+function renderSelectedTags() {
+    const container = document.getElementById('selectedTags');
+    if (selectedTags.length === 0) {
+        container.innerHTML = '';
         return;
     }
     
-    try {
-        const response = await fetch(`/api/accounts/${accountId}/tags`);
-        accountTags = await response.json();
-        
-        tagFilterSelect.innerHTML = '';
-        if (accountTags.length === 0) {
-            tagFilterSelect.innerHTML = '<option value="">No tags for this account</option>';
-        } else {
-            for (const tag of accountTags) {
-                tagFilterSelect.innerHTML += `<option value="${tag.name}">${tag.name} (${tag.channel_count})</option>`;
-            }
-        }
-    } catch (error) {
-        console.error('Error loading tags:', error);
-        tagFilterSelect.innerHTML = '<option value="">Error loading tags</option>';
-    }
+    container.innerHTML = selectedTags.map(tag => `
+        <span class="badge bg-primary me-1 mb-1" style="font-size: 0.9rem;">
+            ${tag.name} (${tag.channel_count})
+            <button type="button" class="btn-close btn-close-white ms-1" style="font-size: 0.6rem;" onclick="removeTag('${tag.name}')" aria-label="Remove"></button>
+        </span>
+    `).join('');
 }
+
+// Hide dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    const tagInput = document.getElementById('tagSearchInput');
+    const tagDropdown = document.getElementById('tagDropdown');
+    if (e.target !== tagInput && !tagDropdown.contains(e.target)) {
+        hideTagDropdown();
+    }
+});
 
 async function loadPreview() {
     const accountId = document.getElementById('testAccountId').value;
@@ -212,10 +351,8 @@ async function loadMoreChannels() {
     if (loadingIndicator) loadingIndicator.style.display = 'block';
     
     try {
-        // Get selected tags
-        const tagFilterSelect = document.getElementById('tagFilter');
-        const selectedTags = Array.from(tagFilterSelect.selectedOptions).map(opt => opt.value);
-        const tagParam = selectedTags.length > 0 ? `&tags=${selectedTags.join(',')}` : '';
+        // Get selected tags from our new tag selector
+        const tagParam = selectedTags.length > 0 ? `&tags=${selectedTags.map(t => t.name).join(',')}` : '';
         
         const response = await fetch(`/api/accounts/${currentAccountId}/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}${tagParam}`);
         const data = await response.json();
@@ -227,6 +364,18 @@ async function loadMoreChannels() {
         // Update total on first load
         if (data.total > 0) {
             totalChannels = data.total;
+        }
+        
+        // Show data source indicator on first load
+        if (loadedChannels === 0) {
+            const dataSourceBadge = data.using_database 
+                ? '<span class="badge bg-success ms-2" title="Using local database"><i class="bi bi-database-check"></i> Database</span>'
+                : '<span class="badge bg-warning text-dark ms-2" title="Using IPTV API"><i class="bi bi-cloud"></i> API</span>';
+            
+            const countDisplay = document.getElementById('channelCount');
+            if (countDisplay) {
+                countDisplay.innerHTML += dataSourceBadge;
+            }
         }
         
         // Append channels to table

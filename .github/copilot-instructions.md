@@ -48,7 +48,38 @@ The tag system parses messy channel names to extract metadata. Currently support
 ```
 
 Implementation: `services/tag_service.py:extract_tags()`. Test suite: `test_tags.py`.
-Current Patterns (Subject to Change)
+
+## Performance Considerations (Critical!)
+
+**Memory Management:** With 10,000+ channels, loading all tags at once causes OOM kills. Always use:
+1. **Lazy loading**: Only load tags for channels that need them
+2. **Batching**: Query tags in batches of 500-1000 stream IDs
+3. **Filtering first**: Apply non-tag filters before loading tags
+4. **Pagination**: Never load all channels into memory
+
+**Bad Pattern (causes OOM):**
+```python
+# DON'T DO THIS - loads all tags for entire account
+channel_tags = db.session.query(ChannelTag, Tag).join(Tag).filter(
+    ChannelTag.account_id == account_id
+).all()
+```
+
+**Good Pattern:**
+```python
+# DO THIS - only load tags for specific streams in batches
+batch_size = 500
+for i in range(0, len(stream_ids), batch_size):
+    batch = stream_ids[i:i + batch_size]
+    tags = db.session.query(ChannelTag.stream_id, Tag.name).join(Tag).filter(
+        ChannelTag.account_id == account_id,
+        ChannelTag.stream_id.in_(batch)
+    ).all()
+```
+
+See `app.py:preview_playlist()` and `app.py:generate_playlist()` for reference implementations.
+
+## Current Patterns (Subject to Change)
 
 **Caching:** Simple in-memory cache with 3600s TTL in `CacheService`. Cache cleared on account updates via `cache_service.clear_account_cache(account_id)`. May evolve to Redis or more sophisticated invalidation.
 
