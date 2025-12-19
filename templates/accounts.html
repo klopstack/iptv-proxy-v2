@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block title %}Accounts - IPTV Proxy{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">IPTV Accounts</h1>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#accountModal" onclick="newAccount()">
+        <i class="bi bi-plus-circle"></i> Add Account
+    </button>
+</div>
+
+<div id="accounts-list">
+    <div class="text-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+</div>
+
+<!-- Account Modal -->
+<div class="modal fade" id="accountModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="accountModalLabel">Add Account</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="accountForm">
+                    <input type="hidden" id="accountId">
+                    <div class="mb-3">
+                        <label for="accountName" class="form-label">Account Name</label>
+                        <input type="text" class="form-control" id="accountName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="accountServer" class="form-label">Server</label>
+                        <input type="text" class="form-control" id="accountServer" placeholder="example.com" required>
+                        <div class="form-text">Without http:// prefix</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="accountUsername" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="accountUsername" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="accountPassword" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="accountPassword" required>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="accountEnabled" checked>
+                        <label class="form-check-label" for="accountEnabled">Enabled</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveAccount()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Categories Modal -->
+<div class="modal fade" id="categoriesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="categoriesModalLabel">Categories</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="categoriesContent">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let accounts = [];
+const modal = new bootstrap.Modal(document.getElementById('accountModal'));
+const categoriesModal = new bootstrap.Modal(document.getElementById('categoriesModal'));
+
+async function loadAccounts() {
+    try {
+        const response = await fetch('/api/accounts');
+        accounts = await response.json();
+        renderAccounts();
+    } catch (error) {
+        document.getElementById('accounts-list').innerHTML = `
+            <div class="alert alert-danger">Error loading accounts: ${error.message}</div>
+        `;
+    }
+}
+
+function renderAccounts() {
+    if (accounts.length === 0) {
+        document.getElementById('accounts-list').innerHTML = `
+            <div class="alert alert-info">
+                No accounts configured. Click "Add Account" to get started.
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '<div class="list-group">';
+    for (const account of accounts) {
+        html += `
+            <div class="list-group-item">
+                <div class="d-flex w-100 justify-content-between align-items-start">
+                    <div>
+                        <h5 class="mb-1">
+                            ${account.name}
+                            ${!account.enabled ? '<span class="badge bg-secondary">Disabled</span>' : ''}
+                        </h5>
+                        <p class="mb-1 text-muted">
+                            <strong>Server:</strong> ${account.server}<br>
+                            <strong>Username:</strong> ${account.username}
+                        </p>
+                        <small>
+                            <a href="/playlist/${account.id}.m3u" target="_blank">
+                                <i class="bi bi-download"></i> Download M3U
+                            </a>
+                            |
+                            <a href="/epg/${account.id}.xml" target="_blank">
+                                <i class="bi bi-file-earmark-text"></i> EPG
+                            </a>
+                        </small>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="testAccount(${account.id})" title="Test Connection">
+                            <i class="bi bi-activity"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewCategories(${account.id})" title="View Categories">
+                            <i class="bi bi-list-ul"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-warning" onclick="editAccount(${account.id})">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteAccount(${account.id})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    html += '</div>';
+    document.getElementById('accounts-list').innerHTML = html;
+}
+
+function newAccount() {
+    document.getElementById('accountModalLabel').textContent = 'Add Account';
+    document.getElementById('accountForm').reset();
+    document.getElementById('accountId').value = '';
+    document.getElementById('accountEnabled').checked = true;
+}
+
+function editAccount(id) {
+    const account = accounts.find(a => a.id === id);
+    if (!account) return;
+    
+    document.getElementById('accountModalLabel').textContent = 'Edit Account';
+    document.getElementById('accountId').value = account.id;
+    document.getElementById('accountName').value = account.name;
+    document.getElementById('accountServer').value = account.server;
+    document.getElementById('accountUsername').value = account.username;
+    document.getElementById('accountPassword').value = '';
+    document.getElementById('accountEnabled').checked = account.enabled;
+    
+    modal.show();
+}
+
+async function saveAccount() {
+    const id = document.getElementById('accountId').value;
+    const data = {
+        name: document.getElementById('accountName').value,
+        server: document.getElementById('accountServer').value,
+        username: document.getElementById('accountUsername').value,
+        password: document.getElementById('accountPassword').value,
+        enabled: document.getElementById('accountEnabled').checked
+    };
+    
+    try {
+        const url = id ? `/api/accounts/${id}` : '/api/accounts';
+        const method = id ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) throw new Error('Failed to save account');
+        
+        modal.hide();
+        loadAccounts();
+    } catch (error) {
+        alert('Error saving account: ' + error.message);
+    }
+}
+
+async function deleteAccount(id) {
+    if (!confirm('Delete this account and all its filters?')) return;
+    
+    try {
+        const response = await fetch(`/api/accounts/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Failed to delete account');
+        
+        loadAccounts();
+    } catch (error) {
+        alert('Error deleting account: ' + error.message);
+    }
+}
+
+async function testAccount(id) {
+    try {
+        const response = await fetch(`/api/accounts/${id}/test`, { method: 'POST' });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert(`Connection successful!\n\nServer: ${result.server_info.url}\nUser: ${result.user_info.username}\nStatus: ${result.user_info.status}\nExpires: ${result.user_info.exp_date}`);
+        } else {
+            alert(`Connection failed: ${result.error}`);
+        }
+    } catch (error) {
+        alert('Error testing account: ' + error.message);
+    }
+}
+
+async function viewCategories(id) {
+    try {
+        // Show modal with loading state
+        document.getElementById('categoriesContent').innerHTML = `
+            <div class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        `;
+        categoriesModal.show();
+        
+        // Fetch categories
+        const response = await fetch(`/api/accounts/${id}/categories`);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const categories = await response.json();
+        
+        // Get account name for the modal title
+        const account = accounts.find(a => a.id === id);
+        document.getElementById('categoriesModalLabel').textContent = 
+            `Categories - ${account ? account.name : 'Account'} (${categories.length} total)`;
+        
+        // Build table with all categories
+        let html = `
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th style="width: 100px;">ID</th>
+                            <th>Category Name</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        for (const cat of categories) {
+            html += `
+                <tr>
+                    <td>${cat.category_id || 'N/A'}</td>
+                    <td>${cat.category_name || 'Unnamed'}</td>
+                </tr>
+            `;
+        }
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        if (categories.length === 0) {
+            html = '<div class="alert alert-info">No categories found for this account.</div>';
+        }
+        
+        document.getElementById('categoriesContent').innerHTML = html;
+    } catch (error) {
+        document.getElementById('categoriesContent').innerHTML = `
+            <div class="alert alert-danger">
+                <strong>Error fetching categories:</strong> ${error.message}
+            </div>
+        `;
+        console.error('Error fetching categories:', error);
+    }
+}
+
+loadAccounts();
+</script>
+{% endblock %}

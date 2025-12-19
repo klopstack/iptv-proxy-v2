@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+
+{% block title %}Filters - IPTV Proxy{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Filters</h1>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#filterModal" onclick="newFilter()">
+        <i class="bi bi-plus-circle"></i> Add Filter
+    </button>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-4">
+        <label for="accountSelect" class="form-label">Select Account:</label>
+        <select class="form-select" id="accountSelect" onchange="loadFilters()">
+            <option value="">All Accounts</option>
+        </select>
+    </div>
+</div>
+
+<div id="filters-list">
+    <div class="text-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Modal -->
+<div class="modal fade" id="filterModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="filterModalLabel">Add Filter</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="filterForm">
+                    <input type="hidden" id="filterId">
+                    <div class="mb-3">
+                        <label for="filterAccountId" class="form-label">Account *</label>
+                        <select class="form-select" id="filterAccountId" required></select>
+                        <div class="form-text">Select which account this filter applies to</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="filterName" class="form-label">Filter Name</label>
+                        <input type="text" class="form-control" id="filterName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="filterType" class="form-label">Filter Type</label>
+                        <select class="form-select" id="filterType" required onchange="updateFilterHelp()">
+                            <option value="category">Category</option>
+                            <option value="channel_name">Channel Name</option>
+                            <option value="regex">Regular Expression</option>
+                        </select>
+                        <div class="form-text" id="filterTypeHelp"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="filterAction" class="form-label">Action</label>
+                        <select class="form-select" id="filterAction" required>
+                            <option value="whitelist">Whitelist (include only these)</option>
+                            <option value="blacklist">Blacklist (exclude these)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="filterValue" class="form-label">Filter Value</label>
+                        <input type="text" class="form-control" id="filterValue" required>
+                        <div class="form-text">Case-insensitive partial match</div>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="filterEnabled" checked>
+                        <label class="form-check-label" for="filterEnabled">Enabled</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveFilter()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let filters = [];
+let accounts = [];
+const modal = new bootstrap.Modal(document.getElementById('filterModal'));
+
+async function loadAccounts() {
+    const response = await fetch('/api/accounts');
+    accounts = await response.json();
+    
+    // Populate account selects
+    const accountSelect = document.getElementById('accountSelect');
+    const filterAccountId = document.getElementById('filterAccountId');
+    
+    accountSelect.innerHTML = '<option value="">All Accounts</option>';
+    filterAccountId.innerHTML = '<option value="">Select an account...</option>';
+    
+    for (const account of accounts) {
+        accountSelect.innerHTML += `<option value="${account.id}">${account.name}</option>`;
+        filterAccountId.innerHTML += `<option value="${account.id}">${account.name}</option>`;
+    }
+}
+
+async function loadFilters() {
+    try {
+        const accountId = document.getElementById('accountSelect').value;
+        const url = accountId ? `/api/accounts/${accountId}/filters` : '/api/filters';
+        
+        const response = await fetch(url);
+        filters = await response.json();
+        renderFilters();
+    } catch (error) {
+        document.getElementById('filters-list').innerHTML = `
+            <div class="alert alert-danger">Error loading filters: ${error.message}</div>
+        `;
+    }
+}
+
+function renderFilters() {
+    if (filters.length === 0) {
+        document.getElementById('filters-list').innerHTML = `
+            <div class="alert alert-info">
+                No filters configured. Click "Add Filter" to create one.
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '<div class="table-responsive"><table class="table table-hover">';
+    html += '<thead><tr><th>Account</th><th>Name</th><th>Type</th><th>Action</th><th>Value</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+    
+    for (const filter of filters) {
+        const account = accounts.find(a => a.id === filter.account_id);
+        const accountName = account ? account.name : `ID: ${filter.account_id}`;
+        
+        html += `
+            <tr>
+                <td>${accountName}</td>
+                <td>${filter.name}</td>
+                <td><span class="badge bg-info">${filter.filter_type}</span></td>
+                <td><span class="badge ${filter.filter_action === 'whitelist' ? 'bg-success' : 'bg-danger'}">${filter.filter_action}</span></td>
+                <td><code>${filter.filter_value}</code></td>
+                <td>${filter.enabled ? '<span class="badge bg-success">Enabled</span>' : '<span class="badge bg-secondary">Disabled</span>'}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-warning" onclick="editFilter(${filter.id})">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteFilter(${filter.id})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }
+    
+    html += '</tbody></table></div>';
+    document.getElementById('filters-list').innerHTML = html;
+}
+
+function newFilter() {
+    document.getElementById('filterModalLabel').textContent = 'Add Filter';
+    document.getElementById('filterForm').reset();
+    document.getElementById('filterId').value = '';
+    document.getElementById('filterEnabled').checked = true;
+    updateFilterHelp();
+}
+
+function editFilter(id) {
+    const filter = filters.find(f => f.id === id);
+    if (!filter) return;
+    
+    document.getElementById('filterModalLabel').textContent = 'Edit Filter';
+    document.getElementById('filterId').value = filter.id;
+    document.getElementById('filterAccountId').value = filter.account_id;
+    document.getElementById('filterName').value = filter.name;
+    document.getElementById('filterType').value = filter.filter_type;
+    document.getElementById('filterAction').value = filter.filter_action;
+    document.getElementById('filterValue').value = filter.filter_value;
+    document.getElementById('filterEnabled').checked = filter.enabled;
+    
+    updateFilterHelp();
+    modal.show();
+}
+
+async function saveFilter() {
+    const id = document.getElementById('filterId').value;
+    const accountId = document.getElementById('filterAccountId').value;
+    
+    // Validate account selection
+    if (!accountId) {
+        alert('Please select an account');
+        return;
+    }
+    
+    const data = {
+        account_id: parseInt(accountId),
+        name: document.getElementById('filterName').value,
+        filter_type: document.getElementById('filterType').value,
+        filter_action: document.getElementById('filterAction').value,
+        filter_value: document.getElementById('filterValue').value,
+        enabled: document.getElementById('filterEnabled').checked
+    };
+    
+    try {
+        const url = id ? `/api/filters/${id}` : '/api/filters';
+        const method = id ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) throw new Error('Failed to save filter');
+        
+        modal.hide();
+        loadFilters();
+    } catch (error) {
+        alert('Error saving filter: ' + error.message);
+    }
+}
+
+async function deleteFilter(id) {
+    if (!confirm('Delete this filter?')) return;
+    
+    try {
+        const response = await fetch(`/api/filters/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Failed to delete filter');
+        
+        loadFilters();
+    } catch (error) {
+        alert('Error deleting filter: ' + error.message);
+    }
+}
+
+function updateFilterHelp() {
+    const type = document.getElementById('filterType').value;
+    const helpText = {
+        'category': 'Match channels in categories containing this text (e.g., "UK", "SPORT")',
+        'channel_name': 'Match channels with names containing this text (e.g., "BBC", "News")',
+        'regex': 'Advanced: Regular expression pattern (e.g., "^UK.*Sport$")'
+    };
+    document.getElementById('filterTypeHelp').textContent = helpText[type] || '';
+}
+
+loadAccounts().then(() => loadFilters());
+</script>
+{% endblock %}

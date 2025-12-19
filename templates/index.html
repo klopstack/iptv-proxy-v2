@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - IPTV Proxy{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Dashboard</h1>
+</div>
+
+<div id="dashboard-content">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> Loading statistics...
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadDashboard() {
+    try {
+        const response = await fetch('/api/accounts');
+        const accounts = await response.json();
+        
+        let html = '<div class="row">';
+        
+        if (accounts.length === 0) {
+            html += `
+                <div class="col-md-12">
+                    <div class="alert alert-warning">
+                        <h4><i class="bi bi-exclamation-triangle"></i> No Accounts Configured</h4>
+                        <p>Get started by <a href="/accounts">adding an IPTV account</a>.</p>
+                    </div>
+                </div>
+            `;
+        } else {
+            for (const account of accounts) {
+                const statsResponse = await fetch(`/api/accounts/${account.id}/stats`);
+                let stats = {};
+                if (statsResponse.ok) {
+                    stats = await statsResponse.json();
+                }
+                
+                html += `
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card ${account.enabled ? '' : 'border-secondary'}">
+                            <div class="card-header ${account.enabled ? 'bg-primary text-white' : 'bg-secondary text-white'}">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-server"></i> ${account.name}
+                                    ${!account.enabled ? '<span class="badge bg-dark">Disabled</span>' : ''}
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text">
+                                    <strong>Server:</strong> ${account.server}<br>
+                                    <strong>Username:</strong> ${account.username}
+                                </p>
+                                ${stats.total_channels !== undefined ? `
+                                    <div class="mb-2">
+                                        <strong>Channels:</strong> ${stats.total_channels.toLocaleString()}<br>
+                                        <strong>Categories:</strong> ${stats.total_categories}
+                                    </div>
+                                ` : ''}
+                                <div class="d-grid gap-2">
+                                    <a href="/playlist/${account.id}.m3u" class="btn btn-sm btn-success" target="_blank">
+                                        <i class="bi bi-download"></i> Download M3U
+                                    </a>
+                                    <a href="/test?account=${account.id}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i> Preview Channels
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        html += '</div>';
+        
+        // Add quick links
+        html += `
+            <div class="row mt-4">
+                <div class="col-md-12">
+                    <h3>Quick Actions</h3>
+                    <div class="list-group">
+                        <a href="/accounts" class="list-group-item list-group-item-action">
+                            <i class="bi bi-plus-circle"></i> Add New Account
+                        </a>
+                        <a href="/filters" class="list-group-item list-group-item-action">
+                            <i class="bi bi-funnel-fill"></i> Manage Filters
+                        </a>
+                        <a href="/test" class="list-group-item list-group-item-action">
+                            <i class="bi bi-play-circle"></i> Test Playlists
+                        </a>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('dashboard-content').innerHTML = html;
+    } catch (error) {
+        document.getElementById('dashboard-content').innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle"></i> Error loading dashboard: ${error.message}
+            </div>
+        `;
+    }
+}
+
+loadDashboard();
+</script>
+{% endblock %}

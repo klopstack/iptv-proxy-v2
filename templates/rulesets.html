@@ -1,0 +1,770 @@
+{% extends "base.html" %}
+
+{% block title %}Tags & Rulesets - IPTV Proxy{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Tags & Rulesets</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button class="btn btn-sm btn-primary me-2" onclick="createDefaultRuleset()">
+            <i class="bi bi-plus-circle"></i> Create Default Ruleset
+        </button>
+        <button class="btn btn-sm btn-outline-primary" onclick="showCreateRulesetModal()">
+            <i class="bi bi-plus-circle"></i> New Ruleset
+        </button>
+    </div>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="rulesets-tab" data-bs-toggle="tab" data-bs-target="#rulesets" type="button">
+            <i class="bi bi-collection"></i> Rulesets
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tags-tab" data-bs-toggle="tab" data-bs-target="#tags" type="button">
+            <i class="bi bi-tags"></i> Extracted Tags
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="playlists-tab" data-bs-toggle="tab" data-bs-target="#playlists" type="button">
+            <i class="bi bi-music-note-list"></i> Tag Playlists
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="mainTabsContent">
+    <!-- Rulesets Tab -->
+    <div class="tab-pane fade show active" id="rulesets" role="tabpanel">
+        <div id="rulesets-list">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tags Tab -->
+    <div class="tab-pane fade" id="tags" role="tabpanel">
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <select class="form-select" id="tags-account-filter" onchange="loadTags()">
+                    <option value="">All Accounts</option>
+                </select>
+            </div>
+        </div>
+        <div id="tags-list">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Playlists Tab -->
+    <div class="tab-pane fade" id="playlists" role="tabpanel">
+        <div class="mb-3">
+            <button class="btn btn-sm btn-primary" onclick="showCreatePlaylistModal()">
+                <i class="bi bi-plus-circle"></i> New Tag Playlist
+            </button>
+        </div>
+        <div id="playlists-list">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit Ruleset Modal -->
+<div class="modal fade" id="rulesetModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rulesetModalTitle">New Ruleset</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="rulesetForm">
+                    <input type="hidden" id="ruleset-id">
+                    <div class="mb-3">
+                        <label for="ruleset-name" class="form-label">Name *</label>
+                        <input type="text" class="form-control" id="ruleset-name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ruleset-description" class="form-label">Description</label>
+                        <textarea class="form-control" id="ruleset-description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ruleset-priority" class="form-label">Priority (lower = higher priority)</label>
+                        <input type="number" class="form-control" id="ruleset-priority" value="100">
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="ruleset-enabled" checked>
+                        <label class="form-check-label" for="ruleset-enabled">Enabled</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveRuleset()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit Rule Modal -->
+<div class="modal fade" id="ruleModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="ruleModalTitle">New Tag Rule</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="ruleForm">
+                    <input type="hidden" id="rule-id">
+                    <input type="hidden" id="rule-ruleset-id">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-name" class="form-label">Rule Name *</label>
+                            <input type="text" class="form-control" id="rule-name" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-tag-name" class="form-label">Tag Name *</label>
+                            <input type="text" class="form-control" id="rule-tag-name" required>
+                            <small class="form-text text-muted">The tag to apply when matched</small>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-pattern-type" class="form-label">Pattern Type *</label>
+                            <select class="form-select" id="rule-pattern-type" required>
+                                <option value="prefix">Prefix</option>
+                                <option value="suffix">Suffix</option>
+                                <option value="contains">Contains</option>
+                                <option value="regex">Regex</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-source" class="form-label">Source *</label>
+                            <select class="form-select" id="rule-source" required>
+                                <option value="both">Channel & Category</option>
+                                <option value="channel_name">Channel Name Only</option>
+                                <option value="category_name">Category Name Only</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="rule-pattern" class="form-label">Pattern *</label>
+                        <input type="text" class="form-control" id="rule-pattern" required>
+                        <small class="form-text text-muted">The pattern to match (e.g., "US|", "HD", "^4K")</small>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-priority" class="form-label">Priority</label>
+                            <input type="number" class="form-control" id="rule-priority" value="100">
+                            <small class="form-text text-muted">Lower = processed first</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="rule-remove-from-name" checked>
+                                <label class="form-check-label" for="rule-remove-from-name">Remove from name</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="rule-enabled" checked>
+                                <label class="form-check-label" for="rule-enabled">Enabled</label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveRule()">Save Rule</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assign Ruleset to Account Modal -->
+<div class="modal fade" id="assignRulesetModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Assign to Accounts</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="assign-ruleset-id">
+                <div id="accounts-assign-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Tag Playlist Modal -->
+<div class="modal fade" id="playlistModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create Tag Playlist</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="playlistForm">
+                    <div class="mb-3">
+                        <label for="playlist-account" class="form-label">Account *</label>
+                        <select class="form-select" id="playlist-account" required></select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="playlist-name" class="form-label">Playlist Name *</label>
+                        <input type="text" class="form-control" id="playlist-name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Required Tags (all must match)</label>
+                        <input type="text" class="form-control" id="playlist-required-tags" placeholder="e.g., US, HD">
+                        <small class="form-text text-muted">Comma-separated tag names</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Excluded Tags (none can match)</label>
+                        <input type="text" class="form-control" id="playlist-excluded-tags" placeholder="e.g., XXX, Adult">
+                        <small class="form-text text-muted">Comma-separated tag names</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="savePlaylist()">Create Playlist</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentRuleset = null;
+let accounts = [];
+
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadAccounts();
+    await loadRulesets();
+});
+
+// Tab change handlers
+document.getElementById('tags-tab').addEventListener('shown.bs.tab', loadTags);
+document.getElementById('playlists-tab').addEventListener('shown.bs.tab', loadPlaylists);
+
+async function loadAccounts() {
+    const response = await fetch('/api/accounts');
+    accounts = await response.json();
+    
+    // Populate account filters
+    const tagsFilter = document.getElementById('tags-account-filter');
+    const playlistAccount = document.getElementById('playlist-account');
+    
+    accounts.forEach(account => {
+        tagsFilter.innerHTML += `<option value="${account.id}">${account.name}</option>`;
+        playlistAccount.innerHTML += `<option value="${account.id}">${account.name}</option>`;
+    });
+}
+
+// ============================================================================
+// Rulesets Management
+// ============================================================================
+
+async function loadRulesets() {
+    try {
+        const response = await fetch('/api/rulesets');
+        const rulesets = await response.json();
+        
+        let html = '';
+        
+        if (rulesets.length === 0) {
+            html = `
+                <div class="alert alert-info">
+                    <h5><i class="bi bi-info-circle"></i> No Rulesets Found</h5>
+                    <p>Create a default ruleset to get started with tag extraction.</p>
+                </div>
+            `;
+        } else {
+            rulesets.forEach(ruleset => {
+                const badge = ruleset.is_default ? '<span class="badge bg-primary ms-2">Default</span>' : '';
+                const status = ruleset.enabled ? '<span class="badge bg-success">Enabled</span>' : '<span class="badge bg-secondary">Disabled</span>';
+                
+                html += `
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                ${ruleset.name} ${badge}
+                                <small class="text-muted ms-2">(${ruleset.rule_count} rules, priority: ${ruleset.priority})</small>
+                            </h5>
+                            <div>
+                                ${status}
+                                <div class="btn-group ms-2">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="showRulesetRules(${ruleset.id})">
+                                        <i class="bi bi-list"></i> Rules
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-info" onclick="showAssignRuleset(${ruleset.id})">
+                                        <i class="bi bi-link"></i> Assign
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="editRuleset(${ruleset.id})">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteRuleset(${ruleset.id})" ${ruleset.is_default ? 'disabled' : ''}>
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        ${ruleset.description ? `<div class="card-body"><p class="text-muted mb-0">${ruleset.description}</p></div>` : ''}
+                        <div class="card-body collapse" id="rules-${ruleset.id}">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6>Tag Extraction Rules</h6>
+                                <button class="btn btn-sm btn-success" onclick="showCreateRuleModal(${ruleset.id})">
+                                    <i class="bi bi-plus"></i> Add Rule
+                                </button>
+                            </div>
+                            <div id="rules-list-${ruleset.id}">
+                                <div class="text-center py-3">
+                                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        document.getElementById('rulesets-list').innerHTML = html;
+    } catch (error) {
+        document.getElementById('rulesets-list').innerHTML = `
+            <div class="alert alert-danger">Error loading rulesets: ${error.message}</div>
+        `;
+    }
+}
+
+async function showRulesetRules(rulesetId) {
+    const rulesDiv = document.getElementById(`rules-${rulesetId}`);
+    const collapse = new bootstrap.Collapse(rulesDiv, { toggle: true });
+    
+    if (rulesDiv.classList.contains('show')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/tag-rules?ruleset_id=${rulesetId}`);
+        const rules = await response.json();
+        
+        let html = '';
+        if (rules.length === 0) {
+            html = '<div class="alert alert-warning">No rules in this ruleset</div>';
+        } else {
+            html = '<div class="table-responsive"><table class="table table-sm table-hover">';
+            html += '<thead><tr><th>Priority</th><th>Name</th><th>Pattern</th><th>Type</th><th>Tag</th><th>Source</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+            
+            rules.forEach(rule => {
+                const status = rule.enabled ? '<span class="badge bg-success">On</span>' : '<span class="badge bg-secondary">Off</span>';
+                const removeIcon = rule.remove_from_name ? '<i class="bi bi-scissors text-warning" title="Removes from name"></i>' : '';
+                
+                html += `
+                    <tr>
+                        <td>${rule.priority}</td>
+                        <td>${rule.name}</td>
+                        <td><code>${rule.pattern}</code></td>
+                        <td><span class="badge bg-info">${rule.pattern_type}</span></td>
+                        <td><span class="badge bg-primary">${rule.tag_name}</span></td>
+                        <td>${rule.source}</td>
+                        <td>${status} ${removeIcon}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="editRule(${rule.id})">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteRule(${rule.id}, ${rulesetId})">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table></div>';
+        }
+        
+        document.getElementById(`rules-list-${rulesetId}`).innerHTML = html;
+    } catch (error) {
+        document.getElementById(`rules-list-${rulesetId}`).innerHTML = `
+            <div class="alert alert-danger">Error loading rules: ${error.message}</div>
+        `;
+    }
+}
+
+function showCreateRulesetModal() {
+    document.getElementById('rulesetModalTitle').textContent = 'New Ruleset';
+    document.getElementById('rulesetForm').reset();
+    document.getElementById('ruleset-id').value = '';
+    new bootstrap.Modal(document.getElementById('rulesetModal')).show();
+}
+
+async function editRuleset(rulesetId) {
+    const response = await fetch(`/api/rulesets/${rulesetId}`);
+    const ruleset = await response.json();
+    
+    document.getElementById('rulesetModalTitle').textContent = 'Edit Ruleset';
+    document.getElementById('ruleset-id').value = ruleset.id;
+    document.getElementById('ruleset-name').value = ruleset.name;
+    document.getElementById('ruleset-description').value = ruleset.description || '';
+    document.getElementById('ruleset-priority').value = ruleset.priority;
+    document.getElementById('ruleset-enabled').checked = ruleset.enabled;
+    
+    new bootstrap.Modal(document.getElementById('rulesetModal')).show();
+}
+
+async function saveRuleset() {
+    const id = document.getElementById('ruleset-id').value;
+    const data = {
+        name: document.getElementById('ruleset-name').value,
+        description: document.getElementById('ruleset-description').value,
+        priority: parseInt(document.getElementById('ruleset-priority').value),
+        enabled: document.getElementById('ruleset-enabled').checked
+    };
+    
+    try {
+        const url = id ? `/api/rulesets/${id}` : '/api/rulesets';
+        const method = id ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('rulesetModal')).hide();
+            await loadRulesets();
+        } else {
+            const error = await response.json();
+            alert('Error: ' + (error.error || 'Failed to save ruleset'));
+        }
+    } catch (error) {
+        alert('Error saving ruleset: ' + error.message);
+    }
+}
+
+async function deleteRuleset(rulesetId) {
+    if (!confirm('Delete this ruleset and all its rules?')) return;
+    
+    try {
+        const response = await fetch(`/api/rulesets/${rulesetId}`, { method: 'DELETE' });
+        if (response.ok) {
+            await loadRulesets();
+        }
+    } catch (error) {
+        alert('Error deleting ruleset: ' + error.message);
+    }
+}
+
+async function createDefaultRuleset() {
+    if (!confirm('Create default ruleset with 22 standard tag extraction rules?')) return;
+    
+    try {
+        const response = await fetch('/api/rulesets/create-default', { method: 'POST' });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert(result.message);
+            await loadRulesets();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error creating default ruleset: ' + error.message);
+    }
+}
+
+// ============================================================================
+// Rules Management
+// ============================================================================
+
+function showCreateRuleModal(rulesetId) {
+    document.getElementById('ruleModalTitle').textContent = 'New Tag Rule';
+    document.getElementById('ruleForm').reset();
+    document.getElementById('rule-id').value = '';
+    document.getElementById('rule-ruleset-id').value = rulesetId;
+    new bootstrap.Modal(document.getElementById('ruleModal')).show();
+}
+
+async function editRule(ruleId) {
+    const response = await fetch(`/api/tag-rules?ruleset_id=`);
+    const rules = await response.json();
+    const rule = rules.find(r => r.id === ruleId);
+    
+    if (!rule) return;
+    
+    document.getElementById('ruleModalTitle').textContent = 'Edit Tag Rule';
+    document.getElementById('rule-id').value = rule.id;
+    document.getElementById('rule-ruleset-id').value = rule.ruleset_id;
+    document.getElementById('rule-name').value = rule.name;
+    document.getElementById('rule-tag-name').value = rule.tag_name;
+    document.getElementById('rule-pattern-type').value = rule.pattern_type;
+    document.getElementById('rule-source').value = rule.source;
+    document.getElementById('rule-pattern').value = rule.pattern;
+    document.getElementById('rule-priority').value = rule.priority;
+    document.getElementById('rule-remove-from-name').checked = rule.remove_from_name;
+    document.getElementById('rule-enabled').checked = rule.enabled;
+    
+    new bootstrap.Modal(document.getElementById('ruleModal')).show();
+}
+
+async function saveRule() {
+    const id = document.getElementById('rule-id').value;
+    const data = {
+        ruleset_id: parseInt(document.getElementById('rule-ruleset-id').value),
+        name: document.getElementById('rule-name').value,
+        tag_name: document.getElementById('rule-tag-name').value,
+        pattern_type: document.getElementById('rule-pattern-type').value,
+        source: document.getElementById('rule-source').value,
+        pattern: document.getElementById('rule-pattern').value,
+        priority: parseInt(document.getElementById('rule-priority').value),
+        remove_from_name: document.getElementById('rule-remove-from-name').checked,
+        enabled: document.getElementById('rule-enabled').checked
+    };
+    
+    try {
+        const url = id ? `/api/tag-rules/${id}` : '/api/tag-rules';
+        const method = id ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('ruleModal')).hide();
+            // Reload the specific ruleset's rules
+            await showRulesetRules(data.ruleset_id);
+            await loadRulesets(); // Refresh rule counts
+        } else {
+            const error = await response.json();
+            alert('Error: ' + (error.error || 'Failed to save rule'));
+        }
+    } catch (error) {
+        alert('Error saving rule: ' + error.message);
+    }
+}
+
+async function deleteRule(ruleId, rulesetId) {
+    if (!confirm('Delete this rule?')) return;
+    
+    try {
+        const response = await fetch(`/api/tag-rules/${ruleId}`, { method: 'DELETE' });
+        if (response.ok) {
+            await showRulesetRules(rulesetId);
+            await loadRulesets();
+        }
+    } catch (error) {
+        alert('Error deleting rule: ' + error.message);
+    }
+}
+
+// ============================================================================
+// Ruleset Assignment
+// ============================================================================
+
+async function showAssignRuleset(rulesetId) {
+    document.getElementById('assign-ruleset-id').value = rulesetId;
+    
+    let html = '<div class="list-group">';
+    
+    for (const account of accounts) {
+        const response = await fetch(`/api/accounts/${account.id}/rulesets`);
+        const accountRulesets = await response.json();
+        const isAssigned = accountRulesets.some(r => r.id === rulesetId);
+        
+        html += `
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <span>${account.name}</span>
+                ${isAssigned ? 
+                    `<button class="btn btn-sm btn-danger" onclick="unassignRuleset(${account.id}, ${rulesetId})">
+                        <i class="bi bi-x-circle"></i> Unassign
+                    </button>` :
+                    `<button class="btn btn-sm btn-success" onclick="assignRuleset(${account.id}, ${rulesetId})">
+                        <i class="bi bi-plus-circle"></i> Assign
+                    </button>`
+                }
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    document.getElementById('accounts-assign-list').innerHTML = html;
+    
+    // Only show the modal if it's not already open
+    const modalElement = document.getElementById('assignRulesetModal');
+    const existingModal = bootstrap.Modal.getInstance(modalElement);
+    if (!existingModal || !existingModal._isShown) {
+        new bootstrap.Modal(modalElement).show();
+    }
+}
+
+async function assignRuleset(accountId, rulesetId) {
+    try {
+        const response = await fetch(`/api/accounts/${accountId}/rulesets`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ruleset_id: rulesetId, priority: 100 })
+        });
+        
+        if (response.ok) {
+            await refreshAssignRuleset(rulesetId); // Just refresh content, don't re-show modal
+        }
+    } catch (error) {
+        alert('Error assigning ruleset: ' + error.message);
+    }
+}
+
+async function unassignRuleset(accountId, rulesetId) {
+    try {
+        const response = await fetch(`/api/accounts/${accountId}/rulesets/${rulesetId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            await refreshAssignRuleset(rulesetId); // Just refresh content, don't re-show modal
+        }
+    } catch (error) {
+        alert('Error unassigning ruleset: ' + error.message);
+    }
+}
+
+async function refreshAssignRuleset(rulesetId) {
+    // Update modal content without recreating the modal instance
+    let html = '<div class="list-group">';
+    
+    for (const account of accounts) {
+        const response = await fetch(`/api/accounts/${account.id}/rulesets`);
+        const accountRulesets = await response.json();
+        const isAssigned = accountRulesets.some(r => r.id === rulesetId);
+        
+        html += `
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <span>${account.name}</span>
+                ${isAssigned ? 
+                    `<button class="btn btn-sm btn-danger" onclick="unassignRuleset(${account.id}, ${rulesetId})">
+                        <i class="bi bi-x-circle"></i> Unassign
+                    </button>` :
+                    `<button class="btn btn-sm btn-success" onclick="assignRuleset(${account.id}, ${rulesetId})">
+                        <i class="bi bi-plus-circle"></i> Assign
+                    </button>`
+                }
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    document.getElementById('accounts-assign-list').innerHTML = html;
+}
+
+// ============================================================================
+// Tags Display
+// ============================================================================
+
+async function loadTags() {
+    const accountId = document.getElementById('tags-account-filter').value;
+    
+    try {
+        const url = accountId ? `/api/accounts/${accountId}/tags` : '/api/tags';
+        const response = await fetch(url);
+        const tags = await response.json();
+        
+        let html = '';
+        if (tags.length === 0) {
+            html = '<div class="alert alert-info">No tags extracted yet. Process an account to extract tags.</div>';
+        } else {
+            html = '<div class="d-flex flex-wrap gap-2">';
+            tags.forEach(tag => {
+                const count = tag.channel_count || '';
+                html += `<span class="badge bg-primary fs-6 py-2 px-3">${tag.name} ${count ? `<span class="badge bg-light text-dark ms-1">${count}</span>` : ''}</span>`;
+            });
+            html += '</div>';
+        }
+        
+        document.getElementById('tags-list').innerHTML = html;
+    } catch (error) {
+        document.getElementById('tags-list').innerHTML = `
+            <div class="alert alert-danger">Error loading tags: ${error.message}</div>
+        `;
+    }
+}
+
+// ============================================================================
+// Playlists Management
+// ============================================================================
+
+async function loadPlaylists() {
+    // This would load saved playlist configurations
+    // For now, show a message
+    document.getElementById('playlists-list').innerHTML = `
+        <div class="alert alert-info">
+            <h5><i class="bi bi-info-circle"></i> Tag-Based Playlists</h5>
+            <p>Create custom playlists based on extracted tags. You can filter channels by required tags and exclude unwanted tags.</p>
+            <p class="mb-0">Click "New Tag Playlist" to get started.</p>
+        </div>
+    `;
+}
+
+function showCreatePlaylistModal() {
+    document.getElementById('playlistForm').reset();
+    new bootstrap.Modal(document.getElementById('playlistModal')).show();
+}
+
+async function savePlaylist() {
+    const accountId = document.getElementById('playlist-account').value;
+    const name = document.getElementById('playlist-name').value;
+    const requiredTags = document.getElementById('playlist-required-tags').value
+        .split(',').map(t => t.trim()).filter(t => t);
+    const excludedTags = document.getElementById('playlist-excluded-tags').value
+        .split(',').map(t => t.trim()).filter(t => t);
+    
+    const data = {
+        account_id: parseInt(accountId),
+        name: name,
+        required_tags: requiredTags,
+        excluded_tags: excludedTags
+    };
+    
+    try {
+        const response = await fetch('/api/playlist-configs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            bootstrap.Modal.getInstance(document.getElementById('playlistModal')).hide();
+            
+            // Show the generated URL
+            alert(`Playlist created!\n\nURL: ${window.location.origin}/api/accounts/${accountId}/playlists/${result.id}/playlist.m3u`);
+            await loadPlaylists();
+        } else {
+            const error = await response.json();
+            alert('Error: ' + (error.error || 'Failed to create playlist'));
+        }
+    } catch (error) {
+        alert('Error creating playlist: ' + error.message);
+    }
+}
+</script>
+{% endblock %}

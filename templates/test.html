@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+
+{% block title %}Test & Preview - IPTV Proxy{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Test & Preview</h1>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Select Account</h5>
+            </div>
+            <div class="card-body">
+                <select class="form-select mb-3" id="testAccountId" onchange="loadPreview()">
+                    <option value="">Select an account...</option>
+                </select>
+                
+                <div class="d-grid gap-2">
+                    <button class="btn btn-primary" onclick="loadPreview()">
+                        <i class="bi bi-eye"></i> Preview Channels
+                    </button>
+                    <button class="btn btn-success" onclick="downloadPlaylist()">
+                        <i class="bi bi-download"></i> Download M3U
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>Active Filters</h5>
+            </div>
+            <div class="card-body" id="activeFilters">
+                <p class="text-muted">Select an account to view filters</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5>Channel Preview</h5>
+            </div>
+            <div class="card-body">
+                <div id="previewResult">
+                    <p class="text-muted">Select an account and click "Preview Channels"</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let accounts = [];
+let currentAccountId = null;
+let totalChannels = 0;
+let loadedChannels = 0;
+const CHANNELS_PER_PAGE = 50;
+let loadingMore = false;
+let hasMore = true;
+
+async function loadAccounts() {
+    const response = await fetch('/api/accounts');
+    accounts = await response.json();
+    
+    const select = document.getElementById('testAccountId');
+    select.innerHTML = '<option value="">Select an account...</option>';
+    
+    for (const account of accounts) {
+        if (account.enabled) {
+            select.innerHTML += `<option value="${account.id}">${account.name}</option>`;
+        }
+    }
+    
+    // Check URL params
+    const params = new URLSearchParams(window.location.search);
+    const accountId = params.get('account');
+    if (accountId) {
+        select.value = accountId;
+        loadPreview();
+    }
+}
+
+async function loadPreview() {
+    const accountId = document.getElementById('testAccountId').value;
+    if (!accountId) return;
+    
+    // Reset state
+    currentAccountId = accountId;
+    totalChannels = 0;
+    loadedChannels = 0;
+    hasMore = true;
+    
+    document.getElementById('previewResult').innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status"></div>
+            <p>Loading channels...</p>
+        </div>
+    `;
+    
+    // Load filters
+    try {
+        const filtersResponse = await fetch(`/api/accounts/${accountId}/filters`);
+        const filters = await filtersResponse.json();
+        
+        let filtersHtml = '';
+        if (filters.length === 0) {
+            filtersHtml = '<p class="text-muted">No filters configured</p>';
+        } else {
+            filtersHtml = '<ul class="list-group list-group-flush">';
+            for (const filter of filters.filter(f => f.enabled)) {
+                const badge = filter.filter_action === 'whitelist' ? 'success' : 'danger';
+                filtersHtml += `
+                    <li class="list-group-item">
+                        <span class="badge bg-${badge}">${filter.filter_action}</span>
+                        <strong>${filter.filter_type}:</strong> ${filter.filter_value}
+                    </li>
+                `;
+            }
+            filtersHtml += '</ul>';
+        }
+        document.getElementById('activeFilters').innerHTML = filtersHtml;
+    } catch (error) {
+        document.getElementById('activeFilters').innerHTML = `<p class="text-danger">Error loading filters</p>`;
+    }
+    
+    // Initialize display
+    let html = `
+        <div class="alert alert-info" id="channelCount">
+            Loading channels...
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover">
+                <thead>
+                    <tr>
+                        <th>Icon</th>
+                        <th>Channel Name</th>
+                        <th>Category</th>
+                    </tr>
+                </thead>
+                <tbody id="channelsTableBody">
+                </tbody>
+            </table>
+        </div>
+        <div id="loadingIndicator" class="text-center my-3" style="min-height: 50px;">
+            <div class="spinner-border spinner-border-sm" role="status">
+                <span class="visually-hidden">Loading more...</span>
+            </div>
+            Loading more channels...
+        </div>
+    `;
+    
+    document.getElementById('previewResult').innerHTML = html;
+    
+    // Set up intersection observer
+    setupInfiniteScroll();
+    
+    // Load first batch
+    await loadMoreChannels();
+}
+
+async function loadMoreChannels() {
+    if (loadingMore || !hasMore || !currentAccountId) return;
+    
+    loadingMore = true;
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    if (loadingIndicator) loadingIndicator.style.display = 'block';
+    
+    try {
+        const response = await fetch(`/api/accounts/${currentAccountId}/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        // Update total on first load
+        if (data.total > 0) {
+            totalChannels = data.total;
+        }
+        
+        // Append channels to table
+        const tbody = document.getElementById('channelsTableBody');
+        let html = '';
+        
+        for (const channel of data.channels) {
+            html += `
+                <tr>
+                    <td>${channel.icon ? `<img src="${channel.icon}" width="40" height="30" onerror="this.style.display='none'">` : ''}</td>
+                    <td>${channel.name}</td>
+                    <td><span class="badge bg-secondary">${channel.category}</span></td>
+                </tr>
+            `;
+        }
+        
+        if (tbody) tbody.innerHTML += html;
+        
+        // Update state
+        loadedChannels += data.showing;
+        hasMore = data.has_more;
+        
+        // Update count display
+        const countDisplay = document.getElementById('channelCount');
+        if (countDisplay) {
+            if (totalChannels > 0) {
+                countDisplay.innerHTML = `Showing ${loadedChannels.toLocaleString()} of ${totalChannels.toLocaleString()} channels`;
+            } else {
+                countDisplay.innerHTML = `Loaded ${loadedChannels.toLocaleString()} channels`;
+            }
+        }
+        
+        // Hide loading indicator if no more channels
+        if (!hasMore && loadingIndicator) {
+            loadingIndicator.style.display = 'none';
+        }
+        
+    } catch (error) {
+        document.getElementById('previewResult').innerHTML = `
+            <div class="alert alert-danger">
+                Error loading channels: ${error.message}
+            </div>
+        `;
+    }
+    
+    loadingMore = false;
+}
+
+function setupInfiniteScroll() {
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    if (!loadingIndicator) return;
+    
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting && !loadingMore && hasMore) {
+                loadMoreChannels();
+            }
+        });
+    }, {
+        root: null,
+        rootMargin: '200px',
+        threshold: 0.1
+    });
+    
+    observer.observe(loadingIndicator);
+}
+
+function downloadPlaylist() {
+    const accountId = document.getElementById('testAccountId').value;
+    if (!accountId) {
+        alert('Please select an account first');
+        return;
+    }
+    
+    window.open(`/playlist/${accountId}.m3u`, '_blank');
+}
+
+loadAccounts();
+</script>
+{% endblock %}

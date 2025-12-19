@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  iptv-proxy-v2:
+    build: .
+    container_name: iptv-proxy-v2
+    restart: unless-stopped
+    ports:
+      - "8889:8000"
+    volumes:
+      - ./data:/app/data  # Persist database
+    environment:
+      PORT: "8000"
+      SECRET_KEY: "${SECRET_KEY:-change-me-in-production}"
+      DEBUG: "False"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - default
+
+networks:
+  default:
+    driver: bridge
