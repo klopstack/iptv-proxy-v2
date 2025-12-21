@@ -54,6 +54,14 @@ class TestAccountRoutes:
             "server_info": {"url": "http://test.server.com", "time_now": "2024-12-19 10:00:00"},
             "user_info": {"username": "testuser", "status": "Active", "exp_date": "1735689600", "max_connections": "1"},
         }
+        mock_service.get_live_streams.return_value = [
+            {"stream_id": 101, "name": "ESPN"},
+            {"stream_id": 102, "name": "CNN"},
+        ]
+        mock_service.get_live_categories.return_value = [
+            {"category_id": "1", "category_name": "Sports"},
+            {"category_id": "2", "category_name": "News"},
+        ]
         mock_iptv_service.return_value = mock_service
 
         response = client.post(f"/api/accounts/{sample_account['id']}/test")
@@ -61,6 +69,8 @@ class TestAccountRoutes:
         assert response.status_code == 200
         data = response.json
         assert data["success"] is True
+        assert data["channels"] == 2
+        assert data["categories"] == 2
         assert "server_info" in data
         assert "user_info" in data
 

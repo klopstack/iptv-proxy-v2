@@ -2,7 +2,7 @@
 Account management routes
 """
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
@@ -56,6 +56,10 @@ def create_account():
         server=data["server"],
         username=data["username"],
         password=data["password"],
+        user_agent=data.get(
+            "user_agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        ),
         enabled=data.get("enabled", True),
     )
 
@@ -69,6 +73,7 @@ def create_account():
                 "name": account.name,
                 "server": account.server,
                 "username": account.username,
+                "user_agent": account.user_agent,
                 "enabled": account.enabled,
             }
         ),
@@ -88,6 +93,8 @@ def update_account(account_id):
     account.username = data.get("username", account.username)
     if "password" in data:
         account.password = data["password"]
+    if "user_agent" in data:
+        account.user_agent = data["user_agent"]
     account.enabled = data.get("enabled", account.enabled)
 
     db.session.commit()
@@ -99,6 +106,7 @@ def update_account(account_id):
             "name": account.name,
             "server": account.server,
             "username": account.username,
+            "user_agent": account.user_agent,
             "enabled": account.enabled,
         }
     )
@@ -125,12 +133,18 @@ def test_account(account_id):
     account = Account.query.get_or_404(account_id)
 
     try:
-        service = IPTVService(account.server, account.username, account.password)
+        service = IPTVService(account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9")
         auth_info = service.authenticate()
+
+        # Get basic stats for response
+        streams = service.get_live_streams()
+        categories = service.get_live_categories()
 
         return jsonify(
             {
                 "success": True,
+                "channels": len(streams),
+                "categories": len(categories),
                 "server_info": {
                     "url": auth_info.get("server_info", {}).get("url", ""),
                     "time": auth_info.get("server_info", {}).get("time_now", ""),
@@ -154,7 +168,7 @@ def get_account_categories(account_id):
     account = Account.query.get_or_404(account_id)
 
     try:
-        service = IPTVService(account.server, account.username, account.password)
+        service = IPTVService(account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9")
         categories = service.get_live_categories()
 
         # Cache it
@@ -224,11 +238,48 @@ def _process_tags_for_account(account_id, streams, categories):
 
 @accounts_bp.route("/api/accounts/<int:account_id>/stats", methods=["GET"])
 def get_account_stats(account_id):
-    """Get statistics for account"""
+    """Get statistics for account (uses database if synced, otherwise API)"""
     account = Account.query.get_or_404(account_id)
 
+    # Check if account is synced to database
+    channel_count = Channel.query.filter_by(account_id=account_id, is_active=True).count()
+
+    if channel_count > 0:
+        # Use database stats (fast!)
+        category_count = db.session.query(Category.id).filter_by(account_id=account_id).count()
+
+        # Get visible/hidden counts
+        visible_count = Channel.query.filter_by(account_id=account_id, is_active=True, is_visible=True).count()
+        hidden_count = channel_count - visible_count
+
+        # Get category distribution
+        category_counts = {}
+        category_data = (
+            db.session.query(Category.category_id, db.func.count(Channel.id))
+            .join(Channel, Channel.category_id == Category.id)
+            .filter(Channel.account_id == account_id, Channel.is_active)
+            .group_by(Category.category_id)
+            .all()
+        )
+        for cat_id, count in category_data:
+            category_counts[str(cat_id)] = count
+
+        return jsonify(
+            {
+                "total_channels": channel_count,
+                "visible_channels": visible_count,
+                "hidden_channels": hidden_count,
+                "total_categories": category_count,
+                "category_counts": category_counts,
+                "using_database": True,
+                "synced": True,
+                "last_sync": account.updated_at.isoformat() if account.updated_at else None,
+            }
+        )
+
+    # Fallback to API call if not synced
     try:
-        service = IPTVService(account.server, account.username, account.password)
+        service = IPTVService(account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9")
 
         # Get cached or fetch new
         streams = cache_service.get_cached_streams(account_id)
@@ -241,12 +292,6 @@ def get_account_stats(account_id):
             categories = service.get_live_categories()
             cache_service.cache_categories(account_id, categories)
 
-        # Auto-process tags when stats are fetched
-        try:
-            _process_tags_for_account(account_id, streams, categories)
-        except Exception as tag_error:
-            logger.warning(f"Error auto-processing tags for account {account_id}: {tag_error}")
-
         # Count by category
         category_counts = {}
         for stream in streams:
@@ -254,7 +299,14 @@ def get_account_stats(account_id):
             category_counts[cat_id] = category_counts.get(cat_id, 0) + 1
 
         return jsonify(
-            {"total_channels": len(streams), "total_categories": len(categories), "category_counts": category_counts}
+            {
+                "total_channels": len(streams),
+                "total_categories": len(categories),
+                "category_counts": category_counts,
+                "using_database": False,
+                "synced": False,
+                "last_sync": None,
+            }
         )
     except Exception as e:
         logger.error(f"Error fetching stats for account {account_id}: {e}")
@@ -336,8 +388,8 @@ def process_account_tags(account_id):
     if not db_channels:
         return jsonify({"success": False, "error": "Account not synced. Please sync channels first."}), 503
 
-    # Mark start time for this processing run
-    processing_start = datetime.now(timezone.utc)
+    # Mark start time for this processing run (use utcnow to match model defaults)
+    processing_start = datetime.utcnow()
 
     # Get tag rules for this account
     tag_rules = TagService.get_rules_for_account(account)
@@ -614,20 +666,151 @@ def preview_account_playlist(account_id):
     offset = request.args.get("offset", 0, type=int)
     channels = base_query.limit(limit).offset(offset).all()
 
+    # Get channel IDs for batch tag loading
+    channel_ids = [ch.stream_id for ch in channels]
+
+    # Load tags for these channels in batch
+    channel_tags_query = (
+        db.session.query(ChannelTag.stream_id, Tag.name)
+        .join(Tag)
+        .filter(ChannelTag.account_id == account_id, ChannelTag.stream_id.in_(channel_ids))
+    )
+
+    # Build tag map
+    tags_map = {}
+    for stream_id, tag_name in channel_tags_query:
+        if stream_id not in tags_map:
+            tags_map[stream_id] = []
+        tags_map[stream_id].append(tag_name)
+
     return jsonify(
         {
             "total": total,
+            "showing": len(channels),
+            "has_more": (offset + len(channels)) < total,
             "channels": [
                 {
                     "id": ch.id,
                     "stream_id": ch.stream_id,
                     "name": ch.name,
                     "cleaned_name": ch.cleaned_name if ch.cleaned_name is not None else ch.name,
+                    "category": ch.category.category_name if ch.category else "Uncategorized",
                     "category_id": ch.category_id,
                     "is_visible": ch.is_visible,
+                    "tags": tags_map.get(ch.stream_id, []),
                 }
                 for ch in channels
             ],
             "using_database": True,
+        }
+    )
+
+
+@accounts_bp.route("/api/accounts/<int:account_id>/preview-channels", methods=["POST"])
+@handle_errors()
+def preview_filter_matches(account_id):
+    """
+    Preview how many channels would match a filter.
+    Used to provide feedback when creating filters.
+    """
+    account = Account.query.get_or_404(account_id)
+
+    if not account.enabled:
+        return jsonify({"success": False, "error": "Account is disabled"}), 403
+
+    # Check if account has synced channels
+    channel_count = Channel.query.filter_by(account_id=account_id, is_active=True).count()
+    if channel_count == 0:
+        return jsonify({"success": False, "error": "Account not synced - sync required"}), 503
+
+    data = request.get_json()
+    filter_type = data.get("filter_type")
+    filter_value = data.get("filter_value", "").strip()
+
+    if not filter_type or not filter_value:
+        return jsonify({"success": False, "error": "Missing filter_type or filter_value"}), 400
+
+    # Get all channels for this account
+    total_query = Channel.query.filter(Channel.account_id == account_id, Channel.is_active)
+    total_count = total_query.count()
+
+    # Build query to match channels
+    match_query = total_query
+
+    if filter_type == "category":
+        # Match category name
+        match_query = match_query.join(Category).filter(Category.category_name.ilike(f"%{filter_value}%"))
+    elif filter_type == "channel_name":
+        # Match channel name
+        match_query = match_query.filter(Channel.name.ilike(f"%{filter_value}%"))
+    elif filter_type == "regex":
+        # Regex match (SQLite REGEXP)
+        import re
+
+        try:
+            # Test if regex is valid
+            re.compile(filter_value)
+            # Note: SQLite doesn't have built-in REGEXP support
+            # We'll need to fetch all and filter in Python for regex
+            all_channels = total_query.all()
+            pattern = re.compile(filter_value, re.IGNORECASE)
+            match_count = sum(1 for ch in all_channels if pattern.search(ch.name))
+            return jsonify({"success": True, "match_count": match_count, "total_count": total_count})
+        except re.error as e:
+            return jsonify({"success": False, "error": f"Invalid regex: {str(e)}"}), 400
+    elif filter_type == "tag":
+        # Match tags
+        tags = [t.strip() for t in filter_value.split(",") if t.strip()]
+        if not tags:
+            return jsonify({"success": False, "error": "No tags specified"}), 400
+
+        # Get channel IDs that have any of these tags
+        tagged_streams = (
+            db.session.query(ChannelTag.stream_id)
+            .join(Tag)
+            .filter(ChannelTag.account_id == account_id, Tag.name.in_(tags))
+            .distinct()
+        )
+
+        match_query = match_query.filter(Channel.stream_id.in_(tagged_streams))
+    else:
+        return jsonify({"success": False, "error": "Invalid filter_type"}), 400
+
+    match_count = match_query.count() if filter_type != "regex" else match_count
+
+    return jsonify({"success": True, "match_count": match_count, "total_count": total_count})
+
+
+@accounts_bp.route("/api/tags/cleanup-orphans", methods=["POST"])
+@handle_errors()
+def cleanup_orphan_tags():
+    """
+    Delete tags that have no associated channels in any account.
+    This cleans up tags that were created but are no longer used.
+    """
+    # Find tags that have no ChannelTag associations
+    orphaned_tags = (
+        db.session.query(Tag)
+        .outerjoin(ChannelTag, Tag.id == ChannelTag.tag_id)
+        .filter(ChannelTag.tag_id.is_(None))
+        .all()
+    )
+
+    orphan_count = len(orphaned_tags)
+    tag_names = [tag.name for tag in orphaned_tags[:100]]  # Sample for display
+
+    # Delete orphaned tags
+    for tag in orphaned_tags:
+        db.session.delete(tag)
+
+    db.session.commit()
+
+    logger.info(f"Cleaned up {orphan_count} orphaned tags")
+
+    return jsonify(
+        {
+            "success": True,
+            "tags_deleted": orphan_count,
+            "sample_tags": tag_names[:20],  # Show first 20 for reference
         }
     )

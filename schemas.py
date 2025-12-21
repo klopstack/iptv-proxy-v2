@@ -6,7 +6,7 @@ database corruption, and improve error messaging.
 """
 import re
 
-from marshmallow import Schema, ValidationError, fields, validates, validates_schema
+from marshmallow import EXCLUDE, Schema, ValidationError, fields, validates, validates_schema
 
 # ============================================================================
 # Account Schemas
@@ -20,6 +20,10 @@ class AccountCreateSchema(Schema):
     server = fields.Str(required=True, validate=lambda x: 1 <= len(x) <= 255)
     username = fields.Str(required=True, validate=lambda x: 1 <= len(x) <= 100)
     password = fields.Str(required=True, validate=lambda x: 1 <= len(x) <= 100)
+    user_agent = fields.Str(
+        validate=lambda x: 1 <= len(x) <= 255,
+        load_default="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    )
     enabled = fields.Bool(load_default=True)
 
     @validates("server")
@@ -39,6 +43,7 @@ class AccountUpdateSchema(Schema):
     server = fields.Str(validate=lambda x: 1 <= len(x) <= 255)
     username = fields.Str(validate=lambda x: 1 <= len(x) <= 100)
     password = fields.Str(validate=lambda x: 1 <= len(x) <= 100)
+    user_agent = fields.Str(validate=lambda x: 1 <= len(x) <= 255)
     enabled = fields.Bool()
 
     @validates("server")
@@ -78,6 +83,9 @@ class FilterUpdateSchema(Schema):
     filter_action = fields.Str(validate=lambda x: x in ["whitelist", "blacklist"])
     filter_value = fields.Str(validate=lambda x: len(x) > 0)
     enabled = fields.Bool()
+
+    class Meta:
+        unknown = EXCLUDE  # Ignore unknown fields like account_id
 
 
 # ============================================================================
@@ -150,6 +158,9 @@ class TagRuleUpdateSchema(Schema):
     remove_from_name = fields.Bool()
     priority = fields.Int(validate=lambda x: 1 <= x <= 1000)
     enabled = fields.Bool()
+
+    class Meta:
+        unknown = EXCLUDE  # Ignore unknown fields like ruleset_id
 
 
 # ============================================================================

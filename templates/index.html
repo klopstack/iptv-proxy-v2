@@ -20,6 +20,48 @@
 
 {% block extra_js %}
 <script>
+async function syncAccount(accountId, button) {
+    const originalText = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Syncing...';
+    
+    try {
+        const response = await fetch(`/api/accounts/${accountId}/sync`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            // Reload dashboard to show updated stats
+            loadDashboard();
+        } else {
+            const error = await response.json();
+            alert('Sync failed: ' + (error.error || 'Unknown error'));
+            button.disabled = false;
+            button.innerHTML = originalText;
+        }
+    } catch (error) {
+        alert('Error syncing account: ' + error.message);
+        button.disabled = false;
+        button.innerHTML = originalText;
+    }
+}
+
+function formatRelativeTime(date) {
+    const now = new Date();
+    const diffMs = now - date;
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffSecs < 60) return 'just now';
+    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString();
+}
+
 async function loadDashboard() {
     try {
         const response = await fetch('/api/accounts');
@@ -44,6 +86,19 @@ async function loadDashboard() {
                     stats = await statsResponse.json();
                 }
                 
+                // Determine sync status
+                const isSynced = stats.synced || false;
+                const syncBadge = isSynced 
+                    ? '<span class="badge bg-success"><i class="bi bi-database-check"></i> Synced</span>'
+                    : '<span class="badge bg-warning text-dark"><i class="bi bi-cloud"></i> Not Synced</span>';
+                
+                let syncInfo = '';
+                if (isSynced && stats.last_sync) {
+                    const syncDate = new Date(stats.last_sync);
+                    const relativeTime = formatRelativeTime(syncDate);
+                    syncInfo = `<small class="text-muted">Last sync: ${relativeTime}</small><br>`;
+                }
+                
                 html += `
                     <div class="col-md-6 col-lg-4 mb-4">
                         <div class="card ${account.enabled ? '' : 'border-secondary'}">
@@ -56,18 +111,36 @@ async function loadDashboard() {
                             <div class="card-body">
                                 <p class="card-text">
                                     <strong>Server:</strong> ${account.server}<br>
-                                    <strong>Username:</strong> ${account.username}
+                                    <strong>Username:</strong> ${account.username}<br>
+                                    <strong>Status:</strong> ${syncBadge}<br>
+                                    ${syncInfo}
                                 </p>
                                 ${stats.total_channels !== undefined ? `
                                     <div class="mb-2">
-                                        <strong>Channels:</strong> ${stats.total_channels.toLocaleString()}<br>
+                                        <strong>Total Channels:</strong> ${stats.total_channels.toLocaleString()}<br>
+                                        ${stats.visible_channels !== undefined ? `
+                                            <strong>Visible:</strong> <span class="text-success">${stats.visible_channels.toLocaleString()}</span><br>
+                                            <strong>Hidden:</strong> <span class="text-danger">${stats.hidden_channels.toLocaleString()}</span><br>
+                                        ` : ''}
                                         <strong>Categories:</strong> ${stats.total_categories}
                                     </div>
                                 ` : ''}
                                 <div class="d-grid gap-2">
-                                    <a href="/playlist/${account.id}.m3u" class="btn btn-sm btn-success" target="_blank">
-                                        <i class="bi bi-download"></i> Download M3U
-                                    </a>
+                                    ${account.enabled ? `
+                                        <button onclick="syncAccount(${account.id}, this)" class="btn btn-sm btn-primary">
+                                            <i class="bi bi-arrow-repeat"></i> Sync Channels
+                                        </button>
+                                        <a href="/playlist/${account.id}.m3u" 
+                                           class="btn btn-sm btn-success ${!isSynced ? 'disabled' : ''}" 
+                                           target="_blank"
+                                           ${!isSynced ? 'onclick="return false;" title="Please sync first"' : 'title="Download complete playlist with filters applied"'}>
+                                            <i class="bi bi-download"></i> Download M3U (Filtered)
+                                        </a>
+                                    ` : `
+                                        <button class="btn btn-sm btn-secondary" disabled>
+                                            Account Disabled
+                                        </button>
+                                    `}
                                     <a href="/test?account=${account.id}" class="btn btn-sm btn-outline-primary">
                                         <i class="bi bi-eye"></i> Preview Channels
                                     </a>
@@ -92,6 +165,12 @@ async function loadDashboard() {
                         </a>
                         <a href="/filters" class="list-group-item list-group-item-action">
                             <i class="bi bi-funnel-fill"></i> Manage Filters
+                        </a>
+                        <a href="/rulesets" class="list-group-item list-group-item-action">
+                            <i class="bi bi-tags-fill"></i> Manage Tags & Rulesets
+                        </a>
+                        <a href="/settings" class="list-group-item list-group-item-action">
+                            <i class="bi bi-gear-fill"></i> Settings & Scheduler
                         </a>
                         <a href="/test" class="list-group-item list-group-item-action">
                             <i class="bi bi-play-circle"></i> Test Playlists

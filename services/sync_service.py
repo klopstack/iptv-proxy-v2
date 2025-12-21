@@ -50,7 +50,9 @@ class ChannelSyncService:
         }
 
         try:
-            iptv_service = IPTVService(account.server, account.username, account.password)
+            iptv_service = IPTVService(
+                account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9"
+            )
 
             # Sync categories first
             try:

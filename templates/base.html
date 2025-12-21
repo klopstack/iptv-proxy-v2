@@ -26,11 +26,6 @@
             <a class="navbar-brand" href="/">
                 <i class="bi bi-broadcast"></i> IPTV Proxy Manager v2
             </a>
-            <div class="d-flex">
-                <button class="btn btn-outline-light btn-sm" id="clear-cache-btn">
-                    <i class="bi bi-arrow-clockwise"></i> Clear Cache
-                </button>
-            </div>
         </div>
     </nav>
 
@@ -64,8 +59,11 @@
                             <a class="nav-link {% if request.path == '/test' %}active{% endif %}" href="/test">
                                 <i class="bi bi-play-circle"></i> Preview Channels
                             </a>
-                        </li>
-                    </ul>
+                        </li>                        <li class="nav-item">
+                            <a class="nav-link {% if request.path == '/settings' %}active{% endif %}" href="/settings">
+                                <i class="bi bi-gear"></i> Settings
+                            </a>
+                        </li>                    </ul>
                 </div>
             </nav>
 

@@ -9,7 +9,7 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 
-class Account(db.Model):
+class Account(db.Model):  # type: ignore[name-defined]
     """IPTV service account"""
 
     __tablename__ = "accounts"
@@ -19,6 +19,10 @@ class Account(db.Model):
     server = db.Column(db.String(255), nullable=False)
     username = db.Column(db.String(100), nullable=False)
     password = db.Column(db.String(100), nullable=False)
+    user_agent = db.Column(
+        db.String(255),
+        default="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    )
     enabled = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -31,7 +35,7 @@ class Account(db.Model):
         return f"<Account {self.name}>"
 
 
-class Filter(db.Model):
+class Filter(db.Model):  # type: ignore[name-defined]
     """Filter rules for accounts"""
 
     __tablename__ = "filters"
@@ -50,7 +54,7 @@ class Filter(db.Model):
         return f"<Filter {self.name} ({self.filter_type})>"
 
 
-class RuleSet(db.Model):
+class RuleSet(db.Model):  # type: ignore[name-defined]
     """Collection of tag extraction rules that can be applied to accounts"""
 
     __tablename__ = "rulesets"
@@ -73,7 +77,7 @@ class RuleSet(db.Model):
         return f"<RuleSet {self.name}>"
 
 
-class AccountRuleSet(db.Model):
+class AccountRuleSet(db.Model):  # type: ignore[name-defined]
     """Many-to-many relationship between accounts and rulesets with priority"""
 
     __tablename__ = "account_rulesets"
@@ -91,7 +95,7 @@ class AccountRuleSet(db.Model):
         return f"<AccountRuleSet account={self.account_id} ruleset={self.ruleset_id}>"
 
 
-class TagRule(db.Model):
+class TagRule(db.Model):  # type: ignore[name-defined]
     """Rules for extracting tags from channel/category names"""
 
     __tablename__ = "tag_rules"
@@ -113,7 +117,7 @@ class TagRule(db.Model):
         return f"<TagRule {self.name}: {self.pattern} -> {self.tag_name}>"
 
 
-class Category(db.Model):
+class Category(db.Model):  # type: ignore[name-defined]
     """Categories from IPTV provider, stored locally for fast access"""
 
     __tablename__ = "categories"
@@ -140,7 +144,7 @@ class Category(db.Model):
         return f"<Category {self.category_name} (account={self.account_id})>"
 
 
-class Channel(db.Model):
+class Channel(db.Model):  # type: ignore[name-defined]
     """Channels from IPTV provider, stored locally for fast access"""
 
     __tablename__ = "channels"
@@ -182,7 +186,7 @@ class Channel(db.Model):
         return f"<Channel {self.name} (account={self.account_id})>"
 
 
-class Tag(db.Model):
+class Tag(db.Model):  # type: ignore[name-defined]
     """Tags extracted from channels"""
 
     __tablename__ = "tags"
@@ -195,7 +199,7 @@ class Tag(db.Model):
         return f"<Tag {self.name}>"
 
 
-class ChannelTag(db.Model):
+class ChannelTag(db.Model):  # type: ignore[name-defined]
     """Many-to-many relationship between channels and tags"""
 
     __tablename__ = "channel_tags"
@@ -221,7 +225,7 @@ class ChannelTag(db.Model):
         return f"<ChannelTag account={self.account_id} stream={self.stream_id} tag={self.tag_id}>"
 
 
-class PlaylistConfig(db.Model):
+class PlaylistConfig(db.Model):  # type: ignore[name-defined]
     """Saved playlist configurations for tag-based filtering"""
 
     __tablename__ = "playlist_configs"

@@ -61,7 +61,7 @@ class FilterService:
 
             # Load channel tags if we have tag filters
             has_tag_filters = any(f.filter_type == "tag" for f in filters)
-            channel_tag_map = {}
+            channel_tag_map: dict = {}
 
             if has_tag_filters:
                 # Load tags for all channels in batches

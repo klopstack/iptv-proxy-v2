@@ -46,11 +46,29 @@ class TagService:
 
             # Try to match the pattern in each search text
             for search_text, can_remove_from_channel in search_texts:
-                matched, match_text = TagService._match_pattern(search_text, rule.pattern, rule.pattern_type)
+                matched, match_result = TagService._match_pattern(search_text, rule.pattern, rule.pattern_type)
 
                 if matched:
+                    # For regex patterns, match_result is a match object; for others, it's a string
+                    match_text = match_result.group(0) if hasattr(match_result, 'group') else match_result
+                    
                     # Handle special tag types
-                    if rule.tag_name == "__LOCATION__":
+                    if rule.tag_name == "__CAPTURE__":
+                        # Extract tag from first regex capture group
+                        if rule.pattern_type == "regex" and hasattr(match_result, 'group'):
+                            try:
+                                captured = match_result.group(1).strip()
+                                normalized_capture = TagService.normalize_tag_name(captured)
+                                if normalized_capture:
+                                    tags.add(normalized_capture)
+                                # Remove the full match from channel name
+                                if rule.remove_from_name and can_remove_from_channel:
+                                    cleaned_name = TagService._remove_text(cleaned_name, match_text)
+                            except IndexError:
+                                logger.warning(f"Rule '{rule.name}' uses __CAPTURE__ but regex has no capture group")
+                        else:
+                            logger.warning(f"Rule '{rule.name}' uses __CAPTURE__ but pattern_type is not regex")
+                    elif rule.tag_name == "__LOCATION__":
                         # Extract location from brackets and add as tag
                         import re
 
@@ -96,25 +114,26 @@ class TagService:
         return tags, cleaned_name
 
     @staticmethod
-    def _match_pattern(text: str, pattern: str, pattern_type: str) -> Tuple[bool, str]:
+    def _match_pattern(text: str, pattern: str, pattern_type: str):
         """
         Check if pattern matches text based on pattern type.
-        Returns tuple of (matched bool, matched text)
+        Returns tuple of (matched bool, matched text or match object)
+        For regex, returns match object to allow capture group access
         """
         if not text or not pattern:
-            return False, ""
+            return False, None
 
         if pattern_type == "prefix":
             # Check if text starts with pattern
             if text.upper().startswith(pattern.upper()):
                 return True, text[: len(pattern)]
-            return False, ""
+            return False, None
 
         elif pattern_type == "suffix":
             # Check if text ends with pattern
             if text.upper().endswith(pattern.upper()):
                 return True, text[-len(pattern) :]
-            return False, ""
+            return False, None
 
         elif pattern_type == "contains":
             # Check if pattern is in text
@@ -122,20 +141,20 @@ class TagService:
             if pos >= 0:
                 # Find the actual matched text preserving case
                 return True, text[pos : pos + len(pattern)]
-            return False, ""
+            return False, None
 
         elif pattern_type == "regex":
             # Use regex matching
             try:
                 match = re.search(pattern, text, re.IGNORECASE)
                 if match:
-                    return True, match.group(0)
+                    return True, match  # Return match object for capture group access
             except re.error as e:
                 logger.warning(f"Invalid regex pattern '{pattern}': {e}")
-                return False, ""
-            return False, ""
+                return False, None
+            return False, None
 
-        return False, ""
+        return False, None
 
     @staticmethod
     def _remove_text(original: str, to_remove: str) -> str:
@@ -232,8 +251,13 @@ class TagService:
         normalized = re.sub(r"_+", "_", normalized)
         normalized = normalized.strip("_")
 
+        # Strip trailing numbers that look like identifiers (e.g., ESPN_123 -> ESPN)
+        # This consolidates numbered tags like ESPN_[1-500] into a single ESPN tag
+        normalized = re.sub(r"_\d+$", "", normalized)
+
         # Return empty string if tag is too short or empty (will be filtered out)
-        if len(normalized) < 2:
+        # Require at least 2 characters to avoid single-letter tags
+        if not normalized or len(normalized) < 2:
             return ""
 
         return normalized

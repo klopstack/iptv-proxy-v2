@@ -17,6 +17,15 @@ api_bp = Blueprint("api", __name__)
 # Initialize cache service
 cache_service = CacheService()
 
+# Store scheduler reference (set by app.py)
+_scheduler = None
+
+
+def set_scheduler(scheduler):
+    """Set the scheduler instance for use in API routes"""
+    global _scheduler
+    _scheduler = scheduler
+
 
 # ============================================================================
 # API Routes - Sync All Accounts
@@ -177,3 +186,89 @@ def preview_channels():
             "has_more": offset + limit < total,
         }
     )
+
+
+# ============================================================================
+# API Routes - Scheduler Management
+# ============================================================================
+
+
+@api_bp.route("/api/scheduler/status", methods=["GET"])
+def get_scheduler_status():
+    """Get scheduler status and configuration"""
+    if _scheduler is None:
+        return jsonify({"error": "Scheduler not initialized"}), 500
+
+    return jsonify(
+        {
+            "running": _scheduler.running,
+            "interval_hours": _scheduler.interval_hours,
+            "interval_seconds": _scheduler.interval_seconds,
+        }
+    )
+
+
+@api_bp.route("/api/scheduler/restart", methods=["POST"])
+def restart_scheduler():
+    """Restart scheduler with new interval"""
+    if _scheduler is None:
+        return jsonify({"error": "Scheduler not initialized"}), 500
+
+    data = request.get_json() or {}
+    new_interval = data.get("interval_hours")
+
+    if new_interval is not None:
+        try:
+            new_interval = int(new_interval)
+            if new_interval < 1 or new_interval > 168:  # 1 hour to 1 week
+                return jsonify({"error": "Interval must be between 1 and 168 hours"}), 400
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid interval value"}), 400
+
+        # Stop and restart with new interval
+        _scheduler.stop()
+        _scheduler.interval_hours = new_interval
+        _scheduler.interval_seconds = new_interval * 3600
+        _scheduler.start()
+
+        logger.info(f"Scheduler restarted with new interval: {new_interval} hours")
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Scheduler restarted with {new_interval} hour interval",
+                "interval_hours": new_interval,
+            }
+        )
+    else:
+        # Just restart with current settings
+        _scheduler.stop()
+        _scheduler.start()
+        return jsonify({"success": True, "message": "Scheduler restarted", "interval_hours": _scheduler.interval_hours})
+
+
+@api_bp.route("/api/scheduler/stop", methods=["POST"])
+def stop_scheduler():
+    """Stop the scheduler"""
+    if _scheduler is None:
+        return jsonify({"error": "Scheduler not initialized"}), 500
+
+    if not _scheduler.running:
+        return jsonify({"error": "Scheduler is not running"}), 400
+
+    _scheduler.stop()
+    logger.info("Scheduler stopped via API")
+    return jsonify({"success": True, "message": "Scheduler stopped"})
+
+
+@api_bp.route("/api/scheduler/start", methods=["POST"])
+def start_scheduler():
+    """Start the scheduler"""
+    if _scheduler is None:
+        return jsonify({"error": "Scheduler not initialized"}), 500
+
+    if _scheduler.running:
+        return jsonify({"error": "Scheduler is already running"}), 400
+
+    _scheduler.start()
+    logger.info("Scheduler started via API")
+    return jsonify({"success": True, "message": "Scheduler started"})

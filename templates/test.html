@@ -117,6 +117,7 @@ async function loadAccounts() {
     
     const select = document.getElementById('testAccountId');
     select.innerHTML = '<option value="">Select an account...</option>';
+    select.innerHTML += '<option value="all">All Accounts</option>';
     
     for (const account of accounts) {
         if (account.enabled) {
@@ -168,7 +169,7 @@ function clearSelectedTags() {
 
 function searchTags() {
     const accountId = document.getElementById('testAccountId').value;
-    if (!accountId) return;
+    if (!accountId || accountId === 'all') return;
     
     const query = document.getElementById('tagSearchInput').value.trim();
     
@@ -210,7 +211,7 @@ function searchTags() {
 
 function showTagDropdown() {
     const accountId = document.getElementById('testAccountId').value;
-    if (accountId) {
+    if (accountId && accountId !== 'all') {
         searchTags();
     }
 }
@@ -279,26 +280,30 @@ async function loadPreview() {
     
     // Load filters
     try {
-        const filtersResponse = await fetch(`/api/accounts/${accountId}/filters`);
-        const filters = await filtersResponse.json();
-        
-        let filtersHtml = '';
-        if (filters.length === 0) {
-            filtersHtml = '<p class="text-muted">No filters configured</p>';
+        if (accountId === 'all') {
+            document.getElementById('activeFilters').innerHTML = '<p class="text-muted">Viewing all accounts - filters vary by account</p>';
         } else {
-            filtersHtml = '<ul class="list-group list-group-flush">';
-            for (const filter of filters.filter(f => f.enabled)) {
-                const badge = filter.filter_action === 'whitelist' ? 'success' : 'danger';
-                filtersHtml += `
-                    <li class="list-group-item">
-                        <span class="badge bg-${badge}">${filter.filter_action}</span>
-                        <strong>${filter.filter_type}:</strong> ${filter.filter_value}
-                    </li>
-                `;
+            const filtersResponse = await fetch(`/api/accounts/${accountId}/filters`);
+            const filters = await filtersResponse.json();
+            
+            let filtersHtml = '';
+            if (filters.length === 0) {
+                filtersHtml = '<p class="text-muted">No filters configured</p>';
+            } else {
+                filtersHtml = '<ul class="list-group list-group-flush">';
+                for (const filter of filters.filter(f => f.enabled)) {
+                    const badge = filter.filter_action === 'whitelist' ? 'success' : 'danger';
+                    filtersHtml += `
+                        <li class="list-group-item">
+                            <span class="badge bg-${badge}">${filter.filter_action}</span>
+                            <strong>${filter.filter_type}:</strong> ${filter.filter_value}
+                        </li>
+                    `;
+                }
+                filtersHtml += '</ul>';
             }
-            filtersHtml += '</ul>';
+            document.getElementById('activeFilters').innerHTML = filtersHtml;
         }
-        document.getElementById('activeFilters').innerHTML = filtersHtml;
     } catch (error) {
         document.getElementById('activeFilters').innerHTML = `<p class="text-danger">Error loading filters</p>`;
     }
@@ -352,7 +357,15 @@ async function loadMoreChannels() {
         // Get selected tags from our new tag selector
         const tagParam = selectedTags.length > 0 ? `&tags=${selectedTags.map(t => t.name).join(',')}` : '';
         
-        const response = await fetch(`/api/accounts/${currentAccountId}/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}${tagParam}`);
+        // Use different endpoint for "all accounts"
+        let url;
+        if (currentAccountId === 'all') {
+            url = `/api/channels/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}${tagParam}`;
+        } else {
+            url = `/api/accounts/${currentAccountId}/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}${tagParam}`;
+        }
+        
+        const response = await fetch(url);
         const data = await response.json();
         
         if (data.error) {
@@ -464,6 +477,11 @@ function downloadPlaylist() {
     const accountId = document.getElementById('testAccountId').value;
     if (!accountId) {
         alert('Please select an account first');
+        return;
+    }
+    
+    if (accountId === 'all') {
+        alert('Please select a specific account to download playlist. "All Accounts" view is for preview only.');
         return;
     }
     

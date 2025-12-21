@@ -35,3 +35,9 @@ def test_page():
 def rulesets_page():
     """Rulesets and tags management page"""
     return render_template("rulesets.html")
+
+
+@web_bp.route("/settings")
+def settings_page():
+    """Settings and scheduler management page"""
+    return render_template("settings.html")

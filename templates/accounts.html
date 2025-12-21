@@ -35,8 +35,8 @@
                     </div>
                     <div class="mb-3">
                         <label for="accountServer" class="form-label">Server</label>
-                        <input type="text" class="form-control" id="accountServer" placeholder="example.com" required>
-                        <div class="form-text">Without http:// prefix</div>
+                        <input type="text" class="form-control" id="accountServer" placeholder="example.com or http://example.com/" required>
+                        <div class="form-text">Enter domain or full URL (http:// and trailing slash will be removed)</div>
                     </div>
                     <div class="mb-3">
                         <label for="accountUsername" class="form-label">Username</label>
@@ -44,7 +44,19 @@
                     </div>
                     <div class="mb-3">
                         <label for="accountPassword" class="form-label">Password</label>
-                        <input type="password" class="form-control" id="accountPassword" required>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="accountPassword" required>
+                            <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text" id="passwordHint" style="display: none;">Password already set (leave blank to keep current)</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="accountUserAgent" class="form-label">User Agent</label>
+                        <input type="text" class="form-control" id="accountUserAgent" 
+                               placeholder="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36">
+                        <div class="form-text">Custom user agent string for API requests (leave blank for default)</div>
                     </div>
                     <div class="mb-3 form-check">
                         <input type="checkbox" class="form-check-input" id="accountEnabled" checked>
@@ -127,12 +139,13 @@ async function renderAccounts() {
     
     let html = '<div class="list-group">';
     for (const account of accounts) {
-        const status = syncStatuses[account.id] || { synced: false };
+        const status = syncStatuses[account.id] || { channel_count: 0 };
         
-        // Format sync status
+        // Format sync status - account is synced if it has channels
+        const synced = (status.channel_count > 0);
         let syncBadge = '';
         let syncInfo = '';
-        if (status.synced) {
+        if (synced) {
             syncBadge = '<span class="badge bg-success" title="Database synced"><i class="bi bi-database-check"></i> Synced</span>';
             if (status.last_sync) {
                 const syncDate = new Date(status.last_sync);
@@ -140,7 +153,7 @@ async function renderAccounts() {
                 syncInfo = `<br><small class="text-muted">Last sync: ${relativeTime} (${status.channel_count || 0} channels)</small>`;
             }
         } else {
-            syncBadge = '<span class="badge bg-warning text-dark" title="Using API (not synced)"><i class="bi bi-cloud"></i> API Only</span>';
+            syncBadge = '<span class="badge bg-warning text-dark" title="Account not synced - using API calls only. Server does not provide a native m3u playlist, all requests go through the IPTV provider API."><i class="bi bi-cloud"></i> API Only</span>';
         }
         
         html += `
@@ -170,6 +183,9 @@ async function renderAccounts() {
                     <div class="btn-group">
                         <button class="btn btn-sm btn-outline-info" data-action="sync" data-account-id="${account.id}" title="Sync Channels to Database">
                             <i class="bi bi-arrow-repeat"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-success" data-action="reprocess-tags" data-account-id="${account.id}" title="Reprocess Tags (run after changing tag rules)">
+                            <i class="bi bi-tags"></i>
                         </button>
                         <button class="btn btn-sm btn-outline-secondary" data-action="test" data-account-id="${account.id}" title="Test Connection">
                             <i class="bi bi-activity"></i>
@@ -206,8 +222,19 @@ function getRelativeTime(date) {
     return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
 }
 
-// Initialize event listeners after DOM is loaded
+// Setup event listeners when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
+    // Password toggle
+    const togglePassword = document.getElementById('togglePassword');
+    const passwordField = document.getElementById('accountPassword');
+    if (togglePassword && passwordField) {
+        togglePassword.addEventListener('click', () => {
+            const type = passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordField.setAttribute('type', type);
+            togglePassword.querySelector('i').className = type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
+        });
+    }
+
     // Add Account button
     const addBtn = document.getElementById('add-account-btn');
     if (addBtn) {
@@ -216,6 +243,8 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('accountForm').reset();
             document.getElementById('accountId').value = '';
             document.getElementById('accountEnabled').checked = true;
+            document.getElementById('accountPassword').required = true;
+            document.getElementById('passwordHint').style.display = 'none';
         });
     }
 
@@ -224,13 +253,29 @@ document.addEventListener('DOMContentLoaded', () => {
     if (saveBtn) {
         saveBtn.addEventListener('click', async () => {
             const id = document.getElementById('accountId').value;
+            let server = document.getElementById('accountServer').value.trim();
+            const password = document.getElementById('accountPassword').value;
+            const userAgent = document.getElementById('accountUserAgent').value.trim();
+            
+            // Strip http:// or https:// and trailing slash from server
+            server = server.replace(/^https?:\/\//, '').replace(/\/$/, '');
+            
             const data = {
                 name: document.getElementById('accountName').value,
-                server: document.getElementById('accountServer').value,
+                server: server,
                 username: document.getElementById('accountUsername').value,
-                password: document.getElementById('accountPassword').value,
                 enabled: document.getElementById('accountEnabled').checked
             };
+            
+            // Only include password if it's set
+            if (password) {
+                data.password = password;
+            }
+            
+            // Include user_agent if provided
+            if (userAgent) {
+                data.user_agent = userAgent;
+            }
             
             try {
                 const url = id ? `/api/accounts/${id}` : '/api/accounts';
@@ -246,7 +291,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     modal.hide();
                     await loadAccounts();
                 } else {
-                    alert('Error saving account');
+                    const error = await response.json();
+                    alert('Error saving account: ' + (error.error || 'Unknown error'));
                 }
             } catch (error) {
                 alert('Error: ' + error.message);
@@ -274,6 +320,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.getElementById('accountServer').value = account.server;
                     document.getElementById('accountUsername').value = account.username;
                     document.getElementById('accountPassword').value = '';
+                    document.getElementById('accountPassword').placeholder = '••••••••';
+                    document.getElementById('accountPassword').required = false;
+                    document.getElementById('passwordHint').style.display = 'block';
+                    document.getElementById('accountUserAgent').value = account.user_agent || '';
                     document.getElementById('accountEnabled').checked = account.enabled;
                     modal.show();
                     break;
@@ -302,7 +352,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         const result = await response.json();
                         
                         if (response.ok) {
-                            alert(`Sync complete! Synced ${result.channels_count || 0} channels`);
+                            const added = result.channels_added || 0;
+                            const updated = result.channels_updated || 0;
+                            const deactivated = result.channels_deactivated || 0;
+                            const total = added + updated;
+                            alert(`Sync complete!\n\nAdded: ${added}\nUpdated: ${updated}\nDeactivated: ${deactivated}\nTotal synced: ${total}`);
                             await loadAccounts();
                         } else {
                             alert('Error syncing channels: ' + (result.error || 'Unknown error'));
@@ -315,12 +369,39 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     break;
 
+                case 'reprocess-tags':
+                    if (!confirm(`Reprocess tags for ${account?.name}? This will extract tags from all channels based on current tag rules. This may take a few minutes for large channel lists.`)) return;
+                    try {
+                        button.disabled = true;
+                        button.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+                        
+                        const response = await fetch(`/api/accounts/${accountId}/process-tags`, { method: 'POST' });
+                        const result = await response.json();
+                        
+                        if (response.ok) {
+                            const created = result.tags_created || 0;
+                            const updated = result.tags_updated || 0;
+                            const removed = result.tags_removed || 0;
+                            const channelsUpdated = result.channels_updated || 0;
+                            alert(`Tag reprocessing complete!\n\nTags created: ${created}\nTags updated: ${updated}\nTags removed: ${removed}\nChannels updated: ${channelsUpdated}`);
+                            await loadAccounts();
+                        } else {
+                            alert('Error reprocessing tags: ' + (result.error || 'Unknown error'));
+                        }
+                    } catch (error) {
+                        alert('Error: ' + error.message);
+                    } finally {
+                        button.disabled = false;
+                        button.innerHTML = '<i class="bi bi-tags"></i>';
+                    }
+                    break;
+
                 case 'test':
                     try {
-                        const response = await fetch(`/api/accounts/${accountId}/test`);
+                        const response = await fetch(`/api/accounts/${accountId}/test`, { method: 'POST' });
                         const result = await response.json();
                         if (result.success) {
-                            alert(`Connection successful!\\nChannels: ${result.channels || 0}\\nCategories: ${result.categories || 0}`);
+                            alert(`Connection successful!\nChannels: ${result.channels || 0}\nCategories: ${result.categories || 0}`);
                         } else {
                             alert('Connection failed: ' + (result.error || 'Unknown error'));
                         }
@@ -347,22 +428,37 @@ document.addEventListener('DOMContentLoaded', () => {
                             `Categories - ${account ? account.name : 'Account'} (${categories.length} total)`;
                         
                         let html = `
+                            <div class="alert alert-info mb-3">
+                                <i class="bi bi-info-circle"></i>
+                                <strong>Tip:</strong> Use <a href="/filters" class="alert-link">Filters</a> to show/hide specific categories or channels.
+                            </div>
+                            <div class="mb-3">
+                                <input type="text" class="form-control" id="categorySearch" placeholder="Search categories...">
+                            </div>
                             <div class="table-responsive">
-                                <table class="table table-striped table-hover">
+                                <table class="table table-striped table-hover table-sm">
                                     <thead>
                                         <tr>
                                             <th style="width: 100px;">ID</th>
                                             <th>Category Name</th>
+                                            <th style="width: 80px;" class="text-end">Actions</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody id="categoriesTableBody">
                         `;
                         
                         for (const cat of categories) {
                             html += `
-                                <tr>
+                                <tr class="category-row" data-category-name="${(cat.category_name || '').toLowerCase()}">
                                     <td>${cat.category_id || 'N/A'}</td>
                                     <td>${cat.category_name || 'Unnamed'}</td>
+                                    <td class="text-end">
+                                        <button class="btn btn-sm btn-outline-secondary" 
+                                                onclick="addCategoryFilter(${accountId}, '${cat.category_name}')"
+                                                title="Add as filter">
+                                            <i class="bi bi-funnel-fill"></i>
+                                        </button>
+                                    </td>
                                 </tr>
                             `;
                         }
@@ -378,6 +474,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         
                         document.getElementById('categoriesContent').innerHTML = html;
+                        
+                        // Add search functionality
+                        const searchInput = document.getElementById('categorySearch');
+                        if (searchInput) {
+                            searchInput.addEventListener('input', (e) => {
+                                const searchTerm = e.target.value.toLowerCase();
+                                const rows = document.querySelectorAll('.category-row');
+                                rows.forEach(row => {
+                                    const categoryName = row.dataset.categoryName;
+                                    row.style.display = categoryName.includes(searchTerm) ? '' : 'none';
+                                });
+                            });
+                        }
                     } catch (error) {
                         document.getElementById('categoriesContent').innerHTML = `
                             <div class="alert alert-danger">
@@ -391,6 +500,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+function addCategoryFilter(accountId, categoryName) {
+    // Navigate to filters page with account and category pre-filled
+    const params = new URLSearchParams({
+        account: accountId,
+        category: categoryName
+    });
+    window.location.href = `/filters?${params.toString()}`;
+}
 
 loadAccounts();
 </script>

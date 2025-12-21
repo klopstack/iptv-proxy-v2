@@ -80,6 +80,14 @@
                         <input type="checkbox" class="form-check-input" id="filterEnabled" checked>
                         <label class="form-check-label" for="filterEnabled">Enabled</label>
                     </div>
+                    <div id="filterMatchFeedback" style="display: none;" class="alert alert-info">
+                        <div class="d-flex align-items-center">
+                            <div class="spinner-border spinner-border-sm me-2" role="status" id="filterMatchSpinner">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <span id="filterMatchText">Checking matches...</span>
+                        </div>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -98,19 +106,26 @@ let accounts = [];
 const modal = new bootstrap.Modal(document.getElementById('filterModal'));
 
 async function loadAccounts() {
-    const response = await fetch('/api/accounts');
-    accounts = await response.json();
-    
-    // Populate account selects
-    const accountSelect = document.getElementById('accountSelect');
-    const filterAccountId = document.getElementById('filterAccountId');
-    
-    accountSelect.innerHTML = '<option value="">All Accounts</option>';
-    filterAccountId.innerHTML = '<option value="">Select an account...</option>';
-    
-    for (const account of accounts) {
-        accountSelect.innerHTML += `<option value="${account.id}">${account.name}</option>`;
-        filterAccountId.innerHTML += `<option value="${account.id}">${account.name}</option>`;
+    try {
+        const response = await fetch('/api/accounts');
+        accounts = await response.json();
+        
+        // Populate account selects
+        const accountSelect = document.getElementById('accountSelect');
+        const filterAccountId = document.getElementById('filterAccountId');
+        
+        accountSelect.innerHTML = '<option value="">All Accounts</option>';
+        filterAccountId.innerHTML = '<option value="">Select an account...</option>';
+        
+        for (const account of accounts) {
+            accountSelect.innerHTML += `<option value="${account.id}">${account.name}</option>`;
+            filterAccountId.innerHTML += `<option value="${account.id}">${account.name}</option>`;
+        }
+    } catch (error) {
+        console.error('Error loading accounts:', error);
+        document.getElementById('filters-list').innerHTML = `
+            <div class="alert alert-danger">Error loading accounts: ${error.message}</div>
+        `;
     }
 }
 
@@ -231,6 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('filterForm').reset();
             document.getElementById('filterId').value = '';
             document.getElementById('filterEnabled').checked = true;
+            document.getElementById('filterAccountId').disabled = false; // Enable account selection for new filters
             updateFilterHelp();
         });
     }
@@ -326,6 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.getElementById('filterModalLabel').textContent = 'Edit Filter';
                     document.getElementById('filterId').value = filter.id;
                     document.getElementById('filterAccountId').value = filter.account_id;
+                    document.getElementById('filterAccountId').disabled = true; // Disable account field when editing
                     document.getElementById('filterName').value = filter.name;
                     document.getElementById('filterType').value = filter.filter_type;
                     document.getElementById('filterAction').value = filter.filter_action;
@@ -366,6 +383,93 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+    
+    // Add event listeners for filter match feedback
+    const filterValue = document.getElementById('filterValue');
+    const filterTypeInput = document.getElementById('filterType');
+    const filterAccountId = document.getElementById('filterAccountId');
+    const tagSelector = document.getElementById('tagSelector');
+    
+    let debounceTimer;
+    const debounceCheckMatches = () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(checkFilterMatches, 500);
+    };
+    
+    if (filterValue) filterValue.addEventListener('input', debounceCheckMatches);
+    if (filterTypeInput) filterTypeInput.addEventListener('change', debounceCheckMatches);
+    if (filterAccountId) filterAccountId.addEventListener('change', debounceCheckMatches);
+    if (tagSelector) tagSelector.addEventListener('change', debounceCheckMatches);
 });
+
+async function checkFilterMatches() {
+    const accountId = document.getElementById('filterAccountId').value;
+    const filterType = document.getElementById('filterType').value;
+    const filterAction = document.getElementById('filterAction').value;
+    let filterValue = document.getElementById('filterValue').value.trim();
+    
+    // Get selected tags if filter type is 'tag'
+    if (filterType === 'tag') {
+        const tagSelector = document.getElementById('tagSelector');
+        const selectedTags = Array.from(tagSelector.selectedOptions).map(opt => opt.value);
+        filterValue = selectedTags.join(',');
+    }
+    
+    const feedback = document.getElementById('filterMatchFeedback');
+    const spinner = document.getElementById('filterMatchSpinner');
+    const text = document.getElementById('filterMatchText');
+    
+    // Don't check if we don't have minimum required fields
+    if (!accountId || !filterType || !filterValue) {
+        feedback.style.display = 'none';
+        return;
+    }
+    
+    // Show loading state
+    feedback.style.display = 'block';
+    feedback.className = 'alert alert-info';
+    spinner.style.display = 'inline-block';
+    text.textContent = 'Checking matches...';
+    
+    try {
+        // Make API call to preview what would match
+        const response = await fetch(`/api/accounts/${accountId}/preview-channels`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                filter_type: filterType,
+                filter_action: filterAction,
+                filter_value: filterValue
+            })
+        });
+        
+        const data = await response.json();
+        
+        spinner.style.display = 'none';
+        
+        if (response.ok && data.success !== false) {
+            const matchCount = data.match_count || 0;
+            const totalCount = data.total_count || 0;
+            
+            if (matchCount === 0) {
+                feedback.className = 'alert alert-warning';
+                text.textContent = `⚠️ No channels match this filter (0 of ${totalCount} channels)`;
+            } else if (filterAction === 'whitelist') {
+                feedback.className = 'alert alert-success';
+                text.textContent = `✓ Would include ${matchCount} of ${totalCount} channels`;
+            } else {
+                feedback.className = 'alert alert-success';
+                text.textContent = `✓ Would exclude ${matchCount} of ${totalCount} channels (${totalCount - matchCount} remaining)`;
+            }
+        } else {
+            feedback.className = 'alert alert-danger';
+            text.textContent = '✗ Error checking matches: ' + (data.error || 'Unknown error');
+        }
+    } catch (error) {
+        spinner.style.display = 'none';
+        feedback.className = 'alert alert-danger';
+        text.textContent = '✗ Error checking matches: ' + error.message;
+    }
+}
 </script>
 {% endblock %}

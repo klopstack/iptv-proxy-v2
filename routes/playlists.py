@@ -163,7 +163,9 @@ def preview_playlist_config(config_id):
 
         for account in accounts:
             # Get streams for this account
-            service = IPTVService(account.server, account.username, account.password)
+            service = IPTVService(
+                account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9"
+            )
             streams = cache_service.get_cached_streams(account.id)
             if not streams:
                 streams = service.get_live_streams()
@@ -428,7 +430,7 @@ def proxy_epg(account_id):
     if not account.enabled:
         raise PermissionError("Account is disabled")
 
-    service = IPTVService(account.server, account.username, account.password)
+    service = IPTVService(account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9")
     epg_data = service.get_xmltv()
 
     return Response(epg_data, mimetype="application/xml")

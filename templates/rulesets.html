@@ -6,6 +6,9 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
     <h1 class="h2">Tags & Rulesets</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
+        <button class="btn btn-sm btn-danger me-2" id="cleanup-orphan-tags-btn" title="Delete tags with no associated channels">
+            <i class="bi bi-trash"></i> Cleanup Orphan Tags
+        </button>
         <button class="btn btn-sm btn-primary me-2" id="create-default-ruleset-btn">
             <i class="bi bi-plus-circle"></i> Create Default Ruleset
         </button>
@@ -238,14 +241,22 @@
                         <input type="text" class="form-control" id="playlist-name" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Required Tags (all must match)</label>
-                        <input type="text" class="form-control" id="playlist-required-tags" placeholder="e.g., US, HD">
-                        <small class="form-text text-muted">Comma-separated tag names</small>
+                        <label for="playlist-required-tags" class="form-label">Required Tags (all must match)</label>
+                        <select class="form-select" id="playlist-required-tags" multiple size="6">
+                            <option value="">Loading tags...</option>
+                        </select>
+                        <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple tags. All selected tags must be present on channels.</small>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Excluded Tags (none can match)</label>
-                        <input type="text" class="form-control" id="playlist-excluded-tags" placeholder="e.g., XXX, Adult">
-                        <small class="form-text text-muted">Comma-separated tag names</small>
+                        <label for="playlist-excluded-tags" class="form-label">Excluded Tags (none can match)</label>
+                        <select class="form-select" id="playlist-excluded-tags" multiple size="6">
+                            <option value="">Loading tags...</option>
+                        </select>
+                        <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple tags. Channels with any of these tags will be excluded.</small>
+                    </div>
+                    <div id="playlistValidationError" class="alert alert-danger" style="display: none;" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <span id="playlistValidationMessage"></span>
                     </div>
                 </form>
             </div>
@@ -798,12 +809,11 @@ async function loadTags() {
             html = '<div class="d-flex flex-wrap gap-2">';
             tags.forEach(tag => {
                 const count = tag.channel_count || '';
-                const previewUrl = accountId 
-                    ? `/test?account=${accountId}&tag=${encodeURIComponent(tag.name)}`
-                    : '#';
                 const clickable = accountId ? 'cursor: pointer;' : 'cursor: default;';
                 const title = accountId ? 'Click to preview channels with this tag' : 'Select an account to preview';
-                html += `<a href="${previewUrl}" class="badge bg-primary fs-6 py-2 px-3 text-decoration-none" style="${clickable}" title="${title}">${tag.name} ${count ? `<span class="badge bg-light text-dark ms-1">${count}</span>` : ''}</a>`;
+                const onClick = accountId ? `onclick="navigateToPreview('${accountId}', '${tag.name.replace(/'/g, "\\'")}')"` : '';
+                const previewUrl = accountId ? '#' : '#'; // Use onclick instead
+                html += `<a href="${previewUrl}" class="badge bg-primary fs-6 py-2 px-3 text-decoration-none" style="${clickable}" title="${title}" ${onClick}>${tag.name} ${count ? `<span class="badge bg-light text-dark ms-1">${count}</span>` : ''}</a>`;
             });
             html += '</div>';
         }
@@ -814,6 +824,11 @@ async function loadTags() {
             <div class="alert alert-danger">Error loading tags: ${error.message}</div>
         `;
     }
+}
+
+function navigateToPreview(accountId, tagName) {
+    // Navigate to test page with account and tag filters
+    window.location.href = `/test?account=${accountId}&tag=${encodeURIComponent(tagName)}`;
 }
 
 async function processAccountTags() {
@@ -858,23 +873,50 @@ async function processAllAccountTags() {
     
     try {
         let totalProcessed = 0;
-        let totalTags = 0;
+        let totalTags = new Set(); // Use set to track unique tags across all accounts
+        let accountsProcessed = 0;
+        let errors = [];
         
         for (const account of accounts) {
+            if (!account.enabled) continue; // Skip disabled accounts
+            
             try {
                 const response = await fetch(`/api/accounts/${account.id}/process-tags`, { method: 'POST' });
+                
+                if (!response.ok) {
+                    errors.push(`${account.name}: ${response.statusText}`);
+                    continue;
+                }
+                
                 const result = await response.json();
                 
                 if (result.success) {
-                    totalProcessed += result.processed;
-                    totalTags += result.unique_tags;
+                    totalProcessed += result.processed || 0;
+                    // Add all unique tags to our set
+                    if (result.tag_counts) {
+                        Object.keys(result.tag_counts).forEach(tag => totalTags.add(tag));
+                    }
+                    accountsProcessed++;
                 }
             } catch (error) {
-                console.error(`Error processing account ${account.id}:`, error);
+                console.error(`Error processing account ${account.name}:`, error);
+                errors.push(`${account.name}: ${error.message}`);
             }
         }
         
-        alert(`Processing complete!\nProcessed ${totalProcessed} total channels\nExtracted ${totalTags} unique tags across all accounts`);
+        let message = `Processing complete!\\n`;
+        message += `Accounts processed: ${accountsProcessed}\\n`;
+        message += `Total channels: ${totalProcessed}\\n`;
+        message += `Unique tags extracted: ${totalTags.size}`;
+        
+        if (errors.length > 0) {
+            message += `\\n\\nErrors:\\n` + errors.slice(0, 3).join('\\n');
+            if (errors.length > 3) {
+                message += `\\n... and ${errors.length - 3} more`;
+            }
+        }
+        
+        alert(message);
         await loadTags();
     } catch (error) {
         alert('Error processing tags: ' + error.message);
@@ -902,16 +944,73 @@ async function loadPlaylists() {
 
 function showCreatePlaylistModal() {
     document.getElementById('playlistForm').reset();
+    document.getElementById('playlistValidationError').style.display = 'none';
+    
+    // Load available tags
+    loadTagsForPlaylist();
+    
     new bootstrap.Modal(document.getElementById('playlistModal')).show();
+}
+
+async function loadTagsForPlaylist() {
+    try {
+        const response = await fetch('/api/tags');
+        const tags = await response.json();
+        
+        const requiredSelect = document.getElementById('playlist-required-tags');
+        const excludedSelect = document.getElementById('playlist-excluded-tags');
+        
+        requiredSelect.innerHTML = '';
+        excludedSelect.innerHTML = '';
+        
+        if (tags.length === 0) {
+            requiredSelect.innerHTML = '<option value="">No tags available</option>';
+            excludedSelect.innerHTML = '<option value="">No tags available</option>';
+        } else {
+            for (const tag of tags) {
+                requiredSelect.innerHTML += `<option value="${tag.name}">${tag.name}</option>`;
+                excludedSelect.innerHTML += `<option value="${tag.name}">${tag.name}</option>`;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading tags:', error);
+        document.getElementById('playlist-required-tags').innerHTML = '<option value="">Error loading tags</option>';
+        document.getElementById('playlist-excluded-tags').innerHTML = '<option value="">Error loading tags</option>';
+    }
 }
 
 async function savePlaylist() {
     const accountId = document.getElementById('playlist-account').value;
-    const name = document.getElementById('playlist-name').value;
-    const requiredTags = document.getElementById('playlist-required-tags').value
-        .split(',').map(t => t.trim()).filter(t => t);
-    const excludedTags = document.getElementById('playlist-excluded-tags').value
-        .split(',').map(t => t.trim()).filter(t => t);
+    const name = document.getElementById('playlist-name').value.trim();
+    
+    // Get selected tags from multi-select
+    const requiredSelect = document.getElementById('playlist-required-tags');
+    const excludedSelect = document.getElementById('playlist-excluded-tags');
+    const requiredTags = Array.from(requiredSelect.selectedOptions).map(opt => opt.value);
+    const excludedTags = Array.from(excludedSelect.selectedOptions).map(opt => opt.value);
+    
+    const errorDiv = document.getElementById('playlistValidationError');
+    const errorMsg = document.getElementById('playlistValidationMessage');
+    
+    // Client-side validation
+    if (!accountId) {
+        errorDiv.style.display = 'block';
+        errorMsg.textContent = 'Please select an account.';
+        document.getElementById('playlist-account').classList.add('is-invalid');
+        return;
+    }
+    
+    if (!name) {
+        errorDiv.style.display = 'block';
+        errorMsg.textContent = 'Please enter a playlist name.';
+        document.getElementById('playlist-name').classList.add('is-invalid');
+        return;
+    }
+    
+    // Clear validation styles
+    errorDiv.style.display = 'none';
+    document.getElementById('playlist-account').classList.remove('is-invalid');
+    document.getElementById('playlist-name').classList.remove('is-invalid');
     
     const data = {
         account_id: parseInt(accountId),
@@ -927,25 +1026,81 @@ async function savePlaylist() {
             body: JSON.stringify(data)
         });
         
+        const result = await response.json();
+        
         if (response.ok) {
-            const result = await response.json();
             bootstrap.Modal.getInstance(document.getElementById('playlistModal')).hide();
             
             // Show the generated URL
-            alert(`Playlist created!\n\nURL: ${window.location.origin}/playlist/config/${result.id}.m3u`);
+            alert(`Playlist created!\\n\\nURL: ${window.location.origin}/playlist/config/${result.id}.m3u`);
             await loadPlaylists();
         } else {
-            const error = await response.json();
-            alert('Error: ' + (error.error || 'Failed to create playlist'));
+            // Show validation error in modal
+            errorDiv.style.display = 'block';
+            errorDiv.className = 'alert alert-danger border border-danger';
+            
+            // Extract detailed error message
+            let errorMessage = 'Validation failed';
+            if (result.error) {
+                errorMessage = result.error;
+            } else if (result.errors) {
+                // Handle marshmallow validation errors
+                const errorList = Object.entries(result.errors)
+                    .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
+                    .join('; ');
+                errorMessage = errorList;
+            }
+            
+            errorMsg.textContent = errorMessage;
+            
+            // Highlight invalid fields if possible
+            if (result.errors) {
+                Object.keys(result.errors).forEach(field => {
+                    const input = document.getElementById(`playlist-${field.replace('_', '-')}`);
+                    if (input) input.classList.add('is-invalid');
+                });
+            }
         }
     } catch (error) {
-        alert('Error creating playlist: ' + error.message);
+        errorDiv.style.display = 'block';
+        errorDiv.className = 'alert alert-danger border border-danger';
+        errorMsg.textContent = 'Error creating playlist: ' + error.message;
     }
 }
 
 // Initialize event listeners after DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     // Static button listeners
+    const cleanupOrphanTagsBtn = document.getElementById('cleanup-orphan-tags-btn');
+    if (cleanupOrphanTagsBtn) {
+        cleanupOrphanTagsBtn.addEventListener('click', async () => {
+            if (!confirm('Delete all tags that have no associated channels? This cannot be undone.')) return;
+            
+            try {
+                cleanupOrphanTagsBtn.disabled = true;
+                cleanupOrphanTagsBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Cleaning...';
+                
+                const response = await fetch('/api/tags/cleanup-orphans', { method: 'POST' });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert(`Cleanup complete!\n\n${result.tags_deleted} orphaned tags deleted.\n\nSample tags removed:\n${result.sample_tags.slice(0, 10).join(', ')}`);
+                    // Reload tags if on tags tab
+                    if (document.getElementById('tags').classList.contains('active')) {
+                        loadTags();
+                    }
+                } else {
+                    alert('Error cleaning up tags: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                cleanupOrphanTagsBtn.disabled = false;
+                cleanupOrphanTagsBtn.innerHTML = '<i class="bi bi-trash"></i> Cleanup Orphan Tags';
+            }
+        });
+    }
+
     const createDefaultBtn = document.getElementById('create-default-ruleset-btn');
     if (createDefaultBtn) {
         createDefaultBtn.addEventListener('click', () => createDefaultRuleset());
@@ -987,7 +1142,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Event delegation for ruleset operations
-    const rulesetsContainer = document.getElementById('rulesets-container');
+    const rulesetsContainer = document.getElementById('rulesets-list');
     if (rulesetsContainer) {
         rulesetsContainer.addEventListener('click', async (e) => {
             const button = e.target.closest('button[data-action]');
