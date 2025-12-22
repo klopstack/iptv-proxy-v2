@@ -24,6 +24,16 @@
                     <div class="form-text">Type to search and click to add tags. Channels must have at least one selected tag.</div>
                 </div>
                 
+                <div class="mb-3">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="collapseDuplicates">
+                        <label class="form-check-label" for="collapseDuplicates">
+                            <i class="bi bi-layers"></i> Collapse duplicate channels
+                        </label>
+                    </div>
+                    <div class="form-text">Hide lower-quality duplicates of the same channel (keeps 4K &gt; RAW &gt; 60FPS &gt; HD)</div>
+                </div>
+                
                 <div class="d-grid gap-2">
                     <button class="btn btn-primary" id="load-preview-btn">
                         <i class="bi bi-eye"></i> Preview Channels
@@ -311,12 +321,16 @@ async function loadMoreChannels() {
         // Get category filter if set from URL
         const categoryParam = window.categoryFilter ? `&category=${encodeURIComponent(window.categoryFilter)}` : '';
         
+        // Get collapse duplicates setting
+        const collapseDuplicates = document.getElementById('collapseDuplicates')?.checked || false;
+        const collapseParam = collapseDuplicates ? '&collapse_duplicates=true' : '';
+        
         // Use different endpoint for "all accounts"
         let url;
         if (currentAccountId === 'all') {
-            url = `/api/channels/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}${tagParam}${categoryParam}`;
+            url = `/api/channels/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}${tagParam}${categoryParam}${collapseParam}`;
         } else {
-            url = `/api/accounts/${currentAccountId}/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}${tagParam}${categoryParam}`;
+            url = `/api/accounts/${currentAccountId}/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}${tagParam}${categoryParam}${collapseParam}`;
         }
         
         const response = await fetch(url);
@@ -337,9 +351,14 @@ async function loadMoreChannels() {
                 ? '<span class="badge bg-success ms-2" title="Using local database"><i class="bi bi-database-check"></i> Database</span>'
                 : '<span class="badge bg-warning text-dark ms-2" title="Using IPTV API"><i class="bi bi-cloud"></i> API</span>';
             
+            // Add collapse info badge if duplicates were collapsed
+            const collapseBadge = data.collapse_duplicates && data.duplicates_collapsed > 0
+                ? `<span class="badge bg-info ms-2" title="${data.duplicates_collapsed} duplicate(s) hidden"><i class="bi bi-layers"></i> ${data.duplicates_collapsed} collapsed</span>`
+                : '';
+            
             const countDisplay = document.getElementById('channelCount');
             if (countDisplay) {
-                countDisplay.innerHTML += dataSourceBadge;
+                countDisplay.innerHTML += dataSourceBadge + collapseBadge;
             }
         }
         
@@ -351,6 +370,11 @@ async function loadMoreChannels() {
             const tagsHtml = channel.tags && channel.tags.length > 0 
                 ? channel.tags.map(tag => `<span class="badge bg-info me-1">${tag}</span>`).join('')
                 : '<span class="text-muted">No tags</span>';
+            
+            // Show duplicate count if channel has collapsed duplicates
+            const duplicateBadge = channel.duplicate_count > 0
+                ? `<span class="badge bg-warning ms-1" title="Best quality of ${channel.duplicate_count + 1} versions"><i class="bi bi-layers"></i> +${channel.duplicate_count}</span>`
+                : '';
             
             // Show cleaned name if different from original
             const cleanedNameHtml = channel.cleaned_name && channel.cleaned_name !== channel.name
@@ -364,7 +388,7 @@ async function loadMoreChannels() {
                     title="Click for details">
                     <td>${channel.icon ? `<img src="${channel.icon}" width="40" height="30" onerror="this.style.display='none'">` : ''}</td>
                     <td>
-                        ${escapeHtml(channel.name)}
+                        ${escapeHtml(channel.name)}${duplicateBadge}
                         ${cleanedNameHtml}
                     </td>
                     <td>${channel.cleaned_name ? escapeHtml(channel.cleaned_name) : '<span class="text-muted">-</span>'}</td>

@@ -253,6 +253,11 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link {% if request.path == '/epg' %}active{% endif %}" href="/epg">
+                                <i class="bi bi-calendar-event"></i> EPG Sources
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link {% if request.path == '/test' %}active{% endif %}" href="/test">
                                 <i class="bi bi-play-circle"></i> Preview Channels
                             </a>

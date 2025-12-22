@@ -229,6 +229,54 @@ async function loadDashboard() {
             console.error('Error loading tag playlists:', e);
         }
         
+        // Load and display image cache stats
+        try {
+            const cacheResponse = await fetch('/api/image-cache/stats');
+            const cacheStats = await cacheResponse.json();
+            
+            const hitRate = cacheStats.total_fetches > 0 
+                ? ((cacheStats.total_hits / cacheStats.total_fetches) * 100).toFixed(1)
+                : 0;
+            
+            html += `
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0"><i class="bi bi-image"></i> Image Cache</h5>
+                                <a href="/settings#image-cache" class="btn btn-sm btn-light">
+                                    <i class="bi bi-gear"></i> Manage
+                                </a>
+                            </div>
+                            <div class="card-body">
+                                <div class="row text-center">
+                                    <div class="col-md-3 col-6 mb-2">
+                                        <div class="h4 mb-0 text-primary">${cacheStats.cached_images.toLocaleString()}</div>
+                                        <small class="text-muted">Cached Images</small>
+                                    </div>
+                                    <div class="col-md-3 col-6 mb-2">
+                                        <div class="h4 mb-0 text-info">${formatBytes(cacheStats.total_size_bytes)}</div>
+                                        <small class="text-muted">Cache Size</small>
+                                    </div>
+                                    <div class="col-md-3 col-6 mb-2">
+                                        <div class="h4 mb-0 text-success">${hitRate}%</div>
+                                        <small class="text-muted">Hit Rate</small>
+                                    </div>
+                                    <div class="col-md-3 col-6 mb-2">
+                                        <div class="h4 mb-0 text-warning">${cacheStats.total_hits.toLocaleString()}</div>
+                                        <small class="text-muted">Cache Hits</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } catch (e) {
+            // Silently fail if image cache stats can't be loaded
+            console.error('Error loading image cache stats:', e);
+        }
+        
         // Add quick links
         html += `
             <div class="row mt-4">
@@ -272,6 +320,14 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
 function copyToClipboard(text) {

@@ -540,15 +540,15 @@ def search_sd_lineups():
     postalcode = request.args.get("postalcode")
 
     if not source_id:
-        return jsonify({"error": "source_id is required"}), 400
+        return jsonify({"success": False, "error": "source_id is required"}), 400
 
     source = EpgSource.query.get_or_404(source_id)
 
     if source.source_type != "schedules_direct":
-        return jsonify({"error": "Source is not a Schedules Direct source"}), 400
+        return jsonify({"success": False, "error": "Source is not a Schedules Direct source"}), 400
 
     if not source.sd_username or not source.sd_password:
-        return jsonify({"error": "Source does not have SD credentials configured"}), 400
+        return jsonify({"success": False, "error": "Source does not have SD credentials configured"}), 400
 
     try:
         client = SchedulesDirectClient(source.sd_username, source.sd_password)
@@ -567,7 +567,7 @@ def search_sd_lineups():
         )
 
     except SchedulesDirectError as e:
-        return jsonify({"error": str(e), "code": e.code}), 400
+        return jsonify({"success": False, "error": str(e), "code": e.code}), 400
 
 
 @epg_bp.route("/api/epg/sd/lineups", methods=["GET"])
@@ -581,7 +581,7 @@ def get_sd_lineups():
     source_id = request.args.get("source_id", type=int)
 
     if not source_id:
-        return jsonify({"error": "source_id is required"}), 400
+        return jsonify({"success": False, "error": "source_id is required"}), 400
 
     _source = EpgSource.query.get_or_404(source_id)  # noqa: F841 (validates source exists)
 

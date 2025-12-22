@@ -818,6 +818,7 @@ def preview_account_playlist(account_id):
     - offset: Number of channels to skip (default: 0)
     - tags: Comma-separated list of tag names to filter by
     - category: Category name to filter by
+    - collapse_duplicates: If "true", collapse duplicate channels keeping highest quality
 
     Returns:
     - JSON with total count, channel data, and using_database flag
@@ -830,6 +831,9 @@ def preview_account_playlist(account_id):
 
     # Parse category filter
     category_filter = request.args.get("category", "")
+
+    # Parse collapse_duplicates option
+    collapse_duplicates = request.args.get("collapse_duplicates", "").lower() == "true"
 
     # Check if account has been synced (database-first approach)
     # Only count ACTIVE channels
@@ -868,55 +872,121 @@ def preview_account_playlist(account_id):
 
     base_query = base_query.order_by(Channel.name)
 
-    # Get total count BEFORE pagination
-    total = base_query.count()
-
     # Apply pagination
     limit = request.args.get("limit", 50, type=int)
     offset = request.args.get("offset", 0, type=int)
-    channels = base_query.limit(limit).offset(offset).all()
 
-    # Get channel IDs for batch tag loading
-    channel_ids = [ch.stream_id for ch in channels]
+    if collapse_duplicates:
+        # For duplicate collapsing, we need to load ALL matching channels first
+        # to properly group and collapse them, then paginate the result
+        all_channels = base_query.all()
 
-    # Load tags for these channels in batch
-    channel_tags_query = (
-        db.session.query(ChannelTag.stream_id, Tag.name)
-        .join(Tag)
-        .filter(ChannelTag.account_id == account_id, ChannelTag.stream_id.in_(channel_ids))
-    )
+        # Get ALL channel IDs for batch tag loading
+        all_channel_ids = [ch.stream_id for ch in all_channels]
 
-    # Build tag map
-    tags_map = {}
-    for stream_id, tag_name in channel_tags_query:
-        if stream_id not in tags_map:
-            tags_map[stream_id] = []
-        tags_map[stream_id].append(tag_name)
+        # Load tags for ALL channels in batches
+        tags_map = {}
+        batch_size = 500
+        for i in range(0, len(all_channel_ids), batch_size):
+            batch = all_channel_ids[i : i + batch_size]
+            channel_tags_query = (
+                db.session.query(ChannelTag.stream_id, Tag.name)
+                .join(Tag)
+                .filter(ChannelTag.account_id == account_id, ChannelTag.stream_id.in_(batch))
+            )
+            for stream_id, tag_name in channel_tags_query:
+                if stream_id not in tags_map:
+                    tags_map[stream_id] = []
+                tags_map[stream_id].append(tag_name)
 
-    return jsonify(
-        {
-            "total": total,
-            "showing": len(channels),
-            "has_more": (offset + len(channels)) < total,
-            "channels": [
-                {
-                    "id": ch.id,
-                    "stream_id": ch.stream_id,
-                    "account_id": ch.account_id,
-                    "name": ch.name,
-                    "cleaned_name": ch.cleaned_name if ch.cleaned_name is not None else ch.name,
-                    "category": ch.category.category_name if ch.category else "Uncategorized",
-                    "category_id": ch.category_id,
-                    "icon": ch.stream_icon,
-                    "is_visible": ch.is_visible,
-                    "tags": tags_map.get(ch.stream_id, []),
-                }
-                for ch in channels
-            ],
-            "using_database": True,
-            "filter_tags": filter_tags,
-        }
-    )
+        # Build channel dictionaries for collapsing
+        channel_dicts = [
+            {
+                "id": ch.id,
+                "stream_id": ch.stream_id,
+                "account_id": ch.account_id,
+                "name": ch.name,
+                "cleaned_name": ch.cleaned_name if ch.cleaned_name is not None else ch.name,
+                "category": ch.category.category_name if ch.category else "Uncategorized",
+                "category_id": ch.category_id,
+                "icon": ch.stream_icon,
+                "is_visible": ch.is_visible,
+                "tags": tags_map.get(ch.stream_id, []),
+            }
+            for ch in all_channels
+        ]
+
+        # Collapse duplicates
+        from services.quality_service import QualityService
+
+        collapsed_channels = QualityService.collapse_duplicates(channel_dicts)
+
+        # Get total after collapsing
+        total = len(collapsed_channels)
+
+        # Apply pagination to collapsed results
+        paginated_channels = collapsed_channels[offset : offset + limit]
+
+        return jsonify(
+            {
+                "total": total,
+                "showing": len(paginated_channels),
+                "has_more": (offset + len(paginated_channels)) < total,
+                "channels": paginated_channels,
+                "using_database": True,
+                "filter_tags": filter_tags,
+                "collapse_duplicates": True,
+                "duplicates_collapsed": len(all_channels) - total,
+            }
+        )
+    else:
+        # Standard pagination without collapsing
+        # Get total count BEFORE pagination
+        total = base_query.count()
+        channels = base_query.limit(limit).offset(offset).all()
+
+        # Get channel IDs for batch tag loading
+        channel_ids = [ch.stream_id for ch in channels]
+
+        # Load tags for these channels in batch
+        channel_tags_query = (
+            db.session.query(ChannelTag.stream_id, Tag.name)
+            .join(Tag)
+            .filter(ChannelTag.account_id == account_id, ChannelTag.stream_id.in_(channel_ids))
+        )
+
+        # Build tag map
+        tags_map = {}
+        for stream_id, tag_name in channel_tags_query:
+            if stream_id not in tags_map:
+                tags_map[stream_id] = []
+            tags_map[stream_id].append(tag_name)
+
+        return jsonify(
+            {
+                "total": total,
+                "showing": len(channels),
+                "has_more": (offset + len(channels)) < total,
+                "channels": [
+                    {
+                        "id": ch.id,
+                        "stream_id": ch.stream_id,
+                        "account_id": ch.account_id,
+                        "name": ch.name,
+                        "cleaned_name": ch.cleaned_name if ch.cleaned_name is not None else ch.name,
+                        "category": ch.category.category_name if ch.category else "Uncategorized",
+                        "category_id": ch.category_id,
+                        "icon": ch.stream_icon,
+                        "is_visible": ch.is_visible,
+                        "tags": tags_map.get(ch.stream_id, []),
+                    }
+                    for ch in channels
+                ],
+                "using_database": True,
+                "filter_tags": filter_tags,
+                "collapse_duplicates": False,
+            }
+        )
 
 
 @accounts_bp.route("/api/accounts/<int:account_id>/preview-channels", methods=["POST"])

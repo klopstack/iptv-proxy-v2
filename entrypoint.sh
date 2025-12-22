@@ -24,5 +24,6 @@ if [ $? -ne 0 ]; then
 fi
 echo ""
 
-# Start gunicorn
-exec gunicorn --bind 0.0.0.0:${PORT} --workers 2 --timeout 120 app:app
+# Start gunicorn with gevent workers for efficient stream proxying
+# Gevent allows handling many concurrent I/O-bound connections per worker
+exec gunicorn --bind 0.0.0.0:${PORT} --worker-class gevent --workers 4 --timeout 120 app:app

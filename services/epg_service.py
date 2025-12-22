@@ -193,6 +193,8 @@ class EpgService:
 
         now = datetime.utcnow()
         seen_channel_ids: Set[str] = set()
+        # Track channels we've already processed in THIS sync to handle duplicate channel IDs in XMLTV
+        processed_in_this_sync: Dict[str, EpgChannel] = {}
 
         # Get existing channels for this source
         existing = {ec.channel_id: ec for ec in EpgChannel.query.filter_by(source_id=source.id).all()}
@@ -231,7 +233,7 @@ class EpgService:
                     last_program = max(times)
 
             if channel_id in existing:
-                # Update existing
+                # Update existing channel from database
                 ec = existing[channel_id]
                 ec.display_name = channel_data["display_name"]
                 ec.display_names_json = json.dumps(channel_data["display_names"])
@@ -243,8 +245,26 @@ class EpgService:
                 ec.last_seen = now
                 ec.updated_at = now
                 stats["channels_updated"] += 1
+            elif channel_id in processed_in_this_sync:
+                # Duplicate channel ID in XMLTV file - update the one we already created
+                # This handles cases where XMLTV has multiple entries for the same channel_id
+                ec = processed_in_this_sync[channel_id]
+                # Merge display names from duplicate entries
+                try:
+                    existing_names = json.loads(ec.display_names_json or "[]")
+                except (json.JSONDecodeError, TypeError):
+                    existing_names = []
+                new_names = channel_data.get("display_names", [])
+                merged_names = list(dict.fromkeys(existing_names + new_names))  # Dedupe while preserving order
+                ec.display_names_json = json.dumps(merged_names)
+                # Use latest icon/url if previous was None
+                if not ec.icon_url and channel_data.get("icon_url"):
+                    ec.icon_url = channel_data.get("icon_url")
+                if not ec.url and channel_data.get("url"):
+                    ec.url = channel_data.get("url")
+                logger.debug(f"Merged duplicate channel ID '{channel_id}' in XMLTV data")
             else:
-                # Create new
+                # Create new channel
                 ec = EpgChannel(
                     source_id=source.id,
                     channel_id=channel_id,
@@ -258,6 +278,7 @@ class EpgService:
                     last_seen=now,
                 )
                 db.session.add(ec)
+                processed_in_this_sync[channel_id] = ec
                 stats["channels_added"] += 1
 
         # Mark channels not seen as removed (but don't delete - they may come back)
@@ -350,10 +371,15 @@ class EpgService:
                     epg_by_name[normalized] = ec
 
         # Get existing mappings to avoid duplicates
-        existing_mappings = {
-            m.channel_id: m
-            for m in ChannelEpgMapping.query.filter(ChannelEpgMapping.channel_id.in_([c.id for c in channels])).all()
-        }
+        # Batch the query to avoid SQLite's "too many SQL variables" error
+        # SQLite has a limit (typically 999 or 32766) on bind parameters
+        BATCH_SIZE = 500
+        existing_mappings: Dict[int, ChannelEpgMapping] = {}
+        channel_ids = [c.id for c in channels]
+        for i in range(0, len(channel_ids), BATCH_SIZE):
+            batch = channel_ids[i : i + BATCH_SIZE]
+            for m in ChannelEpgMapping.query.filter(ChannelEpgMapping.channel_id.in_(batch)).all():
+                existing_mappings[m.channel_id] = m
 
         for channel in channels:
             # Skip if already has a manual override mapping

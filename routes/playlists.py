@@ -11,6 +11,7 @@ from error_handling import ServiceUnavailableError, handle_errors
 from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Tag, db
 from schemas import PlaylistConfigCreateSchema, validate_request_data
 from services.cache_service import CacheService
+from services.image_cache_service import ImageCacheService
 from services.iptv_service import IPTVService
 from services.tag_service import TagService
 
@@ -244,7 +245,13 @@ def _matches_tag_filter(channel_tags, include_tags, exclude_tags, match_mode):
 @playlists_bp.route("/playlist/<int:account_id>.m3u")
 @handle_errors(return_json=False, default_message="Error generating playlist")
 def generate_playlist(account_id):
-    """Generate M3U playlist for account with filters applied (using database)"""
+    """Generate M3U playlist for account with filters applied (using database)
+
+    Query Parameters:
+    - proxy: "true" to use proxy URLs for streams
+    - collapse_duplicates: "true" to collapse duplicate channels keeping highest quality
+    - proxy_icons: "true" to proxy icon URLs through local cache (saves external API quota)
+    """
     account = Account.query.get_or_404(account_id)
 
     if not account.enabled:
@@ -261,8 +268,17 @@ def generate_playlist(account_id):
     if not use_proxy and hasattr(account, "credentials") and len(account.credentials) > 1:
         use_proxy = True
 
+    # Check if we should collapse duplicates
+    collapse_duplicates = request.args.get("collapse_duplicates", "").lower() == "true"
+
+    # Check if we should proxy icons through local cache
+    proxy_icons = request.args.get("proxy_icons", "").lower() == "true"
+
     # Get proxy base URL from request
     proxy_base = f"{request.scheme}://{request.host}"
+
+    # Initialize image cache if proxying icons
+    image_cache = ImageCacheService.get_instance() if proxy_icons else None
 
     # Build base query - use pre-computed is_visible
     query = (
@@ -273,6 +289,42 @@ def generate_playlist(account_id):
 
     # Get all matching channels
     channels = query.order_by(Channel.name).all()
+
+    # If collapsing duplicates, load tags and collapse
+    if collapse_duplicates:
+        from services.quality_service import QualityService
+
+        # Load tags for all channels
+        channel_ids = [ch.stream_id for ch in channels]
+        tags_map = {}
+        batch_size = 500
+        for i in range(0, len(channel_ids), batch_size):
+            batch = channel_ids[i : i + batch_size]
+            channel_tags_query = (
+                db.session.query(ChannelTag.stream_id, Tag.name)
+                .join(Tag)
+                .filter(ChannelTag.account_id == account_id, ChannelTag.stream_id.in_(batch))
+            )
+            for stream_id, tag_name in channel_tags_query:
+                if stream_id not in tags_map:
+                    tags_map[stream_id] = []
+                tags_map[stream_id].append(tag_name)
+
+        # Build channel dicts for collapsing
+        channel_dicts = [
+            {
+                "channel": ch,
+                "stream_id": ch.stream_id,
+                "cleaned_name": ch.cleaned_name or ch.name,
+                "tags": tags_map.get(ch.stream_id, []),
+            }
+            for ch in channels
+        ]
+
+        # Collapse duplicates
+        collapsed = QualityService.collapse_duplicates(channel_dicts)
+        channels = [d["channel"] for d in collapsed]
+        logger.info(f"Collapsed {len(channel_dicts)} channels to {len(channels)} unique channels")
 
     # Get primary credential for direct URL mode
     primary_cred = account.get_primary_credential() if not use_proxy else None
@@ -285,7 +337,13 @@ def generate_playlist(account_id):
         category_name = channel.category.category_name if channel.category else "Unknown"
 
         tvg_id = channel.epg_channel_id or ""
-        tvg_logo = channel.stream_icon or ""
+        original_icon = channel.stream_icon or ""
+
+        # Proxy icon URL if enabled
+        if proxy_icons and image_cache and original_icon:
+            tvg_logo = image_cache.get_proxy_url(original_icon, proxy_base)
+        else:
+            tvg_logo = original_icon
 
         extinf = f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{display_name}" tvg-logo="{tvg_logo}" group-title="{category_name}",{display_name}'
 
@@ -306,7 +364,9 @@ def generate_playlist(account_id):
         m3u_lines.append(extinf)
         m3u_lines.append(stream_url)
 
-    logger.info(f"Generated playlist for account {account_id}: {len(channels)} channels (proxied={use_proxy})")
+    logger.info(
+        f"Generated playlist for account {account_id}: {len(channels)} channels (proxied={use_proxy}, collapsed={collapse_duplicates})"
+    )
     return Response("\n".join(m3u_lines), mimetype="application/x-mpegurl")
 
 
@@ -347,6 +407,11 @@ def _generate_playlist_from_config(config):
 
     Uses database-first approach with pre-computed cleaned_name and is_visible.
     Requires accounts to be synced before playlist generation.
+
+    Query Parameters:
+    - proxy: "true" to use proxy URLs for streams
+    - collapse_duplicates: "true" to collapse duplicate channels keeping highest quality
+    - proxy_icons: "true" to proxy icon URLs through local cache (saves external API quota)
     """
     if not config.enabled:
         raise PermissionError("Playlist configuration is disabled")
@@ -354,8 +419,17 @@ def _generate_playlist_from_config(config):
     # Determine if we should use proxied URLs
     use_proxy = request.args.get("proxy", "").lower() == "true"
 
+    # Check if we should collapse duplicates
+    collapse_duplicates = request.args.get("collapse_duplicates", "").lower() == "true"
+
+    # Check if we should proxy icons through local cache
+    proxy_icons = request.args.get("proxy_icons", "").lower() == "true"
+
     # Get proxy base URL from request
     proxy_base = f"{request.scheme}://{request.host}"
+
+    # Initialize image cache if proxying icons
+    image_cache = ImageCacheService.get_instance() if proxy_icons else None
 
     # Parse config
     include_accounts = json.loads(config.include_accounts) if config.include_accounts else []
@@ -386,13 +460,8 @@ def _generate_playlist_from_config(config):
             f"The following accounts are not synced: {', '.join(unsynced_accounts)}. Please sync channels first."
         )
 
-    # Generate M3U
-    m3u_lines = ["#EXTM3U"]
-    m3u_lines.append(f"# Playlist: {config.name}")
-    if config.description:
-        m3u_lines.append(f"# {config.description}")
-
-    total_channels = 0
+    # Collect all channels from all accounts first (needed for cross-account collapsing)
+    all_channel_data = []
 
     for account in accounts:
         # Build query for channels from this account
@@ -441,43 +510,96 @@ def _generate_playlist_from_config(config):
         # Get all matching channels
         channels = query.order_by(Channel.name).all()
 
-        # Generate M3U entries
+        # Load tags for these channels if collapsing is enabled
+        tags_map = {}
+        if collapse_duplicates:
+            channel_ids = [ch.stream_id for ch in channels]
+            batch_size = 500
+            for i in range(0, len(channel_ids), batch_size):
+                batch = channel_ids[i : i + batch_size]
+                channel_tags_query = (
+                    db.session.query(ChannelTag.stream_id, Tag.name)
+                    .join(Tag)
+                    .filter(ChannelTag.account_id == account.id, ChannelTag.stream_id.in_(batch))
+                )
+                for stream_id, tag_name in channel_tags_query:
+                    if stream_id not in tags_map:
+                        tags_map[stream_id] = []
+                    tags_map[stream_id].append(tag_name)
+
+        # Collect channel data with account info
         for channel in channels:
-            # Use cleaned name (pre-computed during sync/tag processing)
-            display_name = channel.cleaned_name or channel.name
-            category_name = channel.category.category_name if channel.category else "Unknown"
+            all_channel_data.append(
+                {
+                    "channel": channel,
+                    "account": account,
+                    "stream_id": channel.stream_id,
+                    "cleaned_name": channel.cleaned_name or channel.name,
+                    "tags": tags_map.get(channel.stream_id, []),
+                }
+            )
 
-            tvg_id = channel.epg_channel_id or ""
-            tvg_logo = channel.stream_icon or ""
+    # Apply duplicate collapsing across all accounts if enabled
+    if collapse_duplicates:
+        from services.quality_service import QualityService
 
-            # Add account name to group title for multi-account playlists
-            if len(accounts) > 1:
-                group_title = f"{category_name} ({account.name})"
+        original_count = len(all_channel_data)
+        all_channel_data = QualityService.collapse_duplicates(all_channel_data)
+        logger.info(f"Collapsed {original_count} channels to {len(all_channel_data)} unique channels")
+
+    # Generate M3U
+    m3u_lines = ["#EXTM3U"]
+    m3u_lines.append(f"# Playlist: {config.name}")
+    if config.description:
+        m3u_lines.append(f"# {config.description}")
+
+    total_channels = 0
+
+    for data in all_channel_data:
+        channel = data["channel"]
+        account = data["account"]
+
+        # Use cleaned name (pre-computed during sync/tag processing)
+        display_name = channel.cleaned_name or channel.name
+        category_name = channel.category.category_name if channel.category else "Unknown"
+
+        tvg_id = channel.epg_channel_id or ""
+        original_icon = channel.stream_icon or ""
+
+        # Proxy icon URL if enabled
+        if proxy_icons and image_cache and original_icon:
+            tvg_logo = image_cache.get_proxy_url(original_icon, proxy_base)
+        else:
+            tvg_logo = original_icon
+
+        # Add account name to group title for multi-account playlists
+        if len(accounts) > 1:
+            group_title = f"{category_name} ({account.name})"
+        else:
+            group_title = category_name
+
+        extinf = f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{display_name}" tvg-logo="{tvg_logo}" group-title="{group_title}",{display_name}'
+
+        if use_proxy:
+            # Use proxy URL for multiplexed streaming
+            stream_url = f"{proxy_base}/stream/{account.id}/{channel.stream_id}.ts"
+        else:
+            # Direct URL to IPTV provider
+            cred = account.get_primary_credential()
+            if cred:
+                stream_url = f"http://{account.server}/live/{cred.username}/{cred.password}/{channel.stream_id}.ts"
             else:
-                group_title = category_name
+                # Fallback for legacy accounts
+                stream_url = (
+                    f"http://{account.server}/live/{account.username}/{account.password}/{channel.stream_id}.ts"
+                )
 
-            extinf = f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{display_name}" tvg-logo="{tvg_logo}" group-title="{group_title}",{display_name}'
-
-            if use_proxy:
-                # Use proxy URL for multiplexed streaming
-                stream_url = f"{proxy_base}/stream/{account.id}/{channel.stream_id}.ts"
-            else:
-                # Direct URL to IPTV provider
-                cred = account.get_primary_credential()
-                if cred:
-                    stream_url = f"http://{account.server}/live/{cred.username}/{cred.password}/{channel.stream_id}.ts"
-                else:
-                    # Fallback for legacy accounts
-                    stream_url = (
-                        f"http://{account.server}/live/{account.username}/{account.password}/{channel.stream_id}.ts"
-                    )
-
-            m3u_lines.append(extinf)
-            m3u_lines.append(stream_url)
-            total_channels += 1
+        m3u_lines.append(extinf)
+        m3u_lines.append(stream_url)
+        total_channels += 1
 
     logger.info(
-        f"Generated playlist from config {config.id} ({config.name}): {total_channels} channels from {len(accounts)} accounts (proxied={use_proxy})"
+        f"Generated playlist from config {config.id} ({config.name}): {total_channels} channels from {len(accounts)} accounts (proxied={use_proxy}, collapsed={collapse_duplicates})"
     )
     return Response("\n".join(m3u_lines), mimetype="application/x-mpegurl")
 

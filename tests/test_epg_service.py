@@ -297,6 +297,54 @@ class TestSyncEpgSource:
             source = db.session.get(EpgSource, test_epg_source.id)
             assert source.last_sync_status == "error"
 
+    def test_sync_handles_duplicate_channel_ids(self, app, test_epg_source):
+        """Test that sync handles duplicate channel IDs in XMLTV data.
+
+        Some XMLTV sources (like NigmaTV) have multiple channels with the same
+        channel ID but different display names (e.g., Cinemax.hu appears as both
+        'HU: Cinemax' and 'HU: Cinemax2'). The sync should handle this gracefully
+        by merging the duplicate entries.
+        """
+        xml_content = b"""<?xml version="1.0" encoding="UTF-8"?>
+        <tv>
+            <channel id="Cinemax.hu">
+                <display-name>HU: Cinemax</display-name>
+                <icon src="http://example.com/cinemax1.png"/>
+            </channel>
+            <channel id="Cinemax.hu">
+                <display-name>HU: Cinemax2</display-name>
+                <icon src="http://example.com/cinemax2.png"/>
+            </channel>
+            <channel id="HBO.hu">
+                <display-name>HU: HBO</display-name>
+            </channel>
+        </tv>
+        """
+
+        with app.app_context():
+            source = db.session.get(EpgSource, test_epg_source.id)
+            stats = EpgService.sync_epg_source(source, xml_content)
+
+            # Should only create 2 unique channels (Cinemax.hu merged, HBO.hu separate)
+            assert stats["channels_added"] == 2
+            assert stats["channels_updated"] == 0
+
+            # Verify only 2 channels were created
+            channels = EpgChannel.query.filter_by(source_id=source.id).all()
+            assert len(channels) == 2
+
+            # Verify the duplicate was merged with combined display names
+            cinemax = EpgChannel.query.filter_by(source_id=source.id, channel_id="Cinemax.hu").first()
+            assert cinemax is not None
+            import json
+
+            display_names = json.loads(cinemax.display_names_json)
+            # Should have both display names from the duplicates
+            assert "HU: Cinemax" in display_names
+            assert "HU: Cinemax2" in display_names
+            # Icon should be from first entry since it was not None
+            assert cinemax.icon_url == "http://example.com/cinemax1.png"
+
 
 # ============================================================================
 # Parse XMLTV Time Tests

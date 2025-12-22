@@ -47,3 +47,9 @@ def rulesets_page():
 def settings_page():
     """Settings and scheduler management page"""
     return render_template("settings.html")
+
+
+@web_bp.route("/epg")
+def epg_page():
+    """EPG (Electronic Program Guide) management page"""
+    return render_template("epg.html")

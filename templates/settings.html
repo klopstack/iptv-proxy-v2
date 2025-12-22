@@ -53,13 +53,51 @@
         <!-- Cache Management -->
         <div class="card mb-4">
             <div class="card-header bg-secondary text-white">
-                <h5 class="mb-0"><i class="bi bi-database"></i> Cache Management</h5>
+                <h5 class="mb-0"><i class="bi bi-database"></i> API Cache Management</h5>
             </div>
             <div class="card-body">
-                <p>Clear cached data to force fresh API calls on next request.</p>
+                <p>Clear cached API responses to force fresh API calls on next request.</p>
                 <button id="clear-cache-btn" class="btn btn-danger">
-                    <i class="bi bi-trash"></i> Clear All Caches
+                    <i class="bi bi-trash"></i> Clear API Caches
                 </button>
+            </div>
+        </div>
+        
+        <!-- Image Cache Management -->
+        <div class="card mb-4" id="image-cache">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-image"></i> Image Cache Management</h5>
+            </div>
+            <div class="card-body">
+                <div id="image-cache-stats" class="mb-3">
+                    <div class="text-center">
+                        <div class="spinner-border spinner-border-sm" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-flex gap-2 mb-3">
+                    <button id="cleanup-expired-btn" class="btn btn-warning">
+                        <i class="bi bi-clock-history"></i> Cleanup Expired
+                    </button>
+                    <button id="clear-failed-btn" class="btn btn-outline-danger">
+                        <i class="bi bi-x-circle"></i> Clear Failed
+                    </button>
+                    <button id="clear-all-images-btn" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> Clear All Images
+                    </button>
+                </div>
+                
+                <hr>
+                
+                <h6><i class="bi bi-list"></i> Cached Entries</h6>
+                <div id="image-cache-entries">
+                    <div class="text-center text-muted">
+                        <div class="spinner-border spinner-border-sm" role="status"></div>
+                        Loading entries...
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -238,7 +276,7 @@ document.getElementById('clear-cache-btn').addEventListener('click', async funct
         const response = await fetch('/api/cache/clear', { method: 'POST' });
         
         if (response.ok) {
-            alert('✓ All caches cleared successfully!');
+            alert('✓ API caches cleared successfully!');
         } else {
             alert('Error clearing caches');
         }
@@ -250,7 +288,211 @@ document.getElementById('clear-cache-btn').addEventListener('click', async funct
     }
 });
 
+// Image Cache Functions
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+async function loadImageCacheStats() {
+    try {
+        const response = await fetch('/api/image-cache/stats');
+        const stats = await response.json();
+        
+        const hitRate = stats.total_fetches > 0 
+            ? ((stats.total_hits / stats.total_fetches) * 100).toFixed(1)
+            : 0;
+        
+        document.getElementById('image-cache-stats').innerHTML = `
+            <div class="row text-center">
+                <div class="col-3">
+                    <div class="h5 mb-0 text-primary">${stats.cached_images.toLocaleString()}</div>
+                    <small class="text-muted">Cached</small>
+                </div>
+                <div class="col-3">
+                    <div class="h5 mb-0 text-info">${formatBytes(stats.total_size_bytes)}</div>
+                    <small class="text-muted">Size</small>
+                </div>
+                <div class="col-3">
+                    <div class="h5 mb-0 text-success">${hitRate}%</div>
+                    <small class="text-muted">Hit Rate</small>
+                </div>
+                <div class="col-3">
+                    <div class="h5 mb-0 text-warning">${stats.failed_images}</div>
+                    <small class="text-muted">Failed</small>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        document.getElementById('image-cache-stats').innerHTML = `
+            <div class="alert alert-danger">Error loading stats: ${error.message}</div>
+        `;
+    }
+}
+
+async function loadImageCacheEntries() {
+    const container = document.getElementById('image-cache-entries');
+    try {
+        const response = await fetch('/api/image-cache/entries?limit=50');
+        const data = await response.json();
+        
+        if (data.entries.length === 0) {
+            container.innerHTML = '<div class="text-muted">No cached images yet.</div>';
+            return;
+        }
+        
+        let html = `
+            <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="sticky-top bg-white">
+                        <tr>
+                            <th>Status</th>
+                            <th>Size</th>
+                            <th>Hits</th>
+                            <th>URL</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        for (const entry of data.entries) {
+            const statusBadge = entry.status === 'cached' 
+                ? '<span class="badge bg-success">Cached</span>'
+                : entry.status === 'pending'
+                ? '<span class="badge bg-warning">Pending</span>'
+                : '<span class="badge bg-danger">Failed</span>';
+            
+            const truncatedUrl = entry.original_url.length > 50 
+                ? entry.original_url.substring(0, 50) + '...' 
+                : entry.original_url;
+            
+            html += `
+                <tr>
+                    <td>${statusBadge}</td>
+                    <td>${entry.file_size ? formatBytes(entry.file_size) : '-'}</td>
+                    <td>${entry.hit_count}</td>
+                    <td><small title="${entry.original_url}">${truncatedUrl}</small></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteImageEntry(${entry.id})" title="Delete">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
+        
+        html += '</tbody></table></div>';
+        
+        if (data.total > data.entries.length) {
+            html += `<small class="text-muted mt-2 d-block">Showing ${data.entries.length} of ${data.total} entries</small>`;
+        }
+        
+        container.innerHTML = html;
+    } catch (error) {
+        container.innerHTML = `<div class="alert alert-danger">Error loading entries: ${error.message}</div>`;
+    }
+}
+
+async function deleteImageEntry(id) {
+    if (!confirm('Delete this cached image?')) return;
+    
+    try {
+        const response = await fetch(`/api/image-cache/entries/${id}`, { method: 'DELETE' });
+        if (response.ok) {
+            loadImageCacheStats();
+            loadImageCacheEntries();
+        } else {
+            const error = await response.json();
+            alert('Error: ' + (error.error || 'Failed to delete'));
+        }
+    } catch (error) {
+        alert('Error deleting entry: ' + error.message);
+    }
+}
+
+document.getElementById('cleanup-expired-btn').addEventListener('click', async function() {
+    const btn = this;
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Cleaning...';
+    
+    try {
+        const response = await fetch('/api/image-cache/cleanup', { method: 'POST' });
+        if (response.ok) {
+            const result = await response.json();
+            alert(`✓ Cleaned up ${result.removed_count} expired images`);
+            loadImageCacheStats();
+            loadImageCacheEntries();
+        } else {
+            alert('Error cleaning up images');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+});
+
+document.getElementById('clear-failed-btn').addEventListener('click', async function() {
+    if (!confirm('Remove all failed image entries from the cache?')) return;
+    
+    const btn = this;
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Clearing...';
+    
+    try {
+        const response = await fetch('/api/image-cache/cleanup?status=failed', { method: 'POST' });
+        if (response.ok) {
+            const result = await response.json();
+            alert(`✓ Cleared ${result.removed_count} failed entries`);
+            loadImageCacheStats();
+            loadImageCacheEntries();
+        } else {
+            alert('Error clearing failed entries');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+});
+
+document.getElementById('clear-all-images-btn').addEventListener('click', async function() {
+    if (!confirm('Clear ALL cached images? This will force fresh downloads for all icons.')) return;
+    
+    const btn = this;
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Clearing...';
+    
+    try {
+        const response = await fetch('/api/image-cache/cleanup?all=true', { method: 'POST' });
+        if (response.ok) {
+            const result = await response.json();
+            alert(`✓ Cleared ${result.removed_count} cached images`);
+            loadImageCacheStats();
+            loadImageCacheEntries();
+        } else {
+            alert('Error clearing image cache');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+});
+
 // Load status on page load
 loadSchedulerStatus();
+loadImageCacheStats();
+loadImageCacheEntries();
 </script>
 {% endblock %}

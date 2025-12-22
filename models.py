@@ -507,3 +507,37 @@ class SdStation(db.Model):  # type: ignore[name-defined]
 
     def __repr__(self):
         return f"<SdStation {self.callsign} ({self.name})>"
+
+
+class CachedImage(db.Model):  # type: ignore[name-defined]
+    """Cached image metadata for icon/logo proxy
+
+    Images are stored on disk using URL hash as filename.
+    This table tracks metadata for cache management and expiration.
+    """
+
+    __tablename__ = "cached_images"
+
+    id = db.Column(db.Integer, primary_key=True)
+    url_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)  # SHA-256 of original URL
+    original_url = db.Column(db.String(2000), nullable=False)  # Original source URL
+    content_type = db.Column(db.String(100))  # MIME type (image/png, image/jpeg, etc.)
+    file_size = db.Column(db.Integer)  # Size in bytes
+    file_path = db.Column(db.String(500))  # Relative path within cache directory
+
+    # Status and timing
+    status = db.Column(db.String(20), default="pending")  # pending, cached, error, expired
+    error_message = db.Column(db.String(500))  # Error details if fetch failed
+    fetch_count = db.Column(db.Integer, default=0)  # Number of times fetched from source
+    hit_count = db.Column(db.Integer, default=0)  # Number of times served from cache
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    fetched_at = db.Column(db.DateTime)  # When last successfully fetched
+    expires_at = db.Column(db.DateTime)  # When cache entry should be refreshed
+    last_accessed_at = db.Column(db.DateTime)  # When last served to a client
+
+    __table_args__ = (db.Index("idx_cached_image_status", "status"), db.Index("idx_cached_image_expires", "expires_at"))
+
+    def __repr__(self):
+        return f"<CachedImage {self.url_hash[:8]}... ({self.status})>"
