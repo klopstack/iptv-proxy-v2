@@ -285,6 +285,7 @@ def get_epg_mappings():
     Query parameters:
     - account_id: Filter by account
     - unmapped_only: Show only unmapped channels if true
+    - show_filtered: Include channels that are filtered out (default: false)
     - limit: Max results
     - offset: Pagination offset
     """
@@ -292,6 +293,7 @@ def get_epg_mappings():
 
     account_id = request.args.get("account_id", type=int)
     unmapped_only = request.args.get("unmapped_only", "false").lower() == "true"
+    show_filtered = request.args.get("show_filtered", "false").lower() == "true"
     limit = request.args.get("limit", 100, type=int)
     offset = request.args.get("offset", 0, type=int)
 
@@ -300,6 +302,10 @@ def get_epg_mappings():
         mapped_ids = db.session.query(ChannelEpgMapping.channel_id).distinct()
 
         query = Channel.query.filter(Channel.is_active == True, ~Channel.id.in_(mapped_ids))  # noqa: E712
+
+        # By default, only show visible (non-filtered) channels
+        if not show_filtered:
+            query = query.filter(Channel.is_visible == True)  # noqa: E712
 
         if account_id:
             query = query.filter_by(account_id=account_id)
@@ -312,6 +318,7 @@ def get_epg_mappings():
                 "total": total,
                 "offset": offset,
                 "limit": limit,
+                "has_more": offset + len(channels) < total,
                 "unmapped_channels": [
                     {
                         "id": c.id,
@@ -319,6 +326,7 @@ def get_epg_mappings():
                         "cleaned_name": c.cleaned_name,
                         "epg_channel_id": c.epg_channel_id,
                         "account_id": c.account_id,
+                        "is_visible": c.is_visible,
                     }
                     for c in channels
                 ],
@@ -331,6 +339,10 @@ def get_epg_mappings():
         if account_id:
             query = query.filter(Channel.account_id == account_id)
 
+        # By default, only show visible (non-filtered) channels
+        if not show_filtered:
+            query = query.filter(Channel.is_visible == True)  # noqa: E712
+
         total = query.count()
         mappings = query.offset(offset).limit(limit).all()
 
@@ -339,6 +351,7 @@ def get_epg_mappings():
                 "total": total,
                 "offset": offset,
                 "limit": limit,
+                "has_more": offset + len(mappings) < total,
                 "mappings": [
                     {
                         "id": m.id,
@@ -349,6 +362,7 @@ def get_epg_mappings():
                         "mapping_type": m.mapping_type,
                         "confidence": m.confidence,
                         "is_override": m.is_override,
+                        "is_visible": m.channel.is_visible if m.channel else True,
                     }
                     for m in mappings
                 ],

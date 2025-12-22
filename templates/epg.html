@@ -107,6 +107,12 @@
                         Show unmapped channels only
                     </label>
                 </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="showFilteredChannels">
+                    <label class="form-check-label" for="showFilteredChannels">
+                        Include filtered-out channels
+                    </label>
+                </div>
             </div>
             <div class="col-md-4 text-end">
                 <button class="btn btn-success mt-3" id="auto-match-btn">
@@ -427,8 +433,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Mappings tab
     document.getElementById('mappingAccountSelect').addEventListener('change', loadMappings);
     document.getElementById('showUnmappedOnly').addEventListener('change', loadMappings);
+    document.getElementById('showFilteredChannels').addEventListener('change', loadMappings);
     document.getElementById('auto-match-btn').addEventListener('click', showAutoMatchModal);
     document.getElementById('runAutoMatchBtn').addEventListener('click', runAutoMatch);
+    
+    // Infinite scroll for mappings
+    const mappingsList = document.getElementById('mappings-list');
+    mappingsList.addEventListener('scroll', () => {
+        if (mappingsState.hasMore && !mappingsState.loading) {
+            const scrollHeight = mappingsList.scrollHeight;
+            const scrollTop = mappingsList.scrollTop;
+            const clientHeight = mappingsList.clientHeight;
+            
+            if (scrollTop + clientHeight >= scrollHeight - 100) {
+                loadMoreMappings();
+            }
+        }
+    });
     
     // SD tab
     document.getElementById('sdSourceSelect').addEventListener('change', loadSdLineups);
@@ -887,9 +908,22 @@ async function loadMoreEpgChannels() {
 // Channel Mappings
 // ============================================================================
 
-async function loadMappings() {
+// State for mappings pagination
+const mappingsState = {
+    offset: 0,
+    limit: 100,
+    total: 0,
+    loading: false,
+    hasMore: false,
+    accountId: null,
+    unmappedOnly: false,
+    showFiltered: false
+};
+
+async function loadMappings(reset = true) {
     const accountId = document.getElementById('mappingAccountSelect').value;
     const unmappedOnly = document.getElementById('showUnmappedOnly').checked;
+    const showFiltered = document.getElementById('showFilteredChannels').checked;
     const container = document.getElementById('mappings-list');
     
     if (!accountId) {
@@ -897,37 +931,56 @@ async function loadMappings() {
         return;
     }
     
-    container.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
+    // Reset state if filters changed or explicit reset
+    if (reset || accountId !== mappingsState.accountId || 
+        unmappedOnly !== mappingsState.unmappedOnly ||
+        showFiltered !== mappingsState.showFiltered) {
+        mappingsState.offset = 0;
+        mappingsState.accountId = accountId;
+        mappingsState.unmappedOnly = unmappedOnly;
+        mappingsState.showFiltered = showFiltered;
+        container.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
+    }
+    
+    if (mappingsState.loading) return;
+    mappingsState.loading = true;
     
     try {
-        const url = `/api/epg/mappings?account_id=${accountId}&unmapped_only=${unmappedOnly}&limit=100`;
+        const url = `/api/epg/mappings?account_id=${accountId}&unmapped_only=${unmappedOnly}&show_filtered=${showFiltered}&limit=${mappingsState.limit}&offset=${mappingsState.offset}`;
         const response = await fetch(url);
         const data = await response.json();
         
+        mappingsState.total = data.total;
+        mappingsState.hasMore = data.has_more || false;
+        
         if (unmappedOnly) {
-            if (data.unmapped_channels.length === 0) {
+            if (mappingsState.offset === 0 && data.unmapped_channels.length === 0) {
                 container.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle"></i> All channels have EPG mappings!</div>';
                 return;
             }
             
-            let html = `<p class="text-muted mb-2">Showing ${data.unmapped_channels.length} of ${data.total} unmapped channels</p>`;
-            html += '<div class="table-responsive"><table class="table table-striped table-sm">';
-            html += `
-                <thead>
-                    <tr>
-                        <th>Channel Name</th>
-                        <th>Cleaned Name</th>
-                        <th>Provider EPG ID</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-            `;
+            let html = '';
+            if (mappingsState.offset === 0) {
+                html = `<p class="text-muted mb-2">Showing ${data.total} unmapped channels${!showFiltered ? ' (filtered-out channels hidden)' : ''}</p>`;
+                html += '<div class="table-responsive"><table class="table table-striped table-sm" id="mappings-table">';
+                html += `
+                    <thead>
+                        <tr>
+                            <th>Channel Name</th>
+                            <th>Cleaned Name</th>
+                            <th>Provider EPG ID</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mappings-tbody">
+                `;
+            }
             
             for (const ch of data.unmapped_channels) {
+                const filteredBadge = !ch.is_visible ? '<span class="badge bg-secondary ms-2">Filtered</span>' : '';
                 html += `
                     <tr>
-                        <td>${ch.name}</td>
+                        <td>${ch.name}${filteredBadge}</td>
                         <td>${ch.cleaned_name || '-'}</td>
                         <td><code>${ch.epg_channel_id || '-'}</code></td>
                         <td>
@@ -939,28 +992,36 @@ async function loadMappings() {
                 `;
             }
             
-            html += '</tbody></table></div>';
-            container.innerHTML = html;
+            if (mappingsState.offset === 0) {
+                html += '</tbody></table></div>';
+                html += '<div id="mappings-loader" class="text-center py-3" style="display: none;"><div class="spinner-border spinner-border-sm"></div> Loading more...</div>';
+                container.innerHTML = html;
+            } else {
+                document.getElementById('mappings-tbody').insertAdjacentHTML('beforeend', html);
+            }
         } else {
-            if (data.mappings.length === 0) {
+            if (mappingsState.offset === 0 && data.mappings.length === 0) {
                 container.innerHTML = '<div class="alert alert-info">No channel mappings found. Run auto-match or create manual mappings.</div>';
                 return;
             }
             
-            let html = `<p class="text-muted mb-2">Showing ${data.mappings.length} of ${data.total} mappings</p>`;
-            html += '<div class="table-responsive"><table class="table table-striped table-sm">';
-            html += `
-                <thead>
-                    <tr>
-                        <th>Channel</th>
-                        <th>EPG Channel</th>
-                        <th>Type</th>
-                        <th>Confidence</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-            `;
+            let html = '';
+            if (mappingsState.offset === 0) {
+                html = `<p class="text-muted mb-2">Showing ${data.total} mappings${!showFiltered ? ' (filtered-out channels hidden)' : ''}</p>`;
+                html += '<div class="table-responsive"><table class="table table-striped table-sm" id="mappings-table">';
+                html += `
+                    <thead>
+                        <tr>
+                            <th>Channel</th>
+                            <th>EPG Channel</th>
+                            <th>Type</th>
+                            <th>Confidence</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mappings-tbody">
+                `;
+            }
             
             for (const m of data.mappings) {
                 const typeBadge = m.mapping_type === 'manual' 
@@ -968,10 +1029,11 @@ async function loadMappings() {
                     : m.mapping_type.includes('auto')
                     ? '<span class="badge bg-info">Auto</span>'
                     : '<span class="badge bg-secondary">' + m.mapping_type + '</span>';
+                const filteredBadge = !m.is_visible ? '<span class="badge bg-secondary ms-2">Filtered</span>' : '';
                     
                 html += `
                     <tr>
-                        <td>${m.channel_name || 'Channel #' + m.channel_id}</td>
+                        <td>${m.channel_name || 'Channel #' + m.channel_id}${filteredBadge}</td>
                         <td>${m.epg_display_name || 'EPG #' + m.epg_channel_id}</td>
                         <td>${typeBadge} ${m.is_override ? '<i class="bi bi-pin-fill text-warning" title="Override"></i>' : ''}</td>
                         <td>${(m.confidence * 100).toFixed(0)}%</td>
@@ -984,12 +1046,43 @@ async function loadMappings() {
                 `;
             }
             
-            html += '</tbody></table></div>';
-            container.innerHTML = html;
+            if (mappingsState.offset === 0) {
+                html += '</tbody></table></div>';
+                html += '<div id="mappings-loader" class="text-center py-3" style="display: none;"><div class="spinner-border spinner-border-sm"></div> Loading more...</div>';
+                container.innerHTML = html;
+            } else {
+                document.getElementById('mappings-tbody').insertAdjacentHTML('beforeend', html);
+            }
         }
+        
+        // Update offset for next load
+        mappingsState.offset += data.unmapped_channels?.length || data.mappings?.length || 0;
+        
+        // Hide loader if no more data
+        const loader = document.getElementById('mappings-loader');
+        if (loader) {
+            loader.style.display = mappingsState.hasMore ? 'none' : 'none';
+        }
+        
     } catch (error) {
-        container.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        if (mappingsState.offset === 0) {
+            container.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        }
+        console.error('Error loading mappings:', error);
+    } finally {
+        mappingsState.loading = false;
     }
+}
+
+async function loadMoreMappings() {
+    if (!mappingsState.hasMore || mappingsState.loading) return;
+    
+    const loader = document.getElementById('mappings-loader');
+    if (loader) loader.style.display = 'block';
+    
+    await loadMappings(false);
+    
+    if (loader) loader.style.display = 'none';
 }
 
 async function deleteMapping(id) {
