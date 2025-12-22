@@ -392,6 +392,70 @@ class ImageCacheService:
 
         return count
 
+    def cleanup_by_status(self, status: str, delete_files: bool = True) -> int:
+        """Clean up cache entries with a specific status.
+
+        Args:
+            status: The status to filter by (e.g., "error", "expired")
+            delete_files: Also delete files from disk
+
+        Returns:
+            Number of entries cleaned up
+        """
+        from models import CachedImage, db
+
+        count = 0
+        try:
+            entries = CachedImage.query.filter(CachedImage.status == status).all()
+
+            for cached in entries:
+                if delete_files and cached.file_path:
+                    file_path = self.cache_dir / cached.file_path
+                    if file_path.exists():
+                        file_path.unlink()
+
+                db.session.delete(cached)
+                count += 1
+
+            db.session.commit()
+            logger.info(f"Cleaned up {count} cache entries with status '{status}'")
+
+        except Exception as e:
+            logger.error(f"Error during cache cleanup by status: {e}")
+
+        return count
+
+    def clear_all(self, delete_files: bool = True) -> int:
+        """Clear all cache entries.
+
+        Args:
+            delete_files: Also delete files from disk
+
+        Returns:
+            Number of entries cleared
+        """
+        from models import CachedImage, db
+
+        count = 0
+        try:
+            if delete_files:
+                # Delete all cached files
+                entries = CachedImage.query.filter(CachedImage.file_path.isnot(None)).all()
+                for cached in entries:
+                    file_path = self.cache_dir / cached.file_path
+                    if file_path.exists():
+                        file_path.unlink()
+
+            # Delete all entries
+            count = CachedImage.query.delete()
+            db.session.commit()
+            logger.info(f"Cleared {count} cache entries")
+
+        except Exception as e:
+            logger.error(f"Error clearing cache: {e}")
+
+        return count
+
     def get_stats(self) -> dict:
         """Get cache statistics."""
         from models import CachedImage, db

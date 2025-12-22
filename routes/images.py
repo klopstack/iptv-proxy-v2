@@ -119,21 +119,34 @@ def get_cache_stats():
 @images_bp.route("/api/image-cache/cleanup", methods=["POST"])
 @handle_errors(return_json=True, default_message="Error cleaning up cache")
 def cleanup_cache():
-    """Clean up expired cache entries.
+    """Clean up cache entries.
 
     Query parameters:
     - delete_files: "true" to also delete files from disk (default: true)
+    - status: Clean entries with specific status (e.g., "error", "failed")
+    - all: "true" to clear all cache entries
     """
     delete_files = request.args.get("delete_files", "true").lower() == "true"
+    status_filter = request.args.get("status")
+    clear_all = request.args.get("all", "false").lower() == "true"
 
     cache = get_image_cache()
-    count = cache.cleanup_expired(delete_files=delete_files)
+
+    if clear_all:
+        count = cache.clear_all(delete_files=delete_files)
+        message = f"Cleared {count} cache entries"
+    elif status_filter:
+        count = cache.cleanup_by_status(status_filter, delete_files=delete_files)
+        message = f"Cleaned up {count} entries with status '{status_filter}'"
+    else:
+        count = cache.cleanup_expired(delete_files=delete_files)
+        message = f"Cleaned up {count} expired cache entries"
 
     return jsonify(
         {
             "success": True,
-            "cleaned_up": count,
-            "message": f"Cleaned up {count} expired cache entries",
+            "removed_count": count,
+            "message": message,
         }
     )
 

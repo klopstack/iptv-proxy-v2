@@ -313,7 +313,7 @@ class TestImageRoutes:
 
         data = response.get_json()
         assert data["success"] is True
-        assert data["cleaned_up"] >= 1
+        assert data["removed_count"] >= 1
 
     def test_delete_cache_entry(self, client):
         """Test deleting a cache entry"""
