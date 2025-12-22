@@ -1,0 +1,318 @@
+{% extends "base.html" %}
+
+{% block title %}Categories - IPTV Proxy{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Browse Categories</h1>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-funnel"></i> Filters</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label class="form-label">Filter by Account</label>
+                        <select class="form-select" id="accountFilter">
+                            <option value="">All Accounts</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Search Categories</label>
+                        <input type="text" class="form-control" id="categorySearch" placeholder="Search by name...">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Show Empty Categories</label>
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" id="showEmpty">
+                            <label class="form-check-label" for="showEmpty">Include categories with no visible channels</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="showEpg">
+                            <label class="form-check-label" for="showEpg">Show EPG coverage information</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-collection"></i> Categories</h5>
+                <span class="badge bg-primary" id="categoryCount">Loading...</span>
+            </div>
+            <div class="card-body">
+                <div id="categoriesContent">
+                    <div class="text-center py-5">
+                        <div class="spinner-border" role="status"></div>
+                        <p class="mt-2">Loading categories...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let allCategories = [];
+let accounts = [];
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+async function loadAccounts() {
+    try {
+        const response = await fetch('/api/accounts');
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || `HTTP error ${response.status}`);
+        }
+        if (!Array.isArray(data)) {
+            throw new Error(data.error || 'Invalid response format');
+        }
+        accounts = data;
+        
+        const select = document.getElementById('accountFilter');
+        for (const account of accounts) {
+            if (account.enabled) {
+                select.innerHTML += `<option value="${account.id}">${escapeHtml(account.name)}</option>`;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading accounts:', error);
+    }
+}
+
+async function loadCategories() {
+    const accountId = document.getElementById('accountFilter').value;
+    const includeEmpty = document.getElementById('showEmpty').checked;
+    const includeEpg = document.getElementById('showEpg').checked;
+    
+    document.getElementById('categoriesContent').innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border" role="status"></div>
+            <p class="mt-2">Loading categories...</p>
+        </div>
+    `;
+    
+    try {
+        let url = `/api/categories?include_empty=${includeEmpty}&include_epg=${includeEpg}`;
+        if (accountId) {
+            url += `&account_id=${accountId}`;
+        }
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || `HTTP error ${response.status}`);
+        }
+        if (!Array.isArray(data)) {
+            throw new Error(data.error || 'Invalid response format');
+        }
+        allCategories = data;
+        
+        displayCategories();
+    } catch (error) {
+        document.getElementById('categoriesContent').innerHTML = `
+            <div class="alert alert-danger">
+                Error loading categories: ${error.message}
+            </div>
+        `;
+    }
+}
+
+function displayCategories() {
+    const searchTerm = document.getElementById('categorySearch').value.toLowerCase();
+    const accountId = document.getElementById('accountFilter').value;
+    
+    // Filter categories
+    let filtered = allCategories;
+    if (searchTerm) {
+        filtered = filtered.filter(cat => 
+            cat.category_name.toLowerCase().includes(searchTerm)
+        );
+    }
+    
+    // Group by account if showing all accounts
+    const groupByAccount = !accountId;
+    
+    document.getElementById('categoryCount').textContent = `${filtered.length} categories`;
+    
+    if (filtered.length === 0) {
+        document.getElementById('categoriesContent').innerHTML = `
+            <div class="alert alert-info">
+                No categories found matching your criteria.
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    
+    if (groupByAccount) {
+        // Group categories by account
+        const grouped = {};
+        for (const cat of filtered) {
+            if (!grouped[cat.account_id]) {
+                grouped[cat.account_id] = {
+                    account_name: cat.account_name,
+                    categories: []
+                };
+            }
+            grouped[cat.account_id].categories.push(cat);
+        }
+        
+        for (const [accountId, data] of Object.entries(grouped)) {
+            html += `
+                <div class="mb-4">
+                    <h5 class="border-bottom pb-2">
+                        <i class="bi bi-server"></i> ${escapeHtml(data.account_name)}
+                        <span class="badge bg-secondary">${data.categories.length} categories</span>
+                    </h5>
+                    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 g-3">
+            `;
+            
+            for (const cat of data.categories.sort((a, b) => a.category_name.localeCompare(b.category_name))) {
+                html += renderCategoryCard(cat);
+            }
+            
+            html += `
+                    </div>
+                </div>
+            `;
+        }
+    } else {
+        // Single account view - just list categories
+        html = `<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 g-3">`;
+        
+        for (const cat of filtered.sort((a, b) => a.category_name.localeCompare(b.category_name))) {
+            html += renderCategoryCard(cat);
+        }
+        
+        html += `</div>`;
+    }
+    
+    document.getElementById('categoriesContent').innerHTML = html;
+}
+
+function renderCategoryCard(cat) {
+    const visiblePercent = cat.total_count > 0 
+        ? Math.round((cat.visible_count / cat.total_count) * 100) 
+        : 0;
+    
+    const progressColor = visiblePercent >= 80 ? 'success' : 
+                          visiblePercent >= 50 ? 'warning' : 'danger';
+    
+    // EPG coverage info
+    let epgInfo = '';
+    const showEpg = document.getElementById('showEpg').checked;
+    if (showEpg && cat.with_epg_id_count !== undefined) {
+        const epgIdPercent = cat.total_count > 0 
+            ? Math.round((cat.with_epg_id_count / cat.total_count) * 100) 
+            : 0;
+        const epgMappedPercent = cat.epg_coverage_percent || 0;
+        
+        const epgIdColor = epgIdPercent >= 80 ? 'success' : 
+                           epgIdPercent >= 50 ? 'warning' : 'danger';
+        const epgMappedColor = epgMappedPercent >= 80 ? 'success' : 
+                               epgMappedPercent >= 50 ? 'warning' : 'danger';
+        
+        epgInfo = `
+            <div class="mt-2 pt-2 border-top">
+                <small class="text-muted d-block mb-1">
+                    <i class="bi bi-broadcast"></i> EPG IDs: 
+                    <span class="text-${epgIdColor}">${cat.with_epg_id_count}/${cat.total_count}</span>
+                    (${epgIdPercent}%)
+                </small>
+                <div class="progress mb-1" style="height: 4px;" title="${epgIdPercent}% have EPG ID from provider">
+                    <div class="progress-bar bg-${epgIdColor}" style="width: ${epgIdPercent}%"></div>
+                </div>
+                ${cat.epg_mapped_count !== undefined ? `
+                <small class="text-muted d-block mt-1">
+                    <i class="bi bi-link-45deg"></i> EPG Mapped: 
+                    <span class="text-${epgMappedColor}">${cat.epg_mapped_count}/${cat.total_count}</span>
+                    (${epgMappedPercent}%)
+                </small>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    return `
+        <div class="col">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title text-truncate" title="${escapeHtml(cat.category_name)}">
+                        ${escapeHtml(cat.category_name)}
+                    </h6>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="text-muted">
+                            <span class="text-success">${cat.visible_count}</span> visible / 
+                            <span class="text-danger">${cat.hidden_count}</span> hidden
+                        </small>
+                    </div>
+                    <div class="progress" style="height: 6px;" title="${visiblePercent}% visible">
+                        <div class="progress-bar bg-${progressColor}" 
+                             role="progressbar" 
+                             style="width: ${visiblePercent}%"
+                             aria-valuenow="${visiblePercent}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100">
+                        </div>
+                    </div>
+                    ${epgInfo}
+                </div>
+                <div class="card-footer bg-transparent border-top-0">
+                    <div class="btn-group btn-group-sm w-100" role="group">
+                        <a href="/test?account=${cat.account_id}&category=${encodeURIComponent(cat.category_name)}" 
+                           class="btn btn-outline-primary" 
+                           title="Preview channels in this category">
+                            <i class="bi bi-eye"></i> Preview
+                        </a>
+                        <a href="/filters?account=${cat.account_id}&category=${encodeURIComponent(cat.category_name)}" 
+                           class="btn btn-outline-secondary" 
+                           title="Add filter for this category">
+                            <i class="bi bi-funnel"></i> Filter
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Event listeners
+document.getElementById('accountFilter').addEventListener('change', loadCategories);
+document.getElementById('showEmpty').addEventListener('change', loadCategories);
+document.getElementById('showEpg').addEventListener('change', loadCategories);
+
+// Debounced search
+let searchTimeout;
+document.getElementById('categorySearch').addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(displayCategories, 300);
+});
+
+// Initial load
+loadAccounts().then(loadCategories);
+</script>
+{% endblock %}

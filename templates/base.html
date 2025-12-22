@@ -4,18 +4,205 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}IPTV Proxy Manager{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <style>
-        body { padding-top: 60px; }
-        .sidebar { position: fixed; top: 56px; bottom: 0; left: 0; z-index: 100; padding: 48px 0 0; box-shadow: inset -1px 0 0 rgba(0, 0, 0, .1); }
+        /* Theme CSS Variables */
+        :root {
+            --bg-body: #f8f9fa;
+            --bg-sidebar: #f8f9fa;
+            --bg-card: #ffffff;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --text-nav: #333;
+            --border-color: rgba(0, 0, 0, 0.1);
+            --input-bg: #ffffff;
+            --input-border: #ced4da;
+            --table-stripe: rgba(0, 0, 0, 0.05);
+        }
+        
+        [data-theme="dark"] {
+            --bg-body: #1a1d21;
+            --bg-sidebar: #212529;
+            --bg-card: #2d3238;
+            --text-primary: #e9ecef;
+            --text-secondary: #adb5bd;
+            --text-nav: #dee2e6;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --input-bg: #2d3238;
+            --input-border: #495057;
+            --table-stripe: rgba(255, 255, 255, 0.05);
+        }
+        
+        body {
+            padding-top: 60px;
+            background-color: var(--bg-body);
+            color: var(--text-primary);
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        .sidebar {
+            position: fixed;
+            top: 56px;
+            bottom: 0;
+            left: 0;
+            z-index: 100;
+            padding: 48px 0 0;
+            box-shadow: inset -1px 0 0 var(--border-color);
+            background-color: var(--bg-sidebar) !important;
+            transition: background-color 0.3s ease;
+        }
+        
         .sidebar-sticky { position: relative; top: 0; height: calc(100vh - 48px); padding-top: .5rem; overflow-x: hidden; overflow-y: auto; }
-        .nav-link { font-weight: 500; color: #333; }
+        .nav-link { font-weight: 500; color: var(--text-nav); }
         .nav-link:hover { color: #007bff; }
         .nav-link.active { color: #007bff; }
         .nav-link i { margin-right: 0.5rem; }
         main { margin-left: 240px; }
         @media (max-width: 767.98px) { main { margin-left: 0; } .sidebar { position: relative; } }
+        
+        /* Dark mode overrides for Bootstrap components */
+        [data-theme="dark"] .card { background-color: var(--bg-card); border-color: var(--border-color); color: var(--text-primary); }
+        [data-theme="dark"] .card-header { background-color: rgba(0, 0, 0, 0.2); border-color: var(--border-color); color: var(--text-primary); }
+        [data-theme="dark"] .card-body { background-color: var(--bg-card); color: var(--text-primary); }
+        [data-theme="dark"] .card-title { color: var(--text-primary); }
+        [data-theme="dark"] .card-text { color: var(--text-primary); }
+        
+        /* Table dark mode - comprehensive overrides */
+        [data-theme="dark"] table,
+        [data-theme="dark"] .table { 
+            --bs-table-bg: transparent;
+            --bs-table-color: var(--text-primary);
+            --bs-table-border-color: var(--border-color);
+            --bs-table-striped-bg: var(--table-stripe);
+            --bs-table-striped-color: var(--text-primary);
+            --bs-table-hover-bg: rgba(255, 255, 255, 0.075);
+            --bs-table-hover-color: var(--text-primary);
+            color: var(--text-primary) !important; 
+            background-color: transparent !important;
+        }
+        [data-theme="dark"] table th,
+        [data-theme="dark"] table td,
+        [data-theme="dark"] .table th,
+        [data-theme="dark"] .table td { 
+            color: var(--text-primary) !important; 
+            background-color: transparent !important;
+            border-color: var(--border-color) !important;
+        }
+        [data-theme="dark"] table thead,
+        [data-theme="dark"] .table thead { 
+            background-color: rgba(0, 0, 0, 0.2) !important; 
+        }
+        [data-theme="dark"] table thead th,
+        [data-theme="dark"] .table thead th { 
+            color: var(--text-primary) !important; 
+            background-color: transparent !important;
+        }
+        [data-theme="dark"] table tbody tr,
+        [data-theme="dark"] .table tbody tr {
+            color: var(--text-primary) !important;
+            background-color: transparent !important;
+        }
+        [data-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) > * { 
+            --bs-table-accent-bg: var(--table-stripe);
+            background-color: var(--table-stripe) !important;
+            color: var(--text-primary) !important;
+        }
+        [data-theme="dark"] .table-striped > tbody > tr:nth-of-type(even) > * { 
+            background-color: transparent !important;
+            color: var(--text-primary) !important;
+        }
+        [data-theme="dark"] .table > :not(caption) > * > * { 
+            border-color: var(--border-color) !important; 
+            background-color: transparent !important; 
+            color: var(--text-primary) !important;
+            box-shadow: none !important;
+        }
+        [data-theme="dark"] .table-hover > tbody > tr:hover > * { 
+            --bs-table-accent-bg: rgba(255, 255, 255, 0.075);
+            background-color: rgba(255, 255, 255, 0.075) !important;
+            color: var(--text-primary) !important;
+        }
+        [data-theme="dark"] .table-responsive { background-color: transparent !important; }
+        
+        [data-theme="dark"] .form-control, [data-theme="dark"] .form-select {
+            background-color: var(--input-bg);
+            border-color: var(--input-border);
+            color: var(--text-primary);
+        }
+        [data-theme="dark"] .form-control:focus, [data-theme="dark"] .form-select:focus {
+            background-color: var(--input-bg);
+            color: var(--text-primary);
+        }
+        [data-theme="dark"] .form-control::placeholder { color: var(--text-secondary); }
+        [data-theme="dark"] .form-label { color: var(--text-primary); }
+        [data-theme="dark"] .form-text { color: var(--text-secondary); }
+        [data-theme="dark"] .form-check-label { color: var(--text-primary); }
+        [data-theme="dark"] .input-group-text { background-color: var(--bg-sidebar); border-color: var(--input-border); color: var(--text-primary); }
+        [data-theme="dark"] .modal-content { background-color: var(--bg-card); color: var(--text-primary); }
+        [data-theme="dark"] .modal-header, [data-theme="dark"] .modal-footer { border-color: var(--border-color); }
+        [data-theme="dark"] .modal-title { color: var(--text-primary); }
+        [data-theme="dark"] .list-group-item { background-color: var(--bg-card); border-color: var(--border-color); color: var(--text-primary); }
+        [data-theme="dark"] .list-group-item-action:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-primary); }
+        [data-theme="dark"] .dropdown-menu { background-color: var(--bg-card); border-color: var(--border-color); }
+        [data-theme="dark"] .dropdown-item { color: var(--text-primary); }
+        [data-theme="dark"] .dropdown-item:hover { background-color: rgba(255, 255, 255, 0.1); }
+        [data-theme="dark"] .alert { border-color: var(--border-color); }
+        [data-theme="dark"] .alert-info { background-color: rgba(13, 202, 240, 0.15); color: #6edff6; }
+        [data-theme="dark"] .alert-warning { background-color: rgba(255, 193, 7, 0.15); color: #ffda6a; }
+        [data-theme="dark"] .alert-danger { background-color: rgba(220, 53, 69, 0.15); color: #ea868f; }
+        [data-theme="dark"] .alert-success { background-color: rgba(25, 135, 84, 0.15); color: #75b798; }
+        [data-theme="dark"] .alert-secondary { background-color: rgba(108, 117, 125, 0.2); color: #adb5bd; }
+        [data-theme="dark"] .alert-primary { background-color: rgba(13, 110, 253, 0.15); color: #6ea8fe; }
+        [data-theme="dark"] .badge.bg-light { background-color: #495057 !important; color: var(--text-primary) !important; }
+        [data-theme="dark"] .text-muted { color: var(--text-secondary) !important; }
+        [data-theme="dark"] .text-dark { color: var(--text-primary) !important; }
+        [data-theme="dark"] .border { border-color: var(--border-color) !important; }
+        [data-theme="dark"] .border-bottom { border-color: var(--border-color) !important; }
+        [data-theme="dark"] pre, [data-theme="dark"] code { background-color: #1e2126; color: #e9ecef; }
+        [data-theme="dark"] .accordion-item { background-color: var(--bg-card); border-color: var(--border-color); }
+        [data-theme="dark"] .accordion-button { background-color: var(--bg-card); color: var(--text-primary); }
+        [data-theme="dark"] .accordion-button:not(.collapsed) { background-color: rgba(13, 110, 253, 0.15); color: #6ea8fe; }
+        [data-theme="dark"] .accordion-body { background-color: var(--bg-card); }
+        [data-theme="dark"] .nav-tabs { border-color: var(--border-color); }
+        [data-theme="dark"] .nav-tabs .nav-link { color: var(--text-secondary); }
+        [data-theme="dark"] .nav-tabs .nav-link:hover { border-color: var(--border-color); }
+        [data-theme="dark"] .nav-tabs .nav-link.active { background-color: var(--bg-card); color: var(--text-primary); border-color: var(--border-color) var(--border-color) var(--bg-card); }
+        [data-theme="dark"] .tab-content { background-color: transparent; }
+        [data-theme="dark"] .btn-outline-primary { color: #6ea8fe; border-color: #6ea8fe; }
+        [data-theme="dark"] .btn-outline-primary:hover { background-color: #0d6efd; color: #fff; }
+        [data-theme="dark"] .btn-outline-secondary { color: #adb5bd; border-color: #adb5bd; }
+        [data-theme="dark"] .btn-outline-secondary:hover { background-color: #6c757d; color: #fff; }
+        [data-theme="dark"] .btn-outline-success { color: #75b798; border-color: #75b798; }
+        [data-theme="dark"] .btn-outline-success:hover { background-color: #198754; color: #fff; }
+        [data-theme="dark"] .btn-outline-danger { color: #ea868f; border-color: #ea868f; }
+        [data-theme="dark"] .btn-outline-danger:hover { background-color: #dc3545; color: #fff; }
+        [data-theme="dark"] .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
+        [data-theme="dark"] .pagination .page-link { background-color: var(--bg-card); border-color: var(--border-color); color: var(--text-primary); }
+        [data-theme="dark"] .pagination .page-link:hover { background-color: rgba(255, 255, 255, 0.1); }
+        [data-theme="dark"] .pagination .page-item.active .page-link { background-color: #0d6efd; border-color: #0d6efd; }
+        [data-theme="dark"] .pagination .page-item.disabled .page-link { background-color: var(--bg-card); color: var(--text-secondary); }
+        [data-theme="dark"] h1, [data-theme="dark"] h2, [data-theme="dark"] h3, [data-theme="dark"] h4, [data-theme="dark"] h5, [data-theme="dark"] h6 { color: var(--text-primary); }
+        [data-theme="dark"] label { color: var(--text-primary); }
+        [data-theme="dark"] p { color: var(--text-primary); }
+        [data-theme="dark"] strong { color: var(--text-primary); }
+        [data-theme="dark"] small { color: var(--text-secondary); }
+        [data-theme="dark"] a:not(.btn):not(.nav-link):not(.list-group-item) { color: #6ea8fe; }
+        [data-theme="dark"] a:not(.btn):not(.nav-link):not(.list-group-item):hover { color: #9ec5fe; }
+        [data-theme="dark"] em.text-muted { color: var(--text-secondary) !important; }
+        
+        /* Theme toggle button */
+        .theme-toggle {
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1.25rem;
+            padding: 0.25rem 0.5rem;
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+        .theme-toggle:hover { color: #ffffff; }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -26,6 +213,11 @@
             <a class="navbar-brand" href="/">
                 <i class="bi bi-broadcast"></i> IPTV Proxy Manager v2
             </a>
+            <div class="d-flex align-items-center">
+                <button class="theme-toggle" id="themeToggle" title="Toggle dark/light mode">
+                    <i class="bi bi-moon-fill" id="themeIcon"></i>
+                </button>
+            </div>
         </div>
     </nav>
 
@@ -56,6 +248,11 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link {% if request.path == '/categories' %}active{% endif %}" href="/categories">
+                                <i class="bi bi-collection"></i> Categories
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link {% if request.path == '/test' %}active{% endif %}" href="/test">
                                 <i class="bi bi-play-circle"></i> Preview Channels
                             </a>
@@ -78,6 +275,207 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        /**
+         * Reusable TagSelector component for autocomplete tag selection
+         * Usage:
+         *   const selector = new TagSelector({
+         *       containerId: 'my-tag-selector',
+         *       accountIdGetter: () => document.getElementById('account-select').value,
+         *       badgeClass: 'bg-primary',  // optional, default is 'bg-primary'
+         *       placeholder: 'Search tags...',  // optional
+         *       onTagsChanged: (tags) => { ... }  // optional callback
+         *   });
+         */
+        class TagSelector {
+            constructor(options) {
+                this.containerId = options.containerId;
+                this.accountIdGetter = options.accountIdGetter;
+                this.badgeClass = options.badgeClass || 'bg-primary';
+                this.placeholder = options.placeholder || 'Search tags...';
+                this.onTagsChanged = options.onTagsChanged || null;
+                this.selectedTags = [];
+                this.searchTimeout = null;
+                
+                this.init();
+            }
+            
+            init() {
+                const container = document.getElementById(this.containerId);
+                if (!container) return;
+                
+                // Build the HTML structure
+                container.innerHTML = `
+                    <div class="position-relative">
+                        <input type="text" class="form-control tag-selector-input" 
+                               placeholder="${this.placeholder}" autocomplete="off">
+                        <div class="tag-selector-dropdown list-group position-absolute w-100 shadow-sm" 
+                             style="max-height: 200px; overflow-y: auto; z-index: 1050; display: none;
+                                    border: 1px solid #dee2e6; border-radius: 0.25rem; background: white;"></div>
+                    </div>
+                    <div class="tag-selector-selected mt-2"></div>
+                `;
+                
+                this.input = container.querySelector('.tag-selector-input');
+                this.dropdown = container.querySelector('.tag-selector-dropdown');
+                this.selectedContainer = container.querySelector('.tag-selector-selected');
+                
+                // Bind events
+                this.input.addEventListener('focus', () => this.showDropdown());
+                this.input.addEventListener('input', () => this.search());
+                this.input.addEventListener('blur', () => this.hideDropdown());
+                
+                // Handle clicks on selected tags (event delegation)
+                this.selectedContainer.addEventListener('click', (e) => {
+                    const btn = e.target.closest('.tag-remove-btn');
+                    if (btn) {
+                        this.removeTag(btn.dataset.tagName);
+                    }
+                });
+            }
+            
+            search() {
+                const accountId = this.accountIdGetter();
+                if (!accountId) return;
+                
+                const query = this.input.value.trim();
+                
+                clearTimeout(this.searchTimeout);
+                this.searchTimeout = setTimeout(async () => {
+                    try {
+                        const response = await fetch(`/api/accounts/${accountId}/tags/search?q=${encodeURIComponent(query)}&limit=20`);
+                        const tags = await response.json();
+                        
+                        this.dropdown.innerHTML = '';
+                        
+                        // Filter out already selected tags
+                        const availableTags = tags.filter(tag => !this.selectedTags.some(t => t.name === tag.name));
+                        
+                        if (availableTags.length === 0) {
+                            this.dropdown.innerHTML = '<div class="list-group-item text-muted" style="border: none;">No matching tags found</div>';
+                        } else {
+                            for (const tag of availableTags) {
+                                const item = document.createElement('a');
+                                item.href = '#';
+                                item.className = 'list-group-item list-group-item-action';
+                                item.style.cssText = 'border: none; border-bottom: 1px solid #f0f0f0;';
+                                item.innerHTML = `${tag.name} <span class="badge bg-secondary">${tag.channel_count}</span>`;
+                                item.onmousedown = (e) => {
+                                    e.preventDefault();  // Prevent blur
+                                    this.addTag(tag);
+                                };
+                                this.dropdown.appendChild(item);
+                            }
+                        }
+                        
+                        this.dropdown.style.display = 'block';
+                    } catch (error) {
+                        console.error('Error searching tags:', error);
+                        this.dropdown.innerHTML = '<div class="list-group-item text-danger" style="border: none;">Error searching tags</div>';
+                        this.dropdown.style.display = 'block';
+                    }
+                }, 300);
+            }
+            
+            showDropdown() {
+                const accountId = this.accountIdGetter();
+                if (accountId) {
+                    this.search();
+                }
+            }
+            
+            hideDropdown() {
+                setTimeout(() => {
+                    this.dropdown.style.display = 'none';
+                }, 150);
+            }
+            
+            addTag(tag) {
+                // Handle both string tags and tag objects {name, channel_count}
+                const tagObj = typeof tag === 'string' ? { name: tag, channel_count: null } : tag;
+                
+                if (!this.selectedTags.some(t => t.name === tagObj.name)) {
+                    this.selectedTags.push(tagObj);
+                    this.render();
+                    this.input.value = '';
+                    this.dropdown.style.display = 'none';
+                    if (this.onTagsChanged) this.onTagsChanged(this.selectedTags);
+                }
+            }
+            
+            removeTag(tagName) {
+                this.selectedTags = this.selectedTags.filter(t => t.name !== tagName);
+                this.render();
+                if (this.onTagsChanged) this.onTagsChanged(this.selectedTags);
+            }
+            
+            render() {
+                if (this.selectedTags.length === 0) {
+                    this.selectedContainer.innerHTML = '';
+                    return;
+                }
+                
+                this.selectedContainer.innerHTML = this.selectedTags.map(tag => {
+                    const countDisplay = tag.channel_count != null ? ` (${tag.channel_count})` : '';
+                    return `
+                    <span class="badge ${this.badgeClass} me-1 mb-1" style="font-size: 0.9rem; padding: 0.5rem 0.75rem;">
+                        ${tag.name}${countDisplay}
+                        <button type="button" class="btn-close btn-close-white ms-1 tag-remove-btn" 
+                                style="font-size: 0.6rem; padding: 0; margin: 0; width: 0.6rem; height: 0.6rem;" 
+                                data-tag-name="${tag.name}" aria-label="Remove"></button>
+                    </span>
+                `;
+                }).join('');
+            }
+            
+            getTags() {
+                return this.selectedTags;
+            }
+            
+            getTagNames() {
+                return this.selectedTags.map(t => t.name).filter(name => name != null && name !== '');
+            }
+            
+            setTags(tags) {
+                this.selectedTags = tags;
+                this.render();
+            }
+            
+            clear() {
+                this.selectedTags = [];
+                this.input.value = '';
+                this.dropdown.style.display = 'none';
+                this.render();
+            }
+        }
+        
+        // Theme toggle functionality
+        (function() {
+            const themeToggle = document.getElementById('themeToggle');
+            const themeIcon = document.getElementById('themeIcon');
+            const html = document.documentElement;
+            
+            // Get saved theme or default to dark
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            html.setAttribute('data-theme', savedTheme);
+            updateIcon(savedTheme);
+            
+            function updateIcon(theme) {
+                if (themeIcon) {
+                    themeIcon.className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
+                }
+            }
+            
+            if (themeToggle) {
+                themeToggle.addEventListener('click', () => {
+                    const currentTheme = html.getAttribute('data-theme');
+                    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                    html.setAttribute('data-theme', newTheme);
+                    localStorage.setItem('theme', newTheme);
+                    updateIcon(newTheme);
+                });
+            }
+        })();
+        
         document.addEventListener('DOMContentLoaded', () => {
             const clearCacheBtn = document.getElementById('clear-cache-btn');
             if (clearCacheBtn) {

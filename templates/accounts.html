@@ -95,13 +95,88 @@
         </div>
     </div>
 </div>
+
+<!-- Credentials Modal -->
+<div class="modal fade" id="credentialsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="credentialsModalLabel">Manage Credentials</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Multiple Credentials:</strong> Add multiple credentials for the same account to enable DVR and Picture-in-Picture support. 
+                    Each credential provides additional concurrent stream capacity.
+                </div>
+                <div id="credentialsContent">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="add-credential-btn">
+                    <i class="bi bi-plus-circle"></i> Add Credential
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Credential Modal -->
+<div class="modal fade" id="credentialEditModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="credentialEditModalLabel">Add Credential</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="credentialForm">
+                    <input type="hidden" id="credentialId">
+                    <input type="hidden" id="credentialAccountId">
+                    <div class="mb-3">
+                        <label for="credentialUsername" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="credentialUsername" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="credentialPassword" class="form-label">Password</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="credentialPassword" required>
+                            <button class="btn btn-outline-secondary" type="button" id="toggleCredentialPassword">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text" id="credentialPasswordHint" style="display: none;">Password already set (leave blank to keep current)</div>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="credentialEnabled" checked>
+                        <label class="form-check-label" for="credentialEnabled">Enabled</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-credential-btn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 let accounts = [];
+let currentCredentialsAccountId = null;
 const modal = new bootstrap.Modal(document.getElementById('accountModal'));
 const categoriesModal = new bootstrap.Modal(document.getElementById('categoriesModal'));
+const credentialsModal = new bootstrap.Modal(document.getElementById('credentialsModal'));
+const credentialEditModal = new bootstrap.Modal(document.getElementById('credentialEditModal'));
 
 async function loadAccounts() {
     try {
@@ -156,6 +231,16 @@ async function renderAccounts() {
             syncBadge = '<span class="badge bg-warning text-dark" title="Account not synced - using API calls only. Server does not provide a native m3u playlist, all requests go through the IPTV provider API."><i class="bi bi-cloud"></i> API Only</span>';
         }
         
+        // Format credentials info
+        const credentials = account.credentials || [];
+        const totalConnections = account.total_max_connections || credentials.length || 1;
+        let credentialsBadge = '';
+        if (credentials.length > 1) {
+            credentialsBadge = `<span class="badge bg-info" title="${credentials.length} credentials, ${totalConnections} total connections"><i class="bi bi-people"></i> ${credentials.length} credentials (${totalConnections} streams)</span>`;
+        } else if (credentials.length === 1 && credentials[0].max_connections > 1) {
+            credentialsBadge = `<span class="badge bg-info" title="${credentials[0].max_connections} max connections"><i class="bi bi-broadcast"></i> ${credentials[0].max_connections} streams</span>`;
+        }
+        
         html += `
             <div class="list-group-item">
                 <div class="d-flex w-100 justify-content-between align-items-start">
@@ -164,6 +249,7 @@ async function renderAccounts() {
                             ${account.name}
                             ${!account.enabled ? '<span class="badge bg-secondary">Disabled</span>' : ''}
                             ${syncBadge}
+                            ${credentialsBadge}
                         </h5>
                         <p class="mb-1 text-muted">
                             <strong>Server:</strong> ${account.server}<br>
@@ -173,6 +259,10 @@ async function renderAccounts() {
                         <small>
                             <a href="/playlist/${account.id}.m3u" target="_blank">
                                 <i class="bi bi-download"></i> Download M3U
+                            </a>
+                            |
+                            <a href="/playlist/${account.id}.m3u?proxy=true" target="_blank" title="Proxied M3U (for DVR/PIP support)">
+                                <i class="bi bi-shuffle"></i> Proxied M3U
                             </a>
                             |
                             <a href="/epg/${account.id}.xml" target="_blank">
@@ -192,6 +282,9 @@ async function renderAccounts() {
                         </button>
                         <button class="btn btn-sm btn-outline-primary" data-action="view-categories" data-account-id="${account.id}" title="View Categories">
                             <i class="bi bi-list-ul"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-info" data-action="manage-credentials" data-account-id="${account.id}" title="Manage Credentials">
+                            <i class="bi bi-key"></i>
                         </button>
                         <button class="btn btn-sm btn-outline-warning" data-action="edit" data-account-id="${account.id}">
                             <i class="bi bi-pencil"></i>
@@ -398,16 +491,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 case 'test':
                     try {
+                        button.disabled = true;
+                        button.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+                        
                         const response = await fetch(`/api/accounts/${accountId}/test`, { method: 'POST' });
                         const result = await response.json();
                         if (result.success) {
-                            alert(`Connection successful!\nChannels: ${result.channels || 0}\nCategories: ${result.categories || 0}`);
+                            let msg = `Connection successful!\n\nChannels: ${result.channels || 0}\nCategories: ${result.categories || 0}\n`;
+                            
+                            // Show credential results if available
+                            if (result.credentials && result.credentials.length > 0) {
+                                msg += `\nCredentials:\n`;
+                                for (const cred of result.credentials) {
+                                    if (cred.success) {
+                                        msg += `• ${cred.username}: ${cred.max_connections} connection(s), ${cred.status || 'Unknown'}\n`;
+                                    } else {
+                                        msg += `• ${cred.username}: FAILED - ${cred.error}\n`;
+                                    }
+                                }
+                                msg += `\nTotal max connections: ${result.total_max_connections || 1}`;
+                            } else if (result.user_info) {
+                                msg += `\nMax connections: ${result.user_info.max_connections || 1}`;
+                                msg += `\nStatus: ${result.user_info.status || 'Unknown'}`;
+                            }
+                            
+                            alert(msg);
+                            await loadAccounts();
                         } else {
                             alert('Connection failed: ' + (result.error || 'Unknown error'));
                         }
                     } catch (error) {
                         alert('Error: ' + error.message);
+                    } finally {
+                        button.disabled = false;
+                        button.innerHTML = '<i class="bi bi-activity"></i>';
                     }
+                    break;
+                
+                case 'manage-credentials':
+                    await showCredentialsModal(accountId, account?.name);
                     break;
 
                 case 'view-categories':
@@ -499,7 +621,225 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+    
+    // Credential password toggle
+    const toggleCredentialPassword = document.getElementById('toggleCredentialPassword');
+    const credentialPasswordField = document.getElementById('credentialPassword');
+    if (toggleCredentialPassword && credentialPasswordField) {
+        toggleCredentialPassword.addEventListener('click', () => {
+            const type = credentialPasswordField.getAttribute('type') === 'password' ? 'text' : 'password';
+            credentialPasswordField.setAttribute('type', type);
+            toggleCredentialPassword.querySelector('i').className = type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
+        });
+    }
+    
+    // Add credential button
+    const addCredBtn = document.getElementById('add-credential-btn');
+    if (addCredBtn) {
+        addCredBtn.addEventListener('click', () => {
+            document.getElementById('credentialEditModalLabel').textContent = 'Add Credential';
+            document.getElementById('credentialForm').reset();
+            document.getElementById('credentialId').value = '';
+            document.getElementById('credentialAccountId').value = currentCredentialsAccountId;
+            document.getElementById('credentialEnabled').checked = true;
+            document.getElementById('credentialPassword').required = true;
+            document.getElementById('credentialPasswordHint').style.display = 'none';
+            credentialEditModal.show();
+        });
+    }
+    
+    // Save credential button
+    const saveCredBtn = document.getElementById('save-credential-btn');
+    if (saveCredBtn) {
+        saveCredBtn.addEventListener('click', async () => {
+            const credId = document.getElementById('credentialId').value;
+            const accountId = document.getElementById('credentialAccountId').value;
+            const password = document.getElementById('credentialPassword').value;
+            
+            const data = {
+                username: document.getElementById('credentialUsername').value,
+                enabled: document.getElementById('credentialEnabled').checked
+            };
+            
+            if (password) {
+                data.password = password;
+            }
+            
+            try {
+                const url = credId 
+                    ? `/api/accounts/${accountId}/credentials/${credId}` 
+                    : `/api/accounts/${accountId}/credentials`;
+                const method = credId ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    credentialEditModal.hide();
+                    await loadCredentials(accountId);
+                    await loadAccounts();  // Refresh main list to show updated credential count
+                } else {
+                    const error = await response.json();
+                    alert('Error saving credential: ' + (error.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+    }
 });
+
+async function showCredentialsModal(accountId, accountName) {
+    currentCredentialsAccountId = accountId;
+    document.getElementById('credentialsModalLabel').textContent = `Manage Credentials - ${accountName || 'Account'}`;
+    document.getElementById('credentialsContent').innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    `;
+    credentialsModal.show();
+    await loadCredentials(accountId);
+}
+
+async function loadCredentials(accountId) {
+    try {
+        const response = await fetch(`/api/accounts/${accountId}/credentials`);
+        const credentials = await response.json();
+        
+        let html = '';
+        
+        if (credentials.length === 0) {
+            html = '<div class="alert alert-warning">No credentials found. Add one to get started.</div>';
+        } else {
+            html = `
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Max Connections</th>
+                                <th>Status</th>
+                                <th>Expires</th>
+                                <th>Enabled</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            for (const cred of credentials) {
+                const expDate = cred.exp_date ? formatExpDate(cred.exp_date) : 'Unknown';
+                const statusBadge = cred.status === 'Active' 
+                    ? '<span class="badge bg-success">Active</span>'
+                    : `<span class="badge bg-warning">${cred.status || 'Unknown'}</span>`;
+                const enabledBadge = cred.enabled 
+                    ? '<span class="badge bg-success">Yes</span>'
+                    : '<span class="badge bg-secondary">No</span>';
+                
+                html += `
+                    <tr>
+                        <td>${cred.username}</td>
+                        <td>${cred.max_connections || 1}</td>
+                        <td>${statusBadge}</td>
+                        <td>${expDate}</td>
+                        <td>${enabledBadge}</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-info" onclick="testCredential(${accountId}, ${cred.id})" title="Test Connection">
+                                <i class="bi bi-activity"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-warning" onclick="editCredential(${accountId}, ${cred.id}, '${cred.username}', ${cred.enabled})" title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteCredential(${accountId}, ${cred.id})" title="Delete" ${credentials.length <= 1 ? 'disabled' : ''}>
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+                <div class="alert alert-secondary mt-3">
+                    <strong>Total connections available:</strong> ${credentials.reduce((sum, c) => sum + (c.max_connections || 1), 0)}
+                </div>
+            `;
+        }
+        
+        document.getElementById('credentialsContent').innerHTML = html;
+    } catch (error) {
+        document.getElementById('credentialsContent').innerHTML = `
+            <div class="alert alert-danger">
+                <strong>Error loading credentials:</strong> ${error.message}
+            </div>
+        `;
+    }
+}
+
+function formatExpDate(timestamp) {
+    if (!timestamp) return 'Unknown';
+    try {
+        const date = new Date(parseInt(timestamp) * 1000);
+        return date.toLocaleDateString();
+    } catch {
+        return timestamp;
+    }
+}
+
+function editCredential(accountId, credId, username, enabled) {
+    document.getElementById('credentialEditModalLabel').textContent = 'Edit Credential';
+    document.getElementById('credentialId').value = credId;
+    document.getElementById('credentialAccountId').value = accountId;
+    document.getElementById('credentialUsername').value = username;
+    document.getElementById('credentialPassword').value = '';
+    document.getElementById('credentialPassword').required = false;
+    document.getElementById('credentialPasswordHint').style.display = 'block';
+    document.getElementById('credentialEnabled').checked = enabled;
+    credentialEditModal.show();
+}
+
+async function testCredential(accountId, credId) {
+    try {
+        const response = await fetch(`/api/accounts/${accountId}/credentials/${credId}/test`, { method: 'POST' });
+        const result = await response.json();
+        
+        if (result.success) {
+            const info = result.user_info;
+            alert(`Credential test successful!\n\nUsername: ${info.username}\nMax connections: ${info.max_connections}\nStatus: ${info.status}\nExpires: ${formatExpDate(info.exp_date)}`);
+            await loadCredentials(accountId);
+            await loadAccounts();
+        } else {
+            alert('Test failed: ' + (result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function deleteCredential(accountId, credId) {
+    if (!confirm('Are you sure you want to delete this credential?')) return;
+    
+    try {
+        const response = await fetch(`/api/accounts/${accountId}/credentials/${credId}`, { method: 'DELETE' });
+        
+        if (response.ok) {
+            await loadCredentials(accountId);
+            await loadAccounts();
+        } else {
+            const error = await response.json();
+            alert('Error deleting credential: ' + (error.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
 
 function addCategoryFilter(accountId, categoryName) {
     // Navigate to filters page with account and category pre-filled

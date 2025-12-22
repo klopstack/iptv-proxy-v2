@@ -118,6 +118,13 @@ class FilterService:
         """
         Check if a channel passes all enabled filters
 
+        Filter Logic:
+        - Multiple WHITELIST filters of the same type use OR logic
+          (e.g., category whitelist "US" OR "RELAX" - match either)
+        - Multiple BLACKLIST filters use AND logic
+          (channel is hidden if it matches ANY blacklist)
+        - If whitelists exist for a type, channel must match at least one
+
         Args:
             channel: Channel object
             category_name: Category name for the channel
@@ -127,52 +134,70 @@ class FilterService:
         Returns:
             True if channel passes all filters, False otherwise
         """
+        # Group filters by type and action
+        whitelists: Dict[str, List[Filter]] = {}
+        blacklists: List[Filter] = []
+
         for f in filters:
-            if f.filter_type == "category":
-                if f.filter_action == "whitelist":
-                    if category_name != f.filter_value:
-                        return False
-                elif f.filter_action == "blacklist":
-                    if category_name == f.filter_value:
-                        return False
+            if f.filter_action == "whitelist":
+                if f.filter_type not in whitelists:
+                    whitelists[f.filter_type] = []
+                whitelists[f.filter_type].append(f)
+            else:
+                blacklists.append(f)
 
-            elif f.filter_type == "channel_name":
-                if f.filter_action == "whitelist":
-                    if f.filter_value.lower() not in channel.name.lower():
-                        return False
-                elif f.filter_action == "blacklist":
-                    if f.filter_value.lower() in channel.name.lower():
-                        return False
+        # Check blacklists first (AND logic - fail if ANY blacklist matches)
+        for f in blacklists:
+            if FilterService._filter_matches(f, channel, category_name, tags):
+                return False
 
-            elif f.filter_type == "regex":
-                try:
-                    pattern = re.compile(f.filter_value, re.IGNORECASE)
-                    if f.filter_action == "whitelist":
-                        if not pattern.search(channel.name):
-                            return False
-                    elif f.filter_action == "blacklist":
-                        if pattern.search(channel.name):
-                            return False
-                except re.error:
-                    logger.warning(f"Invalid regex pattern in filter {f.id}: {f.filter_value}")
-                    continue
-
-            elif f.filter_type == "tag":
-                # Tag filters: channel must have at least one matching tag
-                tag_match = False
-                for tag in tags:
-                    if tag.upper() == f.filter_value.upper():
-                        tag_match = True
-                        break
-
-                if f.filter_action == "whitelist":
-                    if not tag_match:
-                        return False
-                elif f.filter_action == "blacklist":
-                    if tag_match:
-                        return False
+        # Check whitelists (OR logic within each type - pass if ANY whitelist of that type matches)
+        for filter_type, type_filters in whitelists.items():
+            # Channel must match at least one whitelist of this type
+            matches_any = any(FilterService._filter_matches(f, channel, category_name, tags) for f in type_filters)
+            if not matches_any:
+                return False
 
         return True
+
+    @staticmethod
+    def _filter_matches(f: Filter, channel: Channel, category_name: str, tags: List[str]) -> bool:
+        """
+        Check if a single filter matches the channel
+
+        Args:
+            f: Filter to check
+            channel: Channel object
+            category_name: Category name for the channel
+            tags: List of tag names for the channel
+
+        Returns:
+            True if the filter matches the channel
+        """
+        if f.filter_type == "category":
+            # Use prefix/contains matching for categories (case-insensitive)
+            # e.g., filter "US|" matches "US| SLING ᴿᴬᵂ ⁶⁰ᶠᵖˢ"
+            return f.filter_value.lower() in category_name.lower()
+
+        elif f.filter_type == "channel_name":
+            return f.filter_value.lower() in channel.name.lower()
+
+        elif f.filter_type == "regex":
+            try:
+                pattern = re.compile(f.filter_value, re.IGNORECASE)
+                return bool(pattern.search(channel.name))
+            except re.error:
+                logger.warning(f"Invalid regex pattern in filter {f.id}: {f.filter_value}")
+                return False
+
+        elif f.filter_type == "tag":
+            # Tag filters: channel must have the matching tag
+            for tag in tags:
+                if tag.upper() == f.filter_value.upper():
+                    return True
+            return False
+
+        return False
 
     @staticmethod
     def invalidate_account(account_id: int) -> None:

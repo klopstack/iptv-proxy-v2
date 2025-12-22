@@ -1,4 +1,4 @@
-.PHONY: help install install-js test test-fast lint lint-js format clean run docker-build docker-run venv
+.PHONY: help install install-js test test-fast lint lint-js format clean run debug docker-build docker-run venv
 
 VENV = venv
 PYTHON = $(VENV)/bin/python
@@ -37,7 +37,7 @@ lint: install ## Run Python linting checks in venv
 	$(FLAKE8) . --count --exit-zero --statistics
 	$(BLACK) --check .
 	$(ISORT) --check-only .
-	$(MYPY) app.py models.py services/ || true
+	$(MYPY) app.py models.py services/ routes/
 
 lint-js: ## Run JavaScript/HTML linting
 	npm run lint
@@ -58,6 +58,10 @@ clean: ## Clean up Python generated files
 	rm -rf .mypy_cache/
 	rm -rf $(VENV)/
 
+# Local development environment variables
+export DATABASE_URL ?= sqlite:///$(PWD)/data/iptv_proxy.db
+export SECRET_KEY ?= dev-secret-key
+
 clean-js: ## Clean up JavaScript dependencies
 	rm -rf node_modules package-lock.json
 
@@ -65,6 +69,9 @@ clean-all: clean clean-js ## Clean up all generated files
 
 run: ## Run the application locally
 	python app.py
+
+debug: ## Run the application in debug mode with auto-reload
+	FLASK_DEBUG=1 FLASK_ENV=development python app.py
 
 migrate: ## Run database migrations
 	python run_migrations.py

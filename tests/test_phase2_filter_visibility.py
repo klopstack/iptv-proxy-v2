@@ -147,6 +147,106 @@ def test_category_blacklist_filter(app, test_account, test_channels):
         assert stats["channels_hidden"] == 2  # Movies hidden
 
 
+def test_multiple_category_whitelists_or_logic(app, test_account, test_channels):
+    """Test that multiple category whitelist filters use OR logic"""
+    with app.app_context():
+        # Whitelist both Sports AND Movies - should include channels from either
+        filter1 = Filter(
+            account_id=test_account.id,
+            name="Sports Whitelist",
+            filter_type="category",
+            filter_action="whitelist",
+            filter_value="Sports",
+            enabled=True,
+        )
+        filter2 = Filter(
+            account_id=test_account.id,
+            name="Movies Whitelist",
+            filter_type="category",
+            filter_action="whitelist",
+            filter_value="Movies",
+            enabled=True,
+        )
+        db.session.add_all([filter1, filter2])
+        db.session.commit()
+
+        stats = FilterService.compute_visibility_for_account(test_account.id)
+
+        # All 4 channels should be visible (2 Sports + 2 Movies)
+        assert stats["channels_visible"] == 4
+        assert stats["channels_hidden"] == 0
+
+
+def test_multiple_channel_name_whitelists_or_logic(app, test_account, test_channels):
+    """Test that multiple channel name whitelist filters use OR logic"""
+    with app.app_context():
+        # Whitelist ESPN OR HBO - should include channels matching either
+        filter1 = Filter(
+            account_id=test_account.id,
+            name="ESPN Whitelist",
+            filter_type="channel_name",
+            filter_action="whitelist",
+            filter_value="ESPN",
+            enabled=True,
+        )
+        filter2 = Filter(
+            account_id=test_account.id,
+            name="HBO Whitelist",
+            filter_type="channel_name",
+            filter_action="whitelist",
+            filter_value="HBO",
+            enabled=True,
+        )
+        db.session.add_all([filter1, filter2])
+        db.session.commit()
+
+        stats = FilterService.compute_visibility_for_account(test_account.id)
+
+        # ESPN and HBO channels should be visible (2 channels)
+        assert stats["channels_visible"] == 2
+        assert stats["channels_hidden"] == 2
+
+        espn = Channel.query.filter_by(stream_id="1001").first()
+        hbo = Channel.query.filter_by(stream_id="2001").first()
+        assert espn.is_visible is True
+        assert hbo.is_visible is True
+
+
+def test_whitelist_with_blacklist(app, test_account, test_channels):
+    """Test that blacklists work with whitelists (blacklist has priority)"""
+    with app.app_context():
+        # Whitelist Sports category but blacklist Fox
+        filter1 = Filter(
+            account_id=test_account.id,
+            name="Sports Whitelist",
+            filter_type="category",
+            filter_action="whitelist",
+            filter_value="Sports",
+            enabled=True,
+        )
+        filter2 = Filter(
+            account_id=test_account.id,
+            name="No Fox",
+            filter_type="channel_name",
+            filter_action="blacklist",
+            filter_value="Fox",
+            enabled=True,
+        )
+        db.session.add_all([filter1, filter2])
+        db.session.commit()
+
+        stats = FilterService.compute_visibility_for_account(test_account.id)
+
+        # Only ESPN should be visible (Fox is blacklisted, Movies not whitelisted)
+        assert stats["channels_visible"] == 1
+        assert stats["channels_hidden"] == 3
+
+        espn = Channel.query.filter_by(stream_id="1001").first()
+        fox = Channel.query.filter_by(stream_id="1002").first()
+        assert espn.is_visible is True
+        assert fox.is_visible is False
+
+
 def test_channel_name_filter(app, test_account, test_channels):
     """Test channel name substring filtering"""
     with app.app_context():

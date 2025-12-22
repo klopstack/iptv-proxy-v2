@@ -421,3 +421,66 @@ def test_preview_channels_only_visible_and_active(app, client, test_account):
         data = response.json
         assert data["total"] == 1  # Only visible + active
         assert data["channels"][0]["stream_id"] == "visible"
+
+
+# ============================================================================
+# Channel Details API Tests
+# ============================================================================
+
+
+def test_get_channel_details(app, client, test_channel_with_tags, test_account):
+    """Test getting detailed information for a specific channel"""
+    with app.app_context():
+        response = client.get(f"/api/accounts/{test_account.id}/channels/ch1")
+        assert response.status_code == 200
+
+        data = response.json
+        assert data["stream_id"] == "ch1"
+        assert data["name"] == "Test Channel"
+        assert data["cleaned_name"] == "Test Channel"
+        assert data["account_id"] == test_account.id
+        assert data["account_name"] == "Test Account"
+        assert data["category"] == "Test Category"
+
+        # Check tags are included
+        assert "tags" in data
+        assert len(data["tags"]) == 2
+        assert "HD" in data["tags"]
+        assert "US" in data["tags"]
+
+        # Check other fields are present
+        assert "stream_type" in data
+        assert "stream_icon" in data
+        assert "epg_channel_id" in data
+        assert "tv_archive" in data
+        assert "tv_archive_duration" in data
+        assert "is_active" in data
+        assert "is_visible" in data
+        assert "created_at" in data
+        assert "updated_at" in data
+
+
+def test_get_channel_details_not_found(app, client, test_account):
+    """Test getting channel details for non-existent channel"""
+    with app.app_context():
+        response = client.get(f"/api/accounts/{test_account.id}/channels/nonexistent")
+        assert response.status_code == 404
+
+
+def test_get_channel_details_wrong_account(app, client, test_channel_with_tags, test_account):
+    """Test getting channel details with wrong account returns 404"""
+    with app.app_context():
+        # Create another account
+        other_account = Account(
+            name="Other Account",
+            username="other_user",
+            password="other_pass",
+            server="http://example.com",
+            enabled=True,
+        )
+        db.session.add(other_account)
+        db.session.commit()
+
+        # Try to get test_channel_with_tags using other_account's ID
+        response = client.get(f"/api/accounts/{other_account.id}/channels/ch1")
+        assert response.status_code == 404

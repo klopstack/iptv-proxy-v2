@@ -7,9 +7,10 @@ from datetime import datetime
 from flask import Blueprint, jsonify, request
 
 from error_handling import handle_errors
-from models import Account, Category, Channel, ChannelTag, Filter, Tag, db
+from models import Account, Category, Channel, ChannelTag, Credential, Filter, Tag, db
 from schemas import AccountCreateSchema, AccountUpdateSchema, validate_request_data
 from services.cache_service import CacheService
+from services.connection_manager import ConnectionManager
 from services.iptv_service import IPTVService
 from services.tag_service import TagService
 
@@ -22,6 +23,28 @@ accounts_bp = Blueprint("accounts", __name__)
 cache_service = CacheService()
 
 
+def credential_to_dict(cred):
+    """Convert a Credential to a dictionary."""
+    return {
+        "id": cred.id,
+        "username": cred.username,
+        "max_connections": cred.max_connections or 1,
+        "active_connections": cred.active_connections or 0,
+        "status": cred.status,
+        "exp_date": cred.exp_date,
+        "enabled": cred.enabled,
+    }
+
+
+def get_iptv_service_for_account(account):
+    """Create an IPTVService instance for an account using the best available credential."""
+    cred = account.get_primary_credential()
+    if cred:
+        return IPTVService(account.server, cred.username, cred.password, account.user_agent or "okhttp/3.14.9")
+    # Fallback for legacy accounts
+    return IPTVService(account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9")
+
+
 # ============================================================================
 # API Routes - Account CRUD
 # ============================================================================
@@ -29,31 +52,37 @@ cache_service = CacheService()
 
 @accounts_bp.route("/api/accounts", methods=["GET"])
 def get_accounts():
-    """Get all accounts"""
+    """Get all accounts with credential info"""
     accounts = Account.query.all()
-    return jsonify(
-        [
-            {
-                "id": a.id,
-                "name": a.name,
-                "server": a.server,
-                "username": a.username,
-                "enabled": a.enabled,
-            }
-            for a in accounts
-        ]
-    )
+    result = []
+    for a in accounts:
+        account_data = {
+            "id": a.id,
+            "name": a.name,
+            "server": a.server,
+            "enabled": a.enabled,
+            "credentials": [credential_to_dict(c) for c in a.credentials],
+            "total_max_connections": a.get_total_max_connections(),
+        }
+        # Include legacy username for backward compatibility
+        if a.credentials:
+            account_data["username"] = a.credentials[0].username
+        else:
+            account_data["username"] = a.username
+        result.append(account_data)
+    return jsonify(result)
 
 
 @accounts_bp.route("/api/accounts", methods=["POST"])
 @validate_request_data(AccountCreateSchema)
 def create_account():
-    """Create new account"""
+    """Create new account with initial credential"""
     data = request.validated_data
 
     account = Account(
         name=data["name"],
         server=data["server"],
+        # Store in legacy fields for backward compatibility
         username=data["username"],
         password=data["password"],
         user_agent=data.get(
@@ -64,6 +93,17 @@ def create_account():
     )
 
     db.session.add(account)
+    db.session.flush()  # Get the account ID
+
+    # Create initial credential
+    credential = Credential(
+        account_id=account.id,
+        username=data["username"],
+        password=data["password"],
+        max_connections=1,
+        enabled=True,
+    )
+    db.session.add(credential)
     db.session.commit()
 
     return (
@@ -75,6 +115,8 @@ def create_account():
                 "username": account.username,
                 "user_agent": account.user_agent,
                 "enabled": account.enabled,
+                "credentials": [credential_to_dict(credential)],
+                "total_max_connections": account.get_total_max_connections(),
             }
         ),
         201,
@@ -120,7 +162,7 @@ def delete_account(account_id):
     # Clear cache first
     cache_service.clear_account_cache(account_id)
 
-    # Delete account (cascade will handle filters, channels, etc.)
+    # Delete account (cascade will handle filters, channels, credentials, etc.)
     db.session.delete(account)
     db.session.commit()
 
@@ -129,37 +171,119 @@ def delete_account(account_id):
 
 @accounts_bp.route("/api/accounts/<int:account_id>/test", methods=["POST"])
 def test_account(account_id):
-    """Test account connection"""
+    """Test account connection - tests all credentials and updates their info"""
     account = Account.query.get_or_404(account_id)
 
-    try:
-        service = IPTVService(account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9")
-        auth_info = service.authenticate()
+    # Get credentials to test
+    credentials = account.credentials if account.credentials else []
 
-        # Get basic stats for response
-        streams = service.get_live_streams()
-        categories = service.get_live_categories()
+    # If no credentials, test using legacy fields
+    if not credentials and account.username and account.password:
+        try:
+            service = IPTVService(
+                account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9"
+            )
+            auth_info = service.authenticate()
+            streams = service.get_live_streams()
+            categories = service.get_live_categories()
 
-        return jsonify(
-            {
-                "success": True,
-                "channels": len(streams),
-                "categories": len(categories),
-                "server_info": {
-                    "url": auth_info.get("server_info", {}).get("url", ""),
-                    "time": auth_info.get("server_info", {}).get("time_now", ""),
-                },
-                "user_info": {
-                    "username": auth_info.get("user_info", {}).get("username", ""),
-                    "status": auth_info.get("user_info", {}).get("status", ""),
-                    "exp_date": auth_info.get("user_info", {}).get("exp_date", ""),
-                    "max_connections": auth_info.get("user_info", {}).get("max_connections", ""),
-                },
-            }
+            return jsonify(
+                {
+                    "success": True,
+                    "channels": len(streams),
+                    "categories": len(categories),
+                    "server_info": {
+                        "url": auth_info.get("server_info", {}).get("url", ""),
+                        "time": auth_info.get("server_info", {}).get("time_now", ""),
+                    },
+                    "user_info": {
+                        "username": auth_info.get("user_info", {}).get("username", ""),
+                        "status": auth_info.get("user_info", {}).get("status", ""),
+                        "exp_date": auth_info.get("user_info", {}).get("exp_date", ""),
+                        "max_connections": auth_info.get("user_info", {}).get("max_connections", "1"),
+                    },
+                    "credentials": [],
+                    "legacy_mode": True,
+                }
+            )
+        except Exception as e:
+            logger.error(f"Error testing account {account_id}: {e}")
+            return jsonify({"success": False, "error": str(e)}), 400
+
+    # Test each credential
+    credential_results = []
+    total_channels = 0
+    total_categories = 0
+    first_error = None
+
+    for cred in credentials:
+        try:
+            service = IPTVService(account.server, cred.username, cred.password, account.user_agent or "okhttp/3.14.9")
+            auth_info = service.authenticate()
+
+            # Get channel/category counts only from first credential (they're the same)
+            if not total_channels:
+                streams = service.get_live_streams()
+                categories = service.get_live_categories()
+                total_channels = len(streams)
+                total_categories = len(categories)
+
+            # Update credential with info from auth response
+            user_info = auth_info.get("user_info", {})
+            cred.max_connections = int(user_info.get("max_connections", 1) or 1)
+            cred.status = user_info.get("status", "Unknown")
+            cred.exp_date = user_info.get("exp_date", "")
+            db.session.commit()
+
+            credential_results.append(
+                {
+                    "id": cred.id,
+                    "username": cred.username,
+                    "success": True,
+                    "status": cred.status,
+                    "exp_date": cred.exp_date,
+                    "max_connections": cred.max_connections,
+                }
+            )
+        except Exception as e:
+            logger.error(f"Error testing credential {cred.id} for account {account_id}: {e}")
+            if not first_error:
+                first_error = str(e)
+            credential_results.append(
+                {
+                    "id": cred.id,
+                    "username": cred.username,
+                    "success": False,
+                    "error": str(e),
+                }
+            )
+
+    # Calculate totals
+    total_max_connections = sum(c.get("max_connections", 1) for c in credential_results if c.get("success"))
+
+    # If all credentials failed, return error
+    if all(not c.get("success") for c in credential_results):
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": first_error or "All credentials failed",
+                    "credentials": credential_results,
+                }
+            ),
+            400,
         )
-    except Exception as e:
-        logger.error(f"Error testing account {account_id}: {e}")
-        return jsonify({"success": False, "error": str(e)}), 400
+
+    return jsonify(
+        {
+            "success": True,
+            "channels": total_channels,
+            "categories": total_categories,
+            "total_max_connections": total_max_connections,
+            "credentials": credential_results,
+            "connection_status": ConnectionManager.get_connection_status(account_id),
+        }
+    )
 
 
 @accounts_bp.route("/api/accounts/<int:account_id>/categories", methods=["GET"])
@@ -168,7 +292,7 @@ def get_account_categories(account_id):
     account = Account.query.get_or_404(account_id)
 
     try:
-        service = IPTVService(account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9")
+        service = get_iptv_service_for_account(account)
         categories = service.get_live_categories()
 
         # Cache it
@@ -279,7 +403,7 @@ def get_account_stats(account_id):
 
     # Fallback to API call if not synced
     try:
-        service = IPTVService(account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9")
+        service = get_iptv_service_for_account(account)
 
         # Get cached or fetch new
         streams = cache_service.get_cached_streams(account_id)
@@ -618,6 +742,67 @@ def remove_ruleset_from_account(account_id, ruleset_id):
 
 
 # ============================================================================
+# API Routes - Channel Details
+# ============================================================================
+
+
+@accounts_bp.route("/api/accounts/<int:account_id>/channels/<stream_id>", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error fetching channel details")
+def get_channel_details(account_id, stream_id):
+    """
+    Get full details for a specific channel.
+
+    Returns all available information about a channel including:
+    - Basic info (name, cleaned_name, category, icon)
+    - Stream info (stream_id, stream_type, epg_channel_id)
+    - Archive info (tv_archive, tv_archive_duration)
+    - Tags associated with the channel
+    - Metadata (added date, last_seen, created_at, updated_at)
+    """
+    account = Account.query.get_or_404(account_id)
+
+    # Get channel by stream_id
+    channel = Channel.query.filter_by(account_id=account_id, stream_id=str(stream_id)).first_or_404()
+
+    # Get tags for this channel
+    channel_tags = (
+        db.session.query(Tag.name)
+        .join(ChannelTag, ChannelTag.tag_id == Tag.id)
+        .filter(ChannelTag.account_id == account_id, ChannelTag.stream_id == str(stream_id))
+        .all()
+    )
+    tags = [t[0] for t in channel_tags]
+
+    # Build complete channel data
+    return jsonify(
+        {
+            "id": channel.id,
+            "account_id": channel.account_id,
+            "account_name": account.name,
+            "stream_id": channel.stream_id,
+            "name": channel.name,
+            "cleaned_name": channel.cleaned_name,
+            "category": channel.category.category_name if channel.category else "Uncategorized",
+            "category_id": channel.category_id,
+            "stream_type": channel.stream_type,
+            "stream_icon": channel.stream_icon,
+            "epg_channel_id": channel.epg_channel_id,
+            "added": channel.added,
+            "custom_sid": channel.custom_sid,
+            "tv_archive": channel.tv_archive,
+            "tv_archive_duration": channel.tv_archive_duration,
+            "direct_source": channel.direct_source,
+            "is_active": channel.is_active,
+            "is_visible": channel.is_visible,
+            "tags": tags,
+            "last_seen": channel.last_seen.isoformat() if channel.last_seen else None,
+            "created_at": channel.created_at.isoformat() if channel.created_at else None,
+            "updated_at": channel.updated_at.isoformat() if channel.updated_at else None,
+        }
+    )
+
+
+# ============================================================================
 # API Routes - Account Preview
 # ============================================================================
 
@@ -631,11 +816,20 @@ def preview_account_playlist(account_id):
     Query Parameters:
     - limit: Number of channels to return (default: 50)
     - offset: Number of channels to skip (default: 0)
+    - tags: Comma-separated list of tag names to filter by
+    - category: Category name to filter by
 
     Returns:
     - JSON with total count, channel data, and using_database flag
     """
     Account.query.get_or_404(account_id)
+
+    # Parse tag filter
+    tags_param = request.args.get("tags", "")
+    filter_tags = [t.strip() for t in tags_param.split(",") if t.strip()] if tags_param else []
+
+    # Parse category filter
+    category_filter = request.args.get("category", "")
 
     # Check if account has been synced (database-first approach)
     # Only count ACTIVE channels
@@ -655,8 +849,24 @@ def preview_account_playlist(account_id):
             Channel.is_visible,  # Use pre-computed filter result
         )
         .join(Category, Channel.category_id == Category.id, isouter=True)
-        .order_by(Channel.name)
     )
+
+    # Apply category filter if specified
+    if category_filter:
+        base_query = base_query.filter(Category.category_name == category_filter)
+
+    # Apply tag filter if specified
+    if filter_tags:
+        # Find channels that have at least one of the requested tags
+        tag_subquery = (
+            db.session.query(ChannelTag.stream_id)
+            .join(Tag, ChannelTag.tag_id == Tag.id)
+            .filter(ChannelTag.account_id == account_id, Tag.name.in_(filter_tags))
+            .distinct()
+        )
+        base_query = base_query.filter(Channel.stream_id.in_(tag_subquery))
+
+    base_query = base_query.order_by(Channel.name)
 
     # Get total count BEFORE pagination
     total = base_query.count()
@@ -692,16 +902,19 @@ def preview_account_playlist(account_id):
                 {
                     "id": ch.id,
                     "stream_id": ch.stream_id,
+                    "account_id": ch.account_id,
                     "name": ch.name,
                     "cleaned_name": ch.cleaned_name if ch.cleaned_name is not None else ch.name,
                     "category": ch.category.category_name if ch.category else "Uncategorized",
                     "category_id": ch.category_id,
+                    "icon": ch.stream_icon,
                     "is_visible": ch.is_visible,
                     "tags": tags_map.get(ch.stream_id, []),
                 }
                 for ch in channels
             ],
             "using_database": True,
+            "filter_tags": filter_tags,
         }
     )
 
@@ -814,3 +1027,139 @@ def cleanup_orphan_tags():
             "sample_tags": tag_names[:20],  # Show first 20 for reference
         }
     )
+
+
+# ============================================================================
+# API Routes - Credential Management
+# ============================================================================
+
+
+@accounts_bp.route("/api/accounts/<int:account_id>/credentials", methods=["GET"])
+def get_credentials(account_id):
+    """Get all credentials for an account"""
+    account = Account.query.get_or_404(account_id)
+    return jsonify([credential_to_dict(c) for c in account.credentials])
+
+
+@accounts_bp.route("/api/accounts/<int:account_id>/credentials", methods=["POST"])
+def add_credential(account_id):
+    """Add a new credential to an account"""
+    account = Account.query.get_or_404(account_id)
+    data = request.json
+
+    if not data.get("username") or not data.get("password"):
+        return jsonify({"error": "Username and password are required"}), 400
+
+    # Check for duplicate username
+    existing = Credential.query.filter_by(account_id=account_id, username=data["username"]).first()
+    if existing:
+        return jsonify({"error": "Credential with this username already exists"}), 400
+
+    credential = Credential(
+        account_id=account_id,
+        username=data["username"],
+        password=data["password"],
+        max_connections=data.get("max_connections", 1),
+        enabled=data.get("enabled", True),
+    )
+    db.session.add(credential)
+    db.session.commit()
+
+    # Test the new credential to get connection info
+    try:
+        service = IPTVService(
+            account.server, credential.username, credential.password, account.user_agent or "okhttp/3.14.9"
+        )
+        auth_info = service.authenticate()
+        user_info = auth_info.get("user_info", {})
+
+        credential.max_connections = int(user_info.get("max_connections", 1) or 1)
+        credential.status = user_info.get("status", "Unknown")
+        credential.exp_date = user_info.get("exp_date", "")
+        db.session.commit()
+    except Exception as e:
+        logger.warning(f"Could not verify new credential: {e}")
+
+    return jsonify(credential_to_dict(credential)), 201
+
+
+@accounts_bp.route("/api/accounts/<int:account_id>/credentials/<int:cred_id>", methods=["PUT"])
+def update_credential(account_id, cred_id):
+    """Update a credential"""
+    Account.query.get_or_404(account_id)  # Validate account exists
+    credential = Credential.query.filter_by(id=cred_id, account_id=account_id).first_or_404()
+
+    data = request.json
+
+    if "username" in data:
+        credential.username = data["username"]
+    if "password" in data and data["password"]:
+        credential.password = data["password"]
+    if "enabled" in data:
+        credential.enabled = data["enabled"]
+    if "max_connections" in data:
+        credential.max_connections = data["max_connections"]
+
+    db.session.commit()
+    cache_service.clear_account_cache(account_id)
+
+    return jsonify(credential_to_dict(credential))
+
+
+@accounts_bp.route("/api/accounts/<int:account_id>/credentials/<int:cred_id>", methods=["DELETE"])
+def delete_credential(account_id, cred_id):
+    """Delete a credential"""
+    account = Account.query.get_or_404(account_id)
+    credential = Credential.query.filter_by(id=cred_id, account_id=account_id).first_or_404()
+
+    # Don't allow deleting the last credential
+    if len(account.credentials) <= 1:
+        return jsonify({"error": "Cannot delete the last credential"}), 400
+
+    db.session.delete(credential)
+    db.session.commit()
+
+    return "", 204
+
+
+@accounts_bp.route("/api/accounts/<int:account_id>/credentials/<int:cred_id>/test", methods=["POST"])
+def test_credential(account_id, cred_id):
+    """Test a specific credential and update its info"""
+    account = Account.query.get_or_404(account_id)
+    credential = Credential.query.filter_by(id=cred_id, account_id=account_id).first_or_404()
+
+    try:
+        service = IPTVService(
+            account.server, credential.username, credential.password, account.user_agent or "okhttp/3.14.9"
+        )
+        auth_info = service.authenticate()
+        user_info = auth_info.get("user_info", {})
+
+        # Update credential with auth info
+        credential.max_connections = int(user_info.get("max_connections", 1) or 1)
+        credential.status = user_info.get("status", "Unknown")
+        credential.exp_date = user_info.get("exp_date", "")
+        db.session.commit()
+
+        return jsonify(
+            {
+                "success": True,
+                "credential": credential_to_dict(credential),
+                "user_info": {
+                    "username": user_info.get("username", ""),
+                    "status": credential.status,
+                    "exp_date": credential.exp_date,
+                    "max_connections": credential.max_connections,
+                },
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error testing credential {cred_id}: {e}")
+        return jsonify({"success": False, "error": str(e)}), 400
+
+
+@accounts_bp.route("/api/accounts/<int:account_id>/connection-status", methods=["GET"])
+def get_account_connection_status(account_id):
+    """Get connection status for an account (active streams, available slots)"""
+    Account.query.get_or_404(account_id)  # Validate account exists
+    return jsonify(ConnectionManager.get_connection_status(account_id))

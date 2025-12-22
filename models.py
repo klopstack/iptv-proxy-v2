@@ -10,15 +10,16 @@ db = SQLAlchemy()
 
 
 class Account(db.Model):  # type: ignore[name-defined]
-    """IPTV service account"""
+    """IPTV service account - can have multiple credentials for stream multiplexing"""
 
     __tablename__ = "accounts"
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     server = db.Column(db.String(255), nullable=False)
-    username = db.Column(db.String(100), nullable=False)
-    password = db.Column(db.String(100), nullable=False)
+    # Legacy fields - kept for backward compatibility during migration
+    username = db.Column(db.String(100), nullable=True)
+    password = db.Column(db.String(100), nullable=True)
     user_agent = db.Column(
         db.String(255),
         default="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -30,9 +31,61 @@ class Account(db.Model):  # type: ignore[name-defined]
     # Relationships
     filters = db.relationship("Filter", backref="account", lazy=True, cascade="all, delete-orphan")
     rulesets = db.relationship("RuleSet", secondary="account_rulesets", backref="accounts", lazy="dynamic")
+    credentials = db.relationship(
+        "Credential", backref="account", lazy=True, cascade="all, delete-orphan", order_by="Credential.id"
+    )
+
+    def get_primary_credential(self):
+        """Get the first credential for API calls (channels are same across all credentials)."""
+        if self.credentials:
+            return self.credentials[0]
+        # Fallback to legacy fields for backward compatibility
+        if self.username and self.password:
+            return type(
+                "LegacyCredential",
+                (),
+                {"username": self.username, "password": self.password, "max_connections": 1, "id": None},
+            )()
+        return None
+
+    def get_total_max_connections(self):
+        """Get total available connections across all credentials."""
+        if self.credentials:
+            return sum(c.max_connections or 1 for c in self.credentials)
+        return 1  # Legacy single connection
 
     def __repr__(self):
         return f"<Account {self.name}>"
+
+
+class Credential(db.Model):  # type: ignore[name-defined]
+    """Credentials for IPTV accounts - enables stream multiplexing with multiple logins"""
+
+    __tablename__ = "credentials"
+
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False, index=True)
+    username = db.Column(db.String(100), nullable=False)
+    password = db.Column(db.String(100), nullable=False)
+
+    # Connection tracking
+    max_connections = db.Column(db.Integer, default=1)  # From provider auth response
+    active_connections = db.Column(db.Integer, default=0)  # Currently in use
+
+    # Status from last auth check
+    status = db.Column(db.String(50))  # 'Active', 'Expired', etc.
+    exp_date = db.Column(db.String(50))  # Expiration timestamp from provider
+
+    enabled = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def is_available(self):
+        """Check if this credential has available connection slots."""
+        return self.enabled and self.active_connections < (self.max_connections or 1)
+
+    def __repr__(self):
+        return f"<Credential {self.username} (account={self.account_id}, {self.active_connections}/{self.max_connections})>"
 
 
 class Filter(db.Model):  # type: ignore[name-defined]
@@ -225,6 +278,26 @@ class ChannelTag(db.Model):  # type: ignore[name-defined]
         return f"<ChannelTag account={self.account_id} stream={self.stream_id} tag={self.tag_id}>"
 
 
+class ActiveStream(db.Model):  # type: ignore[name-defined]
+    """Tracks active proxied stream connections for credential multiplexing"""
+
+    __tablename__ = "active_streams"
+
+    id = db.Column(db.Integer, primary_key=True)
+    credential_id = db.Column(db.Integer, db.ForeignKey("credentials.id"), nullable=False, index=True)
+    stream_id = db.Column(db.String(50), nullable=False)  # Stream being watched
+    client_ip = db.Column(db.String(45))  # Client's IP address
+    session_token = db.Column(db.String(64), unique=True, nullable=False)  # Unique session identifier
+    started_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_activity = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    credential = db.relationship("Credential", backref="active_streams")
+
+    def __repr__(self):
+        return f"<ActiveStream credential={self.credential_id} stream={self.stream_id}>"
+
+
 class PlaylistConfig(db.Model):  # type: ignore[name-defined]
     """Saved playlist configurations for tag-based filtering"""
 
@@ -251,3 +324,186 @@ class PlaylistConfig(db.Model):  # type: ignore[name-defined]
 
     def __repr__(self):
         return f"<PlaylistConfig {self.name}>"
+
+
+# ============================================================================
+# EPG (Electronic Program Guide) Models
+# ============================================================================
+
+
+class EpgSource(db.Model):  # type: ignore[name-defined]
+    """EPG data sources - provider XMLTV, Schedules Direct, external XMLTV files, etc."""
+
+    __tablename__ = "epg_sources"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    source_type = db.Column(db.String(50), nullable=False)  # 'provider', 'schedules_direct', 'xmltv_url', 'xmltv_file'
+
+    # For provider sources, link to account
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=True, index=True)
+
+    # For external URL sources
+    url = db.Column(db.String(500))
+
+    # For Schedules Direct
+    sd_username = db.Column(db.String(100))
+    sd_password = db.Column(db.String(100))
+    sd_lineup = db.Column(db.String(100))  # Schedules Direct lineup ID
+
+    # Source priority (lower = higher priority, used when merging EPG data)
+    priority = db.Column(db.Integer, default=100)
+
+    enabled = db.Column(db.Boolean, default=True)
+    last_sync = db.Column(db.DateTime)
+    last_sync_status = db.Column(db.String(50))  # 'success', 'error', 'partial'
+    last_sync_message = db.Column(db.Text)
+    channel_count = db.Column(db.Integer, default=0)  # Channels in this source
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    account = db.relationship("Account", backref="epg_sources")
+    channels = db.relationship("EpgChannel", backref="source", lazy="dynamic", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<EpgSource {self.name} ({self.source_type})>"
+
+
+class EpgChannel(db.Model):  # type: ignore[name-defined]
+    """EPG channel data from XMLTV sources"""
+
+    __tablename__ = "epg_channels"
+
+    id = db.Column(db.Integer, primary_key=True)
+    source_id = db.Column(db.Integer, db.ForeignKey("epg_sources.id"), nullable=False, index=True)
+    channel_id = db.Column(db.String(100), nullable=False, index=True)  # XMLTV channel id attribute
+
+    # Display names (XMLTV can have multiple)
+    display_name = db.Column(db.String(200))  # Primary display name
+    display_names_json = db.Column(db.Text)  # JSON array of all display names
+
+    # Optional metadata from XMLTV
+    icon_url = db.Column(db.String(500))
+    url = db.Column(db.String(500))  # Channel website
+
+    # For matching to our channels
+    # Stores JSON of potential matches: [{"channel_id": 123, "confidence": 0.95, "match_type": "exact_id"}, ...]
+    matched_channels_json = db.Column(db.Text)
+
+    # Stats
+    program_count = db.Column(db.Integer, default=0)  # Number of programs in EPG
+    first_program = db.Column(db.DateTime)  # Earliest program start time
+    last_program = db.Column(db.DateTime)  # Latest program end time
+
+    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Unique constraint per source
+    __table_args__ = (
+        db.UniqueConstraint("source_id", "channel_id", name="_source_channel_uc"),
+        db.Index("idx_epg_channel_id", "channel_id"),
+    )
+
+    def __repr__(self):
+        return f"<EpgChannel {self.channel_id} ({self.display_name})>"
+
+
+class ChannelEpgMapping(db.Model):  # type: ignore[name-defined]
+    """Manual or automatic mappings between our channels and EPG channels"""
+
+    __tablename__ = "channel_epg_mappings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    channel_id = db.Column(db.Integer, db.ForeignKey("channels.id"), nullable=False, index=True)
+    epg_channel_id = db.Column(db.Integer, db.ForeignKey("epg_channels.id"), nullable=False, index=True)
+
+    # How this mapping was created
+    mapping_type = db.Column(db.String(50), nullable=False)  # 'auto_exact', 'auto_fuzzy', 'manual', 'provider'
+    confidence = db.Column(db.Float, default=1.0)  # 0.0-1.0 confidence score for auto matches
+
+    # Allow override - if True, this mapping takes precedence
+    is_override = db.Column(db.Boolean, default=False)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    channel = db.relationship("Channel", backref="epg_mappings")
+    epg_channel = db.relationship("EpgChannel", backref="channel_mappings")
+
+    # Unique constraint - one mapping per channel per EPG channel
+    __table_args__ = (
+        db.UniqueConstraint("channel_id", "epg_channel_id", name="_channel_epg_mapping_uc"),
+        db.Index("idx_channel_epg_channel", "channel_id"),
+        db.Index("idx_epg_channel_mapping", "epg_channel_id"),
+    )
+
+    def __repr__(self):
+        return f"<ChannelEpgMapping channel={self.channel_id} -> epg={self.epg_channel_id} ({self.mapping_type})>"
+
+
+class SdLineup(db.Model):  # type: ignore[name-defined]
+    """Schedules Direct lineup subscriptions"""
+
+    __tablename__ = "sd_lineups"
+
+    id = db.Column(db.Integer, primary_key=True)
+    epg_source_id = db.Column(db.Integer, db.ForeignKey("epg_sources.id"), nullable=False, index=True)
+    lineup_id = db.Column(db.String(100), nullable=False)  # SD lineup ID (e.g., "USA-NY12345-X")
+    name = db.Column(db.String(200))  # Display name
+    location = db.Column(db.String(200))  # Location description
+    lineup_type = db.Column(db.String(50))  # 'Cable', 'Satellite', 'OTA', etc.
+    transport = db.Column(db.String(50))  # Transport type from SD
+
+    # Cache of channel count
+    channel_count = db.Column(db.Integer, default=0)
+
+    # Sync status
+    last_sync = db.Column(db.DateTime)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    source = db.relationship("EpgSource", backref="sd_lineups")
+
+    __table_args__ = (db.UniqueConstraint("epg_source_id", "lineup_id", name="_source_lineup_uc"),)
+
+    def __repr__(self):
+        return f"<SdLineup {self.lineup_id} ({self.name})>"
+
+
+class SdStation(db.Model):  # type: ignore[name-defined]
+    """Schedules Direct station information from lineups"""
+
+    __tablename__ = "sd_stations"
+
+    id = db.Column(db.Integer, primary_key=True)
+    lineup_id = db.Column(db.Integer, db.ForeignKey("sd_lineups.id"), nullable=False, index=True)
+    station_id = db.Column(db.String(50), nullable=False)  # SD station ID
+    channel_number = db.Column(db.String(20))  # Channel number in lineup
+
+    # Station info from SD
+    callsign = db.Column(db.String(50))
+    name = db.Column(db.String(200))
+    affiliate = db.Column(db.String(100))
+    broadcast_language = db.Column(db.String(100))  # JSON array as string
+    logo_url = db.Column(db.String(500))
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    lineup = db.relationship("SdLineup", backref="stations")
+
+    __table_args__ = (
+        db.UniqueConstraint("lineup_id", "station_id", name="_lineup_station_uc"),
+        db.Index("idx_sd_station_callsign", "callsign"),
+        db.Index("idx_sd_station_name", "name"),
+    )
+
+    def __repr__(self):
+        return f"<SdStation {self.callsign} ({self.name})>"

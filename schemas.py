@@ -54,6 +54,29 @@ class AccountUpdateSchema(Schema):
 
 
 # ============================================================================
+# Credential Schemas
+# ============================================================================
+
+
+class CredentialCreateSchema(Schema):
+    """Schema for creating a new credential"""
+
+    username = fields.Str(required=True, validate=lambda x: 1 <= len(x) <= 100)
+    password = fields.Str(required=True, validate=lambda x: 1 <= len(x) <= 100)
+    max_connections = fields.Int(validate=lambda x: x >= 1, load_default=1)
+    enabled = fields.Bool(load_default=True)
+
+
+class CredentialUpdateSchema(Schema):
+    """Schema for updating a credential"""
+
+    username = fields.Str(validate=lambda x: 1 <= len(x) <= 100)
+    password = fields.Str(validate=lambda x: 1 <= len(x) <= 100)
+    max_connections = fields.Int(validate=lambda x: x >= 1)
+    enabled = fields.Bool()
+
+
+# ============================================================================
 # Filter Schemas
 # ============================================================================
 
@@ -184,10 +207,12 @@ class PlaylistConfigCreateSchema(Schema):
     """Schema for creating a new playlist config"""
 
     name = fields.Str(required=True, validate=lambda x: 1 <= len(x) <= 200)
+    description = fields.Str(validate=lambda x: len(x) <= 500, load_default="")
     include_accounts = fields.List(fields.Int(validate=lambda x: x > 0), load_default=[])
     exclude_accounts = fields.List(fields.Int(validate=lambda x: x > 0), load_default=[])
     include_tags = fields.List(fields.Str(validate=lambda x: 1 <= len(x) <= 100), load_default=[])
     exclude_tags = fields.List(fields.Str(validate=lambda x: 1 <= len(x) <= 100), load_default=[])
+    tag_match_mode = fields.Str(validate=lambda x: x in ("all", "any"), load_default="all")
 
     @validates_schema
     def validate_accounts(self, data, **kwargs):
@@ -214,10 +239,12 @@ class PlaylistConfigUpdateSchema(Schema):
     """Schema for updating a playlist config"""
 
     name = fields.Str(validate=lambda x: 1 <= len(x) <= 200)
+    description = fields.Str(validate=lambda x: len(x) <= 500)
     include_accounts = fields.List(fields.Int(validate=lambda x: x > 0))
     exclude_accounts = fields.List(fields.Int(validate=lambda x: x > 0))
     include_tags = fields.List(fields.Str(validate=lambda x: 1 <= len(x) <= 100))
     exclude_tags = fields.List(fields.Str(validate=lambda x: 1 <= len(x) <= 100))
+    tag_match_mode = fields.Str(validate=lambda x: x in ("all", "any"))
 
 
 # ============================================================================

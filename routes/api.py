@@ -6,7 +6,7 @@ import logging
 from flask import Blueprint, jsonify, request
 
 from error_handling import handle_errors
-from models import Account, Channel, ChannelTag, Tag, db
+from models import Account, Category, Channel, ChannelTag, Tag, db
 from services.cache_service import CacheService
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,129 @@ def sync_all_accounts():
 
     results = ChannelSyncService.sync_all_accounts()
     return jsonify({"success": True, "accounts_synced": len(results), "results": results})
+
+
+# ============================================================================
+# API Routes - Categories (Global)
+# ============================================================================
+
+
+@api_bp.route("/api/categories", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error fetching categories")
+def get_all_categories():
+    """Get all categories across all accounts with channel counts
+
+    Query parameters:
+    - account_id (optional): Filter to specific account
+    - include_empty (optional): Include categories with no visible channels (default: false)
+    - include_epg (optional): Include EPG coverage stats (default: false)
+    """
+    account_id = request.args.get("account_id", type=int)
+    include_empty = request.args.get("include_empty", "false").lower() == "true"
+    include_epg = request.args.get("include_epg", "false").lower() == "true"
+
+    # Build query for categories with visible/hidden channel counts
+    # Also count channels with provider EPG IDs
+    query = (
+        db.session.query(
+            Category.id,
+            Category.category_id,
+            Category.category_name,
+            Category.account_id,
+            Account.name.label("account_name"),
+            db.func.sum(
+                db.case((db.and_(Channel.is_visible == True, Channel.is_active == True), 1), else_=0)  # noqa: E712
+            ).label("visible_count"),
+            db.func.sum(
+                db.case((db.and_(Channel.is_visible == False, Channel.is_active == True), 1), else_=0)  # noqa: E712
+            ).label("hidden_count"),
+            db.func.sum(
+                db.case(
+                    (
+                        db.and_(
+                            Channel.is_active == True,  # noqa: E712
+                            Channel.epg_channel_id.isnot(None),
+                            Channel.epg_channel_id != "",
+                        ),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("with_epg_id_count"),
+        )
+        .join(Account, Category.account_id == Account.id)
+        .outerjoin(
+            Channel,
+            db.and_(
+                Channel.category_id == Category.id,
+                Channel.account_id == Category.account_id,
+            ),
+        )
+        .group_by(Category.id, Category.category_id, Category.category_name, Category.account_id, Account.name)
+    )
+
+    if account_id:
+        Account.query.get_or_404(account_id)  # Validate account exists
+        query = query.filter(Category.account_id == account_id)
+
+    if not include_empty:
+        # Filter to categories that have at least one visible channel
+        query = query.having(
+            db.func.sum(
+                db.case(
+                    (db.and_(Channel.is_visible == True, Channel.is_active == True), 1),  # noqa: E712
+                    else_=0,
+                )
+            )
+            > 0  # noqa: W503
+        )
+
+    categories = query.order_by(Category.category_name).all()
+
+    # If include_epg is requested, also get EPG mapping counts
+    epg_coverage_by_category = {}
+    if include_epg:
+        from models import ChannelEpgMapping
+
+        # Get all category IDs we're returning
+        category_ids = [cat.id for cat in categories]
+
+        if category_ids:
+            # Count channels with EPG mappings per category
+            epg_counts = (
+                db.session.query(
+                    Channel.category_id, db.func.count(db.distinct(ChannelEpgMapping.channel_id)).label("mapped_count")
+                )
+                .join(ChannelEpgMapping, Channel.id == ChannelEpgMapping.channel_id)
+                .filter(Channel.category_id.in_(category_ids), Channel.is_active == True)  # noqa: E712
+                .group_by(Channel.category_id)
+                .all()
+            )
+            epg_coverage_by_category = {row.category_id: row.mapped_count for row in epg_counts}
+
+    result = []
+    for cat in categories:
+        cat_data = {
+            "id": cat.id,
+            "category_id": cat.category_id,
+            "category_name": cat.category_name,
+            "account_id": cat.account_id,
+            "account_name": cat.account_name,
+            "visible_count": int(cat.visible_count or 0),
+            "hidden_count": int(cat.hidden_count or 0),
+            "total_count": int(cat.visible_count or 0) + int(cat.hidden_count or 0),
+            "with_epg_id_count": int(cat.with_epg_id_count or 0),
+        }
+
+        if include_epg:
+            total_active = int(cat.visible_count or 0) + int(cat.hidden_count or 0)
+            mapped_count = epg_coverage_by_category.get(cat.id, 0)
+            cat_data["epg_mapped_count"] = mapped_count
+            cat_data["epg_coverage_percent"] = round((mapped_count / total_active * 100), 1) if total_active > 0 else 0
+
+        result.append(cat_data)
+
+    return jsonify(result)
 
 
 # ============================================================================
@@ -122,20 +245,49 @@ def preview_channels():
 
     Query parameters:
     - account_id (optional): Filter to specific account
+    - tags (optional): Comma-separated list of tag names to filter by
+    - category (optional): Category name to filter by
     - limit (default 50): Number of results to return
     - offset (default 0): Offset for pagination
     """
     account_id = request.args.get("account_id", type=int)
+    tags_param = request.args.get("tags", "")
+    category_filter = request.args.get("category", "")
     limit = request.args.get("limit", 50, type=int)
     offset = request.args.get("offset", 0, type=int)
 
+    # Parse tag filter
+    filter_tags = [t.strip() for t in tags_param.split(",") if t.strip()] if tags_param else []
+
     # Build base query
-    query = db.session.query(Channel).filter(Channel.is_active, Channel.is_visible)
+    query = (
+        db.session.query(Channel)
+        .join(Category, Channel.category_id == Category.id, isouter=True)
+        .filter(Channel.is_active, Channel.is_visible)
+    )
 
     # Apply account filter if specified
     if account_id:
         Account.query.get_or_404(account_id)  # Validate account exists
         query = query.filter(Channel.account_id == account_id)
+
+    # Apply category filter if specified
+    if category_filter:
+        query = query.filter(Category.category_name == category_filter)
+
+    # Apply tag filter if specified
+    if filter_tags:
+        # Find channels that have at least one of the requested tags
+        tag_subquery = (
+            db.session.query(ChannelTag.stream_id)
+            .join(Tag, ChannelTag.tag_id == Tag.id)
+            .filter(Tag.name.in_(filter_tags))
+        )
+        if account_id:
+            tag_subquery = tag_subquery.filter(ChannelTag.account_id == account_id)
+        tag_subquery = tag_subquery.distinct()
+
+        query = query.filter(Channel.stream_id.in_(tag_subquery))
 
     # Get total count
     total = query.count()
@@ -170,7 +322,9 @@ def preview_channels():
                 "account_id": ch.account_id,
                 "name": ch.name,
                 "cleaned_name": ch.cleaned_name,
+                "category": ch.category.category_name if ch.category else "Uncategorized",
                 "category_id": ch.category_id,
+                "icon": ch.stream_icon,
                 "is_visible": ch.is_visible,
                 "tags": tag_map.get(ch.stream_id, []),
             }
@@ -184,6 +338,7 @@ def preview_channels():
             "showing": len(result),
             "channels": result,
             "has_more": offset + limit < total,
+            "filter_tags": filter_tags,
         }
     )
 

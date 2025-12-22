@@ -3,6 +3,7 @@ Playlist configuration and M3U generation routes
 """
 import json
 import logging
+import re
 
 from flask import Blueprint, Response, jsonify, request
 
@@ -18,6 +19,17 @@ logger = logging.getLogger(__name__)
 # Create blueprint
 playlists_bp = Blueprint("playlists", __name__)
 
+
+def slugify(text):
+    """Convert text to URL-safe slug."""
+    # Convert to lowercase and replace spaces/special chars with hyphens
+    text = text.lower().strip()
+    text = re.sub(r"[^\w\s-]", "", text)  # Remove non-word chars except hyphens
+    text = re.sub(r"[\s_]+", "-", text)  # Replace spaces/underscores with hyphens
+    text = re.sub(r"-+", "-", text)  # Collapse multiple hyphens
+    return text.strip("-")
+
+
 # Initialize cache service
 cache_service = CacheService()
 
@@ -27,26 +39,27 @@ cache_service = CacheService()
 # ============================================================================
 
 
+def playlist_to_dict(c):
+    """Convert a PlaylistConfig to a dictionary with slug."""
+    return {
+        "id": c.id,
+        "name": c.name,
+        "slug": slugify(c.name),
+        "description": c.description,
+        "include_accounts": json.loads(c.include_accounts) if c.include_accounts else [],
+        "exclude_accounts": json.loads(c.exclude_accounts) if c.exclude_accounts else [],
+        "include_tags": json.loads(c.include_tags) if c.include_tags else [],
+        "exclude_tags": json.loads(c.exclude_tags) if c.exclude_tags else [],
+        "tag_match_mode": c.tag_match_mode,
+        "enabled": c.enabled,
+    }
+
+
 @playlists_bp.route("/api/playlist-configs", methods=["GET"])
 def get_playlist_configs():
     """Get all playlist configurations"""
     configs = PlaylistConfig.query.all()
-    return jsonify(
-        [
-            {
-                "id": c.id,
-                "name": c.name,
-                "description": c.description,
-                "include_accounts": json.loads(c.include_accounts) if c.include_accounts else [],
-                "exclude_accounts": json.loads(c.exclude_accounts) if c.exclude_accounts else [],
-                "include_tags": json.loads(c.include_tags) if c.include_tags else [],
-                "exclude_tags": json.loads(c.exclude_tags) if c.exclude_tags else [],
-                "tag_match_mode": c.tag_match_mode,
-                "enabled": c.enabled,
-            }
-            for c in configs
-        ]
-    )
+    return jsonify([playlist_to_dict(c) for c in configs])
 
 
 @playlists_bp.route("/api/playlist-configs", methods=["POST"])
@@ -69,22 +82,7 @@ def create_playlist_config():
     db.session.add(config)
     db.session.commit()
 
-    return (
-        jsonify(
-            {
-                "id": config.id,
-                "name": config.name,
-                "description": config.description,
-                "include_accounts": json.loads(config.include_accounts),
-                "exclude_accounts": json.loads(config.exclude_accounts),
-                "include_tags": json.loads(config.include_tags),
-                "exclude_tags": json.loads(config.exclude_tags),
-                "tag_match_mode": config.tag_match_mode,
-                "enabled": config.enabled,
-            }
-        ),
-        201,
-    )
+    return jsonify(playlist_to_dict(config)), 201
 
 
 @playlists_bp.route("/api/playlist-configs/<int:config_id>", methods=["PUT"])
@@ -110,19 +108,7 @@ def update_playlist_config(config_id):
 
     db.session.commit()
 
-    return jsonify(
-        {
-            "id": config.id,
-            "name": config.name,
-            "description": config.description,
-            "include_accounts": json.loads(config.include_accounts),
-            "exclude_accounts": json.loads(config.exclude_accounts),
-            "include_tags": json.loads(config.include_tags),
-            "exclude_tags": json.loads(config.exclude_tags),
-            "tag_match_mode": config.tag_match_mode,
-            "enabled": config.enabled,
-        }
-    )
+    return jsonify(playlist_to_dict(config))
 
 
 @playlists_bp.route("/api/playlist-configs/<int:config_id>", methods=["DELETE"])
@@ -269,6 +255,15 @@ def generate_playlist(account_id):
     if channel_count == 0:
         raise ServiceUnavailableError("Account not synced. Please sync channels first.")
 
+    # Determine if we should use proxied URLs
+    # Proxy is used when: explicit ?proxy=true OR account has multiple credentials
+    use_proxy = request.args.get("proxy", "").lower() == "true"
+    if not use_proxy and hasattr(account, "credentials") and len(account.credentials) > 1:
+        use_proxy = True
+
+    # Get proxy base URL from request
+    proxy_base = f"{request.scheme}://{request.host}"
+
     # Build base query - use pre-computed is_visible
     query = (
         db.session.query(Channel)
@@ -278,6 +273,9 @@ def generate_playlist(account_id):
 
     # Get all matching channels
     channels = query.order_by(Channel.name).all()
+
+    # Get primary credential for direct URL mode
+    primary_cred = account.get_primary_credential() if not use_proxy else None
 
     # Generate M3U
     m3u_lines = ["#EXTM3U"]
@@ -290,27 +288,74 @@ def generate_playlist(account_id):
         tvg_logo = channel.stream_icon or ""
 
         extinf = f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{display_name}" tvg-logo="{tvg_logo}" group-title="{category_name}",{display_name}'
-        stream_url = f"http://{account.server}/live/{account.username}/{account.password}/{channel.stream_id}.ts"
+
+        if use_proxy:
+            # Use proxy URL for multiplexed streaming
+            stream_url = f"{proxy_base}/stream/{account_id}/{channel.stream_id}.ts"
+        else:
+            # Direct URL to IPTV provider
+            cred = primary_cred
+            if cred:
+                stream_url = f"http://{account.server}/live/{cred.username}/{cred.password}/{channel.stream_id}.ts"
+            else:
+                # Fallback for legacy accounts without credentials
+                stream_url = (
+                    f"http://{account.server}/live/{account.username}/{account.password}/{channel.stream_id}.ts"
+                )
 
         m3u_lines.append(extinf)
         m3u_lines.append(stream_url)
 
-    logger.info(f"Generated playlist for account {account_id}: {len(channels)} channels")
+    logger.info(f"Generated playlist for account {account_id}: {len(channels)} channels (proxied={use_proxy})")
     return Response("\n".join(m3u_lines), mimetype="application/x-mpegurl")
 
 
+# Keep old ID-based route for backward compatibility
 @playlists_bp.route("/playlist/config/<int:config_id>.m3u")
 @handle_errors(return_json=False, default_message="Error generating playlist from config")
-def generate_playlist_from_config(config_id):
+def generate_playlist_from_config_by_id(config_id):
+    """Generate M3U playlist from config by ID (backward compatibility)."""
+    config = PlaylistConfig.query.get_or_404(config_id)
+    return _generate_playlist_from_config(config)
+
+
+@playlists_bp.route("/playlist/config/<slug>.m3u")
+@handle_errors(return_json=False, default_message="Error generating playlist from config")
+def generate_playlist_from_config_by_name(slug):
+    """Generate M3U playlist from config by name slug.
+
+    The slug is matched against the playlist name (case-insensitive, slugified).
+    """
+    # Find config by matching slugified name
+    configs = PlaylistConfig.query.all()
+    config = None
+    for c in configs:
+        if slugify(c.name) == slug.lower():
+            config = c
+            break
+
+    if not config:
+        from flask import abort
+
+        abort(404, description=f"Playlist '{slug}' not found")
+
+    return _generate_playlist_from_config(config)
+
+
+def _generate_playlist_from_config(config):
     """Generate M3U playlist from config (combines multiple accounts, uses tag filtering).
 
     Uses database-first approach with pre-computed cleaned_name and is_visible.
     Requires accounts to be synced before playlist generation.
     """
-    config = PlaylistConfig.query.get_or_404(config_id)
-
     if not config.enabled:
         raise PermissionError("Playlist configuration is disabled")
+
+    # Determine if we should use proxied URLs
+    use_proxy = request.args.get("proxy", "").lower() == "true"
+
+    # Get proxy base URL from request
+    proxy_base = f"{request.scheme}://{request.host}"
 
     # Parse config
     include_accounts = json.loads(config.include_accounts) if config.include_accounts else []
@@ -332,6 +377,9 @@ def generate_playlist_from_config(config_id):
         channel_count = Channel.query.filter_by(account_id=account.id, is_active=True).count()
         if channel_count == 0:
             unsynced_accounts.append(account.name)
+        # Auto-enable proxy for accounts with multiple credentials
+        if not use_proxy and hasattr(account, "credentials") and len(account.credentials) > 1:
+            use_proxy = True
 
     if unsynced_accounts:
         raise ServiceUnavailableError(
@@ -409,14 +457,27 @@ def generate_playlist_from_config(config_id):
                 group_title = category_name
 
             extinf = f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{display_name}" tvg-logo="{tvg_logo}" group-title="{group_title}",{display_name}'
-            stream_url = f"http://{account.server}/live/{account.username}/{account.password}/{channel.stream_id}.ts"
+
+            if use_proxy:
+                # Use proxy URL for multiplexed streaming
+                stream_url = f"{proxy_base}/stream/{account.id}/{channel.stream_id}.ts"
+            else:
+                # Direct URL to IPTV provider
+                cred = account.get_primary_credential()
+                if cred:
+                    stream_url = f"http://{account.server}/live/{cred.username}/{cred.password}/{channel.stream_id}.ts"
+                else:
+                    # Fallback for legacy accounts
+                    stream_url = (
+                        f"http://{account.server}/live/{account.username}/{account.password}/{channel.stream_id}.ts"
+                    )
 
             m3u_lines.append(extinf)
             m3u_lines.append(stream_url)
             total_channels += 1
 
     logger.info(
-        f"Generated playlist from config {config_id} ({config.name}): {total_channels} channels from {len(accounts)} accounts"
+        f"Generated playlist from config {config.id} ({config.name}): {total_channels} channels from {len(accounts)} accounts (proxied={use_proxy})"
     )
     return Response("\n".join(m3u_lines), mimetype="application/x-mpegurl")
 
@@ -430,7 +491,14 @@ def proxy_epg(account_id):
     if not account.enabled:
         raise PermissionError("Account is disabled")
 
-    service = IPTVService(account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9")
+    # Get credentials for API call
+    cred = account.get_primary_credential()
+    if cred:
+        service = IPTVService(account.server, cred.username, cred.password, account.user_agent or "okhttp/3.14.9")
+    else:
+        # Fallback for legacy accounts
+        service = IPTVService(account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9")
+
     epg_data = service.get_xmltv()
 
     return Response(epg_data, mimetype="application/xml")

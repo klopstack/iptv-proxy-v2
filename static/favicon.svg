@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="tvGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d6efd"/>
+      <stop offset="100%" style="stop-color:#0a58ca"/>
+    </linearGradient>
+  </defs>
+  <!-- TV Body -->
+  <rect x="6" y="14" width="52" height="38" rx="4" fill="url(#tvGrad)"/>
+  <!-- Screen -->
+  <rect x="10" y="18" width="44" height="30" rx="2" fill="#1a1d21"/>
+  <!-- Play button / streaming indicator -->
+  <polygon points="26,28 26,42 40,35" fill="#20c997"/>
+  <!-- Signal waves -->
+  <path d="M44 24c3 0 5.5 2.5 5.5 5.5" stroke="#20c997" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M44 20c5.5 0 10 4.5 10 10" stroke="#20c997" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <!-- Stand -->
+  <rect x="24" y="52" width="16" height="4" rx="1" fill="#6c757d"/>
+  <rect x="20" y="56" width="24" height="3" rx="1" fill="#6c757d"/>
+</svg>

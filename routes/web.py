@@ -31,6 +31,12 @@ def test_page():
     return render_template("test.html")
 
 
+@web_bp.route("/categories")
+def categories_page():
+    """Browse categories page"""
+    return render_template("categories.html")
+
+
 @web_bp.route("/rulesets")
 def rulesets_page():
     """Rulesets and tags management page"""

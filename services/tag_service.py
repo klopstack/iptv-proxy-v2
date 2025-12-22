@@ -50,12 +50,12 @@ class TagService:
 
                 if matched:
                     # For regex patterns, match_result is a match object; for others, it's a string
-                    match_text = match_result.group(0) if hasattr(match_result, 'group') else match_result
-                    
+                    match_text = match_result.group(0) if hasattr(match_result, "group") else match_result
+
                     # Handle special tag types
                     if rule.tag_name == "__CAPTURE__":
                         # Extract tag from first regex capture group
-                        if rule.pattern_type == "regex" and hasattr(match_result, 'group'):
+                        if rule.pattern_type == "regex" and hasattr(match_result, "group"):
                             try:
                                 captured = match_result.group(1).strip()
                                 normalized_capture = TagService.normalize_tag_name(captured)

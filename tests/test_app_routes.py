@@ -71,8 +71,9 @@ class TestAccountRoutes:
         assert data["success"] is True
         assert data["channels"] == 2
         assert data["categories"] == 2
-        assert "server_info" in data
-        assert "user_info" in data
+        # API now returns connection_status and credentials instead of server_info/user_info
+        assert "connection_status" in data
+        assert "credentials" in data
 
     @patch("routes.accounts.IPTVService")
     def test_test_account_failure(self, mock_iptv_service, client, sample_account):

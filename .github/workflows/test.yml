@@ -40,7 +40,7 @@ jobs:
     
     - name: Type check with mypy
       run: |
-        mypy app.py models.py services/ || true
+        mypy app.py models.py services/
 
   lint-js:
     runs-on: ubuntu-latest

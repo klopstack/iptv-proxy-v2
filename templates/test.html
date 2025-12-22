@@ -2,35 +2,6 @@
 
 {% block title %}Preview Channels - IPTV Proxy{% endblock %}
 
-{% block extra_css %}
-<style>
-#tagDropdown {
-    border: 1px solid #dee2e6;
-    border-radius: 0.25rem;
-    background: white;
-}
-#tagDropdown .list-group-item {
-    border: none;
-    border-bottom: 1px solid #f0f0f0;
-}
-#tagDropdown .list-group-item:last-child {
-    border-bottom: none;
-}
-#tagDropdown .list-group-item:hover {
-    background-color: #f8f9fa;
-}
-#selectedTags .badge {
-    padding: 0.5rem 0.75rem;
-}
-#selectedTags .btn-close {
-    padding: 0;
-    margin: 0;
-    width: 0.6rem;
-    height: 0.6rem;
-}
-</style>
-{% endblock %}
-
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
     <h1 class="h2">Preview Channels</h1>
@@ -48,18 +19,8 @@
                 </select>
                 
                 <div class="mb-3">
-                    <label for="tagSearchInput" class="form-label">Filter by Tags</label>
-                    <div class="position-relative">
-                        <input 
-                            type="text" 
-                            class="form-control" 
-                            id="tagSearchInput" 
-                            placeholder="Search tags..." 
-                            autocomplete="off"
-                        >
-                        <div id="tagDropdown" class="list-group position-absolute w-100 shadow-sm" style="max-height: 200px; overflow-y: auto; z-index: 1000; display: none;"></div>
-                    </div>
-                    <div id="selectedTags" class="mt-2"></div>
+                    <label class="form-label">Filter by Tags</label>
+                    <div id="previewTagSelector"></div>
                     <div class="form-text">Type to search and click to add tags. Channels must have at least one selected tag.</div>
                 </div>
                 
@@ -69,6 +30,20 @@
                     </button>
                     <button class="btn btn-success" id="download-playlist-btn">
                         <i class="bi bi-download"></i> Download M3U
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-3" id="categoryFilterCard" style="display: none;">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-funnel-fill"></i> Category Filter</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span id="categoryFilterName"></span>
+                    <button class="btn btn-sm btn-outline-danger" onclick="clearCategoryFilter()">
+                        <i class="bi bi-x-circle"></i> Clear
                     </button>
                 </div>
             </div>
@@ -97,6 +72,28 @@
         </div>
     </div>
 </div>
+
+<!-- Channel Detail Modal -->
+<div class="modal fade" id="channelDetailModal" tabindex="-1" aria-labelledby="channelDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="channelDetailModalLabel">Channel Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="channelDetailContent">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -108,8 +105,7 @@ let loadedChannels = 0;
 const CHANNELS_PER_PAGE = 50;
 let loadingMore = false;
 let hasMore = true;
-let selectedTags = [];
-let searchTimeout = null;
+let tagSelector = null;
 
 async function loadAccounts() {
     const response = await fetch('/api/accounts');
@@ -129,6 +125,7 @@ async function loadAccounts() {
     const params = new URLSearchParams(window.location.search);
     const accountId = params.get('account');
     const tagName = params.get('tag');
+    const categoryName = params.get('category');
     
     if (accountId) {
         select.value = accountId;
@@ -136,21 +133,70 @@ async function loadAccounts() {
         // If a tag is specified, load it first then preview
         if (tagName) {
             await loadTagFromUrl(accountId, tagName);
+        } else if (categoryName) {
+            // Store category filter for use in loadPreview and show the filter card
+            window.categoryFilter = categoryName;
+            updateCategoryFilterUI();
+            await loadPreview();
         } else {
             await loadPreview();
         }
     }
 }
 
+function updateCategoryFilterUI() {
+    const card = document.getElementById('categoryFilterCard');
+    const nameSpan = document.getElementById('categoryFilterName');
+    
+    if (window.categoryFilter) {
+        card.style.display = 'block';
+        nameSpan.innerHTML = `<span class="badge bg-info">${escapeHtml(window.categoryFilter)}</span>`;
+    } else {
+        card.style.display = 'none';
+        nameSpan.innerHTML = '';
+    }
+}
+
+function clearCategoryFilter() {
+    window.categoryFilter = null;
+    updateCategoryFilterUI();
+    
+    // Remove category from URL without reloading
+    const url = new URL(window.location);
+    url.searchParams.delete('category');
+    window.history.replaceState({}, '', url);
+    
+    // Reload preview with the filter cleared
+    loadPreview();
+}
+
+function initTagSelector() {
+    if (tagSelector) return; // Already initialized
+    
+    tagSelector = new TagSelector({
+        containerId: 'previewTagSelector',
+        accountIdGetter: () => {
+            const val = document.getElementById('testAccountId').value;
+            // Return null for "all" so selector knows there's no specific account
+            return val === 'all' ? null : val;
+        },
+        badgeClass: 'bg-primary',
+        placeholder: 'Search tags...'
+    });
+}
+
 async function loadTagFromUrl(accountId, tagName) {
     try {
+        // Initialize tag selector first
+        initTagSelector();
+        
         // Fetch the specific tag to get its details
         const response = await fetch(`/api/accounts/${accountId}/tags/search?q=${encodeURIComponent(tagName)}&limit=1`);
         const tags = await response.json();
         
         if (tags.length > 0 && tags[0].name === tagName) {
-            selectedTags.push(tags[0]);
-            renderSelectedTags();
+            // Add the tag to the selector
+            tagSelector.setTags([tags[0]]);
         }
         
         // Load preview with the tag filter
@@ -162,108 +208,12 @@ async function loadTagFromUrl(accountId, tagName) {
     }
 }
 
-function clearSelectedTags() {
-    selectedTags = [];
-    renderSelectedTags();
-}
-
-function searchTags() {
-    const accountId = document.getElementById('testAccountId').value;
-    if (!accountId || accountId === 'all') return;
-    
-    const query = document.getElementById('tagSearchInput').value.trim();
-    
-    // Debounce search
-    clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(async () => {
-        try {
-            const response = await fetch(`/api/accounts/${accountId}/tags/search?q=${encodeURIComponent(query)}&limit=20`);
-            const tags = await response.json();
-            
-            const dropdown = document.getElementById('tagDropdown');
-            dropdown.innerHTML = '';
-            
-            if (tags.length === 0) {
-                dropdown.innerHTML = '<div class="list-group-item text-muted">No tags found</div>';
-            } else {
-                for (const tag of tags) {
-                    // Skip already selected tags
-                    if (selectedTags.some(t => t.name === tag.name)) continue;
-                    
-                    const item = document.createElement('a');
-                    item.href = '#';
-                    item.className = 'list-group-item list-group-item-action';
-                    item.innerHTML = `${tag.name} <span class="badge bg-secondary">${tag.channel_count}</span>`;
-                    item.onclick = (e) => {
-                        e.preventDefault();
-                        addTag(tag);
-                    };
-                    dropdown.appendChild(item);
-                }
-            }
-            
-            dropdown.style.display = 'block';
-        } catch (error) {
-            console.error('Error searching tags:', error);
-        }
-    }, 300);
-}
-
-function showTagDropdown() {
-    const accountId = document.getElementById('testAccountId').value;
-    if (accountId && accountId !== 'all') {
-        searchTags();
-    }
-}
-
-function hideTagDropdown() {
-    setTimeout(() => {
-        document.getElementById('tagDropdown').style.display = 'none';
-    }, 200);
-}
-
-function addTag(tag) {
-    if (!selectedTags.some(t => t.name === tag.name)) {
-        selectedTags.push(tag);
-        renderSelectedTags();
-        document.getElementById('tagSearchInput').value = '';
-        document.getElementById('tagDropdown').innerHTML = '';
-        document.getElementById('tagDropdown').style.display = 'none';
-    }
-}
-
-function removeTag(tagName) {
-    selectedTags = selectedTags.filter(t => t.name !== tagName);
-    renderSelectedTags();
-}
-
-function renderSelectedTags() {
-    const container = document.getElementById('selectedTags');
-    if (selectedTags.length === 0) {
-        container.innerHTML = '';
-        return;
-    }
-    
-    container.innerHTML = selectedTags.map(tag => `
-        <span class="badge bg-primary me-1 mb-1" style="font-size: 0.9rem;">
-            ${tag.name} (${tag.channel_count})
-            <button type="button" class="btn-close btn-close-white ms-1" style="font-size: 0.6rem;" data-action="remove-tag" data-tag-name="${tag.name}" aria-label="Remove"></button>
-        </span>
-    `).join('');
-}
-
-// Hide dropdown when clicking outside
-document.addEventListener('click', function(e) {
-    const tagInput = document.getElementById('tagSearchInput');
-    const tagDropdown = document.getElementById('tagDropdown');
-    if (e.target !== tagInput && !tagDropdown.contains(e.target)) {
-        hideTagDropdown();
-    }
-});
-
 async function loadPreview() {
     const accountId = document.getElementById('testAccountId').value;
     if (!accountId) return;
+    
+    // Initialize tag selector if needed
+    initTagSelector();
     
     // Reset state
     currentAccountId = accountId;
@@ -322,7 +272,7 @@ async function loadPreview() {
                         <th>Cleaned Name</th>
                         <th>Category</th>
                         <th>Tags</th>
-                        <th>Actions</th>
+                        <th style="min-width: 90px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="channelsTableBody">
@@ -354,15 +304,19 @@ async function loadMoreChannels() {
     if (loadingIndicator) loadingIndicator.style.display = 'block';
     
     try {
-        // Get selected tags from our new tag selector
-        const tagParam = selectedTags.length > 0 ? `&tags=${selectedTags.map(t => t.name).join(',')}` : '';
+        // Get selected tags from the TagSelector component
+        const selectedTagNames = tagSelector ? tagSelector.getTagNames() : [];
+        const tagParam = selectedTagNames.length > 0 ? `&tags=${selectedTagNames.join(',')}` : '';
+        
+        // Get category filter if set from URL
+        const categoryParam = window.categoryFilter ? `&category=${encodeURIComponent(window.categoryFilter)}` : '';
         
         // Use different endpoint for "all accounts"
         let url;
         if (currentAccountId === 'all') {
-            url = `/api/channels/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}${tagParam}`;
+            url = `/api/channels/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}${tagParam}${categoryParam}`;
         } else {
-            url = `/api/accounts/${currentAccountId}/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}${tagParam}`;
+            url = `/api/accounts/${currentAccountId}/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}${tagParam}${categoryParam}`;
         }
         
         const response = await fetch(url);
@@ -404,19 +358,27 @@ async function loadMoreChannels() {
                 : '';
             
             html += `
-                <tr>
+                <tr class="channel-row" style="cursor: pointer;" 
+                    data-account-id="${channel.account_id}" 
+                    data-stream-id="${channel.stream_id}"
+                    title="Click for details">
                     <td>${channel.icon ? `<img src="${channel.icon}" width="40" height="30" onerror="this.style.display='none'">` : ''}</td>
                     <td>
-                        ${channel.name}
+                        ${escapeHtml(channel.name)}
                         ${cleanedNameHtml}
                     </td>
-                    <td>${channel.cleaned_name || '<span class="text-muted">-</span>'}</td>
-                    <td><span class="badge bg-secondary">${channel.category}</span></td>
+                    <td>${channel.cleaned_name ? escapeHtml(channel.cleaned_name) : '<span class="text-muted">-</span>'}</td>
+                    <td><span class="badge bg-secondary">${escapeHtml(channel.category || 'Uncategorized')}</span></td>
                     <td>${tagsHtml}</td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-primary" data-action="create-tag-rule" data-channel-name="${escapeHtml(channel.name)}" data-channel-id="${channel.id}" title="Create tag rule for this channel">
-                            <i class="bi bi-tag"></i>
-                        </button>
+                    <td class="text-nowrap">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-outline-primary" data-action="create-tag-rule" data-channel-name="${escapeHtml(channel.name)}" data-channel-id="${channel.id}" title="Create tag rule for this channel" onclick="event.stopPropagation();">
+                                <i class="bi bi-tag"></i>
+                            </button>
+                            <button class="btn btn-outline-info" data-action="view-details" data-account-id="${channel.account_id}" data-stream-id="${channel.stream_id}" title="View channel details" onclick="event.stopPropagation(); showChannelDetails('${channel.account_id}', '${channel.stream_id}');">
+                                <i class="bi bi-info-circle"></i>
+                            </button>
+                        </div>
                     </td>
                 </tr>
             `;
@@ -526,6 +488,167 @@ function createManualTagRule(channelName) {
     window.open(`/rulesets?${params.toString()}`, '_blank');
 }
 
+async function showChannelDetails(accountId, streamId) {
+    const modal = new bootstrap.Modal(document.getElementById('channelDetailModal'));
+    const contentDiv = document.getElementById('channelDetailContent');
+    
+    // Show loading state
+    contentDiv.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    `;
+    
+    modal.show();
+    
+    try {
+        const response = await fetch(`/api/accounts/${accountId}/channels/${streamId}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const channel = await response.json();
+        
+        // Format tags
+        const tagsHtml = channel.tags && channel.tags.length > 0
+            ? channel.tags.map(tag => `<span class="badge bg-info me-1">${escapeHtml(tag)}</span>`).join('')
+            : '<span class="text-muted">No tags</span>';
+        
+        // Format dates
+        const formatDate = (dateStr) => {
+            if (!dateStr) return '<span class="text-muted">-</span>';
+            const date = new Date(dateStr);
+            return date.toLocaleString();
+        };
+        
+        // Format boolean values
+        const formatBool = (val) => val 
+            ? '<span class="badge bg-success">Yes</span>' 
+            : '<span class="badge bg-secondary">No</span>';
+        
+        // Update modal title
+        document.getElementById('channelDetailModalLabel').textContent = channel.cleaned_name || channel.name;
+        
+        // Build detail view
+        contentDiv.innerHTML = `
+            <div class="row">
+                <div class="col-md-4 text-center mb-3">
+                    ${channel.stream_icon 
+                        ? `<img src="${channel.stream_icon}" class="img-fluid rounded mb-2" style="max-height: 150px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                           <div class="text-muted" style="display:none;"><i class="bi bi-image" style="font-size: 4rem;"></i><br>No icon available</div>`
+                        : '<div class="text-muted"><i class="bi bi-image" style="font-size: 4rem;"></i><br>No icon available</div>'
+                    }
+                </div>
+                <div class="col-md-8">
+                    <h5 class="mb-1">${escapeHtml(channel.name)}</h5>
+                    ${channel.cleaned_name && channel.cleaned_name !== channel.name 
+                        ? `<p class="text-muted mb-2">Cleaned: ${escapeHtml(channel.cleaned_name)}</p>` 
+                        : ''}
+                    <div class="mb-2">
+                        <span class="badge bg-secondary">${escapeHtml(channel.category)}</span>
+                        <span class="badge bg-primary ms-1">${escapeHtml(channel.account_name)}</span>
+                    </div>
+                    <div class="mb-2">${tagsHtml}</div>
+                </div>
+            </div>
+            
+            <hr>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="border-bottom pb-2">Stream Information</h6>
+                    <table class="table table-sm">
+                        <tr>
+                            <th style="width: 40%">Stream ID</th>
+                            <td><code>${escapeHtml(channel.stream_id)}</code></td>
+                        </tr>
+                        <tr>
+                            <th>Stream Type</th>
+                            <td>${channel.stream_type ? escapeHtml(channel.stream_type) : '<span class="text-muted">-</span>'}</td>
+                        </tr>
+                        <tr>
+                            <th>EPG Channel ID</th>
+                            <td>${channel.epg_channel_id ? `<code>${escapeHtml(channel.epg_channel_id)}</code>` : '<span class="text-muted">-</span>'}</td>
+                        </tr>
+                        <tr>
+                            <th>Custom SID</th>
+                            <td>${channel.custom_sid ? `<code>${escapeHtml(channel.custom_sid)}</code>` : '<span class="text-muted">-</span>'}</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="border-bottom pb-2">Archive & Status</h6>
+                    <table class="table table-sm">
+                        <tr>
+                            <th style="width: 40%">TV Archive</th>
+                            <td>${formatBool(channel.tv_archive)}</td>
+                        </tr>
+                        <tr>
+                            <th>Archive Duration</th>
+                            <td>${channel.tv_archive_duration ? channel.tv_archive_duration + ' days' : '<span class="text-muted">-</span>'}</td>
+                        </tr>
+                        <tr>
+                            <th>Active</th>
+                            <td>${formatBool(channel.is_active)}</td>
+                        </tr>
+                        <tr>
+                            <th>Visible</th>
+                            <td>${formatBool(channel.is_visible)}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-12">
+                    <h6 class="border-bottom pb-2">Metadata</h6>
+                    <table class="table table-sm">
+                        <tr>
+                            <th style="width: 20%">Added (from provider)</th>
+                            <td>${channel.added ? formatDate(channel.added * 1000) : '<span class="text-muted">Unknown</span>'}</td>
+                        </tr>
+                        <tr>
+                            <th>Last Seen</th>
+                            <td>${formatDate(channel.last_seen)}</td>
+                        </tr>
+                        <tr>
+                            <th>Created At</th>
+                            <td>${formatDate(channel.created_at)}</td>
+                        </tr>
+                        <tr>
+                            <th>Updated At</th>
+                            <td>${formatDate(channel.updated_at)}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            
+            ${channel.direct_source ? `
+            <div class="row">
+                <div class="col-12">
+                    <h6 class="border-bottom pb-2">Direct Source URL</h6>
+                    <div class="input-group">
+                        <input type="text" class="form-control form-control-sm" value="${escapeHtml(channel.direct_source)}" readonly>
+                        <button class="btn btn-outline-secondary btn-sm" type="button" onclick="navigator.clipboard.writeText('${escapeHtml(channel.direct_source)}'); this.innerHTML='<i class=\\'bi bi-check\\'></i> Copied!';">
+                            <i class="bi bi-clipboard"></i> Copy
+                        </button>
+                    </div>
+                </div>
+            </div>
+            ` : ''}
+        `;
+    } catch (error) {
+        console.error('Error loading channel details:', error);
+        contentDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle-fill"></i> 
+                Error loading channel details: ${escapeHtml(error.message)}
+            </div>
+        `;
+    }
+}
+
 loadAccounts();
 
 // Initialize event listeners after DOM is loaded
@@ -542,42 +665,34 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadBtn.addEventListener('click', () => downloadPlaylist());
     }
 
-    // Event delegation for tag operations
-    const selectedTagsDiv = document.getElementById('selected-tags');
-    if (selectedTagsDiv) {
-        selectedTagsDiv.addEventListener('click', (e) => {
-            const button = e.target.closest('button[data-action="remove-tag"]');
-            if (button) {
-                const tagName = button.dataset.tagName;
-                removeTag(tagName);
-            }
-        });
-    }
+    // Event delegation for channel operations (create tag rule)
+    document.getElementById('previewResult').addEventListener('click', (e) => {
+        const tagRuleButton = e.target.closest('button[data-action="create-tag-rule"]');
+        if (tagRuleButton) {
+            const channelName = tagRuleButton.dataset.channelName;
+            createManualTagRule(channelName);
+            return;
+        }
+        
+        // Handle row click for channel details
+        const channelRow = e.target.closest('.channel-row');
+        if (channelRow && !e.target.closest('button')) {
+            const accountId = channelRow.dataset.accountId;
+            const streamId = channelRow.dataset.streamId;
+            showChannelDetails(accountId, streamId);
+        }
+    });
 
-    // Event delegation for channel operations
-    const channelsPreview = document.getElementById('channels-preview');
-    if (channelsPreview) {
-        channelsPreview.addEventListener('click', (e) => {
-            const button = e.target.closest('button[data-action="create-tag-rule"]');
-            if (button) {
-                const channelName = button.dataset.channelName;
-                createManualTagRule(channelName);
-            }
-        });
-    }
-
-    // Account selector change
+    // Account selector change - clear tags when account changes
     const testAccountSelect = document.getElementById('testAccountId');
     if (testAccountSelect) {
-        testAccountSelect.addEventListener('change', () => clearSelectedTags());
+        testAccountSelect.addEventListener('change', () => {
+            if (tagSelector) tagSelector.clear();
+        });
     }
-
-    // Tag search input
-    const tagSearchInput = document.getElementById('tagSearchInput');
-    if (tagSearchInput) {
-        tagSearchInput.addEventListener('input', () => searchTags());
-        tagSearchInput.addEventListener('focus', () => showTagDropdown());
-    }
+    
+    // Initialize tag selector on page load
+    initTagSelector();
 });
 </script>
 {% endblock %}

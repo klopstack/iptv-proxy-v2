@@ -260,12 +260,13 @@ class TestPatternMatching:
     def test_match_pattern_regex(self, test_app):
         """Test regex pattern matching"""
         with app.app_context():
-            matched, match_text = TagService._match_pattern("Channel 4K", r"\b4K\b", "regex")
+            matched, match_obj = TagService._match_pattern("Channel 4K", r"\b4K\b", "regex")
             assert matched is True
-            assert match_text == "4K"
+            # Regex returns match object for capture group access
+            assert match_obj.group() == "4K"
 
             # Should not match 4K in middle of word
-            matched, match_text = TagService._match_pattern("Channel X4KUHD", r"\b4K\b", "regex")
+            matched, match_obj = TagService._match_pattern("Channel X4KUHD", r"\b4K\b", "regex")
             assert matched is False
 
     def test_match_pattern_case_insensitive(self, test_app):

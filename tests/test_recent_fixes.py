@@ -2,15 +2,15 @@
 Tests for recent bug fixes (issues 20-25)
 """
 import pytest
-from datetime import datetime
-from models import Account, Channel, Category, ChannelTag, Tag
+
+from models import Account, Category, Channel, ChannelTag, Tag
 
 
 @pytest.fixture
 def sample_account(client):
     """Create a test account"""
     from models import db
-    
+
     account = Account(
         name="Test Account",
         server="test.example.com",
@@ -32,7 +32,7 @@ class TestDatetimeTimezoneIssue:
         from models import db
 
         category = Category(
-            account_id=test_account.id,
+            account_id=sample_account.id,
             category_id=1,
             category_name="Test Category",
         )
@@ -40,7 +40,7 @@ class TestDatetimeTimezoneIssue:
         db.session.commit()
 
         channel = Channel(
-            account_id=test_account.id,
+            account_id=sample_account.id,
             stream_id=1,
             name="Test Channel",
             category_id=category.id,
@@ -50,19 +50,19 @@ class TestDatetimeTimezoneIssue:
         db.session.commit()
 
         # This should not raise TypeError about timezone comparison
-        response = client.post(f"/api/accounts/{test_account.id}/process-tags")
+        response = client.post(f"/api/accounts/{sample_account.id}/process-tags")
         assert response.status_code in [200, 503]  # 503 if no tag rules configured
 
 
 class TestPreviewChannelsAPI:
     """Test for Issue 21: Preview channels API missing fields"""
 
-    def test_preview_includes_showing_field(self, client, test_account):
+    def test_preview_includes_showing_field(self, client, sample_account):
         """Ensure preview API returns 'showing' field"""
         from models import db
 
         category = Category(
-            account_id=test_account.id,
+            account_id=sample_account.id,
             category_id=1,
             category_name="Test",
         )
@@ -71,7 +71,7 @@ class TestPreviewChannelsAPI:
         # Create test channels
         for i in range(3):
             channel = Channel(
-                account_id=test_account.id,
+                account_id=sample_account.id,
                 stream_id=i,
                 name=f"Channel {i}",
                 category_id=category.id,
@@ -81,7 +81,7 @@ class TestPreviewChannelsAPI:
             db.session.add(channel)
         db.session.commit()
 
-        response = client.get(f"/api/accounts/{test_account.id}/preview?limit=2")
+        response = client.get(f"/api/accounts/{sample_account.id}/preview?limit=2")
         assert response.status_code == 200
         data = response.json
 
@@ -93,19 +93,20 @@ class TestPreviewChannelsAPI:
         assert data["has_more"] is True
         assert data["total"] == 3
 
-    def test_preview_includes_category_and_tags(self, client, test_account):
+    def test_preview_includes_category_and_tags(self, client, sample_account):
         """Ensure preview API returns category name and tags"""
         from models import db
 
         category = Category(
-            account_id=test_account.id,
+            account_id=sample_account.id,
             category_id=1,
             category_name="Test Category",
         )
         db.session.add(category)
+        db.session.flush()  # Get the category ID
 
         channel = Channel(
-            account_id=test_account.id,
+            account_id=sample_account.id,
             stream_id=1,
             name="Test Channel",
             category_id=category.id,
@@ -113,20 +114,21 @@ class TestPreviewChannelsAPI:
             is_visible=True,
         )
         db.session.add(channel)
+        db.session.flush()
 
         tag = Tag(name="test_tag")
         db.session.add(tag)
         db.session.commit()
 
         channel_tag = ChannelTag(
-            account_id=test_account.id,
+            account_id=sample_account.id,
             stream_id=channel.stream_id,
             tag_id=tag.id,
         )
         db.session.add(channel_tag)
         db.session.commit()
 
-        response = client.get(f"/api/accounts/{test_account.id}/preview")
+        response = client.get(f"/api/accounts/{sample_account.id}/preview")
         assert response.status_code == 200
         data = response.json
 
@@ -155,12 +157,12 @@ class TestAllAccountsPreview:
 class TestStatsAPI:
     """Test for Issue 24: Dashboard statistics"""
 
-    def test_stats_include_visibility_counts(self, client, test_account):
+    def test_stats_include_visibility_counts(self, client, sample_account):
         """Ensure stats API returns visible/hidden channel counts"""
         from models import db
 
         category = Category(
-            account_id=test_account.id,
+            account_id=sample_account.id,
             category_id=1,
             category_name="Test",
         )
@@ -169,7 +171,7 @@ class TestStatsAPI:
         # Create 5 visible and 3 hidden channels
         for i in range(8):
             channel = Channel(
-                account_id=test_account.id,
+                account_id=sample_account.id,
                 stream_id=i,
                 name=f"Channel {i}",
                 category_id=category.id,
@@ -179,7 +181,7 @@ class TestStatsAPI:
             db.session.add(channel)
         db.session.commit()
 
-        response = client.get(f"/api/accounts/{test_account.id}/stats")
+        response = client.get(f"/api/accounts/{sample_account.id}/stats")
         assert response.status_code == 200
         data = response.json
 
@@ -194,19 +196,19 @@ class TestStatsAPI:
 class TestSyncStatusAPI:
     """Test for Issue 25: Accounts page sync status"""
 
-    def test_sync_status_returns_channel_count(self, client, test_account):
+    def test_sync_status_returns_channel_count(self, client, sample_account):
         """Ensure sync status API returns channel_count not 'synced' boolean"""
         from models import db
 
         category = Category(
-            account_id=test_account.id,
+            account_id=sample_account.id,
             category_id=1,
             category_name="Test",
         )
         db.session.add(category)
 
         channel = Channel(
-            account_id=test_account.id,
+            account_id=sample_account.id,
             stream_id=1,
             name="Test Channel",
             category_id=category.id,
@@ -215,7 +217,7 @@ class TestSyncStatusAPI:
         db.session.add(channel)
         db.session.commit()
 
-        response = client.get(f"/api/accounts/{test_account.id}/sync/status")
+        response = client.get(f"/api/accounts/{sample_account.id}/sync/status")
         assert response.status_code == 200
         data = response.json
 

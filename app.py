@@ -49,9 +49,11 @@ logger = logging.getLogger(__name__)
 
 from routes.accounts import accounts_bp
 from routes.api import api_bp, set_scheduler
+from routes.epg import epg_bp
 from routes.filters import filters_bp
 from routes.playlists import playlists_bp
 from routes.rulesets import rulesets_bp
+from routes.streams import streams_bp
 from routes.web import web_bp
 
 app.register_blueprint(web_bp)
@@ -60,6 +62,8 @@ app.register_blueprint(filters_bp)
 app.register_blueprint(rulesets_bp)
 app.register_blueprint(playlists_bp)
 app.register_blueprint(api_bp)
+app.register_blueprint(streams_bp)
+app.register_blueprint(epg_bp)
 
 # Pass scheduler to API blueprint
 set_scheduler(sync_scheduler)

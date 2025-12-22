@@ -30,6 +30,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "--verbose --cov=. --cov-report=html --cov-report=term-missing --cov-fail-under=80"
+norecursedirs = ["services", "routes", "migrations", "static", "templates", "data", "instance", "venv"]
 
 [tool.coverage.run]
 source = ["."]
@@ -60,11 +61,12 @@ exclude_lines = [
 ]
 
 [tool.mypy]
-python_version = "3.8"
-warn_return_any = true
+python_version = "3.9"
+warn_return_any = false  # Disabled: API clients commonly return Any from JSON responses
 warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
+plugins = ["sqlalchemy.ext.mypy.plugin"]
 exclude = [
     "venv",
     "env",
