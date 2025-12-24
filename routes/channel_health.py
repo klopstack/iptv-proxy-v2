@@ -99,6 +99,7 @@ def get_channels_paginated():
     - status (optional): Filter by status (down, degraded, healthy, unknown, ignored)
     - visibility (optional): Filter by visibility (visible, hidden)
     - epg (optional): Filter by EPG presence (with, without)
+    - ppv (optional): Filter by PPV status (ppv, non-ppv, all). Default: non-ppv (excludes PPV)
     - search (optional): Search by channel name
     - page (optional): Page number (default: 1)
     - per_page (optional): Items per page (default: 100, max: 500)
@@ -109,6 +110,7 @@ def get_channels_paginated():
     status_filter = request.args.get("status")
     visibility_filter = request.args.get("visibility")
     epg_filter = request.args.get("epg")
+    ppv_filter = request.args.get("ppv")
     search = request.args.get("search", "").strip()
     page = request.args.get("page", 1, type=int)
     per_page = min(request.args.get("per_page", 100, type=int), 500)
@@ -131,12 +133,16 @@ def get_channels_paginated():
     if epg_filter and epg_filter not in ["with", "without"]:
         return jsonify({"success": False, "error": "Invalid epg filter. Valid values: with, without"}), 400
 
+    if ppv_filter and ppv_filter not in ["ppv", "non-ppv", "all"]:
+        return jsonify({"success": False, "error": "Invalid ppv filter. Valid values: ppv, non-ppv, all"}), 400
+
     result = ChannelHealthService.get_channels_paginated(
         account_id=account_id,
         category_id=category_id,
         status_filter=status_filter,
         visibility_filter=visibility_filter,
         epg_filter=epg_filter,
+        ppv_filter=ppv_filter,
         search=search,
         page=page,
         per_page=per_page,

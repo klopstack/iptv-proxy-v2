@@ -16,51 +16,59 @@
 
 <!-- Status Summary Cards -->
 <div class="row mb-4" id="summary-cards">
-    <div class="col-md-2">
+    <div class="col">
         <div class="card text-white bg-success h-100">
-            <div class="card-body text-center">
-                <h2 class="card-title" id="healthy-count">-</h2>
-                <p class="card-text mb-0"><i class="bi bi-check-circle"></i> Healthy</p>
+            <div class="card-body text-center py-2">
+                <h2 class="card-title mb-0" id="healthy-count">-</h2>
+                <p class="card-text mb-0 small"><i class="bi bi-check-circle"></i> Healthy</p>
             </div>
         </div>
     </div>
-    <div class="col-md-2">
+    <div class="col">
         <div class="card text-white bg-warning h-100">
-            <div class="card-body text-center">
-                <h2 class="card-title" id="degraded-count">-</h2>
-                <p class="card-text mb-0"><i class="bi bi-exclamation-triangle"></i> Degraded</p>
+            <div class="card-body text-center py-2">
+                <h2 class="card-title mb-0" id="degraded-count">-</h2>
+                <p class="card-text mb-0 small"><i class="bi bi-exclamation-triangle"></i> Degraded</p>
             </div>
         </div>
     </div>
-    <div class="col-md-2">
+    <div class="col">
         <div class="card text-white bg-danger h-100">
-            <div class="card-body text-center">
-                <h2 class="card-title" id="down-count">-</h2>
-                <p class="card-text mb-0"><i class="bi bi-x-circle"></i> Down</p>
+            <div class="card-body text-center py-2">
+                <h2 class="card-title mb-0" id="down-count">-</h2>
+                <p class="card-text mb-0 small"><i class="bi bi-x-circle"></i> Down</p>
             </div>
         </div>
     </div>
-    <div class="col-md-2">
+    <div class="col">
         <div class="card text-white bg-secondary h-100">
-            <div class="card-body text-center">
-                <h2 class="card-title" id="unknown-count">-</h2>
-                <p class="card-text mb-0"><i class="bi bi-question-circle"></i> Not Scanned</p>
+            <div class="card-body text-center py-2">
+                <h2 class="card-title mb-0" id="unknown-count">-</h2>
+                <p class="card-text mb-0 small"><i class="bi bi-question-circle"></i> Not Scanned</p>
             </div>
         </div>
     </div>
-    <div class="col-md-2">
+    <div class="col">
         <div class="card text-dark bg-light h-100">
-            <div class="card-body text-center">
-                <h2 class="card-title" id="ignored-count">-</h2>
-                <p class="card-text mb-0"><i class="bi bi-eye-slash"></i> Ignored</p>
+            <div class="card-body text-center py-2">
+                <h2 class="card-title mb-0" id="ignored-count">-</h2>
+                <p class="card-text mb-0 small"><i class="bi bi-eye-slash"></i> Ignored</p>
             </div>
         </div>
     </div>
-    <div class="col-md-2">
+    <div class="col">
+        <div class="card text-dark bg-light h-100" title="PPV channels are excluded from health scanning (only work during scheduled events)">
+            <div class="card-body text-center py-2">
+                <h2 class="card-title mb-0" id="ppv-count">-</h2>
+                <p class="card-text mb-0 small"><i class="bi bi-ticket-perforated"></i> PPV</p>
+            </div>
+        </div>
+    </div>
+    <div class="col">
         <div class="card bg-info text-white h-100">
-            <div class="card-body text-center">
-                <h2 class="card-title" id="total-count">-</h2>
-                <p class="card-text mb-0"><i class="bi bi-collection"></i> Total</p>
+            <div class="card-body text-center py-2">
+                <h2 class="card-title mb-0" id="total-count">-</h2>
+                <p class="card-text mb-0 small"><i class="bi bi-collection"></i> Total</p>
             </div>
         </div>
     </div>
@@ -77,17 +85,25 @@
                 <form id="config-form">
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <div class="form-check form-switch mb-3">
+                            <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" id="scanning-enabled">
                                 <label class="form-check-label" for="scanning-enabled">
                                     <strong>Enable Background Scanning</strong>
                                 </label>
                             </div>
+                            <small class="text-muted">Automatically scan channels when idle</small>
                         </div>
                         <div class="col-md-6">
-                            <button type="button" class="btn btn-info btn-sm" id="manual-scan-btn" disabled>
-                                <i class="bi bi-play"></i> Run Manual Scan
-                            </button>
+                            <label for="scan-account" class="form-label">Manual Scan Account</label>
+                            <div class="input-group input-group-sm">
+                                <select class="form-select form-select-sm" id="scan-account">
+                                    <option value="">Select account...</option>
+                                </select>
+                                <button type="button" class="btn btn-info" id="manual-scan-btn" disabled>
+                                    <i class="bi bi-play"></i> Scan
+                                </button>
+                            </div>
+                            <small class="text-muted" id="scan-info">Scans up to 20 unscanned channels</small>
                         </div>
                     </div>
                     
@@ -126,6 +142,16 @@
                         <label class="form-check-label" for="auto-disable">
                             Auto-disable channels marked as down
                         </label>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="scan-hidden">
+                        <label class="form-check-label" for="scan-hidden">
+                            Scan hidden channels
+                        </label>
+                        <small class="form-text text-muted d-block">
+                            By default, only visible channels are scanned. Enable to also scan channels hidden by filters.
+                        </small>
                     </div>
                     
                     <button type="submit" class="btn btn-primary btn-sm">
@@ -186,6 +212,13 @@
                             <option value="">Visibility</option>
                             <option value="visible">Visible</option>
                             <option value="hidden">Hidden</option>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="filter-ppv" style="min-width: 100px;">
+                            <option value="non-ppv" selected>Non-PPV</option>
+                            <option value="ppv">PPV Only</option>
+                            <option value="all">All Channels</option>
                         </select>
                     </div>
                     <div class="col-auto">
@@ -330,6 +363,7 @@ let filters = {
     category_id: '',
     status: '',
     visibility: '',
+    ppv: 'non-ppv',  // Default to hiding PPV channels
     epg: '',
     search: ''
 };
@@ -351,6 +385,13 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('config-form').addEventListener('submit', saveConfig);
     document.getElementById('manual-scan-btn').addEventListener('click', runManualScan);
     document.getElementById('scanning-enabled').addEventListener('change', toggleScanning);
+    
+    // Scan account selector enables the scan button
+    document.getElementById('scan-account').addEventListener('change', (e) => {
+        const scanBtn = document.getElementById('manual-scan-btn');
+        scanBtn.disabled = !e.target.value;
+        updateScanInfo(e.target.value);
+    });
     
     // Filter change listeners
     document.getElementById('filter-account').addEventListener('change', (e) => {
@@ -382,6 +423,12 @@ document.addEventListener('DOMContentLoaded', function() {
         loadChannels();
     });
     
+    document.getElementById('filter-ppv').addEventListener('change', (e) => {
+        filters.ppv = e.target.value;
+        currentPage = 1;
+        loadChannels();
+    });
+    
     document.getElementById('filter-epg').addEventListener('change', (e) => {
         filters.epg = e.target.value;
         currentPage = 1;
@@ -405,12 +452,22 @@ async function loadAccounts() {
         const data = await response.json();
         accounts = data.accounts || [];
         
-        const select = document.getElementById('filter-account');
+        // Populate filter account dropdown
+        const filterSelect = document.getElementById('filter-account');
         accounts.forEach(account => {
             const option = document.createElement('option');
             option.value = account.id;
             option.textContent = account.name;
-            select.appendChild(option);
+            filterSelect.appendChild(option);
+        });
+        
+        // Also populate scan account dropdown
+        const scanSelect = document.getElementById('scan-account');
+        accounts.forEach(account => {
+            const option = document.createElement('option');
+            option.value = account.id;
+            option.textContent = account.name;
+            scanSelect.appendChild(option);
         });
         
         // Load categories after accounts
@@ -467,6 +524,8 @@ async function loadConfig() {
                 config.reserved_connections?.value || '1';
             document.getElementById('auto-disable').checked = 
                 config.auto_disable_down_channels?.value !== 'false';
+            document.getElementById('scan-hidden').checked = 
+                config.scan_hidden_channels?.value === 'true';
             
             document.getElementById('manual-scan-btn').disabled = 
                 !document.getElementById('scanning-enabled').checked;
@@ -485,6 +544,7 @@ async function saveConfig(e) {
         analysis_duration_seconds: document.getElementById('analysis-duration').value,
         reserved_connections: document.getElementById('reserved-connections').value,
         auto_disable_down_channels: document.getElementById('auto-disable').checked ? 'true' : 'false',
+        scan_hidden_channels: document.getElementById('scan-hidden').checked ? 'true' : 'false',
     };
     
     try {
@@ -561,16 +621,25 @@ async function loadScanStatus() {
     }
 }
 
-async function runManualScan() {
-    const accountId = document.getElementById('filter-account').value;
+function updateScanInfo(accountId) {
+    const info = document.getElementById('scan-info');
     if (!accountId) {
-        showToast('Please select an account first', 'warning');
+        info.textContent = 'Scans up to 20 unscanned channels';
+        return;
+    }
+    info.textContent = 'Scans up to 20 unscanned channels for this account';
+}
+
+async function runManualScan() {
+    const accountId = document.getElementById('scan-account').value;
+    if (!accountId) {
+        showToast('Please select an account to scan', 'warning');
         return;
     }
     
     const btn = document.getElementById('manual-scan-btn');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Scanning...';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     
     try {
         const response = await fetch(`/api/channel-health/scan/${accountId}`, {
@@ -592,7 +661,7 @@ async function runManualScan() {
         showToast('Error running scan: ' + error.message, 'danger');
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-play"></i> Run Manual Scan';
+        btn.innerHTML = '<i class="bi bi-play"></i> Scan';
     }
 }
 
@@ -614,6 +683,7 @@ async function loadSummary() {
             document.getElementById('down-count').textContent = (summary.by_status.down || 0).toLocaleString();
             document.getElementById('unknown-count').textContent = (summary.by_status.unknown || 0).toLocaleString();
             document.getElementById('ignored-count').textContent = (summary.by_status.ignored || 0).toLocaleString();
+            document.getElementById('ppv-count').textContent = (summary.ppv || 0).toLocaleString();
             document.getElementById('total-count').textContent = (summary.total || 0).toLocaleString();
         }
     } catch (error) {
@@ -646,6 +716,7 @@ async function loadChannels() {
         if (filters.category_id) params.append('category_id', filters.category_id);
         if (filters.status) params.append('status', filters.status);
         if (filters.visibility) params.append('visibility', filters.visibility);
+        if (filters.ppv) params.append('ppv', filters.ppv);
         if (filters.epg) params.append('epg', filters.epg);
         if (filters.search) params.append('search', filters.search);
         
@@ -828,13 +899,13 @@ function getStatusBadge(status) {
 function getResultBadge(result) {
     const badges = {
         success: '<span class="badge bg-success">OK</span>',
-        connection_failed: '<span class="badge bg-danger">Conn Fail</span>',
+        connection_failed: '<span class="badge bg-danger">Connection Error</span>',
         timeout: '<span class="badge bg-warning text-dark">Timeout</span>',
-        http_error: '<span class="badge bg-danger">HTTP Err</span>',
+        http_error: '<span class="badge bg-danger">HTTP Error</span>',
         no_video: '<span class="badge bg-warning text-dark">No Video</span>',
-        black_screen: '<span class="badge bg-warning text-dark">Black</span>',
-        audio_only: '<span class="badge bg-info">Audio</span>',
-        invalid_stream: '<span class="badge bg-danger">Invalid</span>',
+        black_screen: '<span class="badge bg-warning text-dark">No Picture</span>',
+        audio_only: '<span class="badge bg-info">Audio Only</span>',
+        invalid_stream: '<span class="badge bg-danger">Stream Error</span>',
         skipped: '<span class="badge bg-secondary">Skipped</span>',
     };
     return badges[result] || `<span class="badge bg-secondary">${escapeHtml(result)}</span>`;

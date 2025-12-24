@@ -196,6 +196,88 @@ class TestSchedulerAPI:
             )
             assert response.status_code == 400
 
+    def test_scheduler_restart_epg_interval_invalid(self, app, client):
+        """Test scheduler restart with invalid EPG interval"""
+        mock_scheduler = MagicMock()
+        mock_scheduler.account_interval_hours = 6
+        mock_scheduler.epg_interval_hours = 12
+        mock_scheduler.fcc_interval_hours = 168
+
+        with patch("routes.api._scheduler", mock_scheduler):
+            response = client.post(
+                "/api/scheduler/restart",
+                json={"epg_interval_hours": "invalid"},
+                content_type="application/json",
+            )
+            assert response.status_code == 400
+            assert "Invalid EPG interval" in response.json["error"]
+
+    def test_scheduler_restart_epg_interval_out_of_range(self, app, client):
+        """Test scheduler restart with EPG interval out of range"""
+        mock_scheduler = MagicMock()
+        mock_scheduler.account_interval_hours = 6
+        mock_scheduler.epg_interval_hours = 12
+        mock_scheduler.fcc_interval_hours = 168
+
+        with patch("routes.api._scheduler", mock_scheduler):
+            # Test too low
+            response = client.post(
+                "/api/scheduler/restart",
+                json={"epg_interval_hours": 0},
+                content_type="application/json",
+            )
+            assert response.status_code == 400
+            assert "between 1 and 336" in response.json["error"]
+
+            # Test too high
+            response = client.post(
+                "/api/scheduler/restart",
+                json={"epg_interval_hours": 500},
+                content_type="application/json",
+            )
+            assert response.status_code == 400
+
+    def test_scheduler_restart_fcc_interval_invalid(self, app, client):
+        """Test scheduler restart with invalid FCC interval"""
+        mock_scheduler = MagicMock()
+        mock_scheduler.account_interval_hours = 6
+        mock_scheduler.epg_interval_hours = 12
+        mock_scheduler.fcc_interval_hours = 168
+
+        with patch("routes.api._scheduler", mock_scheduler):
+            response = client.post(
+                "/api/scheduler/restart",
+                json={"fcc_interval_hours": "invalid"},
+                content_type="application/json",
+            )
+            assert response.status_code == 400
+            assert "Invalid FCC interval" in response.json["error"]
+
+    def test_scheduler_restart_fcc_interval_out_of_range(self, app, client):
+        """Test scheduler restart with FCC interval out of range"""
+        mock_scheduler = MagicMock()
+        mock_scheduler.account_interval_hours = 6
+        mock_scheduler.epg_interval_hours = 12
+        mock_scheduler.fcc_interval_hours = 168
+
+        with patch("routes.api._scheduler", mock_scheduler):
+            # Test too low
+            response = client.post(
+                "/api/scheduler/restart",
+                json={"fcc_interval_hours": 10},
+                content_type="application/json",
+            )
+            assert response.status_code == 400
+            assert "between 24 and 672" in response.json["error"]
+
+            # Test too high
+            response = client.post(
+                "/api/scheduler/restart",
+                json={"fcc_interval_hours": 1000},
+                content_type="application/json",
+            )
+            assert response.status_code == 400
+
 
 # ============================================================================
 # Cache API Tests

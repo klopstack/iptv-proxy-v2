@@ -474,14 +474,18 @@ class ChannelHealthService:
     def get_channels_to_scan(account_id: int, limit: int = 100) -> List[Channel]:
         """
         Get channels that need health scanning, prioritizing:
-        1. Channels never scanned
-        2. Channels not scanned recently
-        3. Channels with degraded status (for confirmation)
+        1. Visible channels first (hidden channels are lower priority)
+        2. Within each visibility group:
+           a. Channels never scanned
+           b. Channels not scanned recently
+           c. Channels with degraded status (for confirmation)
 
         Excludes channels that are:
         - Already marked as permanently down
         - Marked as ignored
         - Inactive
+        - PPV channels (they only have content during specific events)
+        - Hidden channels (if scan_hidden_channels config is false)
 
         Args:
             account_id: Account to get channels for
@@ -494,15 +498,24 @@ class ChannelHealthService:
         scan_interval = ChannelHealthConfig.get_int("scan_interval_minutes", 30)
         scan_cutoff = datetime.now(timezone.utc) - timedelta(minutes=scan_interval)
 
+        # Check if we should scan hidden channels
+        scan_hidden = ChannelHealthConfig.get_bool("scan_hidden_channels", False)
+
         # Get channels that need scanning
         # Subquery to get channels with their health status
+        # Exclude PPV channels (they only work during scheduled events)
+        channels_query = Channel.query.outerjoin(ChannelHealthStatus).filter(
+            Channel.account_id == account_id,
+            Channel.is_active == True,  # noqa: E712
+            Channel.is_ppv == False,  # noqa: E712 - Exclude PPV channels
+        )
+
+        # Optionally exclude hidden channels
+        if not scan_hidden:
+            channels_query = channels_query.filter(Channel.is_visible == True)  # noqa: E712
+
         channels_query = (
-            Channel.query.outerjoin(ChannelHealthStatus)
-            .filter(
-                Channel.account_id == account_id,
-                Channel.is_active == True,  # noqa: E712
-            )
-            .filter(
+            channels_query.filter(
                 # Include channels that:
                 # - Have no health status (never checked)
                 # - Are not down or ignored
@@ -524,7 +537,12 @@ class ChannelHealthService:
                 )
             )
             .order_by(
-                # Prioritize: never checked, then degraded, then oldest check
+                # Prioritize visible channels first
+                db.case(
+                    (Channel.is_visible == True, 0),  # noqa: E712
+                    else_=1,
+                ),
+                # Then: never checked, then degraded, then oldest check
                 db.case(
                     (ChannelHealthStatus.id.is_(None), 0),
                     (ChannelHealthStatus.status == ChannelHealthStatus.STATUS_DEGRADED, 1),
@@ -822,6 +840,7 @@ class ChannelHealthService:
             return {
                 "summary": {
                     "total": 0,
+                    "ppv": 0,
                     "by_status": {
                         ChannelHealthStatus.STATUS_UNKNOWN: 0,
                         ChannelHealthStatus.STATUS_HEALTHY: 0,
@@ -833,9 +852,26 @@ class ChannelHealthService:
                 "config": ChannelHealthConfig.get_all(),
             }
 
+        # Count PPV channels (excluded from health scanning) using the is_ppv column
+        ppv_query = (
+            db.session.query(func.count(Channel.id))
+            .join(Account)
+            .filter(Account.enabled == True)  # noqa: E712
+            .filter(Channel.is_ppv == True)  # noqa: E712
+        )
+
+        if account_id:
+            ppv_query = ppv_query.filter(Channel.account_id == account_id)
+
+        if category_id:
+            ppv_query = ppv_query.filter(Channel.category_id == category_id)
+
+        ppv_count = ppv_query.scalar() or 0
+
         return {
             "summary": {
                 "total": result.total or 0,
+                "ppv": ppv_count,
                 "by_status": {
                     ChannelHealthStatus.STATUS_UNKNOWN: result.unknown or 0,
                     ChannelHealthStatus.STATUS_HEALTHY: result.healthy or 0,
@@ -854,6 +890,7 @@ class ChannelHealthService:
         status_filter: Optional[str] = None,
         visibility_filter: Optional[str] = None,
         epg_filter: Optional[str] = None,
+        ppv_filter: Optional[str] = None,
         search: Optional[str] = None,
         page: int = 1,
         per_page: int = 100,
@@ -868,6 +905,7 @@ class ChannelHealthService:
             status_filter: Filter by status (down, degraded, healthy, unknown, ignored)
             visibility_filter: Filter by visibility (visible, hidden)
             epg_filter: Filter by EPG presence (with, without)
+            ppv_filter: Filter by PPV status (ppv, non-ppv, all)
             search: Search by channel name
             page: Page number (1-indexed)
             per_page: Items per page
@@ -916,6 +954,14 @@ class ChannelHealthService:
                 query = query.filter(epg_exists)
             elif epg_filter == "without":
                 query = query.filter(~epg_exists)
+
+        # PPV filter
+        if ppv_filter:
+            if ppv_filter == "ppv":
+                query = query.filter(Channel.is_ppv == True)  # noqa: E712
+            elif ppv_filter == "non-ppv":
+                query = query.filter(Channel.is_ppv == False)  # noqa: E712
+            # "all" means no filter
 
         # Get total count before pagination
         total = query.count()

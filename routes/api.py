@@ -59,8 +59,6 @@ def get_all_categories():
     - include_epg (optional): Include EPG coverage stats (default: false)
     - include_ppv (optional): Include PPV categories (default: true)
     """
-    from services.epg_service import is_ppv_category
-
     account_id = request.args.get("account_id", type=int)
     include_empty = request.args.get("include_empty", "false").lower() == "true"
     include_epg = request.args.get("include_epg", "false").lower() == "true"
@@ -74,6 +72,7 @@ def get_all_categories():
             Category.category_id,
             Category.category_name,
             Category.account_id,
+            Category.is_ppv,
             Account.name.label("account_name"),
             db.func.sum(
                 db.case((db.and_(Channel.is_visible == True, Channel.is_active == True), 1), else_=0)  # noqa: E712
@@ -103,7 +102,14 @@ def get_all_categories():
                 Channel.account_id == Category.account_id,
             ),
         )
-        .group_by(Category.id, Category.category_id, Category.category_name, Category.account_id, Account.name)
+        .group_by(
+            Category.id,
+            Category.category_id,
+            Category.category_name,
+            Category.account_id,
+            Category.is_ppv,
+            Account.name,
+        )
     )
 
     if account_id:
@@ -147,8 +153,8 @@ def get_all_categories():
 
     result = []
     for cat in categories:
-        # Skip PPV categories if not requested
-        if not include_ppv and is_ppv_category(cat.category_name):
+        # Skip PPV categories if not requested (use database column)
+        if not include_ppv and cat.is_ppv:
             continue
 
         cat_data = {
@@ -161,7 +167,7 @@ def get_all_categories():
             "hidden_count": int(cat.hidden_count or 0),
             "total_count": int(cat.visible_count or 0) + int(cat.hidden_count or 0),
             "with_epg_id_count": int(cat.with_epg_id_count or 0),
-            "is_ppv": is_ppv_category(cat.category_name),
+            "is_ppv": cat.is_ppv or False,
         }
 
         if include_epg:

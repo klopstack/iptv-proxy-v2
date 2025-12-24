@@ -220,6 +220,7 @@ class Category(db.Model):  # type: ignore[name-defined]
     # Sync metadata
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
     is_active = db.Column(db.Boolean, default=True)
+    is_ppv = db.Column(db.Boolean, default=False, index=True)  # PPV category flag
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -227,6 +228,7 @@ class Category(db.Model):  # type: ignore[name-defined]
     __table_args__ = (
         db.UniqueConstraint("account_id", "category_id", name="_account_category_uc"),
         db.Index("idx_category_account", "account_id"),
+        db.Index("idx_category_ppv", "is_ppv"),
     )
 
     def __repr__(self):
@@ -257,6 +259,7 @@ class Channel(db.Model):  # type: ignore[name-defined]
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
     is_active = db.Column(db.Boolean, default=True)
     is_visible = db.Column(db.Boolean, default=True)  # Pre-computed filter result
+    is_ppv = db.Column(db.Boolean, default=False, index=True)  # PPV channel (set at sync based on category)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1557,6 +1560,11 @@ class ChannelHealthConfig(db.Model):  # type: ignore[name-defined]
         "scan_interval_minutes": ("30", "Minutes between channel scan cycles"),
         # Black screen detection threshold (0.0-1.0, percentage of black frames)
         "black_screen_threshold": ("0.95", "Ratio of black frames to consider screen as black (0.0-1.0)"),
+        # Whether to scan hidden channels (channels filtered out by user rules)
+        "scan_hidden_channels": (
+            "false",
+            "Whether to scan hidden/filtered channels (visible channels are always prioritized)",
+        ),
     }
 
     @staticmethod

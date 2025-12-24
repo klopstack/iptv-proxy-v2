@@ -1158,3 +1158,506 @@ class TestParseLocationTag:
             city, state = EpgMatchRulesService._parse_location_tag(None)
             assert city is None
             assert state is None
+
+
+class TestDefaultRulesets:
+    """Tests for creating default rulesets and exclusion patterns"""
+
+    def test_create_default_epg_match_ruleset(self, client, app):
+        """Test creating the default EPG match ruleset"""
+        response = client.post("/api/epg-match-rules/create-default")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["success"] is True
+        assert data["name"] == "Default EPG Matching"
+        assert data["rule_count"] == 7  # 7 default rules
+
+    def test_create_default_epg_match_ruleset_already_exists(self, client, app):
+        """Test creating default ruleset when it already exists"""
+        # Create it first
+        client.post("/api/epg-match-rules/create-default")
+        # Try to create again
+        response = client.post("/api/epg-match-rules/create-default")
+        assert response.status_code == 400
+        data = response.get_json()
+        assert data["success"] is False
+        assert "already exists" in data["error"]
+
+    def test_create_default_exclusion_patterns(self, client, app):
+        """Test creating default exclusion patterns"""
+        response = client.post("/api/epg-match-rules/create-default-exclusions")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["success"] is True
+        assert data["patterns_created"] == 4  # 4 default patterns
+
+    def test_create_default_exclusion_patterns_skip_existing(self, client, app):
+        """Test that creating default exclusions skips existing patterns"""
+        # Create them first
+        client.post("/api/epg-match-rules/create-default-exclusions")
+        # Try to create again
+        response = client.post("/api/epg-match-rules/create-default-exclusions")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["patterns_created"] == 0
+        assert data["patterns_skipped"] == 4
+
+
+class TestMatchTypes:
+    """Tests for match type info endpoint"""
+
+    def test_get_match_types(self, client, app):
+        """Test getting available match types"""
+        response = client.get("/api/epg-match-rules/match-types")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert "match_types" in data
+        # Check for some expected match types
+        match_type_values = [mt["value"] for mt in data["match_types"]]
+        assert "provider_id" in match_type_values
+        assert "exact_name" in match_type_values
+        assert "fuzzy_name" in match_type_values
+        assert "fcc_lookup" in match_type_values
+
+
+class TestDuplicateRuleset:
+    """Tests for duplicating rulesets"""
+
+    def test_duplicate_ruleset(self, client, app, sample_ruleset):
+        """Test duplicating a ruleset"""
+        with app.app_context():
+            # First add a rule to the ruleset
+            from models import EpgMatchRule, db
+
+            rule = EpgMatchRule(
+                ruleset_id=sample_ruleset.id,
+                name="Test Rule",
+                description="A test rule",
+                match_type="exact_name",
+                pattern="ESPN",
+                priority=10,
+                enabled=True,
+            )
+            db.session.add(rule)
+            db.session.commit()
+
+        response = client.post(f"/api/epg-match-rules/rulesets/{sample_ruleset.id}/duplicate")
+        assert response.status_code == 201
+        data = response.get_json()
+        assert "(Copy)" in data["name"]
+        assert data["rule_count"] == 1
+
+    def test_duplicate_ruleset_not_found(self, client, app):
+        """Test duplicating a non-existent ruleset"""
+        response = client.post("/api/epg-match-rules/rulesets/99999/duplicate")
+        assert response.status_code == 404
+
+    def test_duplicate_ruleset_unique_name(self, client, app, sample_ruleset):
+        """Test that duplicating creates unique names"""
+        # Duplicate twice
+        response1 = client.post(f"/api/epg-match-rules/rulesets/{sample_ruleset.id}/duplicate")
+        assert response1.status_code == 201
+        name1 = response1.get_json()["name"]
+
+        response2 = client.post(f"/api/epg-match-rules/rulesets/{sample_ruleset.id}/duplicate")
+        assert response2.status_code == 201
+        name2 = response2.get_json()["name"]
+
+        # Names should be different
+        assert name1 != name2
+
+
+class TestNameMappings:
+    """Tests for channel name mapping functionality"""
+
+    def test_create_name_mapping(self, client, app):
+        """Test creating a channel name mapping"""
+        response = client.post(
+            "/api/epg-match-rules/name-mappings",
+            json={
+                "name": "Test Mapping",
+                "description": "Maps old name to new name",
+                "old_name": "ESPN HD",
+                "new_name": "ESPN",
+            },
+        )
+        assert response.status_code == 201
+        data = response.get_json()
+        assert data["name"] == "Test Mapping"
+        assert data["old_name"] == "ESPN HD"
+        assert data["new_name"] == "ESPN"
+
+    def test_get_name_mappings(self, client, app):
+        """Test getting all name mappings"""
+        # Create a mapping first
+        client.post(
+            "/api/epg-match-rules/name-mappings",
+            json={"name": "Test", "old_name": "Old", "new_name": "New"},
+        )
+
+        response = client.get("/api/epg-match-rules/name-mappings")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert isinstance(data, list)
+        assert len(data) >= 1
+
+    def test_get_name_mapping_by_id(self, client, app):
+        """Test getting a specific name mapping"""
+        # Create a mapping first
+        create_response = client.post(
+            "/api/epg-match-rules/name-mappings",
+            json={"name": "Test", "old_name": "Old", "new_name": "New"},
+        )
+        mapping_id = create_response.get_json()["id"]
+
+        response = client.get(f"/api/epg-match-rules/name-mappings/{mapping_id}")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["id"] == mapping_id
+
+    def test_update_name_mapping(self, client, app):
+        """Test updating a name mapping"""
+        # Create a mapping first
+        create_response = client.post(
+            "/api/epg-match-rules/name-mappings",
+            json={"name": "Test", "old_name": "Old", "new_name": "New"},
+        )
+        mapping_id = create_response.get_json()["id"]
+
+        response = client.put(
+            f"/api/epg-match-rules/name-mappings/{mapping_id}",
+            json={"new_name": "Updated New", "priority": 50},
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["new_name"] == "Updated New"
+        assert data["priority"] == 50
+
+    def test_delete_name_mapping(self, client, app):
+        """Test deleting a name mapping"""
+        # Create a mapping first
+        create_response = client.post(
+            "/api/epg-match-rules/name-mappings",
+            json={"name": "Test", "old_name": "Old", "new_name": "New"},
+        )
+        mapping_id = create_response.get_json()["id"]
+
+        response = client.delete(f"/api/epg-match-rules/name-mappings/{mapping_id}")
+        assert response.status_code == 204
+
+        # Verify it's gone
+        get_response = client.get(f"/api/epg-match-rules/name-mappings/{mapping_id}")
+        assert get_response.status_code == 404
+
+
+class TestNameMappingPreview:
+    """Tests for channel name mapping preview"""
+
+    def test_preview_name_mapping_empty_pattern(self, client, app):
+        """Test preview with empty pattern returns error"""
+        response = client.post("/api/epg-match-rules/name-mappings/preview", json={})
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["total_count"] == 0
+        assert "old_name is required" in data.get("error", "")
+
+    def test_preview_name_mapping_invalid_regex(self, client, app):
+        """Test preview with invalid regex"""
+        response = client.post(
+            "/api/epg-match-rules/name-mappings/preview",
+            json={"old_name": "[invalid", "new_name": "test", "match_type": "regex"},
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert "Invalid regex" in data.get("error", "")
+
+    def test_preview_name_mapping_contains(self, client, app, sample_account):
+        """Test preview with contains match type"""
+        with app.app_context():
+            from models import Channel, db
+
+            # Create a test channel
+            channel = Channel(
+                account_id=sample_account.id,
+                stream_id=123,
+                name="ESPN HD Sports",
+                cleaned_name="ESPN HD Sports",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+        response = client.post(
+            "/api/epg-match-rules/name-mappings/preview",
+            json={
+                "old_name": "HD",
+                "new_name": "",
+                "match_type": "contains",
+                "case_sensitive": False,
+            },
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        # Should match the channel
+        assert data["total_count"] >= 1
+
+    def test_preview_name_mapping_exact(self, client, app, sample_account):
+        """Test preview with exact match type"""
+        with app.app_context():
+            from models import Channel, db
+
+            channel = Channel(
+                account_id=sample_account.id,
+                stream_id=124,
+                name="CNN",
+                cleaned_name="CNN",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+        response = client.post(
+            "/api/epg-match-rules/name-mappings/preview",
+            json={
+                "old_name": "CNN",
+                "new_name": "CNN News",
+                "match_type": "exact",
+                "case_sensitive": False,
+            },
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["total_count"] >= 1
+        # Check the transformation
+        if data["matches"]:
+            assert data["matches"][0]["transformed_name"] == "CNN News"
+
+    def test_preview_name_mapping_prefix(self, client, app, sample_account):
+        """Test preview with prefix match type"""
+        with app.app_context():
+            from models import Channel, db
+
+            channel = Channel(
+                account_id=sample_account.id,
+                stream_id=125,
+                name="HBO Max",
+                cleaned_name="HBO Max",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+        response = client.post(
+            "/api/epg-match-rules/name-mappings/preview",
+            json={
+                "old_name": "HBO",
+                "new_name": "HBO+",
+                "match_type": "prefix",
+                "case_sensitive": False,
+            },
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["total_count"] >= 1
+
+    def test_preview_name_mapping_suffix(self, client, app, sample_account):
+        """Test preview with suffix match type"""
+        with app.app_context():
+            from models import Channel, db
+
+            channel = Channel(
+                account_id=sample_account.id,
+                stream_id=126,
+                name="Sports HD",
+                cleaned_name="Sports HD",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+        response = client.post(
+            "/api/epg-match-rules/name-mappings/preview",
+            json={
+                "old_name": "HD",
+                "new_name": "",
+                "match_type": "suffix",
+                "case_sensitive": False,
+            },
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["total_count"] >= 1
+
+    def test_preview_name_mapping_regex(self, client, app, sample_account):
+        """Test preview with regex match type"""
+        with app.app_context():
+            from models import Channel, db
+
+            channel = Channel(
+                account_id=sample_account.id,
+                stream_id=127,
+                name="ABC 4K Sports",
+                cleaned_name="ABC 4K Sports",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+        response = client.post(
+            "/api/epg-match-rules/name-mappings/preview",
+            json={
+                "old_name": r"\s*4K\s*",
+                "new_name": " ",
+                "match_type": "regex",
+                "case_sensitive": False,
+            },
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["total_count"] >= 1
+
+
+class TestExclusionPreviewExtended:
+    """Additional tests for exclusion pattern preview"""
+
+    def test_preview_exclusion_category_name(self, client, app, sample_account):
+        """Test exclusion preview for category_name pattern type"""
+        with app.app_context():
+            from models import Category, Channel, db
+
+            category = Category(
+                account_id=sample_account.id,
+                category_id=1,
+                category_name="PPV Sports",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=sample_account.id,
+                stream_id=200,
+                name="Big Fight",
+                cleaned_name="Big Fight",
+                category_id=category.id,
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+        response = client.post(
+            "/api/epg-match-rules/exclusions/preview",
+            json={
+                "pattern_type": "category_name",
+                "pattern": "PPV",
+                "is_regex": False,
+            },
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["total_count"] >= 1
+
+    def test_preview_exclusion_channel_name_regex(self, client, app, sample_account):
+        """Test exclusion preview with channel_name and regex"""
+        with app.app_context():
+            from models import Channel, db
+
+            channel = Channel(
+                account_id=sample_account.id,
+                stream_id=201,
+                name="PPV Event 123",
+                cleaned_name="PPV Event 123",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+        response = client.post(
+            "/api/epg-match-rules/exclusions/preview",
+            json={
+                "pattern_type": "channel_name",
+                "pattern": r"PPV\s+Event\s+\d+",
+                "is_regex": True,
+            },
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["total_count"] >= 1
+
+
+class TestRulePreviewExtended:
+    """Additional tests for rule pattern preview"""
+
+    def test_preview_rule_category_pattern(self, client, app, sample_account):
+        """Test rule preview with category_pattern"""
+        with app.app_context():
+            from models import Category, Channel, db
+
+            category = Category(
+                account_id=sample_account.id,
+                category_id=2,
+                category_name="US Sports",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=sample_account.id,
+                stream_id=300,
+                name="ESPN",
+                cleaned_name="ESPN",
+                category_id=category.id,
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+        response = client.post(
+            "/api/epg-match-rules/rules/preview",
+            json={
+                "match_type": "exact_name",
+                "source": "cleaned_name",
+                "pattern": "ESPN",
+                "category_pattern": "Sports",
+            },
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["total_count"] >= 1
+
+    def test_preview_rule_with_exclude_category(self, client, app, sample_account):
+        """Test rule preview with category_exclude_pattern"""
+        with app.app_context():
+            from models import Category, Channel, db
+
+            category = Category(
+                account_id=sample_account.id,
+                category_id=3,
+                category_name="UK Sports",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=sample_account.id,
+                stream_id=301,
+                name="ESPN UK",
+                cleaned_name="ESPN UK",
+                category_id=category.id,
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+        response = client.post(
+            "/api/epg-match-rules/rules/preview",
+            json={
+                "match_type": "exact_name",
+                "source": "cleaned_name",
+                "pattern": "ESPN UK",
+                "category_exclude_pattern": "PPV",
+            },
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        # Should match - category is "UK Sports", not PPV
+        assert data["total_count"] >= 1

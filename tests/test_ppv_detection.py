@@ -181,6 +181,7 @@ class TestPPVEPGMatching:
                 name="UFC 300 Main Event",
                 category_id=ppv_category.id,
                 is_active=True,
+                is_ppv=True,  # Marked as PPV (set during sync based on category)
             )
             db.session.add(ppv_channel)
 
@@ -236,6 +237,7 @@ class TestPPVEPGMatching:
                     name=f"PPV Event {i}",
                     category_id=ppv_category.id,
                     is_active=True,
+                    is_ppv=True,  # Marked as PPV (set during sync based on category)
                 )
                 db.session.add(channel)
             db.session.commit()

@@ -134,6 +134,11 @@ class ChannelSyncService:
             if not category_id:
                 continue
 
+            # Check if this is a PPV category
+            from services.epg_service import is_ppv_category
+
+            is_ppv = is_ppv_category(category_name)
+
             if category_id in existing:
                 # Update existing
                 cat = existing[category_id]
@@ -143,6 +148,7 @@ class ChannelSyncService:
                     stats["categories_updated"] += 1
                 cat.last_seen = now
                 cat.is_active = True
+                cat.is_ppv = is_ppv
             else:
                 # Create new
                 cat = Category(
@@ -151,6 +157,7 @@ class ChannelSyncService:
                     category_name=category_name,
                     last_seen=now,
                     is_active=True,
+                    is_ppv=is_ppv,
                 )
                 db.session.add(cat)
                 stats["categories_added"] += 1
@@ -196,6 +203,11 @@ class ChannelSyncService:
                 category_id = categories[cat_id_str]
                 category_name = category_names.get(cat_id_str, "")
 
+            # Determine if this is a PPV channel based on category
+            from services.epg_service import is_ppv_category
+
+            is_ppv = is_ppv_category(category_name) if category_name else False
+
             # Compute cleaned name using tag rules
             _, cleaned_name = TagService.extract_tags(name, category_name, tag_rules)
 
@@ -212,6 +224,9 @@ class ChannelSyncService:
                     changed = True
                 if chan.category_id != category_id:
                     chan.category_id = category_id
+                    changed = True
+                if chan.is_ppv != is_ppv:
+                    chan.is_ppv = is_ppv
                     changed = True
 
                 # Update other fields
@@ -244,6 +259,7 @@ class ChannelSyncService:
                     name=name,
                     cleaned_name=cleaned_name,
                     category_id=category_id,
+                    is_ppv=is_ppv,
                     stream_type=chan_data.get("stream_type"),
                     stream_icon=chan_data.get("stream_icon"),
                     epg_channel_id=chan_data.get("epg_channel_id"),

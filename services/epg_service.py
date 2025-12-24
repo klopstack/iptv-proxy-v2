@@ -1206,9 +1206,12 @@ class EpgService:
             logger.debug(f"EPG matching: Processing channel '{channel.name}' (stream_id={channel.stream_id})")
 
             # Skip PPV channels - they update dynamically and don't have traditional EPG
-            if is_ppv_channel(channel):
+            # Use pre-computed is_ppv column instead of expensive pattern matching
+            if channel.is_ppv:
                 stats["skipped_ppv"] += 1
-                logger.debug(f"  -> Skipping PPV channel (category='{channel.category.category_name}')")
+                logger.debug(
+                    f"  -> Skipping PPV channel (category='{channel.category.category_name if channel.category else 'None'}')"
+                )
                 continue
 
             # Skip if already has a manual override mapping
@@ -2443,7 +2446,7 @@ class EpgService:
                     "with_provider_epg": with_provider_epg,
                     "with_epg_mapping": with_mapping,
                     "coverage_percent": round((with_mapping / total * 100), 1) if total > 0 else 0,
-                    "is_ppv": is_ppv_category(category.category_name),
+                    "is_ppv": category.is_ppv or False,
                 }
             )
 

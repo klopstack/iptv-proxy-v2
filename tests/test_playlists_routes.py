@@ -10,7 +10,7 @@ from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Tag, 
 
 @pytest.fixture
 def test_account(app):
-    """Create a test account"""
+    """Create a test account and return its ID"""
     with app.app_context():
         account = Account(
             name="Test Account",
@@ -21,7 +21,8 @@ def test_account(app):
         )
         db.session.add(account)
         db.session.commit()
-        yield account
+        account_id = account.id
+    yield account_id
 
 
 @pytest.fixture
@@ -29,7 +30,7 @@ def test_channel_with_tag(app, test_account):
     """Create a test channel with tags"""
     with app.app_context():
         category = Category(
-            account_id=test_account.id,
+            account_id=test_account,
             category_id="cat1",
             category_name="Movies",
         )
@@ -37,7 +38,7 @@ def test_channel_with_tag(app, test_account):
         db.session.flush()
 
         channel = Channel(
-            account_id=test_account.id,
+            account_id=test_account,
             stream_id="ch1",
             name="Movie Channel HD",
             cleaned_name="Movie Channel",
@@ -53,14 +54,15 @@ def test_channel_with_tag(app, test_account):
         db.session.flush()
 
         channel_tag = ChannelTag(
-            account_id=test_account.id,
+            account_id=test_account,
             stream_id="ch1",
             tag_id=tag.id,
         )
         db.session.add(channel_tag)
         db.session.commit()
 
-        yield channel
+        channel_id = channel.id
+    yield channel_id
 
 
 @pytest.fixture
@@ -70,7 +72,7 @@ def test_playlist_config(app, test_account):
         config = PlaylistConfig(
             name="Test Playlist",
             description="Test playlist description",
-            include_accounts=json.dumps([test_account.id]),
+            include_accounts=json.dumps([test_account]),
             exclude_accounts=json.dumps([]),
             include_tags=json.dumps([]),
             exclude_tags=json.dumps([]),
@@ -79,7 +81,8 @@ def test_playlist_config(app, test_account):
         )
         db.session.add(config)
         db.session.commit()
-        yield config
+        config_id = config.id
+    yield config_id
 
 
 # ============================================================================
@@ -112,7 +115,7 @@ class TestPlaylistConfigCRUD:
             json={
                 "name": "New Playlist",
                 "description": "A new test playlist",
-                "include_accounts": [test_account.id],
+                "include_accounts": [test_account],
                 "exclude_accounts": [],
                 "include_tags": ["HD"],
                 "exclude_tags": ["SD"],
@@ -123,7 +126,7 @@ class TestPlaylistConfigCRUD:
         assert response.status_code == 201
         data = response.json
         assert data["name"] == "New Playlist"
-        assert data["include_accounts"] == [test_account.id]
+        assert data["include_accounts"] == [test_account]
         assert data["include_tags"] == ["HD"]
 
     def test_create_playlist_config_minimal(self, app, client):
@@ -151,7 +154,7 @@ class TestPlaylistConfigCRUD:
     def test_update_playlist_config(self, app, client, test_playlist_config):
         """Test updating a playlist config"""
         response = client.put(
-            f"/api/playlist-configs/{test_playlist_config.id}",
+            f"/api/playlist-configs/{test_playlist_config}",
             json={
                 "name": "Updated Playlist",
                 "description": "Updated description",
@@ -177,7 +180,7 @@ class TestPlaylistConfigCRUD:
 
     def test_delete_playlist_config(self, app, client, test_playlist_config):
         """Test deleting a playlist config"""
-        response = client.delete(f"/api/playlist-configs/{test_playlist_config.id}")
+        response = client.delete(f"/api/playlist-configs/{test_playlist_config}")
         assert response.status_code == 204
 
         # Verify it's gone
@@ -214,7 +217,7 @@ class TestPlaylistPreview:
                 mock_cache.get_cached_streams.return_value = mock_streams
                 mock_cache.get_cached_categories.return_value = mock_categories
 
-                response = client.get(f"/api/playlist-configs/{test_playlist_config.id}/preview")
+                response = client.get(f"/api/playlist-configs/{test_playlist_config}/preview")
                 # Preview should return 200 and have expected structure
                 assert response.status_code == 200
                 data = response.json
@@ -242,7 +245,7 @@ class TestPlaylistPreview:
                 mock_cache.get_cached_streams.return_value = mock_streams
                 mock_cache.get_cached_categories.return_value = mock_categories
 
-                response = client.get(f"/api/playlist-configs/{test_playlist_config.id}/preview?limit=10&offset=0")
+                response = client.get(f"/api/playlist-configs/{test_playlist_config}/preview?limit=10&offset=0")
                 assert response.status_code == 200
                 data = response.json
                 # Response should have pagination structure
@@ -268,3 +271,183 @@ class TestSlugify:
         data = response.json
         assert len(data) == 1
         assert data[0]["slug"] == "test-playlist"  # "Test Playlist" -> "test-playlist"
+
+
+# ============================================================================
+# Tag Filter Tests
+# ============================================================================
+
+
+class TestMatchesTagFilter:
+    """Tests for _matches_tag_filter function"""
+
+    def test_exclude_tags_takes_precedence(self, app):
+        """Test that exclude tags take precedence over include"""
+        from routes.playlists import _matches_tag_filter
+
+        # Channel has US and HD tags
+        channel_tags = {"US", "HD"}
+        # Include US but exclude HD
+        include_tags = ["US"]
+        exclude_tags = ["HD"]
+
+        # Should not match because HD is excluded
+        assert _matches_tag_filter(channel_tags, include_tags, exclude_tags, "any") is False
+
+    def test_include_tags_all_mode(self, app):
+        """Test that all mode requires all include tags"""
+        from routes.playlists import _matches_tag_filter
+
+        channel_tags = {"US", "HD"}
+        include_tags = ["US", "HD", "4K"]  # Need all three
+
+        # Should not match - missing 4K
+        assert _matches_tag_filter(channel_tags, include_tags, [], "all") is False
+
+        # Should match when channel has all tags
+        channel_tags = {"US", "HD", "4K"}
+        assert _matches_tag_filter(channel_tags, include_tags, [], "all") is True
+
+    def test_include_tags_any_mode(self, app):
+        """Test that any mode requires at least one include tag"""
+        from routes.playlists import _matches_tag_filter
+
+        channel_tags = {"US", "HD"}
+        include_tags = ["UK", "CA"]  # Neither present
+
+        # Should not match - no matching tag
+        assert _matches_tag_filter(channel_tags, include_tags, [], "any") is False
+
+        # Add a matching tag
+        include_tags = ["US", "UK"]
+        assert _matches_tag_filter(channel_tags, include_tags, [], "any") is True
+
+    def test_no_include_tags_includes_all(self, app):
+        """Test that no include tags includes all (not excluded)"""
+        from routes.playlists import _matches_tag_filter
+
+        channel_tags = {"US", "HD"}
+        include_tags = []  # No include filter
+        exclude_tags = []
+
+        # Should match - no restrictions
+        assert _matches_tag_filter(channel_tags, include_tags, exclude_tags, "any") is True
+
+    def test_case_insensitive_matching(self, app):
+        """Test that tag matching is case insensitive"""
+        from routes.playlists import _matches_tag_filter
+
+        channel_tags = {"us", "hd"}  # lowercase
+        include_tags = ["US", "HD"]  # uppercase
+
+        assert _matches_tag_filter(channel_tags, include_tags, [], "all") is True
+
+
+# ============================================================================
+# M3U Generation Tests
+# ============================================================================
+
+
+class TestM3UGeneration:
+    """Tests for M3U playlist generation"""
+
+    def test_generate_playlist_account_not_found(self, app, client):
+        """Test generating playlist for non-existent account"""
+        response = client.get("/playlist/99999.m3u")
+        assert response.status_code == 404
+
+    def test_generate_playlist_account_disabled(self, app, client, test_account):
+        """Test generating playlist for disabled account"""
+        with app.app_context():
+            from models import Account
+
+            account = Account.query.get(test_account)
+            account.enabled = False
+            db.session.commit()
+
+        response = client.get(f"/playlist/{test_account}.m3u")
+        assert response.status_code == 403
+
+    def test_generate_playlist_not_synced(self, app, client, test_account):
+        """Test generating playlist for account without synced channels"""
+        response = client.get(f"/playlist/{test_account}.m3u")
+        assert response.status_code == 503  # Service unavailable
+
+    def test_generate_playlist_with_channels(self, app, client, test_channel_with_tag, test_account):
+        """Test generating playlist with synced channels"""
+        from unittest.mock import patch
+
+        with patch("routes.playlists.cache_service") as mock_cache:
+            mock_cache.get_cached_categories.return_value = [{"category_id": "cat1", "category_name": "Movies"}]
+
+            response = client.get(f"/playlist/{test_account}.m3u")
+            # Should succeed
+            assert response.status_code == 200
+            assert b"#EXTM3U" in response.data
+
+
+# ============================================================================
+# Playlist Config M3U Generation Tests
+# ============================================================================
+
+
+class TestPlaylistConfigM3U:
+    """Tests for playlist config M3U generation"""
+
+    def test_generate_playlist_config_not_found(self, app, client):
+        """Test generating M3U for non-existent config"""
+        response = client.get("/playlist/config/99999.m3u")
+        assert response.status_code == 404
+
+    def test_generate_playlist_config_by_slug_not_found(self, app, client):
+        """Test generating M3U by slug for non-existent config"""
+        response = client.get("/playlist/config/nonexistent-config.m3u")
+        assert response.status_code == 404
+
+    def test_generate_playlist_config_disabled(self, app, client, test_playlist_config):
+        """Test generating M3U for disabled config"""
+        with app.app_context():
+            from models import PlaylistConfig
+
+            config = PlaylistConfig.query.get(test_playlist_config)
+            config.enabled = False
+            db.session.commit()
+
+        response = client.get(f"/playlist/config/{test_playlist_config}.m3u")
+        assert response.status_code == 403
+
+
+# ============================================================================
+# EPG Proxy Tests
+# ============================================================================
+
+
+class TestEPGProxy:
+    """Tests for EPG proxy routes"""
+
+    def test_proxy_epg_account_not_found(self, app, client):
+        """Test proxying EPG for non-existent account"""
+        response = client.get("/epg/99999.xml")
+        assert response.status_code == 404
+
+    def test_proxy_epg_account_disabled(self, app, client, test_account):
+        """Test proxying EPG for disabled account"""
+        with app.app_context():
+            from models import Account
+
+            account = Account.query.get(test_account)
+            account.enabled = False
+            db.session.commit()
+
+        response = client.get(f"/epg/{test_account}.xml")
+        assert response.status_code == 403
+
+    def test_generate_epg_config_not_found(self, app, client):
+        """Test generating EPG for non-existent config"""
+        response = client.get("/epg/config/99999.xml")
+        assert response.status_code == 404
+
+    def test_generate_epg_config_by_slug_not_found(self, app, client):
+        """Test generating EPG by slug for non-existent config"""
+        response = client.get("/epg/config/nonexistent-config.xml")
+        assert response.status_code == 404
