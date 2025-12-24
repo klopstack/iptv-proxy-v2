@@ -93,6 +93,7 @@ get_links_for_channel
 
 # epg.py
 get_epg_sources
+get_source_mappings
 create_epg_source
 update_epg_source
 delete_epg_source
@@ -190,6 +191,13 @@ stations_page
 decompress_content
 parse_xmltv
 _get_channel_country_tags
+is_ppv_channel
+is_ppv_category
+is_ppv_placeholder_name
+get_ppv_event_title
+generate_ppv_epg_entries
+get_ppv_epg_xmltv
+PPV_PLACEHOLDER_PATTERNS
 event  # xml iteration variable
 
 # FCC facility service - public API methods

@@ -10,6 +10,7 @@ from flask import Blueprint, jsonify, request
 
 from error_handling import handle_errors
 from models import Account, ChannelEpgMapping, EpgChannel, EpgSource, SdLineup, SdStation, db
+from services.epg_match_rules_service import EpgMatchRulesService
 from services.epg_service import EpgService, make_sd_xmltv_id, normalize_xmltv_url
 from services.iptv_service import IPTVService
 from services.schedules_direct import SchedulesDirectClient, SchedulesDirectError, validate_credentials
@@ -120,8 +121,20 @@ def _sync_sd_channels_to_epg(source: EpgSource, channels: List[Dict]) -> Dict:
 
 @epg_bp.route("/api/epg/sources", methods=["GET"])
 def get_epg_sources():
-    """Get all EPG sources"""
+    """Get all EPG sources with usage statistics"""
     sources = EpgSource.query.order_by(EpgSource.priority, EpgSource.name).all()
+
+    # Get mapping counts per source (how many channels are using EPG from each source)
+    # Join ChannelEpgMapping -> EpgChannel -> EpgSource to count mappings per source
+    mapping_counts = (
+        db.session.query(EpgSource.id, db.func.count(ChannelEpgMapping.id).label("mapping_count"))
+        .join(EpgChannel, EpgChannel.source_id == EpgSource.id)
+        .join(ChannelEpgMapping, ChannelEpgMapping.epg_channel_id == EpgChannel.id)
+        .group_by(EpgSource.id)
+        .all()
+    )
+    mapping_count_map = {row.id: row.mapping_count for row in mapping_counts}
+
     return jsonify(
         [
             {
@@ -137,6 +150,7 @@ def get_epg_sources():
                 "last_sync_status": s.last_sync_status,
                 "last_sync_message": s.last_sync_message,
                 "channel_count": s.channel_count,
+                "used_mapping_count": mapping_count_map.get(s.id, 0),
                 "xmltv_grabber": s.xmltv_grabber,
                 "xmltv_config_name": s.xmltv_config_name,
                 "xmltv_days": s.xmltv_days,
@@ -256,10 +270,87 @@ def delete_epg_source(source_id):
     return jsonify({"success": True, "message": "EPG source deleted"})
 
 
+@epg_bp.route("/api/epg/sources/<int:source_id>/mappings", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error getting source mappings")
+def get_source_mappings(source_id):
+    """Get all channel mappings that use EPG data from this source.
+
+    This shows which channels are using EPG listings from this provider.
+
+    Query parameters:
+    - limit: Max results (default 100)
+    - offset: Pagination offset
+    - search: Search by channel name
+    """
+    from models import Category, Channel
+
+    source = EpgSource.query.get_or_404(source_id)
+
+    limit = request.args.get("limit", 100, type=int)
+    offset = request.args.get("offset", 0, type=int)
+    search = request.args.get("search", "")
+
+    # Query mappings through EpgChannel for this source
+    query = (
+        db.session.query(ChannelEpgMapping, Channel, EpgChannel, Category)
+        .join(EpgChannel, ChannelEpgMapping.epg_channel_id == EpgChannel.id)
+        .join(Channel, ChannelEpgMapping.channel_id == Channel.id)
+        .outerjoin(Category, Channel.category_id == Category.id)
+        .filter(EpgChannel.source_id == source_id)
+    )
+
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            db.or_(
+                Channel.name.ilike(search_term),
+                Channel.cleaned_name.ilike(search_term),
+                EpgChannel.display_name.ilike(search_term),
+            )
+        )
+
+    total = query.count()
+    results = query.order_by(Channel.name).offset(offset).limit(limit).all()
+
+    mappings = []
+    for mapping, channel, epg_channel, category in results:
+        mappings.append(
+            {
+                "mapping_id": mapping.id,
+                "channel_id": channel.id,
+                "channel_name": channel.name,
+                "channel_clean_name": channel.cleaned_name,
+                "channel_icon": channel.stream_icon,
+                "category_id": category.id if category else None,
+                "category_name": category.category_name if category else None,
+                "account_id": channel.account_id,
+                "epg_channel_id": epg_channel.id,
+                "epg_channel_xmltv_id": epg_channel.channel_id,
+                "epg_channel_name": epg_channel.display_name,
+                "epg_channel_icon": epg_channel.icon_url,
+                "mapping_type": mapping.mapping_type,
+                "confidence": mapping.confidence,
+            }
+        )
+
+    return jsonify(
+        {
+            "source_id": source.id,
+            "source_name": source.name,
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "mappings": mappings,
+        }
+    )
+
+
 @epg_bp.route("/api/epg/sources/<int:source_id>/sync", methods=["POST"])
 @handle_errors(return_json=True, default_message="Error syncing EPG source")
 def sync_epg_source(source_id):
     """Sync EPG data from a source"""
+    from services.epg_service import update_ppv_channel_visibility
+
     source = EpgSource.query.get_or_404(source_id)
 
     if source.source_type == "provider":
@@ -278,6 +369,13 @@ def sync_epg_source(source_id):
 
         xml_content = service.get_xmltv()
         stats = EpgService.sync_epg_source(source, xml_content)
+
+        # Update PPV channel visibility for this account
+        try:
+            ppv_stats = update_ppv_channel_visibility(account.id)
+            logger.info(f"PPV visibility update after EPG sync: {ppv_stats}")
+        except Exception as e:
+            logger.warning(f"Failed to update PPV visibility after EPG sync: {e}")
 
         return jsonify(
             {
@@ -409,6 +507,83 @@ def sync_epg_source(source_id):
 
 
 # ============================================================================
+# API Routes - PPV Channel Visibility
+# ============================================================================
+
+
+@epg_bp.route("/api/epg/ppv/update-visibility", methods=["POST"])
+@handle_errors(return_json=True, default_message="Error updating PPV channel visibility")
+def update_ppv_visibility():
+    """
+    Update PPV channel visibility based on channel name changes.
+
+    PPV channels from IPTV providers have placeholder names like "PPV 1" when
+    no event is scheduled. When an event IS scheduled, the provider changes
+    the channel name to the event title (e.g., "UFC 300: Main Event").
+
+    This endpoint:
+    1. Finds all PPV channels (by tag)
+    2. Checks if channel name is a placeholder or actual event title
+    3. Hides placeholder channels, shows channels with event titles
+
+    Query parameters:
+    - account_id: Optional - limit update to specific account
+    """
+    from services.epg_service import update_ppv_channel_visibility
+
+    account_id = request.args.get("account_id", type=int)
+
+    stats = update_ppv_channel_visibility(account_id)
+
+    message_parts = []
+    if stats["events_detected"] > 0:
+        message_parts.append(f"{stats['events_detected']} active event(s)")
+    if stats["channels_shown"] > 0:
+        message_parts.append(f"{stats['channels_shown']} channel(s) shown")
+    if stats["channels_hidden"] > 0:
+        message_parts.append(f"{stats['channels_hidden']} hidden")
+
+    message = ", ".join(message_parts) if message_parts else "No PPV channel visibility changes"
+
+    return jsonify(
+        {
+            "success": True,
+            "message": message,
+            "stats": stats,
+        }
+    )
+
+
+@epg_bp.route("/api/epg/ppv/xmltv", methods=["GET"])
+@handle_errors(return_json=False, default_message="Error generating PPV EPG")
+def get_ppv_epg_xmltv():
+    """
+    Get XMLTV EPG data for active PPV channels.
+
+    Since PPV channels don't have external EPG data, this generates synthetic
+    EPG entries using the channel name as the program title. Only visible
+    (active event) PPV channels are included.
+
+    Query parameters:
+    - account_id: Optional - limit to specific account
+    - duration: Optional - event duration in hours (default: 8)
+
+    Returns:
+        XMLTV XML document
+    """
+    from flask import Response
+
+    from services.epg_service import get_ppv_epg_xmltv
+
+    account_id = request.args.get("account_id", type=int)
+    duration = request.args.get("duration", default=8, type=int)
+
+    xml_data = get_ppv_epg_xmltv(account_id, duration_hours=duration)
+
+    return Response(xml_data, mimetype="application/xml")
+
+
+# ============================================================================
 # API Routes - EPG Channels
 # ============================================================================
 
@@ -419,7 +594,7 @@ def get_epg_channels():
 
     Query parameters:
     - source_id: Filter by EPG source
-    - search: Search by channel ID or display name
+    - search: Search by channel ID or display name (supports fuzzy matching)
     - limit: Max results (default 100)
     - offset: Pagination offset
     """
@@ -434,13 +609,16 @@ def get_epg_channels():
         query = query.filter_by(source_id=source_id)
 
     if search:
-        search_term = f"%{search}%"
-        query = query.filter(
-            db.or_(
-                EpgChannel.channel_id.ilike(search_term),
-                EpgChannel.display_name.ilike(search_term),
+        # Support fuzzy matching by splitting search into words and matching each
+        search_words = search.strip().split()
+        for word in search_words:
+            search_term = f"%{word}%"
+            query = query.filter(
+                db.or_(
+                    EpgChannel.channel_id.ilike(search_term),
+                    EpgChannel.display_name.ilike(search_term),
+                )
             )
-        )
 
     total = query.count()
     channels = query.order_by(EpgChannel.display_name).offset(offset).limit(limit).all()
@@ -478,34 +656,59 @@ def get_epg_channels():
 def match_channels_to_epg(account_id):
     """Run automatic EPG matching for an account's channels
 
+    DEPRECATED: This endpoint now redirects to the rule-based matching system.
+    Use /api/epg/match-with-rules/<account_id> instead.
+
     Query parameters:
     - source_id: Optional EPG source to match against
     - category_id: Optional category to limit matching to
-    - skip_threshold: Skip channels with existing match at or above this confidence (default 0.85)
+    - include_filtered: Include filtered out channels (default false)
+    """
+    # Redirect to the rule-based matching endpoint
+    return match_channels_to_epg_with_rules(account_id)
+
+
+@epg_bp.route("/api/epg/match-with-rules/<int:account_id>", methods=["POST"])
+@handle_errors(return_json=True, default_message="Error matching channels to EPG with rules")
+def match_channels_to_epg_with_rules(account_id):
+    """Run EPG matching using configurable rulesets
+
+    This uses the new rule-based matching system where matching rules are
+    defined in the database and can be configured per-account.
+
+    Query parameters:
+    - source_id: Optional EPG source to match against
+    - category_id: Optional category to limit matching to
+    - include_filtered: Include filtered out channels (default false)
     """
     Account.query.get_or_404(account_id)
 
     source_id = request.args.get("source_id", type=int)
     category_id = request.args.get("category_id", type=int)
-    skip_threshold = request.args.get("skip_threshold", default=0.85, type=float)
+    include_filtered = request.args.get("include_filtered", "false").lower() == "true"
 
-    stats = EpgService.match_channels_to_epg(
+    stats = EpgMatchRulesService.match_channels_with_rules(
         account_id,
         source_id=source_id,
         category_id=category_id,
-        skip_matched_threshold=skip_threshold,
+        include_filtered=include_filtered,
     )
 
-    matched_count = (
-        stats["matched_exact_id"]
-        + stats.get("matched_callsign_tag", 0)
-        + stats["matched_exact_name"]
-        + stats["matched_fuzzy"]
-    )
+    matched_count = stats.get("matched", 0)
+
+    # Build informative message
+    parts = [f"Matched {matched_count} channels"]
+    if stats.get("skipped_existing", 0) > 0:
+        parts.append(f"skipped {stats['skipped_existing']} already matched")
+    if stats.get("excluded", 0) > 0:
+        parts.append(f"excluded {stats['excluded']} channels")
+
+    message = ", ".join(parts)
+
     return jsonify(
         {
             "success": True,
-            "message": f"Matched {matched_count} channels, skipped {stats['skipped_existing']} already matched",
+            "message": message,
             "stats": stats,
         }
     )
@@ -609,10 +812,12 @@ def get_epg_mappings():
                         "stream_id": m.channel.stream_id if m.channel else None,
                         "account_id": m.channel.account_id if m.channel else None,
                         "channel_name": m.channel.name if m.channel else None,
+                        "cleaned_name": m.channel.cleaned_name if m.channel else None,
                         "epg_channel_id": m.epg_channel_id,
                         "epg_display_name": m.epg_channel.display_name if m.epg_channel else None,
                         "mapping_type": m.mapping_type,
                         "confidence": m.confidence,
+                        "time_offset_hours": m.time_offset_hours or 0,
                         "is_override": m.is_override,
                         "is_visible": m.channel.is_visible if m.channel else True,
                     }
@@ -622,8 +827,6 @@ def get_epg_mappings():
         )
     else:
         # view_mode == "all" - return all channels with mapping info if available
-        from sqlalchemy.orm import aliased
-
         query = Channel.query.filter(Channel.is_active == True)  # noqa: E712
 
         if not show_filtered:
@@ -674,6 +877,7 @@ def get_epg_mappings():
                             ),
                             "mapping_type": mappings_by_channel[c.id].mapping_type,
                             "confidence": mappings_by_channel[c.id].confidence,
+                            "time_offset_hours": mappings_by_channel[c.id].time_offset_hours or 0,
                             "is_override": mappings_by_channel[c.id].is_override,
                         }
                         if c.id in mappings_by_channel
@@ -710,11 +914,20 @@ def create_epg_mapping():
     if existing:
         return jsonify({"error": "Mapping already exists", "mapping_id": existing.id}), 409
 
+    # Get optional time offset (default 0)
+    time_offset = data.get("time_offset_hours", 0)
+    if not isinstance(time_offset, int):
+        try:
+            time_offset = int(time_offset)
+        except (ValueError, TypeError):
+            time_offset = 0
+
     mapping = ChannelEpgMapping(
         channel_id=data["channel_id"],
         epg_channel_id=data["epg_channel_id"],
         mapping_type="manual",
         confidence=1.0,
+        time_offset_hours=time_offset,
         is_override=True,  # Manual mappings are always overrides
     )
 
@@ -743,6 +956,44 @@ def delete_epg_mapping(mapping_id):
     db.session.commit()
 
     return jsonify({"success": True, "message": "EPG mapping deleted"})
+
+
+@epg_bp.route("/api/epg/mappings/bulk-delete", methods=["POST"])
+@handle_errors(return_json=True, default_message="Error deleting EPG mappings")
+def bulk_delete_epg_mappings():
+    """Delete all EPG mappings for channels in a category
+
+    Request body:
+    - account_id: Required - the account ID
+    - category_id: Required - the category ID to delete mappings for
+    """
+    from models import Channel
+
+    data = request.get_json()
+    account_id = data.get("account_id")
+    category_id = data.get("category_id")
+
+    if not account_id:
+        return jsonify({"error": "account_id is required"}), 400
+    if not category_id:
+        return jsonify({"error": "category_id is required"}), 400
+
+    # Get all channels in this category for the account
+    channels = Channel.query.filter_by(account_id=account_id, category_id=category_id).all()
+
+    channel_ids = [ch.id for ch in channels]
+
+    if not channel_ids:
+        return jsonify({"success": True, "deleted_count": 0, "message": "No channels found in category"})
+
+    # Delete all mappings for these channels
+    deleted_count = ChannelEpgMapping.query.filter(ChannelEpgMapping.channel_id.in_(channel_ids)).delete(
+        synchronize_session=False
+    )
+
+    db.session.commit()
+
+    return jsonify({"success": True, "deleted_count": deleted_count, "message": f"Deleted {deleted_count} mappings"})
 
 
 # ============================================================================

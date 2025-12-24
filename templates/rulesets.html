@@ -9,10 +9,10 @@
         <button class="btn btn-sm btn-danger me-2" id="cleanup-orphan-tags-btn" title="Delete tags with no associated channels">
             <i class="bi bi-trash"></i> Cleanup Orphan Tags
         </button>
-        <button class="btn btn-sm btn-success me-2" id="import-ruleset-btn" title="Import ruleset from JSON file">
-            <i class="bi bi-upload"></i> Import Ruleset
+        <button class="btn btn-sm btn-primary me-2" id="process-all-tags-btn">
+            <i class="bi bi-arrow-repeat"></i> Discover Tags
         </button>
-        <button class="btn btn-sm btn-primary me-2" id="create-default-ruleset-btn">
+        <button class="btn btn-sm btn-secondary me-2" id="create-default-ruleset-btn">
             <i class="bi bi-plus-circle"></i> Create Default Ruleset
         </button>
         <button class="btn btn-sm btn-outline-primary" id="create-ruleset-btn">
@@ -62,10 +62,10 @@
             </div>
             <div class="col-md-6 text-end">
                 <button class="btn btn-sm btn-primary" id="process-all-tags-btn">
-                    <i class="bi bi-arrow-repeat"></i> Process All Accounts
+                    <i class="bi bi-arrow-repeat"></i> Discover Tags
                 </button>
                 <button class="btn btn-sm btn-outline-primary" id="process-account-tags-btn" style="display:none;">
-                    <i class="bi bi-arrow-repeat"></i> Process Selected Account
+                    <i class="bi bi-arrow-repeat"></i> Discover Tags (Selected Account)
                 </button>
             </div>
         </div>
@@ -409,15 +409,22 @@ async function loadRulesets(preserveExpanded = false) {
             `;
         } else {
             rulesets.forEach(ruleset => {
-                const badge = ruleset.is_default ? '<span class="badge bg-primary ms-2">Default</span>' : '';
+                const defaultBadge = ruleset.is_default ? '<span class="badge bg-primary ms-2">Default</span>' : '';
                 const status = ruleset.enabled ? '<span class="badge bg-success">Enabled</span>' : '<span class="badge bg-secondary">Disabled</span>';
                 const isExpanded = expandedRulesets.has(ruleset.id);
+                
+                // Show assigned accounts
+                let assignedAccountsBadges = '';
+                if (ruleset.assigned_accounts && ruleset.assigned_accounts.length > 0) {
+                    const accountNames = ruleset.assigned_accounts.map(a => a.name).join(', ');
+                    assignedAccountsBadges = `<span class="badge bg-info ms-2" title="Assigned to: ${accountNames}"><i class="bi bi-person-check"></i> ${ruleset.assigned_accounts.length} account${ruleset.assigned_accounts.length > 1 ? 's' : ''}</span>`;
+                }
                 
                 html += `
                     <div class="card mb-3">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="mb-0">
-                                ${ruleset.name} ${badge}
+                                ${ruleset.name} ${defaultBadge}${assignedAccountsBadges}
                                 <small class="text-muted ms-2">(${ruleset.rule_count} rules, priority: ${ruleset.priority})</small>
                             </h5>
                             <div>
@@ -1098,9 +1105,7 @@ async function processAccountTags() {
     }
 }
 
-async function processAllAccountTags() {
-    if (!confirm('Process tag extraction for all accounts? This may take a while.')) return;
-    
+async function processAllAccountTags() {    
     const btn = document.getElementById('process-all-tags-btn');
     const originalHtml = btn.innerHTML;
     btn.disabled = true;

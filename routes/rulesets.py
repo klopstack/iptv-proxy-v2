@@ -6,7 +6,7 @@ import logging
 from flask import Blueprint, jsonify, request
 
 from error_handling import handle_errors
-from models import AccountRuleSet, RuleSet, TagRule, db
+from models import Account, AccountRuleSet, RuleSet, TagRule, db
 from schemas import (
     RuleSetCreateSchema,
     RuleSetUpdateSchema,
@@ -33,8 +33,23 @@ cache_service = CacheService()
 
 @rulesets_bp.route("/api/rulesets", methods=["GET"])
 def get_rulesets():
-    """Get all rulesets"""
+    """Get all rulesets with assigned accounts"""
     rulesets = RuleSet.query.all()
+
+    # Get all account assignments in one query
+    assignments = (
+        db.session.query(AccountRuleSet.ruleset_id, Account.id, Account.name)
+        .join(Account, Account.id == AccountRuleSet.account_id)
+        .all()
+    )
+
+    # Build a map of ruleset_id -> list of assigned accounts
+    ruleset_accounts = {}
+    for ruleset_id, account_id, account_name in assignments:
+        if ruleset_id not in ruleset_accounts:
+            ruleset_accounts[ruleset_id] = []
+        ruleset_accounts[ruleset_id].append({"id": account_id, "name": account_name})
+
     return jsonify(
         [
             {
@@ -45,6 +60,7 @@ def get_rulesets():
                 "enabled": rs.enabled,
                 "priority": rs.priority,
                 "rule_count": len(rs.rules),
+                "assigned_accounts": ruleset_accounts.get(rs.id, []),
             }
             for rs in rulesets
         ]

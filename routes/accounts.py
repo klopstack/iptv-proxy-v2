@@ -747,6 +747,7 @@ def preview_account_playlist(account_id):
     - offset: Number of channels to skip (default: 0)
     - tags: Comma-separated list of tag names to filter by
     - category: Category name to filter by
+    - search: Full-text search term for channel name/cleaned name
     - collapse_duplicates: If "true", collapse duplicate channels keeping highest quality
 
     Returns:
@@ -762,6 +763,9 @@ def preview_account_playlist(account_id):
 
     # Parse category filter
     category_filter = request.args.get("category", "")
+
+    # Parse search filter
+    search_term = request.args.get("search", "").strip()
 
     # Parse collapse_duplicates option
     collapse_duplicates = request.args.get("collapse_duplicates", "").lower() == "true"
@@ -789,6 +793,13 @@ def preview_account_playlist(account_id):
     # Apply category filter if specified
     if category_filter:
         base_query = base_query.filter(Category.category_name == category_filter)
+
+    # Apply search filter if specified (searches channel name and cleaned name)
+    if search_term:
+        search_pattern = f"%{search_term}%"
+        base_query = base_query.filter(
+            db.or_(Channel.name.ilike(search_pattern), Channel.cleaned_name.ilike(search_pattern))
+        )
 
     # Apply tag filter if specified
     if filter_tags:

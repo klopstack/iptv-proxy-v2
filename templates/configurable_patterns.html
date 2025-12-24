@@ -1,0 +1,898 @@
+{% extends "base.html" %}
+
+{% block title %}Configurable Patterns - IPTV Proxy{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Configurable Patterns</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('fcc_match_patterns.fcc_match_patterns') }}" class="btn btn-sm btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left"></i> Back to FCC Patterns
+        </a>
+    </div>
+</div>
+
+<!-- Info Alert -->
+<div class="alert alert-info mb-4">
+    <i class="bi bi-info-circle"></i>
+    <strong>Configurable Patterns</strong> control how EPG matching categorizes channels.
+    These include country-to-EPG suffix mappings, quality tag definitions, country tags for filtering, and callsign suffix patterns.
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="country-suffixes-tab" data-bs-toggle="tab" data-bs-target="#country-suffixes" type="button">
+            <i class="bi bi-globe"></i> Country Suffixes
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="quality-tags-tab" data-bs-toggle="tab" data-bs-target="#quality-tags" type="button">
+            <i class="bi bi-stars"></i> Quality Tags
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="country-tags-tab" data-bs-toggle="tab" data-bs-target="#country-tags" type="button">
+            <i class="bi bi-flag"></i> Country Tags
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="callsign-suffixes-tab" data-bs-toggle="tab" data-bs-target="#callsign-suffixes" type="button">
+            <i class="bi bi-broadcast-pin"></i> Callsign Suffixes
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="mainTabsContent">
+    <!-- Country Suffixes Tab -->
+    <div class="tab-pane fade show active" id="country-suffixes" role="tabpanel">
+        <div class="alert alert-secondary mb-3">
+            <strong>Country Suffixes</strong> map country codes (like US, UK, CA) to EPG suffix formats for channel lookups.
+            For example, US channels use ".us" EPG suffix.
+        </div>
+        <div class="mb-3">
+            <button class="btn btn-sm btn-primary" id="create-country-suffix-btn">
+                <i class="bi bi-plus-circle"></i> New Country Suffix
+            </button>
+        </div>
+        <div id="country-suffixes-list">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quality Tags Tab -->
+    <div class="tab-pane fade" id="quality-tags" role="tabpanel">
+        <div class="alert alert-secondary mb-3">
+            <strong>Quality Tags</strong> identify quality indicators in channel names (HD, 4K, FHD, etc.).
+            These are excluded from location detection and used for quality ranking.
+            Higher quality scores indicate better quality.
+        </div>
+        <div class="mb-3">
+            <button class="btn btn-sm btn-primary" id="create-quality-tag-btn">
+                <i class="bi bi-plus-circle"></i> New Quality Tag
+            </button>
+        </div>
+        <div id="quality-tags-list">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Country Tags Tab -->
+    <div class="tab-pane fade" id="country-tags" role="tabpanel">
+        <div class="alert alert-secondary mb-3">
+            <strong>Country Tags</strong> identify country identifiers in channel names/tags (US, UK, CA, etc.).
+            These are excluded from location detection to avoid confusion with cities.
+        </div>
+        <div class="mb-3">
+            <button class="btn btn-sm btn-primary" id="create-country-tag-btn">
+                <i class="bi bi-plus-circle"></i> New Country Tag
+            </button>
+        </div>
+        <div id="country-tags-list">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Callsign Suffixes Tab -->
+    <div class="tab-pane fade" id="callsign-suffixes" role="tabpanel">
+        <div class="alert alert-secondary mb-3">
+            <strong>Callsign Suffixes</strong> are patterns like -TV, -DT, -HD that can be appended to or stripped from callsigns during FCC lookups.
+            These help normalize callsigns for database matching.
+        </div>
+        <div class="mb-3">
+            <button class="btn btn-sm btn-primary" id="create-callsign-suffix-btn">
+                <i class="bi bi-plus-circle"></i> New Callsign Suffix
+            </button>
+        </div>
+        <div id="callsign-suffixes-list">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Country Suffix Modal -->
+<div class="modal fade" id="countrySuffixModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="countrySuffixModalTitle">New Country Suffix</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="countrySuffixForm">
+                    <input type="hidden" id="country-suffix-id">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="country-suffix-code" class="form-label">Country Code *</label>
+                            <input type="text" class="form-control" id="country-suffix-code" placeholder="e.g., US" maxlength="10" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="country-suffix-name" class="form-label">Country Name</label>
+                            <input type="text" class="form-control" id="country-suffix-name" placeholder="e.g., United States">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="country-suffix-epg" class="form-label">EPG Suffixes (JSON array) *</label>
+                        <input type="text" class="form-control" id="country-suffix-epg" placeholder='[".us"]' required>
+                        <small class="form-text text-muted">Suffixes to try when looking up EPG IDs (in order)</small>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="country-suffix-priority" class="form-label">Priority</label>
+                            <input type="number" class="form-control" id="country-suffix-priority" value="100">
+                        </div>
+                        <div class="col-md-6 mb-3 d-flex align-items-end">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="country-suffix-enabled" checked>
+                                <label class="form-check-label" for="country-suffix-enabled">Enabled</label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-country-suffix-btn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quality Tag Modal -->
+<div class="modal fade" id="qualityTagModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="qualityTagModalTitle">New Quality Tag</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="qualityTagForm">
+                    <input type="hidden" id="quality-tag-id">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="quality-tag-name" class="form-label">Tag Name *</label>
+                            <input type="text" class="form-control" id="quality-tag-name" placeholder="e.g., HD" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="quality-tag-display" class="form-label">Display Name</label>
+                            <input type="text" class="form-control" id="quality-tag-display" placeholder="e.g., High Definition">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="quality-tag-category" class="form-label">Category</label>
+                            <select class="form-select" id="quality-tag-category">
+                                <option value="">None</option>
+                                <option value="resolution">Resolution</option>
+                                <option value="codec">Codec</option>
+                                <option value="hdr">HDR</option>
+                                <option value="audio">Audio</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="quality-tag-score" class="form-label">Quality Score</label>
+                            <input type="number" class="form-control" id="quality-tag-score" value="0" min="-100" max="100">
+                            <small class="form-text text-muted">Higher = better quality</small>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="quality-tag-exclude-location" checked>
+                                <label class="form-check-label" for="quality-tag-exclude-location">Exclude from Location Detection</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="quality-tag-enabled" checked>
+                                <label class="form-check-label" for="quality-tag-enabled">Enabled</label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-quality-tag-btn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Country Tag Modal -->
+<div class="modal fade" id="countryTagModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="countryTagModalTitle">New Country Tag</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="countryTagForm">
+                    <input type="hidden" id="country-tag-id">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="country-tag-name" class="form-label">Tag Name *</label>
+                            <input type="text" class="form-control" id="country-tag-name" placeholder="e.g., US" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="country-tag-country" class="form-label">Country Name</label>
+                            <input type="text" class="form-control" id="country-tag-country" placeholder="e.g., United States">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="country-tag-iso" class="form-label">ISO Code</label>
+                            <input type="text" class="form-control" id="country-tag-iso" placeholder="e.g., USA" maxlength="3">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="country-tag-exclude-location" checked>
+                                <label class="form-check-label" for="country-tag-exclude-location">Exclude from Location Detection</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="country-tag-enabled" checked>
+                                <label class="form-check-label" for="country-tag-enabled">Enabled</label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-country-tag-btn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Callsign Suffix Modal -->
+<div class="modal fade" id="callsignSuffixModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="callsignSuffixModalTitle">New Callsign Suffix</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="callsignSuffixForm">
+                    <input type="hidden" id="callsign-suffix-id">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="callsign-suffix-value" class="form-label">Suffix *</label>
+                            <input type="text" class="form-control" id="callsign-suffix-value" placeholder="e.g., -TV" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="callsign-suffix-description" class="form-label">Description</label>
+                            <input type="text" class="form-control" id="callsign-suffix-description" placeholder="e.g., Television">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="callsign-suffix-try-on-miss" checked>
+                            <label class="form-check-label" for="callsign-suffix-try-on-miss">Try on Miss</label>
+                            <small class="form-text text-muted d-block">If initial lookup fails, try appending this suffix</small>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="callsign-suffix-strip-on-normalize" checked>
+                            <label class="form-check-label" for="callsign-suffix-strip-on-normalize">Strip on Normalize</label>
+                            <small class="form-text text-muted d-block">Remove this suffix when normalizing callsigns</small>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="callsign-suffix-priority" class="form-label">Priority</label>
+                            <input type="number" class="form-control" id="callsign-suffix-priority" value="100">
+                        </div>
+                        <div class="col-md-6 mb-3 d-flex align-items-end">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="callsign-suffix-enabled" checked>
+                                <label class="form-check-label" for="callsign-suffix-enabled">Enabled</label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-callsign-suffix-btn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// API base URL
+const API_BASE = '/api/fcc-match-patterns';
+
+// Load data on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadCountrySuffixes();
+    loadQualityTags();
+    loadCountryTags();
+    loadCallsignSuffixes();
+});
+
+// ============================================================================
+// Country Suffixes
+// ============================================================================
+
+async function loadCountrySuffixes() {
+    try {
+        const response = await fetch(`${API_BASE}/country-suffixes`);
+        const suffixes = await response.json();
+        renderCountrySuffixes(suffixes);
+    } catch (error) {
+        console.error('Error loading country suffixes:', error);
+        document.getElementById('country-suffixes-list').innerHTML = '<div class="alert alert-danger">Failed to load country suffixes</div>';
+    }
+}
+
+function renderCountrySuffixes(suffixes) {
+    const container = document.getElementById('country-suffixes-list');
+    if (suffixes.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No country suffixes defined.</div>';
+        return;
+    }
+
+    let html = `
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Priority</th>
+                    <th>Code</th>
+                    <th>Country</th>
+                    <th>EPG Suffixes</th>
+                    <th>Enabled</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    for (const suffix of suffixes) {
+        const epgBadges = (suffix.epg_suffixes || []).map(s => `<span class="badge bg-info me-1">${s}</span>`).join('');
+        html += `
+            <tr>
+                <td>${suffix.priority}</td>
+                <td><strong>${suffix.country_code}</strong></td>
+                <td>${suffix.country_name || ''}</td>
+                <td>${epgBadges}</td>
+                <td><span class="badge ${suffix.enabled ? 'bg-success' : 'bg-secondary'}">${suffix.enabled ? 'Yes' : 'No'}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="editCountrySuffix(${suffix.id})">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteCountrySuffix(${suffix.id})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+document.getElementById('create-country-suffix-btn').addEventListener('click', () => {
+    document.getElementById('countrySuffixModalTitle').textContent = 'New Country Suffix';
+    document.getElementById('countrySuffixForm').reset();
+    document.getElementById('country-suffix-id').value = '';
+    document.getElementById('country-suffix-enabled').checked = true;
+    new bootstrap.Modal(document.getElementById('countrySuffixModal')).show();
+});
+
+async function editCountrySuffix(id) {
+    try {
+        const response = await fetch(`${API_BASE}/country-suffixes/${id}`);
+        const suffix = await response.json();
+
+        document.getElementById('countrySuffixModalTitle').textContent = 'Edit Country Suffix';
+        document.getElementById('country-suffix-id').value = suffix.id;
+        document.getElementById('country-suffix-code').value = suffix.country_code;
+        document.getElementById('country-suffix-name').value = suffix.country_name || '';
+        document.getElementById('country-suffix-epg').value = JSON.stringify(suffix.epg_suffixes || []);
+        document.getElementById('country-suffix-priority').value = suffix.priority;
+        document.getElementById('country-suffix-enabled').checked = suffix.enabled;
+
+        new bootstrap.Modal(document.getElementById('countrySuffixModal')).show();
+    } catch (error) {
+        alert('Error loading country suffix: ' + error.message);
+    }
+}
+
+document.getElementById('save-country-suffix-btn').addEventListener('click', async () => {
+    const id = document.getElementById('country-suffix-id').value;
+    let epgSuffixes;
+    try {
+        epgSuffixes = JSON.parse(document.getElementById('country-suffix-epg').value);
+    } catch (e) {
+        alert('Invalid EPG suffixes JSON');
+        return;
+    }
+
+    const data = {
+        country_code: document.getElementById('country-suffix-code').value,
+        country_name: document.getElementById('country-suffix-name').value,
+        epg_suffixes: epgSuffixes,
+        priority: parseInt(document.getElementById('country-suffix-priority').value),
+        enabled: document.getElementById('country-suffix-enabled').checked
+    };
+
+    try {
+        const url = id ? `${API_BASE}/country-suffixes/${id}` : `${API_BASE}/country-suffixes`;
+        const response = await fetch(url, {
+            method: id ? 'PUT' : 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to save');
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('countrySuffixModal')).hide();
+        loadCountrySuffixes();
+    } catch (error) {
+        alert('Error saving country suffix: ' + error.message);
+    }
+});
+
+async function deleteCountrySuffix(id) {
+    if (!confirm('Delete this country suffix?')) return;
+    try {
+        await fetch(`${API_BASE}/country-suffixes/${id}`, {method: 'DELETE'});
+        loadCountrySuffixes();
+    } catch (error) {
+        alert('Error deleting country suffix: ' + error.message);
+    }
+}
+
+// ============================================================================
+// Quality Tags
+// ============================================================================
+
+async function loadQualityTags() {
+    try {
+        const response = await fetch(`${API_BASE}/quality-tags`);
+        const tags = await response.json();
+        renderQualityTags(tags);
+    } catch (error) {
+        console.error('Error loading quality tags:', error);
+        document.getElementById('quality-tags-list').innerHTML = '<div class="alert alert-danger">Failed to load quality tags</div>';
+    }
+}
+
+function renderQualityTags(tags) {
+    const container = document.getElementById('quality-tags-list');
+    if (tags.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No quality tags defined.</div>';
+        return;
+    }
+
+    let html = `
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Tag</th>
+                    <th>Display Name</th>
+                    <th>Category</th>
+                    <th>Score</th>
+                    <th>Exclude Location</th>
+                    <th>Enabled</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    for (const tag of tags) {
+        const scoreClass = tag.quality_score > 0 ? 'text-success' : (tag.quality_score < 0 ? 'text-danger' : '');
+        html += `
+            <tr>
+                <td><strong>${tag.tag_name}</strong></td>
+                <td>${tag.display_name || ''}</td>
+                <td>${tag.category ? `<span class="badge bg-secondary">${tag.category}</span>` : ''}</td>
+                <td class="${scoreClass}">${tag.quality_score}</td>
+                <td><span class="badge ${tag.exclude_from_location ? 'bg-warning' : 'bg-light text-dark'}">${tag.exclude_from_location ? 'Yes' : 'No'}</span></td>
+                <td><span class="badge ${tag.enabled ? 'bg-success' : 'bg-secondary'}">${tag.enabled ? 'Yes' : 'No'}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="editQualityTag(${tag.id})">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteQualityTag(${tag.id})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+document.getElementById('create-quality-tag-btn').addEventListener('click', () => {
+    document.getElementById('qualityTagModalTitle').textContent = 'New Quality Tag';
+    document.getElementById('qualityTagForm').reset();
+    document.getElementById('quality-tag-id').value = '';
+    document.getElementById('quality-tag-enabled').checked = true;
+    document.getElementById('quality-tag-exclude-location').checked = true;
+    new bootstrap.Modal(document.getElementById('qualityTagModal')).show();
+});
+
+async function editQualityTag(id) {
+    try {
+        const response = await fetch(`${API_BASE}/quality-tags/${id}`);
+        const tag = await response.json();
+
+        document.getElementById('qualityTagModalTitle').textContent = 'Edit Quality Tag';
+        document.getElementById('quality-tag-id').value = tag.id;
+        document.getElementById('quality-tag-name').value = tag.tag_name;
+        document.getElementById('quality-tag-display').value = tag.display_name || '';
+        document.getElementById('quality-tag-category').value = tag.category || '';
+        document.getElementById('quality-tag-score').value = tag.quality_score;
+        document.getElementById('quality-tag-exclude-location').checked = tag.exclude_from_location;
+        document.getElementById('quality-tag-enabled').checked = tag.enabled;
+
+        new bootstrap.Modal(document.getElementById('qualityTagModal')).show();
+    } catch (error) {
+        alert('Error loading quality tag: ' + error.message);
+    }
+}
+
+document.getElementById('save-quality-tag-btn').addEventListener('click', async () => {
+    const id = document.getElementById('quality-tag-id').value;
+
+    const data = {
+        tag_name: document.getElementById('quality-tag-name').value,
+        display_name: document.getElementById('quality-tag-display').value,
+        category: document.getElementById('quality-tag-category').value || null,
+        quality_score: parseInt(document.getElementById('quality-tag-score').value),
+        exclude_from_location: document.getElementById('quality-tag-exclude-location').checked,
+        enabled: document.getElementById('quality-tag-enabled').checked
+    };
+
+    try {
+        const url = id ? `${API_BASE}/quality-tags/${id}` : `${API_BASE}/quality-tags`;
+        const response = await fetch(url, {
+            method: id ? 'PUT' : 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to save');
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('qualityTagModal')).hide();
+        loadQualityTags();
+    } catch (error) {
+        alert('Error saving quality tag: ' + error.message);
+    }
+});
+
+async function deleteQualityTag(id) {
+    if (!confirm('Delete this quality tag?')) return;
+    try {
+        await fetch(`${API_BASE}/quality-tags/${id}`, {method: 'DELETE'});
+        loadQualityTags();
+    } catch (error) {
+        alert('Error deleting quality tag: ' + error.message);
+    }
+}
+
+// ============================================================================
+// Country Tags
+// ============================================================================
+
+async function loadCountryTags() {
+    try {
+        const response = await fetch(`${API_BASE}/country-tags`);
+        const tags = await response.json();
+        renderCountryTags(tags);
+    } catch (error) {
+        console.error('Error loading country tags:', error);
+        document.getElementById('country-tags-list').innerHTML = '<div class="alert alert-danger">Failed to load country tags</div>';
+    }
+}
+
+function renderCountryTags(tags) {
+    const container = document.getElementById('country-tags-list');
+    if (tags.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No country tags defined.</div>';
+        return;
+    }
+
+    let html = `
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Tag</th>
+                    <th>Country</th>
+                    <th>ISO Code</th>
+                    <th>Exclude Location</th>
+                    <th>Enabled</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    for (const tag of tags) {
+        html += `
+            <tr>
+                <td><strong>${tag.tag_name}</strong></td>
+                <td>${tag.country_name || ''}</td>
+                <td>${tag.iso_code || ''}</td>
+                <td><span class="badge ${tag.exclude_from_location ? 'bg-warning' : 'bg-light text-dark'}">${tag.exclude_from_location ? 'Yes' : 'No'}</span></td>
+                <td><span class="badge ${tag.enabled ? 'bg-success' : 'bg-secondary'}">${tag.enabled ? 'Yes' : 'No'}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="editCountryTag(${tag.id})">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteCountryTag(${tag.id})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+document.getElementById('create-country-tag-btn').addEventListener('click', () => {
+    document.getElementById('countryTagModalTitle').textContent = 'New Country Tag';
+    document.getElementById('countryTagForm').reset();
+    document.getElementById('country-tag-id').value = '';
+    document.getElementById('country-tag-enabled').checked = true;
+    document.getElementById('country-tag-exclude-location').checked = true;
+    new bootstrap.Modal(document.getElementById('countryTagModal')).show();
+});
+
+async function editCountryTag(id) {
+    try {
+        const response = await fetch(`${API_BASE}/country-tags/${id}`);
+        const tag = await response.json();
+
+        document.getElementById('countryTagModalTitle').textContent = 'Edit Country Tag';
+        document.getElementById('country-tag-id').value = tag.id;
+        document.getElementById('country-tag-name').value = tag.tag_name;
+        document.getElementById('country-tag-country').value = tag.country_name || '';
+        document.getElementById('country-tag-iso').value = tag.iso_code || '';
+        document.getElementById('country-tag-exclude-location').checked = tag.exclude_from_location;
+        document.getElementById('country-tag-enabled').checked = tag.enabled;
+
+        new bootstrap.Modal(document.getElementById('countryTagModal')).show();
+    } catch (error) {
+        alert('Error loading country tag: ' + error.message);
+    }
+}
+
+document.getElementById('save-country-tag-btn').addEventListener('click', async () => {
+    const id = document.getElementById('country-tag-id').value;
+
+    const data = {
+        tag_name: document.getElementById('country-tag-name').value,
+        country_name: document.getElementById('country-tag-country').value || null,
+        iso_code: document.getElementById('country-tag-iso').value || null,
+        exclude_from_location: document.getElementById('country-tag-exclude-location').checked,
+        enabled: document.getElementById('country-tag-enabled').checked
+    };
+
+    try {
+        const url = id ? `${API_BASE}/country-tags/${id}` : `${API_BASE}/country-tags`;
+        const response = await fetch(url, {
+            method: id ? 'PUT' : 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to save');
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('countryTagModal')).hide();
+        loadCountryTags();
+    } catch (error) {
+        alert('Error saving country tag: ' + error.message);
+    }
+});
+
+async function deleteCountryTag(id) {
+    if (!confirm('Delete this country tag?')) return;
+    try {
+        await fetch(`${API_BASE}/country-tags/${id}`, {method: 'DELETE'});
+        loadCountryTags();
+    } catch (error) {
+        alert('Error deleting country tag: ' + error.message);
+    }
+}
+
+// ============================================================================
+// Callsign Suffixes
+// ============================================================================
+
+async function loadCallsignSuffixes() {
+    try {
+        const response = await fetch(`${API_BASE}/callsign-suffixes`);
+        const suffixes = await response.json();
+        renderCallsignSuffixes(suffixes);
+    } catch (error) {
+        console.error('Error loading callsign suffixes:', error);
+        document.getElementById('callsign-suffixes-list').innerHTML = '<div class="alert alert-danger">Failed to load callsign suffixes</div>';
+    }
+}
+
+function renderCallsignSuffixes(suffixes) {
+    const container = document.getElementById('callsign-suffixes-list');
+    if (suffixes.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No callsign suffixes defined.</div>';
+        return;
+    }
+
+    let html = `
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Priority</th>
+                    <th>Suffix</th>
+                    <th>Description</th>
+                    <th>Try on Miss</th>
+                    <th>Strip on Normalize</th>
+                    <th>Enabled</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    for (const suffix of suffixes) {
+        html += `
+            <tr>
+                <td>${suffix.priority}</td>
+                <td><code>${suffix.suffix}</code></td>
+                <td>${suffix.description || ''}</td>
+                <td><span class="badge ${suffix.try_on_miss ? 'bg-info' : 'bg-light text-dark'}">${suffix.try_on_miss ? 'Yes' : 'No'}</span></td>
+                <td><span class="badge ${suffix.strip_on_normalize ? 'bg-warning' : 'bg-light text-dark'}">${suffix.strip_on_normalize ? 'Yes' : 'No'}</span></td>
+                <td><span class="badge ${suffix.enabled ? 'bg-success' : 'bg-secondary'}">${suffix.enabled ? 'Yes' : 'No'}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="editCallsignSuffix(${suffix.id})">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteCallsignSuffix(${suffix.id})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+document.getElementById('create-callsign-suffix-btn').addEventListener('click', () => {
+    document.getElementById('callsignSuffixModalTitle').textContent = 'New Callsign Suffix';
+    document.getElementById('callsignSuffixForm').reset();
+    document.getElementById('callsign-suffix-id').value = '';
+    document.getElementById('callsign-suffix-enabled').checked = true;
+    document.getElementById('callsign-suffix-try-on-miss').checked = true;
+    document.getElementById('callsign-suffix-strip-on-normalize').checked = true;
+    new bootstrap.Modal(document.getElementById('callsignSuffixModal')).show();
+});
+
+async function editCallsignSuffix(id) {
+    try {
+        const response = await fetch(`${API_BASE}/callsign-suffixes/${id}`);
+        const suffix = await response.json();
+
+        document.getElementById('callsignSuffixModalTitle').textContent = 'Edit Callsign Suffix';
+        document.getElementById('callsign-suffix-id').value = suffix.id;
+        document.getElementById('callsign-suffix-value').value = suffix.suffix;
+        document.getElementById('callsign-suffix-description').value = suffix.description || '';
+        document.getElementById('callsign-suffix-try-on-miss').checked = suffix.try_on_miss;
+        document.getElementById('callsign-suffix-strip-on-normalize').checked = suffix.strip_on_normalize;
+        document.getElementById('callsign-suffix-priority').value = suffix.priority;
+        document.getElementById('callsign-suffix-enabled').checked = suffix.enabled;
+
+        new bootstrap.Modal(document.getElementById('callsignSuffixModal')).show();
+    } catch (error) {
+        alert('Error loading callsign suffix: ' + error.message);
+    }
+}
+
+document.getElementById('save-callsign-suffix-btn').addEventListener('click', async () => {
+    const id = document.getElementById('callsign-suffix-id').value;
+
+    const data = {
+        suffix: document.getElementById('callsign-suffix-value').value,
+        description: document.getElementById('callsign-suffix-description').value || null,
+        try_on_miss: document.getElementById('callsign-suffix-try-on-miss').checked,
+        strip_on_normalize: document.getElementById('callsign-suffix-strip-on-normalize').checked,
+        priority: parseInt(document.getElementById('callsign-suffix-priority').value),
+        enabled: document.getElementById('callsign-suffix-enabled').checked
+    };
+
+    try {
+        const url = id ? `${API_BASE}/callsign-suffixes/${id}` : `${API_BASE}/callsign-suffixes`;
+        const response = await fetch(url, {
+            method: id ? 'PUT' : 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to save');
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('callsignSuffixModal')).hide();
+        loadCallsignSuffixes();
+    } catch (error) {
+        alert('Error saving callsign suffix: ' + error.message);
+    }
+});
+
+async function deleteCallsignSuffix(id) {
+    if (!confirm('Delete this callsign suffix?')) return;
+    try {
+        await fetch(`${API_BASE}/callsign-suffixes/${id}`, {method: 'DELETE'});
+        loadCallsignSuffixes();
+    } catch (error) {
+        alert('Error deleting callsign suffix: ' + error.message);
+    }
+}
+</script>
+{% endblock %}

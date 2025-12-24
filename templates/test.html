@@ -19,6 +19,17 @@
                 </select>
                 
                 <div class="mb-3">
+                    <label class="form-label">Search Channels</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="channelSearch" placeholder="Search by channel name...">
+                        <button class="btn btn-outline-secondary" type="button" id="clearSearchBtn" title="Clear search">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                    <div class="form-text">Search in channel name and cleaned name</div>
+                </div>
+                
+                <div class="mb-3">
                     <label class="form-label">Filter by Tags</label>
                     <div id="previewTagSelector"></div>
                     <div class="form-text">Type to search and click to add tags. Channels must have at least one selected tag.</div>
@@ -239,34 +250,7 @@ async function loadPreview() {
     `;
     
     // Load filters
-    try {
-        if (accountId === 'all') {
-            document.getElementById('activeFilters').innerHTML = '<p class="text-muted">Viewing all accounts - filters vary by account</p>';
-        } else {
-            const filtersResponse = await fetch(`/api/accounts/${accountId}/filters`);
-            const filters = await filtersResponse.json();
-            
-            let filtersHtml = '';
-            if (filters.length === 0) {
-                filtersHtml = '<p class="text-muted">No filters configured</p>';
-            } else {
-                filtersHtml = '<ul class="list-group list-group-flush">';
-                for (const filter of filters.filter(f => f.enabled)) {
-                    const badge = filter.filter_action === 'whitelist' ? 'success' : 'danger';
-                    filtersHtml += `
-                        <li class="list-group-item">
-                            <span class="badge bg-${badge}">${filter.filter_action}</span>
-                            <strong>${filter.filter_type}:</strong> ${filter.filter_value}
-                        </li>
-                    `;
-                }
-                filtersHtml += '</ul>';
-            }
-            document.getElementById('activeFilters').innerHTML = filtersHtml;
-        }
-    } catch (error) {
-        document.getElementById('activeFilters').innerHTML = `<p class="text-danger">Error loading filters</p>`;
-    }
+    await loadActiveFilters(accountId);
     
     // Initialize display
     const html = `
@@ -325,12 +309,16 @@ async function loadMoreChannels() {
         const collapseDuplicates = document.getElementById('collapseDuplicates')?.checked || false;
         const collapseParam = collapseDuplicates ? '&collapse_duplicates=true' : '';
         
+        // Get search term
+        const searchTerm = document.getElementById('channelSearch')?.value.trim() || '';
+        const searchParam = searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : '';
+        
         // Use different endpoint for "all accounts"
         let url;
         if (currentAccountId === 'all') {
-            url = `/api/channels/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}${tagParam}${categoryParam}${collapseParam}`;
+            url = `/api/channels/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}${tagParam}${categoryParam}${collapseParam}${searchParam}`;
         } else {
-            url = `/api/accounts/${currentAccountId}/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}${tagParam}${categoryParam}${collapseParam}`;
+            url = `/api/accounts/${currentAccountId}/preview?limit=${CHANNELS_PER_PAGE}&offset=${loadedChannels}${tagParam}${categoryParam}${collapseParam}${searchParam}`;
         }
         
         const response = await fetch(url);
@@ -408,14 +396,17 @@ async function loadMoreChannels() {
                     <td>${tagsHtml}</td>
                     <td class="text-nowrap">
                         <div class="btn-group btn-group-sm" role="group">
-                            <a class="btn btn-outline-success" href="/stream/${channel.account_id}/${channel.stream_id}.ts" target="_blank" title="Play stream" onclick="event.stopPropagation();">
+                            <a class="btn btn-outline-success" href="/stream/${channel.account_id}/${channel.stream_id}.ts" target="_blank" title="Play stream">
                                 <i class="bi bi-play-fill"></i>
                             </a>
-                            <button class="btn btn-outline-primary" data-action="create-tag-rule" data-channel-name="${escapeHtml(channel.name)}" data-channel-id="${channel.id}" title="Create tag rule for this channel" onclick="event.stopPropagation();">
+                            <button class="btn btn-outline-primary" data-action="create-tag-rule" data-channel-name="${escapeHtml(channel.name)}" data-channel-id="${channel.id}" title="Create tag rule for this channel">
                                 <i class="bi bi-tag"></i>
                             </button>
-                            <button class="btn btn-outline-info" data-action="view-details" data-account-id="${channel.account_id}" data-stream-id="${channel.stream_id}" title="View channel details" onclick="event.stopPropagation(); showChannelDetails('${channel.account_id}', '${channel.stream_id}');">
+                            <button class="btn btn-outline-info" data-action="view-details" data-account-id="${channel.account_id}" data-stream-id="${channel.stream_id}" title="View channel details">
                                 <i class="bi bi-info-circle"></i>
+                            </button>
+                            <button class="btn btn-outline-danger" data-action="hide-channel" data-account-id="${channel.account_id}" data-channel-name="${escapeHtml(channel.name)}" title="Hide this channel">
+                                <i class="bi bi-eye-slash"></i>
                             </button>
                         </div>
                     </td>
@@ -721,6 +712,140 @@ async function showChannelDetails(accountId, streamId) {
     }
 }
 
+// Hide channel by creating a filter
+async function hideChannel(accountId, channelName, button) {
+    const originalHtml = button.innerHTML;
+    
+    try {
+        // Disable button during API call
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+        
+        // Create new filter to hide the channel
+        const createResponse = await fetch('/api/filters', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                account_id: parseInt(accountId),
+                name: `Hide: ${channelName}`,
+                filter_type: 'channel_name',
+                filter_action: 'blacklist',
+                filter_value: channelName,
+                enabled: true
+            })
+        });
+        
+        if (!createResponse.ok) {
+            const errorData = await createResponse.json();
+            throw new Error(errorData.error || 'Failed to create filter');
+        }
+        
+        // Remove the channel row from the table
+        const row = button.closest('tr');
+        if (row) {
+            row.style.transition = 'opacity 0.3s ease-out';
+            row.style.opacity = '0';
+            setTimeout(() => row.remove(), 300);
+        }
+        
+        // Decrement the channel count
+        loadedChannels--;
+        totalChannels--;
+        const countDisplay = document.getElementById('channelCount');
+        if (countDisplay && totalChannels > 0) {
+            countDisplay.innerHTML = `Showing ${loadedChannels.toLocaleString()} of ${totalChannels.toLocaleString()} channels`;
+        }
+        
+        showToast(`Channel "${channelName}" hidden`, 'success');
+        
+        // Reload active filters panel
+        loadActiveFilters(accountId);
+        
+    } catch (error) {
+        console.error('Error hiding channel:', error);
+        showToast(`Error: ${error.message}`, 'danger');
+        button.innerHTML = originalHtml;
+    } finally {
+        button.disabled = false;
+    }
+}
+
+// Toast notification helper
+function showToast(message, type = 'info') {
+    // Create toast container if it doesn't exist
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        container.style.zIndex = '1080';
+        document.body.appendChild(container);
+    }
+    
+    const toastId = 'toast-' + Date.now();
+    const bgClass = type === 'success' ? 'bg-success' : 
+                    type === 'danger' ? 'bg-danger' : 
+                    type === 'warning' ? 'bg-warning text-dark' : 'bg-info';
+    
+    const toastHtml = `
+        <div id="${toastId}" class="toast align-items-center ${bgClass} text-white border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    ${escapeHtml(message)}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', toastHtml);
+    
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
+    toast.show();
+    
+    // Remove from DOM after hiding
+    toastElement.addEventListener('hidden.bs.toast', () => {
+        toastElement.remove();
+    });
+}
+
+// Load active filters for an account
+async function loadActiveFilters(accountId) {
+    try {
+        if (accountId === 'all') {
+            document.getElementById('activeFilters').innerHTML = '<p class="text-muted">Viewing all accounts - filters vary by account</p>';
+        } else {
+            const filtersResponse = await fetch(`/api/accounts/${accountId}/filters`);
+            const filters = await filtersResponse.json();
+            
+            let filtersHtml = '';
+            if (filters.length === 0) {
+                filtersHtml = '<p class="text-muted">No filters configured</p>';
+            } else {
+                filtersHtml = '<ul class="list-group list-group-flush">';
+                for (const filter of filters.filter(f => f.enabled)) {
+                    const badge = filter.filter_action === 'whitelist' ? 'success' : 'danger';
+                    filtersHtml += `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>
+                                <span class="badge bg-${badge}">${filter.filter_action}</span>
+                                <strong>${filter.filter_type}:</strong> ${escapeHtml(filter.filter_value)}
+                            </span>
+                        </li>
+                    `;
+                }
+                filtersHtml += '</ul>';
+            }
+            document.getElementById('activeFilters').innerHTML = filtersHtml;
+        }
+    } catch (error) {
+        document.getElementById('activeFilters').innerHTML = `<p class="text-danger">Error loading filters</p>`;
+    }
+}
+
 loadAccounts();
 
 // Initialize event listeners after DOM is loaded
@@ -736,19 +861,82 @@ document.addEventListener('DOMContentLoaded', () => {
     if (downloadBtn) {
         downloadBtn.addEventListener('click', () => downloadPlaylist());
     }
+    
+    // Channel search - debounced to avoid too many requests
+    let searchTimeout = null;
+    const channelSearchInput = document.getElementById('channelSearch');
+    if (channelSearchInput) {
+        channelSearchInput.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                if (currentAccountId) {
+                    loadPreview();
+                }
+            }, 300); // 300ms debounce
+        });
+        
+        // Enter key triggers immediate search
+        channelSearchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && currentAccountId) {
+                clearTimeout(searchTimeout);
+                loadPreview();
+            }
+        });
+    }
+    
+    // Clear search button
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    if (clearSearchBtn) {
+        clearSearchBtn.addEventListener('click', () => {
+            const searchInput = document.getElementById('channelSearch');
+            if (searchInput) {
+                searchInput.value = '';
+                if (currentAccountId) {
+                    loadPreview();
+                }
+            }
+        });
+    }
 
-    // Event delegation for channel operations (create tag rule)
+    // Event delegation for channel operations (create tag rule, hide channel)
     document.getElementById('previewResult').addEventListener('click', (e) => {
+        // Check for any button click first to prevent row click
+        const anyButton = e.target.closest('button, a.btn');
+        
         const tagRuleButton = e.target.closest('button[data-action="create-tag-rule"]');
         if (tagRuleButton) {
+            e.stopPropagation();
             const channelName = tagRuleButton.dataset.channelName;
             createManualTagRule(channelName);
             return;
         }
         
+        const hideChannelButton = e.target.closest('button[data-action="hide-channel"]');
+        if (hideChannelButton) {
+            e.stopPropagation();
+            const accountId = hideChannelButton.dataset.accountId;
+            const channelName = hideChannelButton.dataset.channelName;
+            hideChannel(accountId, channelName, hideChannelButton);
+            return;
+        }
+        
+        const viewDetailsButton = e.target.closest('button[data-action="view-details"]');
+        if (viewDetailsButton) {
+            e.stopPropagation();
+            const accountId = viewDetailsButton.dataset.accountId;
+            const streamId = viewDetailsButton.dataset.streamId;
+            showChannelDetails(accountId, streamId);
+            return;
+        }
+        
+        // If any button/link was clicked but not handled above, stop here
+        if (anyButton) {
+            return;
+        }
+        
         // Handle row click for channel details
         const channelRow = e.target.closest('.channel-row');
-        if (channelRow && !e.target.closest('button')) {
+        if (channelRow) {
             const accountId = channelRow.dataset.accountId;
             const streamId = channelRow.dataset.streamId;
             showChannelDetails(accountId, streamId);

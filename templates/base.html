@@ -258,6 +258,16 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link {% if request.path == '/epg-match-rules' %}active{% endif %}" href="/epg-match-rules">
+                                <i class="bi bi-diagram-3"></i> EPG Match Rules
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.path == '/fcc-match-patterns' %}active{% endif %}" href="/fcc-match-patterns">
+                                <i class="bi bi-broadcast"></i> FCC Match Patterns
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link {% if request.path == '/stations' %}active{% endif %}" href="/stations">
                                 <i class="bi bi-broadcast-pin"></i> Station Database
                             </a>

@@ -33,6 +33,7 @@ def test_tag_extraction():
         MockRule("US|", "prefix", "US", "both", True, 10),
         MockRule(r"^US:\s*", "regex", "US", "channel_name", True, 10),
         MockRule(r"^GO:\s*", "regex", "GO", "channel_name", True, 10),
+        MockRule(r"^([A-Z]{2}):\s*", "regex", "__CAPTURE__", "channel_name", True, 15),
         MockRule("PRIME:", "prefix", "PRIME", "both", True, 15),
         MockRule("ᵁᴴᴰ", "contains", "UHD", "both", True, 17),
         MockRule("ᴴᴰ", "contains", "HD", "both", True, 18),
@@ -143,6 +144,19 @@ def test_tag_extraction():
             "category_name": "US| FOX ᴴᴰ/ᴿᴬᵂ ⁶⁰ᶠᵖˢ",
             "expected_tags": {"US", "HD", "RAW", "60FPS", "KABB"},
             "expected_name": "FOX KABB SAN ANTONIO",
+        },
+        # Test generic two-letter colon prefix (like RK:)
+        {
+            "channel_name": "RK: ESPN HD",
+            "category_name": "SPORTS ᴴᴰ",
+            "expected_tags": {"RK", "HD", "SPORTS"},
+            "expected_name": "ESPN",
+        },
+        {
+            "channel_name": "AB: CNN NEWS",
+            "category_name": "NEWS",
+            "expected_tags": {"AB", "NEWS"},
+            "expected_name": "CNN NEWS",
         },
     ]
 

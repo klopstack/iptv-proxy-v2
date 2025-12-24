@@ -55,6 +55,12 @@ def epg_page():
     return render_template("epg.html")
 
 
+@web_bp.route("/epg-match-rules")
+def epg_match_rules_page():
+    """EPG Match Rules configuration page"""
+    return render_template("epg_match_rules.html")
+
+
 @web_bp.route("/stations")
 def stations_page():
     """FCC Station Database page"""

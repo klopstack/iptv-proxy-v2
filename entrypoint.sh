@@ -26,4 +26,5 @@ echo ""
 
 # Start gunicorn with gevent workers for efficient stream proxying
 # Gevent allows handling many concurrent I/O-bound connections per worker
-exec gunicorn --bind 0.0.0.0:${PORT} --worker-class gevent --workers 4 --timeout 120 app:app
+# Increased timeout to 600 seconds (10 minutes) to accommodate EPG matching on large channel lists
+exec gunicorn --bind 0.0.0.0:${PORT} --worker-class gevent --workers 4 --timeout 600 app:app

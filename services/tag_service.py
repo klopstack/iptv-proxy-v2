@@ -399,6 +399,17 @@ class TagService:
                 "remove_from_name": True,
                 "priority": 10,
             },
+            # Generic two-letter colon prefix cleanup (captures the prefix as tag)
+            {
+                "ruleset_id": ruleset.id,
+                "name": "Two-Letter Colon Prefix",
+                "pattern": r"^([A-Z]{2}):\s*",
+                "pattern_type": "regex",
+                "tag_name": "__CAPTURE__",
+                "source": "channel_name",
+                "remove_from_name": True,
+                "priority": 15,
+            },
             # Quality indicators - Superscript versions (process these first)
             {
                 "ruleset_id": ruleset.id,

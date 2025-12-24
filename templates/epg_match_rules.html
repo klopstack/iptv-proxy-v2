@@ -1,0 +1,1374 @@
+{% extends "base.html" %}
+
+{% block title %}EPG Match Rules - IPTV Proxy{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">EPG Match Rules</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button class="btn btn-sm btn-warning me-2" id="create-default-exclusions-btn" title="Create default PPV/Event exclusion patterns">
+            <i class="bi bi-shield-x"></i> Create Default Exclusions
+        </button>
+        <button class="btn btn-sm btn-primary me-2" id="create-default-ruleset-btn">
+            <i class="bi bi-plus-circle"></i> Create Default Ruleset
+        </button>
+        <button class="btn btn-sm btn-outline-primary" id="create-ruleset-btn">
+            <i class="bi bi-plus-circle"></i> New Ruleset
+        </button>
+    </div>
+</div>
+
+<!-- Info Alert -->
+<div class="alert alert-info mb-4">
+    <i class="bi bi-info-circle"></i>
+    <strong>EPG Match Rules</strong> define how channels are matched to EPG (program guide) data.
+    Rules are processed in priority order (lower numbers first). When a rule matches, it can either
+    create an EPG mapping or skip the channel entirely. Use exclusion patterns to prevent specific
+    channels (like PPV events) from being matched.
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="rulesets-tab" data-bs-toggle="tab" data-bs-target="#rulesets" type="button">
+            <i class="bi bi-collection"></i> Match Rulesets
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="exclusions-tab" data-bs-toggle="tab" data-bs-target="#exclusions" type="button">
+            <i class="bi bi-shield-x"></i> Exclusion Patterns
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="reference-tab" data-bs-toggle="tab" data-bs-target="#reference" type="button">
+            <i class="bi bi-book"></i> Reference
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="mainTabsContent">
+    <!-- Rulesets Tab -->
+    <div class="tab-pane fade show active" id="rulesets" role="tabpanel">
+        <div id="rulesets-list">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exclusions Tab -->
+    <div class="tab-pane fade" id="exclusions" role="tabpanel">
+        <div class="mb-3">
+            <button class="btn btn-sm btn-primary" id="create-exclusion-btn">
+                <i class="bi bi-plus-circle"></i> New Exclusion Pattern
+            </button>
+        </div>
+        <div id="exclusions-list">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reference Tab -->
+    <div class="tab-pane fade" id="reference" role="tabpanel">
+        <div id="reference-content">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit Ruleset Modal -->
+<div class="modal fade" id="rulesetModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rulesetModalTitle">New EPG Match Ruleset</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="rulesetForm">
+                    <input type="hidden" id="ruleset-id">
+                    <div class="mb-3">
+                        <label for="ruleset-name" class="form-label">Name *</label>
+                        <input type="text" class="form-control" id="ruleset-name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ruleset-description" class="form-label">Description</label>
+                        <textarea class="form-control" id="ruleset-description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ruleset-priority" class="form-label">Priority (lower = higher priority)</label>
+                        <input type="number" class="form-control" id="ruleset-priority" value="100">
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="ruleset-is-default">
+                        <label class="form-check-label" for="ruleset-is-default">Default (apply to accounts without assigned rulesets)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="ruleset-enabled" checked>
+                        <label class="form-check-label" for="ruleset-enabled">Enabled</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-ruleset-btn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit Rule Modal -->
+<div class="modal fade" id="ruleModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="ruleModalTitle">New EPG Match Rule</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="ruleForm">
+                    <input type="hidden" id="rule-id">
+                    <input type="hidden" id="rule-ruleset-id">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-name" class="form-label">Rule Name *</label>
+                            <input type="text" class="form-control" id="rule-name" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-priority" class="form-label">Priority</label>
+                            <input type="number" class="form-control" id="rule-priority" value="100">
+                            <small class="form-text text-muted">Lower = processed first</small>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="rule-description" class="form-label">Description</label>
+                        <input type="text" class="form-control" id="rule-description" placeholder="Optional description">
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-match-type" class="form-label">Match Type *</label>
+                            <select class="form-select" id="rule-match-type" required>
+                                <option value="provider_id">Provider EPG ID</option>
+                                <option value="callsign_tag">Callsign Tag</option>
+                                <option value="callsign_name">Callsign from Name</option>
+                                <option value="fcc_lookup">FCC Database Lookup</option>
+                                <option value="exact_name">Exact Name Match</option>
+                                <option value="fuzzy_name">Fuzzy Name Match</option>
+                                <option value="tag_based">Tag-Based</option>
+                                <option value="category_pattern">Category Pattern</option>
+                                <option value="network_fallback">Network Fallback</option>
+                                <option value="regex">Regex Pattern</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-action" class="form-label">Action *</label>
+                            <select class="form-select" id="rule-action" required>
+                                <option value="map_epg">Map EPG</option>
+                                <option value="skip">Skip (No EPG)</option>
+                                <option value="use_fallback">Use Fallback EPG</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-source" class="form-label">Source Field</label>
+                            <select class="form-select" id="rule-source">
+                                <option value="cleaned_name">Cleaned Name</option>
+                                <option value="channel_name">Channel Name</option>
+                                <option value="category_name">Category Name</option>
+                                <option value="epg_channel_id">EPG Channel ID</option>
+                                <option value="tags">Channel Tags</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3" id="confidence-group">
+                            <label for="rule-min-confidence" class="form-label">Min Confidence (0-1)</label>
+                            <input type="number" class="form-control" id="rule-min-confidence" value="0.75" min="0" max="1" step="0.05">
+                            <small class="form-text text-muted">For fuzzy matching</small>
+                        </div>
+                    </div>
+                    <div class="mb-3" id="pattern-group">
+                        <label for="rule-pattern" class="form-label">Pattern</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="rule-pattern">
+                            <button type="button" class="btn btn-outline-info" id="preview-rule-btn">
+                                <i class="bi bi-eye"></i> Preview
+                            </button>
+                        </div>
+                        <small class="form-text text-muted">Regex pattern for matching (required for regex and category_pattern types)</small>
+                    </div>
+                    <div class="mb-3" id="fallback-group" style="display: none;">
+                        <label for="rule-fallback-epg-id" class="form-label">Fallback EPG Channel ID</label>
+                        <input type="text" class="form-control" id="rule-fallback-epg-id">
+                        <small class="form-text text-muted">EPG channel ID to use as fallback</small>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3" id="category-pattern-group">
+                            <label for="rule-category-pattern" class="form-label">Category Include Pattern</label>
+                            <input type="text" class="form-control" id="rule-category-pattern" placeholder="Regex to filter categories">
+                        </div>
+                        <div class="col-md-6 mb-3" id="category-exclude-group">
+                            <label for="rule-category-exclude-pattern" class="form-label">Category Exclude Pattern</label>
+                            <input type="text" class="form-control" id="rule-category-exclude-pattern" placeholder="Regex to exclude categories">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="rule-account-filter" class="form-label">Preview Account (optional)</label>
+                        <select class="form-select" id="rule-account-filter">
+                            <option value="">All accounts</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="country-codes-group">
+                        <label for="rule-country-codes" class="form-label">Country Codes</label>
+                        <input type="text" class="form-control" id="rule-country-codes" placeholder="US, UK, CA (comma-separated)">
+                        <small class="form-text text-muted">Limit matching to channels with these country tags</small>
+                    </div>
+                    <div class="mb-3" id="time-offset-group">
+                        <label for="rule-time-offset" class="form-label">Time Offset (hours)</label>
+                        <input type="number" class="form-control" id="rule-time-offset" value="0" min="-24" max="24">
+                        <small class="form-text text-muted">For time-shifted channels (e.g., -3 for West Coast)</small>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="rule-enabled" checked>
+                                <label class="form-check-label" for="rule-enabled">Enabled</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="rule-stop-on-match" checked>
+                                <label class="form-check-label" for="rule-stop-on-match">Stop on match</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Preview Results -->
+                    <div id="rule-preview-results" style="display: none;">
+                        <hr>
+                        <h6><i class="bi bi-eye"></i> Pattern Preview</h6>
+                        <div id="rule-preview-error" class="alert alert-danger" style="display: none;"></div>
+                        <div id="rule-preview-loading" class="text-center" style="display: none;">
+                            <div class="spinner-border spinner-border-sm" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            Testing pattern...
+                        </div>
+                        <div id="rule-preview-content">
+                            <p class="text-muted mb-2">
+                                <span id="rule-preview-count">0</span> channels match this pattern
+                                <span id="rule-preview-more" style="display: none;">(showing first 100)</span>
+                            </p>
+                            <div id="rule-preview-list" class="border rounded p-2" style="max-height: 200px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-rule-btn">Save Rule</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit Exclusion Pattern Modal -->
+<div class="modal fade" id="exclusionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exclusionModalTitle">New Exclusion Pattern</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="exclusionForm">
+                    <input type="hidden" id="exclusion-id">
+                    <div class="mb-3">
+                        <label for="exclusion-name" class="form-label">Name *</label>
+                        <input type="text" class="form-control" id="exclusion-name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="exclusion-description" class="form-label">Description</label>
+                        <textarea class="form-control" id="exclusion-description" rows="2"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="exclusion-pattern-type" class="form-label">Pattern Type *</label>
+                            <select class="form-select" id="exclusion-pattern-type" required>
+                                <option value="category_name">Category Name</option>
+                                <option value="channel_name">Channel Name</option>
+                                <option value="tag">Tag</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="exclusion-priority" class="form-label">Priority</label>
+                            <input type="number" class="form-control" id="exclusion-priority" value="100">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="exclusion-pattern" class="form-label">Pattern *</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="exclusion-pattern" required>
+                            <button type="button" class="btn btn-outline-info" id="preview-exclusion-btn">
+                                <i class="bi bi-eye"></i> Preview
+                            </button>
+                        </div>
+                        <small class="form-text text-muted">Regex pattern to match (or literal if 'Is Regex' is unchecked)</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="exclusion-account-filter" class="form-label">Preview Account (optional)</label>
+                        <select class="form-select" id="exclusion-account-filter">
+                            <option value="">All accounts</option>
+                        </select>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="exclusion-is-regex" checked>
+                        <label class="form-check-label" for="exclusion-is-regex">Is Regex</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="exclusion-hide-channel">
+                        <label class="form-check-label" for="exclusion-hide-channel">Also hide channel from playlist</label>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="exclusion-enabled" checked>
+                        <label class="form-check-label" for="exclusion-enabled">Enabled</label>
+                    </div>
+                    
+                    <!-- Preview Results -->
+                    <div id="exclusion-preview-results" style="display: none;">
+                        <hr>
+                        <h6><i class="bi bi-eye"></i> Pattern Preview</h6>
+                        <div id="exclusion-preview-error" class="alert alert-danger" style="display: none;"></div>
+                        <div id="exclusion-preview-loading" class="text-center" style="display: none;">
+                            <div class="spinner-border spinner-border-sm" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            Testing pattern...
+                        </div>
+                        <div id="exclusion-preview-content">
+                            <p class="text-muted mb-2">
+                                <span id="exclusion-preview-count">0</span> channels match this pattern
+                                <span id="exclusion-preview-more" style="display: none;">(showing first 100)</span>
+                            </p>
+                            <div id="exclusion-preview-list" class="border rounded p-2" style="max-height: 200px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-exclusion-btn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assign Ruleset to Account Modal -->
+<div class="modal fade" id="assignRulesetModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Assign to Accounts</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="assign-ruleset-id">
+                <div id="accounts-assign-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let accounts = [];
+let matchTypes = [];
+let expandedRulesets = new Set();
+
+// Utility function to escape HTML
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    await Promise.all([
+        loadAccounts(),
+        loadMatchTypes(),
+        loadRulesets()
+    ]);
+});
+
+// Tab change handlers
+document.getElementById('exclusions-tab').addEventListener('shown.bs.tab', loadExclusions);
+document.getElementById('reference-tab').addEventListener('shown.bs.tab', loadReference);
+
+async function loadAccounts() {
+    try {
+        const response = await fetch('/api/accounts');
+        accounts = await response.json();
+    } catch (error) {
+        console.error('Error loading accounts:', error);
+    }
+}
+
+async function loadMatchTypes() {
+    try {
+        const response = await fetch('/api/epg-match-rules/match-types');
+        const data = await response.json();
+        matchTypes = data;
+    } catch (error) {
+        console.error('Error loading match types:', error);
+    }
+}
+
+// ============================================================================
+// Rulesets Management
+// ============================================================================
+
+async function loadRulesets(preserveExpanded = false) {
+    // Save currently expanded rulesets if preserving
+    if (preserveExpanded) {
+        document.querySelectorAll('[id^="rules-"].show').forEach(el => {
+            const id = el.id.replace('rules-', '');
+            expandedRulesets.add(parseInt(id));
+        });
+    } else {
+        expandedRulesets.clear();
+    }
+    
+    try {
+        const response = await fetch('/api/epg-match-rules/rulesets');
+        const rulesets = await response.json();
+        
+        let html = '';
+        
+        if (rulesets.length === 0) {
+            html = `
+                <div class="alert alert-info">
+                    <h5><i class="bi bi-info-circle"></i> No EPG Match Rulesets Found</h5>
+                    <p>Create a default ruleset to get started with EPG matching.</p>
+                </div>
+            `;
+        } else {
+            rulesets.forEach(ruleset => {
+                const defaultBadge = ruleset.is_default ? '<span class="badge bg-primary ms-2">Default</span>' : '';
+                const status = ruleset.enabled ? '<span class="badge bg-success">Enabled</span>' : '<span class="badge bg-secondary">Disabled</span>';
+                const isExpanded = expandedRulesets.has(ruleset.id);
+                
+                // Show assigned accounts
+                let assignedAccountsBadges = '';
+                if (ruleset.assigned_accounts && ruleset.assigned_accounts.length > 0) {
+                    const accountNames = ruleset.assigned_accounts.map(a => a.name).join(', ');
+                    assignedAccountsBadges = `<span class="badge bg-info ms-2" title="Assigned to: ${accountNames}"><i class="bi bi-person-check"></i> ${ruleset.assigned_accounts.length} account${ruleset.assigned_accounts.length > 1 ? 's' : ''}</span>`;
+                }
+                
+                html += `
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                ${escapeHtml(ruleset.name)} ${defaultBadge}${assignedAccountsBadges}
+                                <small class="text-muted ms-2">(${ruleset.rule_count} rules, priority: ${ruleset.priority})</small>
+                            </h5>
+                            <div>
+                                ${status}
+                                <div class="btn-group ms-2">
+                                    <button class="btn btn-sm btn-outline-primary" data-action="show-rules" data-ruleset-id="${ruleset.id}">
+                                        <i class="bi bi-list"></i> Rules
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-info" data-action="show-assign" data-ruleset-id="${ruleset.id}">
+                                        <i class="bi bi-link"></i> Assign
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-warning" data-action="duplicate" data-ruleset-id="${ruleset.id}" title="Duplicate ruleset">
+                                        <i class="bi bi-copy"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary" data-action="edit" data-ruleset-id="${ruleset.id}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" data-action="delete" data-ruleset-id="${ruleset.id}">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        ${ruleset.description ? `<div class="card-body"><p class="text-muted mb-0">${escapeHtml(ruleset.description)}</p></div>` : ''}
+                        <div class="card-body collapse ${isExpanded ? 'show' : ''}" id="rules-${ruleset.id}">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6>EPG Match Rules</h6>
+                                <button class="btn btn-sm btn-success" data-action="create-rule" data-ruleset-id="${ruleset.id}">
+                                    <i class="bi bi-plus"></i> Add Rule
+                                </button>
+                            </div>
+                            <div id="rules-list-${ruleset.id}">
+                                <div class="text-center py-3">
+                                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        document.getElementById('rulesets-list').innerHTML = html;
+        
+        // Reload rules for expanded rulesets
+        for (const rulesetId of expandedRulesets) {
+            await loadRulesForRuleset(rulesetId);
+        }
+    } catch (error) {
+        document.getElementById('rulesets-list').innerHTML = `
+            <div class="alert alert-danger">Error loading rulesets: ${error.message}</div>
+        `;
+    }
+}
+
+async function loadRulesForRuleset(rulesetId) {
+    try {
+        const response = await fetch(`/api/epg-match-rules/rules?ruleset_id=${rulesetId}`);
+        const rules = await response.json();
+        
+        let html = '';
+        if (rules.length === 0) {
+            html = '<div class="alert alert-warning">No rules in this ruleset</div>';
+        } else {
+            html = '<div class="table-responsive"><table class="table table-sm table-hover">';
+            html += '<thead><tr><th>Priority</th><th>Name</th><th>Type</th><th>Source</th><th>Action</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+            
+            rules.forEach(rule => {
+                const status = rule.enabled ? '<span class="badge bg-success">On</span>' : '<span class="badge bg-secondary">Off</span>';
+                const stopIcon = rule.stop_on_match ? '<i class="bi bi-stop-circle text-warning" title="Stops processing on match"></i>' : '';
+                
+                html += `
+                    <tr>
+                        <td>${rule.priority}</td>
+                        <td>${escapeHtml(rule.name)}</td>
+                        <td><span class="badge bg-info">${rule.match_type}</span></td>
+                        <td>${rule.source || '-'}</td>
+                        <td><span class="badge bg-primary">${rule.action}</span></td>
+                        <td>${status} ${stopIcon}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-secondary" data-action="edit-rule" data-rule-id="${rule.id}">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" data-action="delete-rule" data-rule-id="${rule.id}" data-ruleset-id="${rulesetId}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table></div>';
+        }
+        
+        document.getElementById(`rules-list-${rulesetId}`).innerHTML = html;
+    } catch (error) {
+        document.getElementById(`rules-list-${rulesetId}`).innerHTML = `
+            <div class="alert alert-danger">Error loading rules: ${error.message}</div>
+        `;
+    }
+}
+
+async function showRulesetRules(rulesetId) {
+    const rulesDiv = document.getElementById(`rules-${rulesetId}`);
+    const isCurrentlyShown = rulesDiv.classList.contains('show');
+    
+    new bootstrap.Collapse(rulesDiv, { toggle: true });
+    
+    if (isCurrentlyShown) {
+        expandedRulesets.delete(rulesetId);
+        return;
+    }
+    
+    expandedRulesets.add(rulesetId);
+    await loadRulesForRuleset(rulesetId);
+}
+
+// ============================================================================
+// Ruleset CRUD
+// ============================================================================
+
+function showCreateRulesetModal() {
+    document.getElementById('rulesetModalTitle').textContent = 'New EPG Match Ruleset';
+    document.getElementById('rulesetForm').reset();
+    document.getElementById('ruleset-id').value = '';
+    document.getElementById('ruleset-enabled').checked = true;
+    new bootstrap.Modal(document.getElementById('rulesetModal')).show();
+}
+
+async function editRuleset(rulesetId) {
+    const response = await fetch(`/api/epg-match-rules/rulesets/${rulesetId}`);
+    const ruleset = await response.json();
+    
+    document.getElementById('rulesetModalTitle').textContent = 'Edit EPG Match Ruleset';
+    document.getElementById('ruleset-id').value = ruleset.id;
+    document.getElementById('ruleset-name').value = ruleset.name;
+    document.getElementById('ruleset-description').value = ruleset.description || '';
+    document.getElementById('ruleset-priority').value = ruleset.priority;
+    document.getElementById('ruleset-is-default').checked = ruleset.is_default;
+    document.getElementById('ruleset-enabled').checked = ruleset.enabled;
+    
+    new bootstrap.Modal(document.getElementById('rulesetModal')).show();
+}
+
+async function saveRuleset() {
+    const id = document.getElementById('ruleset-id').value;
+    const data = {
+        name: document.getElementById('ruleset-name').value,
+        description: document.getElementById('ruleset-description').value,
+        priority: parseInt(document.getElementById('ruleset-priority').value),
+        is_default: document.getElementById('ruleset-is-default').checked,
+        enabled: document.getElementById('ruleset-enabled').checked
+    };
+    
+    try {
+        const url = id ? `/api/epg-match-rules/rulesets/${id}` : '/api/epg-match-rules/rulesets';
+        const method = id ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('rulesetModal')).hide();
+            await loadRulesets(true);
+        } else {
+            const error = await response.json();
+            alert('Error: ' + (error.error || 'Failed to save ruleset'));
+        }
+    } catch (error) {
+        alert('Error saving ruleset: ' + error.message);
+    }
+}
+
+async function deleteRuleset(rulesetId) {
+    if (!confirm('Delete this ruleset and all its rules?')) return;
+    
+    try {
+        const response = await fetch(`/api/epg-match-rules/rulesets/${rulesetId}`, { method: 'DELETE' });
+        if (response.ok) {
+            await loadRulesets();
+        }
+    } catch (error) {
+        alert('Error deleting ruleset: ' + error.message);
+    }
+}
+
+async function duplicateRuleset(rulesetId) {
+    try {
+        const response = await fetch(`/api/epg-match-rules/rulesets/${rulesetId}/duplicate`, { method: 'POST' });
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert(result.message);
+            await loadRulesets();
+        } else {
+            alert('Error: ' + (result.error || 'Failed to duplicate ruleset'));
+        }
+    } catch (error) {
+        alert('Error duplicating ruleset: ' + error.message);
+    }
+}
+
+async function createDefaultRuleset() {
+    if (!confirm('Create default EPG match ruleset with standard matching rules?')) return;
+    
+    try {
+        const response = await fetch('/api/epg-match-rules/create-default', { method: 'POST' });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert(result.message);
+            await loadRulesets();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error creating default ruleset: ' + error.message);
+    }
+}
+
+// ============================================================================
+// Rule CRUD
+// ============================================================================
+
+function showCreateRuleModal(rulesetId) {
+    document.getElementById('ruleModalTitle').textContent = 'New EPG Match Rule';
+    document.getElementById('ruleForm').reset();
+    document.getElementById('rule-id').value = '';
+    document.getElementById('rule-ruleset-id').value = rulesetId;
+    document.getElementById('rule-enabled').checked = true;
+    document.getElementById('rule-stop-on-match').checked = true;
+    
+    // Populate account dropdown
+    populateRuleAccountDropdown();
+    
+    // Hide preview results
+    resetRulePreview();
+    
+    updateRuleFormVisibility();
+    new bootstrap.Modal(document.getElementById('ruleModal')).show();
+}
+
+async function editRule(ruleId) {
+    const response = await fetch(`/api/epg-match-rules/rules/${ruleId}`);
+    const rule = await response.json();
+    
+    document.getElementById('ruleModalTitle').textContent = 'Edit EPG Match Rule';
+    document.getElementById('rule-id').value = rule.id;
+    document.getElementById('rule-ruleset-id').value = rule.ruleset_id;
+    document.getElementById('rule-name').value = rule.name;
+    document.getElementById('rule-description').value = rule.description || '';
+    document.getElementById('rule-match-type').value = rule.match_type;
+    document.getElementById('rule-source').value = rule.source || 'cleaned_name';
+    document.getElementById('rule-action').value = rule.action || 'map_epg';
+    document.getElementById('rule-min-confidence').value = rule.min_confidence || 0.75;
+    document.getElementById('rule-pattern').value = rule.pattern || '';
+    document.getElementById('rule-fallback-epg-id').value = rule.fallback_epg_id || '';
+    document.getElementById('rule-category-pattern').value = rule.category_pattern || '';
+    document.getElementById('rule-category-exclude-pattern').value = rule.category_exclude_pattern || '';
+    document.getElementById('rule-country-codes').value = (rule.country_codes || []).join(', ');
+    document.getElementById('rule-time-offset').value = rule.time_offset_hours || 0;
+    document.getElementById('rule-priority').value = rule.priority;
+    document.getElementById('rule-enabled').checked = rule.enabled;
+    document.getElementById('rule-stop-on-match').checked = rule.stop_on_match;
+    
+    // Populate account dropdown
+    populateRuleAccountDropdown();
+    
+    // Hide preview results
+    resetRulePreview();
+    
+    updateRuleFormVisibility();
+    new bootstrap.Modal(document.getElementById('ruleModal')).show();
+}
+
+function updateRuleFormVisibility() {
+    const matchType = document.getElementById('rule-match-type').value;
+    const action = document.getElementById('rule-action').value;
+    
+    // Show/hide confidence field based on match type
+    const confidenceGroup = document.getElementById('confidence-group');
+    confidenceGroup.style.display = matchType === 'fuzzy_name' ? 'block' : 'none';
+    
+    // Show/hide fallback field based on action
+    const fallbackGroup = document.getElementById('fallback-group');
+    fallbackGroup.style.display = action === 'use_fallback' ? 'block' : 'none';
+}
+
+document.getElementById('rule-match-type').addEventListener('change', updateRuleFormVisibility);
+document.getElementById('rule-action').addEventListener('change', updateRuleFormVisibility);
+
+async function saveRule() {
+    const id = document.getElementById('rule-id').value;
+    const countryCodes = document.getElementById('rule-country-codes').value
+        .split(',')
+        .map(s => s.trim().toUpperCase())
+        .filter(s => s.length > 0);
+    
+    const data = {
+        ruleset_id: parseInt(document.getElementById('rule-ruleset-id').value),
+        name: document.getElementById('rule-name').value,
+        description: document.getElementById('rule-description').value,
+        match_type: document.getElementById('rule-match-type').value,
+        source: document.getElementById('rule-source').value,
+        action: document.getElementById('rule-action').value,
+        min_confidence: parseFloat(document.getElementById('rule-min-confidence').value),
+        pattern: document.getElementById('rule-pattern').value || null,
+        fallback_epg_id: document.getElementById('rule-fallback-epg-id').value || null,
+        category_pattern: document.getElementById('rule-category-pattern').value || null,
+        category_exclude_pattern: document.getElementById('rule-category-exclude-pattern').value || null,
+        country_codes: countryCodes.length > 0 ? countryCodes : null,
+        time_offset_hours: parseInt(document.getElementById('rule-time-offset').value) || 0,
+        priority: parseInt(document.getElementById('rule-priority').value),
+        enabled: document.getElementById('rule-enabled').checked,
+        stop_on_match: document.getElementById('rule-stop-on-match').checked
+    };
+    
+    try {
+        const url = id ? `/api/epg-match-rules/rules/${id}` : '/api/epg-match-rules/rules';
+        const method = id ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('ruleModal')).hide();
+            await loadRulesets(true);
+        } else {
+            const error = await response.json();
+            alert('Error: ' + (error.error || error.validation_errors || 'Failed to save rule'));
+        }
+    } catch (error) {
+        alert('Error saving rule: ' + error.message);
+    }
+}
+
+async function deleteRule(ruleId, rulesetId) {
+    if (!confirm('Delete this rule?')) return;
+    
+    try {
+        const response = await fetch(`/api/epg-match-rules/rules/${ruleId}`, { method: 'DELETE' });
+        if (response.ok) {
+            await loadRulesForRuleset(rulesetId);
+        }
+    } catch (error) {
+        alert('Error deleting rule: ' + error.message);
+    }
+}
+
+// ============================================================================
+// Exclusions Management
+// ============================================================================
+
+async function loadExclusions() {
+    try {
+        const response = await fetch('/api/epg-match-rules/exclusions');
+        const exclusions = await response.json();
+        
+        let html = '';
+        
+        if (exclusions.length === 0) {
+            html = `
+                <div class="alert alert-info">
+                    <h5><i class="bi bi-info-circle"></i> No Exclusion Patterns</h5>
+                    <p>Create exclusion patterns to prevent specific channels from being matched to EPG data.</p>
+                </div>
+            `;
+        } else {
+            html = '<div class="table-responsive"><table class="table table-striped">';
+            html += '<thead><tr><th>Priority</th><th>Name</th><th>Type</th><th>Pattern</th><th>Hide</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+            
+            exclusions.forEach(p => {
+                const status = p.enabled ? '<span class="badge bg-success">Enabled</span>' : '<span class="badge bg-secondary">Disabled</span>';
+                const hideIcon = p.hide_channel ? '<i class="bi bi-eye-slash text-warning" title="Hides channel"></i>' : '';
+                const regexBadge = p.is_regex ? '<span class="badge bg-secondary">regex</span>' : '<span class="badge bg-light text-dark">literal</span>';
+                
+                html += `
+                    <tr>
+                        <td>${p.priority}</td>
+                        <td>${escapeHtml(p.name)}</td>
+                        <td><span class="badge bg-info">${p.pattern_type}</span></td>
+                        <td><code>${escapeHtml(p.pattern)}</code> ${regexBadge}</td>
+                        <td>${hideIcon}</td>
+                        <td>${status}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-secondary" data-action="edit-exclusion" data-exclusion-id="${p.id}">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" data-action="delete-exclusion" data-exclusion-id="${p.id}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table></div>';
+        }
+        
+        document.getElementById('exclusions-list').innerHTML = html;
+    } catch (error) {
+        document.getElementById('exclusions-list').innerHTML = `
+            <div class="alert alert-danger">Error loading exclusions: ${error.message}</div>
+        `;
+    }
+}
+
+function showCreateExclusionModal() {
+    document.getElementById('exclusionModalTitle').textContent = 'New Exclusion Pattern';
+    document.getElementById('exclusionForm').reset();
+    document.getElementById('exclusion-id').value = '';
+    document.getElementById('exclusion-is-regex').checked = true;
+    document.getElementById('exclusion-enabled').checked = true;
+    
+    // Populate account dropdown
+    populateExclusionAccountDropdown();
+    
+    // Hide preview results
+    resetExclusionPreview();
+    
+    new bootstrap.Modal(document.getElementById('exclusionModal')).show();
+}
+
+async function editExclusion(exclusionId) {
+    const response = await fetch(`/api/epg-match-rules/exclusions/${exclusionId}`);
+    const exclusion = await response.json();
+    
+    document.getElementById('exclusionModalTitle').textContent = 'Edit Exclusion Pattern';
+    document.getElementById('exclusion-id').value = exclusion.id;
+    document.getElementById('exclusion-name').value = exclusion.name;
+    document.getElementById('exclusion-description').value = exclusion.description || '';
+    document.getElementById('exclusion-pattern-type').value = exclusion.pattern_type;
+    document.getElementById('exclusion-pattern').value = exclusion.pattern;
+    document.getElementById('exclusion-is-regex').checked = exclusion.is_regex;
+    document.getElementById('exclusion-hide-channel').checked = exclusion.hide_channel;
+    document.getElementById('exclusion-enabled').checked = exclusion.enabled;
+    document.getElementById('exclusion-priority').value = exclusion.priority;
+    
+    // Populate account dropdown
+    populateExclusionAccountDropdown();
+    
+    // Hide preview results
+    resetExclusionPreview();
+    
+    new bootstrap.Modal(document.getElementById('exclusionModal')).show();
+}
+
+async function saveExclusion() {
+    const id = document.getElementById('exclusion-id').value;
+    const data = {
+        name: document.getElementById('exclusion-name').value,
+        description: document.getElementById('exclusion-description').value,
+        pattern_type: document.getElementById('exclusion-pattern-type').value,
+        pattern: document.getElementById('exclusion-pattern').value,
+        is_regex: document.getElementById('exclusion-is-regex').checked,
+        hide_channel: document.getElementById('exclusion-hide-channel').checked,
+        enabled: document.getElementById('exclusion-enabled').checked,
+        priority: parseInt(document.getElementById('exclusion-priority').value)
+    };
+    
+    try {
+        const url = id ? `/api/epg-match-rules/exclusions/${id}` : '/api/epg-match-rules/exclusions';
+        const method = id ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('exclusionModal')).hide();
+            await loadExclusions();
+        } else {
+            const error = await response.json();
+            alert('Error: ' + (error.error || 'Failed to save exclusion'));
+        }
+    } catch (error) {
+        alert('Error saving exclusion: ' + error.message);
+    }
+}
+
+async function deleteExclusion(exclusionId) {
+    if (!confirm('Delete this exclusion pattern?')) return;
+    
+    try {
+        const response = await fetch(`/api/epg-match-rules/exclusions/${exclusionId}`, { method: 'DELETE' });
+        if (response.ok) {
+            await loadExclusions();
+        }
+    } catch (error) {
+        alert('Error deleting exclusion: ' + error.message);
+    }
+}
+
+async function createDefaultExclusions() {
+    if (!confirm('Create default exclusion patterns for PPV and event channels?')) return;
+    
+    try {
+        const response = await fetch('/api/epg-match-rules/create-default-exclusions', { method: 'POST' });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert(result.message);
+            // Switch to exclusions tab and reload
+            new bootstrap.Tab(document.getElementById('exclusions-tab')).show();
+            await loadExclusions();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error creating default exclusions: ' + error.message);
+    }
+}
+
+// ============================================================================
+// Account Assignment
+// ============================================================================
+
+async function showAssignModal(rulesetId) {
+    document.getElementById('assign-ruleset-id').value = rulesetId;
+    
+    // Get current assignments
+    const assignmentsResponse = await fetch(`/api/epg-match-rules/rulesets/${rulesetId}`);
+    const ruleset = await assignmentsResponse.json();
+    
+    // Get all account EPG ruleset assignments
+    let assignedAccountIds = new Set();
+    for (const account of accounts) {
+        try {
+            const resp = await fetch(`/api/accounts/${account.id}/epg-match-rulesets`);
+            const assignments = await resp.json();
+            if (assignments.some(a => a.ruleset_id === rulesetId)) {
+                assignedAccountIds.add(account.id);
+            }
+        } catch (e) {
+            console.error('Error checking assignments:', e);
+        }
+    }
+    
+    let html = '<div class="list-group">';
+    accounts.forEach(account => {
+        const isAssigned = assignedAccountIds.has(account.id);
+        html += `
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <span>${escapeHtml(account.name)}</span>
+                <button class="btn btn-sm ${isAssigned ? 'btn-danger' : 'btn-success'}" 
+                        data-action="toggle-assign" 
+                        data-account-id="${account.id}" 
+                        data-assigned="${isAssigned}">
+                    ${isAssigned ? '<i class="bi bi-x"></i> Remove' : '<i class="bi bi-plus"></i> Assign'}
+                </button>
+            </div>
+        `;
+    });
+    html += '</div>';
+    
+    document.getElementById('accounts-assign-list').innerHTML = html;
+    new bootstrap.Modal(document.getElementById('assignRulesetModal')).show();
+}
+
+async function toggleAssignment(accountId, isCurrentlyAssigned) {
+    const rulesetId = document.getElementById('assign-ruleset-id').value;
+    
+    try {
+        if (isCurrentlyAssigned) {
+            await fetch(`/api/accounts/${accountId}/epg-match-rulesets/${rulesetId}`, { method: 'DELETE' });
+        } else {
+            await fetch(`/api/accounts/${accountId}/epg-match-rulesets`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ruleset_id: parseInt(rulesetId), priority: 100 })
+            });
+        }
+        
+        // Refresh the modal
+        await showAssignModal(parseInt(rulesetId));
+        await loadRulesets(true);
+    } catch (error) {
+        alert('Error updating assignment: ' + error.message);
+    }
+}
+
+// ============================================================================
+// Reference Tab
+// ============================================================================
+
+async function loadReference() {
+    try {
+        const response = await fetch('/api/epg-match-rules/match-types');
+        const data = await response.json();
+        
+        let html = '<div class="row">';
+        
+        // Match Types
+        html += '<div class="col-md-4 mb-4">';
+        html += '<div class="card h-100"><div class="card-header"><h5 class="mb-0">Match Types</h5></div>';
+        html += '<div class="card-body"><dl>';
+        data.match_types.forEach(t => {
+            html += `<dt><code>${t.value}</code></dt><dd class="mb-3">${t.description}</dd>`;
+        });
+        html += '</dl></div></div></div>';
+        
+        // Actions
+        html += '<div class="col-md-4 mb-4">';
+        html += '<div class="card h-100"><div class="card-header"><h5 class="mb-0">Actions</h5></div>';
+        html += '<div class="card-body"><dl>';
+        data.actions.forEach(a => {
+            html += `<dt><code>${a.value}</code></dt><dd class="mb-3">${a.description}</dd>`;
+        });
+        html += '</dl></div></div></div>';
+        
+        // Sources
+        html += '<div class="col-md-4 mb-4">';
+        html += '<div class="card h-100"><div class="card-header"><h5 class="mb-0">Source Fields</h5></div>';
+        html += '<div class="card-body"><dl>';
+        data.sources.forEach(s => {
+            html += `<dt><code>${s.value}</code></dt><dd class="mb-3">${s.description}</dd>`;
+        });
+        html += '</dl></div></div></div>';
+        
+        html += '</div>';
+        
+        // Exclusion Types
+        html += '<div class="row"><div class="col-12">';
+        html += '<div class="card"><div class="card-header"><h5 class="mb-0">Exclusion Pattern Types</h5></div>';
+        html += '<div class="card-body"><dl class="row">';
+        data.exclusion_types.forEach(e => {
+            html += `<dt class="col-sm-3"><code>${e.value}</code></dt><dd class="col-sm-9">${e.description}</dd>`;
+        });
+        html += '</dl></div></div></div></div>';
+        
+        document.getElementById('reference-content').innerHTML = html;
+    } catch (error) {
+        document.getElementById('reference-content').innerHTML = `
+            <div class="alert alert-danger">Error loading reference: ${error.message}</div>
+        `;
+    }
+}
+
+// ============================================================================
+// Preview Functions
+// ============================================================================
+
+function populateExclusionAccountDropdown() {
+    const select = document.getElementById('exclusion-account-filter');
+    select.innerHTML = '<option value="">All accounts</option>';
+    accounts.forEach(account => {
+        select.innerHTML += `<option value="${account.id}">${escapeHtml(account.name)}</option>`;
+    });
+}
+
+function populateRuleAccountDropdown() {
+    const select = document.getElementById('rule-account-filter');
+    select.innerHTML = '<option value="">All accounts</option>';
+    accounts.forEach(account => {
+        select.innerHTML += `<option value="${account.id}">${escapeHtml(account.name)}</option>`;
+    });
+}
+
+function resetExclusionPreview() {
+    document.getElementById('exclusion-preview-results').style.display = 'none';
+    document.getElementById('exclusion-preview-error').style.display = 'none';
+    document.getElementById('exclusion-preview-loading').style.display = 'none';
+    document.getElementById('exclusion-preview-list').innerHTML = '';
+    document.getElementById('exclusion-preview-count').textContent = '0';
+    document.getElementById('exclusion-preview-more').style.display = 'none';
+}
+
+function resetRulePreview() {
+    document.getElementById('rule-preview-results').style.display = 'none';
+    document.getElementById('rule-preview-error').style.display = 'none';
+    document.getElementById('rule-preview-loading').style.display = 'none';
+    document.getElementById('rule-preview-list').innerHTML = '';
+    document.getElementById('rule-preview-count').textContent = '0';
+    document.getElementById('rule-preview-more').style.display = 'none';
+}
+
+async function previewExclusionPattern() {
+    const pattern = document.getElementById('exclusion-pattern').value;
+    const patternType = document.getElementById('exclusion-pattern-type').value;
+    const isRegex = document.getElementById('exclusion-is-regex').checked;
+    const accountId = document.getElementById('exclusion-account-filter').value;
+    
+    if (!pattern) {
+        document.getElementById('exclusion-preview-results').style.display = 'block';
+        document.getElementById('exclusion-preview-error').style.display = 'block';
+        document.getElementById('exclusion-preview-error').textContent = 'Please enter a pattern to preview';
+        document.getElementById('exclusion-preview-content').style.display = 'none';
+        return;
+    }
+    
+    // Show loading state
+    document.getElementById('exclusion-preview-results').style.display = 'block';
+    document.getElementById('exclusion-preview-loading').style.display = 'block';
+    document.getElementById('exclusion-preview-error').style.display = 'none';
+    document.getElementById('exclusion-preview-content').style.display = 'none';
+    
+    try {
+        const response = await fetch('/api/epg-match-rules/exclusions/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                pattern_type: patternType,
+                pattern: pattern,
+                is_regex: isRegex,
+                account_id: accountId || null
+            })
+        });
+        
+        const data = await response.json();
+        
+        document.getElementById('exclusion-preview-loading').style.display = 'none';
+        
+        if (data.error) {
+            document.getElementById('exclusion-preview-error').style.display = 'block';
+            document.getElementById('exclusion-preview-error').textContent = data.error;
+            document.getElementById('exclusion-preview-content').style.display = 'none';
+        } else {
+            document.getElementById('exclusion-preview-content').style.display = 'block';
+            document.getElementById('exclusion-preview-count').textContent = data.total_count;
+            document.getElementById('exclusion-preview-more').style.display = data.total_count > 100 ? 'inline' : 'none';
+            
+            // Build match list
+            let html = '';
+            if (data.matches.length === 0) {
+                html = '<p class="text-muted mb-0">No channels match this pattern</p>';
+            } else {
+                html = '<ul class="list-unstyled mb-0">';
+                data.matches.forEach(match => {
+                    const name = escapeHtml(match.cleaned_name || match.name);
+                    const category = match.category ? `<small class="text-muted"> (${escapeHtml(match.category)})</small>` : '';
+                    html += `<li class="mb-1"><code>${name}</code>${category}</li>`;
+                });
+                html += '</ul>';
+            }
+            document.getElementById('exclusion-preview-list').innerHTML = html;
+        }
+    } catch (error) {
+        document.getElementById('exclusion-preview-loading').style.display = 'none';
+        document.getElementById('exclusion-preview-error').style.display = 'block';
+        document.getElementById('exclusion-preview-error').textContent = 'Error: ' + error.message;
+        document.getElementById('exclusion-preview-content').style.display = 'none';
+    }
+}
+
+async function previewRulePattern() {
+    const matchType = document.getElementById('rule-match-type').value;
+    const source = document.getElementById('rule-source').value;
+    const pattern = document.getElementById('rule-pattern').value;
+    const categoryPattern = document.getElementById('rule-category-pattern').value;
+    const categoryExcludePattern = document.getElementById('rule-category-exclude-pattern').value;
+    const accountId = document.getElementById('rule-account-filter').value;
+    
+    // For non-pattern-based match types, show category filter results only
+    const patternBasedTypes = ['regex', 'exact_name', 'fuzzy_name', 'category_pattern'];
+    const needsPattern = patternBasedTypes.includes(matchType);
+    
+    if (needsPattern && !pattern && !categoryPattern) {
+        document.getElementById('rule-preview-results').style.display = 'block';
+        document.getElementById('rule-preview-error').style.display = 'block';
+        document.getElementById('rule-preview-error').textContent = 'Please enter a pattern or category filter to preview';
+        document.getElementById('rule-preview-content').style.display = 'none';
+        return;
+    }
+    
+    // Show loading state
+    document.getElementById('rule-preview-results').style.display = 'block';
+    document.getElementById('rule-preview-loading').style.display = 'block';
+    document.getElementById('rule-preview-error').style.display = 'none';
+    document.getElementById('rule-preview-content').style.display = 'none';
+    
+    try {
+        const response = await fetch('/api/epg-match-rules/rules/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                match_type: matchType,
+                source: source,
+                pattern: pattern || null,
+                category_pattern: categoryPattern || null,
+                category_exclude_pattern: categoryExcludePattern || null,
+                account_id: accountId || null
+            })
+        });
+        
+        const data = await response.json();
+        
+        document.getElementById('rule-preview-loading').style.display = 'none';
+        
+        if (data.error) {
+            document.getElementById('rule-preview-error').style.display = 'block';
+            document.getElementById('rule-preview-error').textContent = data.error;
+            document.getElementById('rule-preview-content').style.display = 'none';
+        } else {
+            document.getElementById('rule-preview-content').style.display = 'block';
+            document.getElementById('rule-preview-count').textContent = data.total_count;
+            document.getElementById('rule-preview-more').style.display = data.total_count > 100 ? 'inline' : 'none';
+            
+            // Build match list
+            let html = '';
+            if (data.matches.length === 0) {
+                html = '<p class="text-muted mb-0">No channels match this pattern</p>';
+            } else {
+                html = '<ul class="list-unstyled mb-0">';
+                data.matches.forEach(match => {
+                    const name = escapeHtml(match.cleaned_name || match.name);
+                    const category = match.category ? `<small class="text-muted"> (${escapeHtml(match.category)})</small>` : '';
+                    const epgId = match.epg_channel_id ? `<span class="badge bg-secondary ms-1" title="Provider EPG ID">${escapeHtml(match.epg_channel_id)}</span>` : '';
+                    html += `<li class="mb-1"><code>${name}</code>${category}${epgId}</li>`;
+                });
+                html += '</ul>';
+            }
+            document.getElementById('rule-preview-list').innerHTML = html;
+        }
+    } catch (error) {
+        document.getElementById('rule-preview-loading').style.display = 'none';
+        document.getElementById('rule-preview-error').style.display = 'block';
+        document.getElementById('rule-preview-error').textContent = 'Error: ' + error.message;
+        document.getElementById('rule-preview-content').style.display = 'none';
+    }
+}
+
+// ============================================================================
+// Event Delegation
+// ============================================================================
+
+document.addEventListener('click', async (e) => {
+    const target = e.target.closest('[data-action]');
+    if (!target) return;
+    
+    const action = target.dataset.action;
+    
+    switch (action) {
+        case 'show-rules':
+            await showRulesetRules(parseInt(target.dataset.rulesetId));
+            break;
+        case 'show-assign':
+            await showAssignModal(parseInt(target.dataset.rulesetId));
+            break;
+        case 'edit':
+            await editRuleset(parseInt(target.dataset.rulesetId));
+            break;
+        case 'delete':
+            await deleteRuleset(parseInt(target.dataset.rulesetId));
+            break;
+        case 'duplicate':
+            await duplicateRuleset(parseInt(target.dataset.rulesetId));
+            break;
+        case 'create-rule':
+            showCreateRuleModal(parseInt(target.dataset.rulesetId));
+            break;
+        case 'edit-rule':
+            await editRule(parseInt(target.dataset.ruleId));
+            break;
+        case 'delete-rule':
+            await deleteRule(parseInt(target.dataset.ruleId), parseInt(target.dataset.rulesetId));
+            break;
+        case 'edit-exclusion':
+            await editExclusion(parseInt(target.dataset.exclusionId));
+            break;
+        case 'delete-exclusion':
+            await deleteExclusion(parseInt(target.dataset.exclusionId));
+            break;
+        case 'toggle-assign':
+            await toggleAssignment(parseInt(target.dataset.accountId), target.dataset.assigned === 'true');
+            break;
+    }
+});
+
+// Button event listeners
+document.getElementById('create-ruleset-btn').addEventListener('click', showCreateRulesetModal);
+document.getElementById('create-default-ruleset-btn').addEventListener('click', createDefaultRuleset);
+document.getElementById('create-default-exclusions-btn').addEventListener('click', createDefaultExclusions);
+document.getElementById('create-exclusion-btn').addEventListener('click', showCreateExclusionModal);
+document.getElementById('save-ruleset-btn').addEventListener('click', saveRuleset);
+document.getElementById('save-rule-btn').addEventListener('click', saveRule);
+document.getElementById('save-exclusion-btn').addEventListener('click', saveExclusion);
+document.getElementById('preview-exclusion-btn').addEventListener('click', previewExclusionPattern);
+document.getElementById('preview-rule-btn').addEventListener('click', previewRulePattern);
+</script>
+{% endblock %}

@@ -99,16 +99,22 @@
     <!-- Channel Mappings Tab -->
     <div class="tab-pane fade" id="mappings-pane" role="tabpanel">
         <div class="row mb-3">
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label for="mappingAccountSelect" class="form-label">Filter by Account:</label>
                 <select class="form-select" id="mappingAccountSelect">
                     <option value="">All Accounts</option>
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label for="mappingCategorySelect" class="form-label">Filter by Category:</label>
                 <select class="form-select" id="mappingCategorySelect">
                     <option value="">All Categories</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="mappingEpgSourceSelect" class="form-label">EPG Provider:</label>
+                <select class="form-select" id="mappingEpgSourceSelect">
+                    <option value="">All Sources</option>
                 </select>
             </div>
             <div class="col-md-2">
@@ -128,25 +134,28 @@
                 </div>
             </div>
             <div class="col-md-2 text-end">
-                <button class="btn btn-success mt-3" id="auto-match-btn" disabled>
-                    <i class="bi bi-magic"></i> Auto-Match
-                </button>
-            </div>
-        </div>
-        <!-- Skip Threshold Slider -->
-        <div class="row mb-3" id="skip-threshold-row" style="display: none;">
-            <div class="col-md-6">
-                <label for="skipThresholdSlider" class="form-label">Skip Threshold: <span id="skipThresholdValue">85%</span></label>
-                <input type="range" class="form-range" id="skipThresholdSlider" min="0" max="100" value="85">
-                <div class="d-flex justify-content-between small text-muted">
-                    <span>Re-match all (0%)</span>
-                    <span>Skip good matches (100%)</span>
+                <div class="btn-group mt-3" role="group">
+                    <button type="button" class="btn btn-success" id="auto-match-btn" disabled>
+                        <i class="bi bi-magic"></i> Auto-Match
+                    </button>
+                    <button type="button" class="btn btn-success dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" disabled id="auto-match-dropdown">
+                        <span class="visually-hidden">Toggle Dropdown</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="/epg-match-rules"><i class="bi bi-gear"></i> Configure Match Rules...</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="#" id="clear-category-mappings-btn"><i class="bi bi-trash"></i> Clear Category Mappings...</a></li>
+                    </ul>
                 </div>
             </div>
-            <div class="col-md-6">
-                <small class="text-muted d-block mt-2">
-                    Channels with existing matches at or above this confidence level will be skipped during auto-match.
-                </small>
+        </div>
+        <!-- Account Ruleset Info -->
+        <div class="row mb-3" id="account-ruleset-info" style="display: none;">
+            <div class="col-12">
+                <div class="alert alert-info py-2 mb-0 d-flex align-items-center justify-content-between">
+                    <span id="ruleset-info-text"><i class="bi bi-info-circle"></i> Loading ruleset info...</span>
+                    <a href="/epg-match-rules" class="btn btn-sm btn-outline-primary">Manage Rules</a>
+                </div>
             </div>
         </div>
         <!-- Auto-Match Results Alert -->
@@ -458,15 +467,38 @@
             <div class="modal-body">
                 <div class="mb-3">
                     <label class="form-label">Channel</label>
-                    <div id="manualMappingChannel" class="form-control-plaintext"></div>
+                    <div id="manualMappingChannel" class="form-control-plaintext fw-bold"></div>
                     <input type="hidden" id="manualMappingChannelId">
                 </div>
                 <div class="mb-3">
-                    <label for="manualMappingEpgChannel" class="form-label">EPG Channel *</label>
-                    <input type="text" class="form-control" id="manualMappingEpgSearch" placeholder="Search EPG channels...">
-                    <select class="form-select mt-2" id="manualMappingEpgChannel" size="6">
-                        <option value="">Search for EPG channels above...</option>
+                    <label for="manualMappingEpgSource" class="form-label">EPG Provider</label>
+                    <select class="form-select" id="manualMappingEpgSource">
+                        <option value="">All Sources</option>
                     </select>
+                </div>
+                <div class="mb-3">
+                    <label for="manualMappingEpgChannel" class="form-label">EPG Channel *</label>
+                    <input type="text" class="form-control" id="manualMappingEpgSearch" placeholder="Search EPG channels (fuzzy match supported)...">
+                    <small class="text-muted">Try searching multiple words like "CNN HD" or "ESPN 2"</small>
+                    <div id="epgChannelListContainer" class="border rounded mt-2" style="max-height: 250px; overflow-y: auto;">
+                        <div class="list-group list-group-flush" id="epgChannelList">
+                            <div class="list-group-item text-muted">Type to search EPG channels...</div>
+                        </div>
+                        <div id="epgChannelLoader" class="text-center py-2" style="display: none;">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                            <span class="ms-2">Loading more...</span>
+                        </div>
+                    </div>
+                    <input type="hidden" id="manualMappingEpgChannel">
+                    <div id="selectedEpgChannel" class="alert alert-success mt-2" style="display: none;">
+                        <strong>Selected:</strong> <span id="selectedEpgChannelName"></span>
+                        <button type="button" class="btn-close float-end" onclick="clearSelectedEpgChannel()"></button>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="manualMappingTimeOffset" class="form-label">Time Offset (hours)</label>
+                    <input type="number" class="form-control" id="manualMappingTimeOffset" value="0" min="-12" max="12">
+                    <small class="text-muted">Use negative values for west coast feeds (e.g., -3), positive for east coast delays</small>
                 </div>
             </div>
             <div class="modal-footer">
@@ -500,6 +532,37 @@
         </div>
     </div>
 </div>
+
+<!-- Source Mappings Modal -->
+<div class="modal fade" id="sourceMappingsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sourceMappingsModalTitle">EPG Mappings</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <input type="text" class="form-control" id="sourceMappingsSearch" placeholder="Search channels...">
+                </div>
+                <div id="source-mappings-list" style="max-height: 500px; overflow-y: auto;">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="source-mappings-pagination" class="d-flex justify-content-between align-items-center mt-3">
+                    <span id="mappings-showing-text" class="text-muted"></span>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary" id="mappings-prev-btn" disabled>Previous</button>
+                        <button class="btn btn-outline-secondary" id="mappings-next-btn" disabled>Next</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -510,6 +573,16 @@ const sourceModal = new bootstrap.Modal(document.getElementById('sourceModal'));
 const searchLineupModal = new bootstrap.Modal(document.getElementById('searchLineupModal'));
 const manualMappingModal = new bootstrap.Modal(document.getElementById('manualMappingModal'));
 const sdStationsModal = new bootstrap.Modal(document.getElementById('sdStationsModal'));
+const sourceMappingsModal = new bootstrap.Modal(document.getElementById('sourceMappingsModal'));
+
+// Source mappings state
+let currentSourceMappings = {
+    sourceId: null,
+    sourceName: '',
+    offset: 0,
+    limit: 50,
+    search: ''
+};
 
 // ============================================================================
 // Initialization
@@ -547,11 +620,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('mappingCategorySelect').addEventListener('change', loadMappings);
     document.getElementById('mappingViewSelect').addEventListener('change', loadMappings);
     document.getElementById('showFilteredChannels').addEventListener('change', loadMappings);
-    document.getElementById('auto-match-btn').addEventListener('click', runAutoMatch);
-    
-    // Skip threshold slider
-    document.getElementById('skipThresholdSlider').addEventListener('input', (e) => {
-        document.getElementById('skipThresholdValue').textContent = e.target.value + '%';
+    document.getElementById('auto-match-btn').addEventListener('click', () => runAutoMatch());
+    document.getElementById('clear-category-mappings-btn').addEventListener('click', (e) => {
+        e.preventDefault();
+        clearCategoryMappings();
     });
     
     // Infinite scroll for mappings
@@ -573,8 +645,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('searchLineupsBtn').addEventListener('click', searchLineups);
     
     // Manual mapping
-    document.getElementById('manualMappingEpgSearch').addEventListener('input', debounce(searchEpgChannels, 300));
+    document.getElementById('manualMappingEpgSearch').addEventListener('input', debounce(() => searchEpgChannels(true), 300));
+    document.getElementById('manualMappingEpgSource').addEventListener('change', () => searchEpgChannels(true));
     document.getElementById('saveManualMappingBtn').addEventListener('click', saveManualMapping);
+    setupEpgChannelScroll();
     
     // SD stations search
     document.getElementById('stationSearch').addEventListener('input', debounce(filterStations, 200));
@@ -655,7 +729,7 @@ async function loadSources() {
 }
 
 function populateSourceSelects() {
-    const selects = ['channelSourceSelect', 'matchSourceSelect'];
+    const selects = ['channelSourceSelect', 'matchSourceSelect', 'mappingEpgSourceSelect', 'manualMappingEpgSource'];
     selects.forEach(id => {
         const select = document.getElementById(id);
         if (select) {
@@ -698,6 +772,7 @@ function renderSources() {
                 <th>Type</th>
                 <th>Source</th>
                 <th>Channels</th>
+                <th>In Use</th>
                 <th>Last Sync</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -722,6 +797,14 @@ function renderSources() {
             : source.source_type === 'xmltv_grabber'
             ? '<i class="bi bi-terminal"></i> ' + (source.xmltv_grabber || 'Grabber')
             : '-';
+
+        // In Use column - clickable if there are mappings
+        const usedCount = source.used_mapping_count || 0;
+        const inUseHtml = usedCount > 0
+            ? `<a href="#" onclick="showSourceMappings(${source.id}, '${source.name.replace(/'/g, "\\'")}'); return false;" class="text-decoration-none">
+                <span class="badge bg-primary">${usedCount}</span>
+               </a>`
+            : '<span class="badge bg-secondary">0</span>';
             
         html += `
             <tr>
@@ -732,6 +815,7 @@ function renderSources() {
                 <td><span class="badge bg-info">${source.source_type}</span></td>
                 <td>${sourceInfo}</td>
                 <td>${source.channel_count || 0}</td>
+                <td>${inUseHtml}</td>
                 <td>${source.last_sync ? new Date(source.last_sync).toLocaleString() : 'Never'}</td>
                 <td>${statusBadge}</td>
                 <td>
@@ -903,6 +987,137 @@ async function syncSource(id) {
         btn.disabled = false;
         btn.innerHTML = originalHtml;
     }
+}
+
+// ============================================================================
+// Source Mappings (EPG In-Use Drill-Down)
+// ============================================================================
+
+async function showSourceMappings(sourceId, sourceName) {
+    currentSourceMappings = {
+        sourceId: sourceId,
+        sourceName: sourceName,
+        offset: 0,
+        limit: 50,
+        search: ''
+    };
+    
+    document.getElementById('sourceMappingsModalTitle').textContent = `Channels using EPG from: ${sourceName}`;
+    document.getElementById('sourceMappingsSearch').value = '';
+    
+    // Set up search handler
+    document.getElementById('sourceMappingsSearch').oninput = debounce(() => {
+        currentSourceMappings.search = document.getElementById('sourceMappingsSearch').value;
+        currentSourceMappings.offset = 0;
+        loadSourceMappingsPage();
+    }, 300);
+    
+    // Set up pagination handlers
+    document.getElementById('mappings-prev-btn').onclick = () => {
+        if (currentSourceMappings.offset > 0) {
+            currentSourceMappings.offset -= currentSourceMappings.limit;
+            loadSourceMappingsPage();
+        }
+    };
+    
+    document.getElementById('mappings-next-btn').onclick = () => {
+        currentSourceMappings.offset += currentSourceMappings.limit;
+        loadSourceMappingsPage();
+    };
+    
+    sourceMappingsModal.show();
+    await loadSourceMappingsPage();
+}
+
+async function loadSourceMappingsPage() {
+    const container = document.getElementById('source-mappings-list');
+    container.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
+    
+    try {
+        let url = `/api/epg/sources/${currentSourceMappings.sourceId}/mappings?limit=${currentSourceMappings.limit}&offset=${currentSourceMappings.offset}`;
+        if (currentSourceMappings.search) {
+            url += `&search=${encodeURIComponent(currentSourceMappings.search)}`;
+        }
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to load mappings');
+        }
+        
+        renderSourceMappings(data);
+        updateMappingsPagination(data.total, data.offset, data.limit);
+    } catch (error) {
+        container.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+    }
+}
+
+function renderSourceMappings(data) {
+    const container = document.getElementById('source-mappings-list');
+    
+    if (!data.mappings || data.mappings.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No channels are currently using EPG data from this source.</div>';
+        return;
+    }
+    
+    let html = '<div class="table-responsive"><table class="table table-sm table-striped">';
+    html += `
+        <thead>
+            <tr>
+                <th style="width: 35%">Channel</th>
+                <th style="width: 35%">EPG Channel</th>
+                <th>Category</th>
+                <th>Match Type</th>
+                <th>Confidence</th>
+            </tr>
+        </thead>
+        <tbody>
+    `;
+    
+    for (const m of data.mappings) {
+        const confidenceClass = m.confidence >= 0.9 ? 'text-success' : m.confidence >= 0.7 ? 'text-warning' : 'text-danger';
+        const confidencePct = Math.round(m.confidence * 100);
+        
+        const channelIcon = m.channel_icon 
+            ? `<img src="${m.channel_icon}" style="max-height: 20px; max-width: 30px; margin-right: 5px;" onerror="this.style.display='none'">`
+            : '';
+        const epgIcon = m.epg_channel_icon
+            ? `<img src="${m.epg_channel_icon}" style="max-height: 20px; max-width: 30px; margin-right: 5px;" onerror="this.style.display='none'">`
+            : '';
+        
+        html += `
+            <tr>
+                <td>
+                    ${channelIcon}
+                    <span title="${m.channel_name}">${m.channel_clean_name || m.channel_name}</span>
+                </td>
+                <td>
+                    ${epgIcon}
+                    <span title="XMLTV ID: ${m.epg_channel_xmltv_id}">${m.epg_channel_name || m.epg_channel_xmltv_id}</span>
+                </td>
+                <td><small class="text-muted">${m.category_name || '-'}</small></td>
+                <td><span class="badge bg-secondary">${m.mapping_type}</span></td>
+                <td><span class="${confidenceClass}">${confidencePct}%</span></td>
+            </tr>
+        `;
+    }
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+function updateMappingsPagination(total, offset, limit) {
+    const showingText = document.getElementById('mappings-showing-text');
+    const prevBtn = document.getElementById('mappings-prev-btn');
+    const nextBtn = document.getElementById('mappings-next-btn');
+    
+    const start = offset + 1;
+    const end = Math.min(offset + limit, total);
+    showingText.textContent = total > 0 ? `Showing ${start}-${end} of ${total}` : 'No mappings';
+    
+    prevBtn.disabled = offset === 0;
+    nextBtn.disabled = (offset + limit) >= total;
 }
 
 // ============================================================================
@@ -1085,14 +1300,49 @@ const mappingsState = {
 function updateAutoMatchButton() {
     const accountId = document.getElementById('mappingAccountSelect').value;
     const btn = document.getElementById('auto-match-btn');
-    const thresholdRow = document.getElementById('skip-threshold-row');
+    const dropdown = document.getElementById('auto-match-dropdown');
+    const rulesetInfo = document.getElementById('account-ruleset-info');
     
     if (accountId) {
         btn.disabled = false;
-        thresholdRow.style.display = 'flex';
+        dropdown.disabled = false;
+        rulesetInfo.style.display = 'flex';
+        loadAccountRulesetInfo(accountId);
     } else {
         btn.disabled = true;
-        thresholdRow.style.display = 'none';
+        dropdown.disabled = true;
+        rulesetInfo.style.display = 'none';
+    }
+}
+
+// Load ruleset info for account
+async function loadAccountRulesetInfo(accountId) {
+    const infoText = document.getElementById('ruleset-info-text');
+    try {
+        const response = await fetch(`/api/accounts/${accountId}/epg-match-rulesets`);
+        const data = await response.json();
+        
+        // API returns array directly, not {rulesets: [...]}
+        if (Array.isArray(data) && data.length > 0) {
+            const rulesetNames = data.map(r => r.ruleset_name).join(', ');
+            infoText.innerHTML = `<i class="bi bi-list-check text-success"></i> <strong>Rule-based matching enabled:</strong> ${rulesetNames}`;
+        } else {
+            // Check for default rulesets
+            const defaultResponse = await fetch('/api/epg-match-rules/rulesets?is_default=true');
+            const defaultData = await defaultResponse.json();
+            
+            // Default rulesets API also returns array directly
+            const defaultRulesets = Array.isArray(defaultData) ? defaultData : (defaultData.rulesets || []);
+            if (defaultRulesets.length > 0) {
+                const defaultNames = defaultRulesets.map(r => r.name).join(', ');
+                infoText.innerHTML = `<i class="bi bi-info-circle"></i> <strong>Using default rulesets:</strong> ${defaultNames}`;
+            } else {
+                infoText.innerHTML = `<i class="bi bi-exclamation-triangle text-warning"></i> No EPG match rules configured. <a href="/epg-match-rules">Create rules</a> for better matching.`;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading ruleset info:', error);
+        infoText.innerHTML = `<i class="bi bi-exclamation-circle text-danger"></i> Error loading ruleset info`;
     }
 }
 
@@ -1105,7 +1355,7 @@ async function loadCategoriesForAccount(accountId) {
     }
     
     try {
-        const response = await fetch(`/api/categories?account_id=${accountId}&include_empty=false`);
+        const response = await fetch(`/api/categories?account_id=${accountId}&include_empty=false&include_ppv=false`);
         const categories = await response.json();
         
         for (const cat of categories) {
@@ -1259,12 +1509,13 @@ function renderMappingRow(item, viewMode) {
     const filteredBadge = item.is_visible === false ? '<span class="badge bg-secondary ms-1">Filtered</span>' : '';
     
     // Determine channel info and mapping info based on view mode
-    let channelId, channelName, streamId, accountId, categoryName, mapping;
+    let channelId, channelName, originalName, streamId, accountId, categoryName, mapping;
     
     if (viewMode === 'all') {
         // item is a channel with optional mapping
         channelId = item.id;
-        channelName = item.name;
+        originalName = item.name;
+        channelName = item.cleaned_name || item.name;
         streamId = item.stream_id;
         accountId = item.account_id;
         categoryName = item.category_name || '-';
@@ -1272,7 +1523,8 @@ function renderMappingRow(item, viewMode) {
     } else if (viewMode === 'unmapped') {
         // item is an unmapped channel
         channelId = item.id;
-        channelName = item.name;
+        originalName = item.name;
+        channelName = item.cleaned_name || item.name;
         streamId = item.stream_id;
         accountId = item.account_id;
         categoryName = item.category_name || '-';
@@ -1280,7 +1532,8 @@ function renderMappingRow(item, viewMode) {
     } else {
         // viewMode === 'mapped' - item is a mapping
         channelId = item.channel_id;
-        channelName = item.channel_name || `Channel #${item.channel_id}`;
+        originalName = item.channel_name;
+        channelName = item.cleaned_name || item.channel_name || `Channel #${item.channel_id}`;
         streamId = item.stream_id;
         accountId = item.account_id;
         categoryName = '-';
@@ -1323,14 +1576,21 @@ function renderMappingRow(item, viewMode) {
     let actions = `<a class="btn btn-outline-success btn-sm" href="/stream/${accountId}/${streamId}.ts" target="_blank" title="Play stream"><i class="bi bi-play-fill"></i></a>`;
     
     if (mapping) {
-        actions += ` <button class="btn btn-outline-danger btn-sm" onclick="deleteMapping(${mapping.id})" title="Delete mapping"><i class="bi bi-trash"></i></button>`;
+        actions += ` <button class="btn btn-outline-danger btn-sm" onclick="deleteMapping(${mapping.id}, ${channelId})" title="Delete mapping"><i class="bi bi-trash"></i></button>`;
     } else {
         actions += ` <button class="btn btn-outline-primary btn-sm" onclick="showManualMappingModal(${channelId}, '${escapeHtml(channelName)}')" title="Create mapping"><i class="bi bi-link"></i></button>`;
     }
     
+    // Add hide channel button
+    const escapedChannelName = escapeHtml(channelName).replace(/'/g, "\\'");
+    actions += ` <button class="btn btn-outline-secondary btn-sm" onclick="hideChannel(${accountId}, '${escapedChannelName}')" title="Hide this channel"><i class="bi bi-eye-slash"></i></button>`;
+    
+    // Show original name as tooltip if it differs from cleaned name
+    const tooltip = originalName && originalName !== channelName ? ` title="${escapeHtml(originalName)}"` : '';
+    
     return `
         <tr data-channel-id="${channelId}">
-            <td>${channelName}${filteredBadge}</td>
+            <td${tooltip}>${channelName}${filteredBadge}</td>
             <td><small class="text-muted">${categoryName}</small></td>
             <td>${mappingCell}</td>
             <td>${matchInfoCell}</td>
@@ -1358,26 +1618,92 @@ async function loadMoreMappings() {
     await loadMappings(false);
 }
 
-async function deleteMapping(id) {
-    if (!confirm('Delete this mapping?')) return;
-    
+async function deleteMapping(id, channelId) {
     try {
         const response = await fetch(`/api/epg/mappings/${id}`, { method: 'DELETE' });
         if (response.ok) {
-            loadMappings();
+            // Update the row in place instead of reloading the entire list
+            const row = document.querySelector(`tr[data-channel-id="${channelId}"]`);
+            if (row) {
+                // Update mapping cell to show "Not mapped"
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 4) {
+                    cells[2].innerHTML = '<span class="text-muted">Not mapped</span>';
+                    cells[3].innerHTML = '-';
+                }
+                // Update actions - replace delete button with create mapping button
+                const channelName = cells[0].textContent.replace(/Filtered$/, '').trim();
+                const actionsDiv = cells[4].querySelector('.btn-group');
+                if (actionsDiv) {
+                    const deleteBtn = actionsDiv.querySelector('button[onclick^="deleteMapping"]');
+                    if (deleteBtn) {
+                        const createBtn = document.createElement('button');
+                        createBtn.className = 'btn btn-outline-primary btn-sm';
+                        createBtn.setAttribute('onclick', `showManualMappingModal(${channelId}, '${escapeHtml(channelName)}')`);
+                        createBtn.setAttribute('title', 'Create mapping');
+                        createBtn.innerHTML = '<i class="bi bi-link"></i>';
+                        deleteBtn.replaceWith(createBtn);
+                    }
+                }
+            }
+            showToast('Mapping deleted', 'success');
         } else {
             const error = await response.json();
-            alert('Error: ' + (error.error || 'Failed to delete mapping'));
+            showToast('Error: ' + (error.error || 'Failed to delete mapping'), 'error');
         }
     } catch (error) {
-        alert('Error: ' + error.message);
+        showToast('Error: ' + error.message, 'error');
+    }
+}
+
+async function clearCategoryMappings() {
+    const accountId = document.getElementById('mappingAccountSelect').value;
+    const categoryId = document.getElementById('mappingCategorySelect').value;
+    const categorySelect = document.getElementById('mappingCategorySelect');
+    const categoryName = categorySelect.options[categorySelect.selectedIndex]?.text || 'selected category';
+    
+    if (!accountId) {
+        alert('Please select an account first');
+        return;
+    }
+    
+    if (!categoryId) {
+        alert('Please select a category first');
+        return;
+    }
+    
+    if (!confirm(`Are you sure you want to delete ALL EPG mappings for channels in "${categoryName}"?\n\nThis action cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/epg/mappings/bulk-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ account_id: parseInt(accountId), category_id: parseInt(categoryId) })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showToast(`Deleted ${result.deleted_count} mappings from "${categoryName}"`, 'success');
+            await loadMappings();
+        } else {
+            showToast('Error: ' + (result.error || 'Failed to delete mappings'), 'error');
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'error');
     }
 }
 
 async function runAutoMatch() {
+    console.log('runAutoMatch called');
     const accountId = document.getElementById('mappingAccountSelect').value;
     const categoryId = document.getElementById('mappingCategorySelect').value;
-    const skipThreshold = document.getElementById('skipThresholdSlider').value / 100;
+    const includeFiltered = document.getElementById('showFilteredChannels').checked;
+    const sourceId = document.getElementById('mappingEpgSourceSelect').value;
+    
+    console.log('Account ID:', accountId, 'Category ID:', categoryId, 'Source ID:', sourceId);
     
     if (!accountId) {
         alert('Please select an account');
@@ -1385,116 +1711,231 @@ async function runAutoMatch() {
     }
     
     const btn = document.getElementById('auto-match-btn');
+    const dropdown = document.getElementById('auto-match-dropdown');
     const originalHtml = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Matching...';
+    dropdown.disabled = true;
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Matching...`;
     
     // Show progress in the list area itself
     const listContainer = document.getElementById('mappings-list');
     const originalListContent = listContainer.innerHTML;
-    listContainer.innerHTML = `
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;"></div>
-            <h5>Running Auto-Match...</h5>
-            <p class="text-muted">Matching channels to EPG data. This may take a moment.</p>
-        </div>
-    `;
     
     // Hide the results alert initially
     const alertDiv = document.getElementById('autoMatchResultsAlert');
     alertDiv.classList.add('d-none');
     
     try {
-        let url = `/api/epg/match/${accountId}`;
-        const params = new URLSearchParams();
-        if (categoryId) params.append('category_id', categoryId);
-        if (skipThreshold !== 0.85) params.append('skip_threshold', skipThreshold);
-        if (params.toString()) url += '?' + params.toString();
+        await runRuleBasedMatch(accountId, categoryId, includeFiltered, sourceId, listContainer, alertDiv);
         
-        const response = await fetch(url, { method: 'POST' });
-        const result = await response.json();
-        
-        if (response.ok) {
-            const stats = result.stats || {};
-            const matchedCount = (stats.matched_exact_id || 0) + (stats.matched_callsign_tag || 0) + 
-                                 (stats.matched_fcc_lookup || 0) + (stats.matched_exact_name || 0) + 
-                                 (stats.matched_fuzzy || 0);
-            
-            // Show brief success summary in the alert
-            const contentDiv = document.getElementById('autoMatchResultsContent');
-            alertDiv.classList.remove('d-none', 'alert-info', 'alert-danger');
-            alertDiv.classList.add('alert-success');
-            contentDiv.innerHTML = `
-                <i class="bi bi-check-circle"></i> <strong>Matched ${matchedCount} channels</strong>
-                <span class="ms-2 text-muted small">
-                    (Provider: ${stats.matched_exact_id || 0}, 
-                    Callsign: ${stats.matched_callsign_tag || 0}, 
-                    FCC: ${stats.matched_fcc_lookup || 0}, 
-                    Name: ${stats.matched_exact_name || 0}, 
-                    Fuzzy: ${stats.matched_fuzzy || 0}, 
-                    Skipped: ${stats.skipped_existing || 0}, 
-                    Unmatched: ${stats.unmatched || 0})
-                </span>
-            `;
-            
-            // Reload the mappings list to show updated results with new mappings visible
-            await loadMappings();
-        } else {
-            // Restore original content on error
-            listContainer.innerHTML = originalListContent;
-            alertDiv.classList.remove('d-none', 'alert-info', 'alert-success');
-            alertDiv.classList.add('alert-danger');
-            const contentDiv = document.getElementById('autoMatchResultsContent');
-            contentDiv.innerHTML = `<strong><i class="bi bi-x-circle"></i> Error:</strong> ${result.error || 'Match failed'}`;
-        }
+        console.log('Reloading mappings...');
+        // Reload the mappings list to show updated results
+        await loadMappings();
     } catch (error) {
+        console.error('Error in runAutoMatch:', error);
         // Restore original content on error
         listContainer.innerHTML = originalListContent;
         alertDiv.classList.remove('d-none', 'alert-info', 'alert-success');
         alertDiv.classList.add('alert-danger');
         const contentDiv = document.getElementById('autoMatchResultsContent');
-        contentDiv.innerHTML = `<strong><i class="bi bi-x-circle"></i> Error:</strong> ${error.message}`;
+        
+        // Provide more helpful error messages
+        let errorMsg = error.message;
+        if (error.name === 'AbortError') {
+            errorMsg = 'Operation timed out after 10 minutes. Try filtering by category to match fewer channels at once.';
+        } else if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+            errorMsg = 'Network error or server timeout. For large channel lists, try filtering by category first.';
+        }
+        
+        contentDiv.innerHTML = `<strong><i class="bi bi-x-circle"></i> Error:</strong> ${errorMsg}`;
     } finally {
         btn.disabled = false;
+        dropdown.disabled = false;
         btn.innerHTML = originalHtml;
     }
+}
+
+// Rule-based matching function
+async function runRuleBasedMatch(accountId, categoryId, includeFiltered, sourceId, listContainer, alertDiv) {
+    listContainer.innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;"></div>
+            <h5>Running Rule-Based Match...</h5>
+            <p class="text-muted">Matching channels using configured EPG match rules.</p>
+        </div>
+    `;
+    
+    let url = `/api/epg/match-with-rules/${accountId}?`;
+    const params = [];
+    if (categoryId) params.push(`category_id=${categoryId}`);
+    if (includeFiltered) params.push('include_filtered=true');
+    if (sourceId) params.push(`source_id=${sourceId}`);
+    url += params.join('&');
+    
+    const response = await fetch(url, { method: 'POST' });
+    const result = await response.json();
+    
+    if (!response.ok) {
+        throw new Error(result.error || 'Rule-based match failed');
+    }
+    
+    const stats = result.stats || {};
+    const matchedCount = stats.matched || 0;
+    
+    alertDiv.classList.remove('d-none', 'alert-info', 'alert-danger');
+    alertDiv.classList.add('alert-success');
+    const contentDiv = document.getElementById('autoMatchResultsContent');
+    
+    // Build detailed stats display
+    let statsHtml = `<i class="bi bi-check-circle"></i> <strong>Rule-Based Match: ${matchedCount} channels matched</strong>`;
+    
+    // Show match type breakdown if available
+    const byType = stats.by_match_type || {};
+    const typeDetails = [];
+    if (byType.exact_id) typeDetails.push(`ID: ${byType.exact_id}`);
+    if (byType.callsign_tag) typeDetails.push(`Callsign: ${byType.callsign_tag}`);
+    if (byType.fcc_lookup) typeDetails.push(`FCC: ${byType.fcc_lookup}`);
+    if (byType.exact_name) typeDetails.push(`Name: ${byType.exact_name}`);
+    if (byType.fuzzy_name) typeDetails.push(`Fuzzy: ${byType.fuzzy_name}`);
+    if (byType.regex) typeDetails.push(`Regex: ${byType.regex}`);
+    
+    if (typeDetails.length > 0) {
+        statsHtml += ` <span class="ms-2 text-muted small">(${typeDetails.join(', ')}`;
+        if (stats.skipped_existing) statsHtml += `, Skipped: ${stats.skipped_existing}`;
+        if (stats.excluded) statsHtml += `, Excluded: ${stats.excluded}`;
+        if (stats.unmatched) statsHtml += `, Unmatched: ${stats.unmatched}`;
+        statsHtml += `)</span>`;
+    }
+    
+    contentDiv.innerHTML = statsHtml;
 }
 
 function showManualMappingModal(channelId, channelName) {
     document.getElementById('manualMappingChannelId').value = channelId;
     document.getElementById('manualMappingChannel').textContent = channelName;
     document.getElementById('manualMappingEpgSearch').value = '';
-    document.getElementById('manualMappingEpgChannel').innerHTML = '<option value="">Search for EPG channels above...</option>';
+    document.getElementById('manualMappingEpgChannel').value = '';
+    document.getElementById('epgChannelList').innerHTML = '<div class="list-group-item text-muted">Type to search EPG channels...</div>';
+    document.getElementById('manualMappingTimeOffset').value = '0';
+    document.getElementById('selectedEpgChannel').style.display = 'none';
+    // Reset lazy load state
+    epgSearchState = { search: '', offset: 0, hasMore: true, loading: false };
     manualMappingModal.show();
 }
 
-async function searchEpgChannels() {
-    const search = document.getElementById('manualMappingEpgSearch').value;
-    if (search.length < 2) return;
+// State for EPG channel lazy loading in manual mapping modal
+let epgSearchState = { search: '', offset: 0, hasMore: true, loading: false };
+const EPG_CHANNELS_PER_PAGE = 20;
+
+function clearSelectedEpgChannel() {
+    document.getElementById('manualMappingEpgChannel').value = '';
+    document.getElementById('selectedEpgChannel').style.display = 'none';
+    // Re-highlight list items
+    document.querySelectorAll('#epgChannelList .list-group-item').forEach(item => {
+        item.classList.remove('active');
+    });
+}
+
+function selectEpgChannel(id, displayName, channelId) {
+    document.getElementById('manualMappingEpgChannel').value = id;
+    document.getElementById('selectedEpgChannelName').textContent = `${displayName} (${channelId})`;
+    document.getElementById('selectedEpgChannel').style.display = 'block';
+    // Highlight selected item
+    document.querySelectorAll('#epgChannelList .list-group-item').forEach(item => {
+        item.classList.remove('active');
+        if (item.dataset.id === String(id)) {
+            item.classList.add('active');
+        }
+    });
+}
+
+async function searchEpgChannels(resetResults = true) {
+    const search = document.getElementById('manualMappingEpgSearch').value.trim();
+    const sourceId = document.getElementById('manualMappingEpgSource').value;
+    
+    if (resetResults) {
+        epgSearchState = { search: search, offset: 0, hasMore: true, loading: false };
+        document.getElementById('epgChannelList').innerHTML = '';
+        // Clear selection when search changes
+        document.getElementById('manualMappingEpgChannel').value = '';
+        document.getElementById('selectedEpgChannel').style.display = 'none';
+    }
+    
+    if (search.length < 2) {
+        document.getElementById('epgChannelList').innerHTML = '<div class="list-group-item text-muted">Type at least 2 characters to search...</div>';
+        return;
+    }
+    
+    if (epgSearchState.loading || !epgSearchState.hasMore) return;
+    
+    epgSearchState.loading = true;
+    const loader = document.getElementById('epgChannelLoader');
+    loader.style.display = 'block';
     
     try {
-        const response = await fetch(`/api/epg/channels?search=${encodeURIComponent(search)}&limit=20`);
+        let url = `/api/epg/channels?search=${encodeURIComponent(search)}&limit=${EPG_CHANNELS_PER_PAGE}&offset=${epgSearchState.offset}`;
+        if (sourceId) url += `&source_id=${sourceId}`;
+        const response = await fetch(url);
         const data = await response.json();
         
-        const select = document.getElementById('manualMappingEpgChannel');
-        select.innerHTML = '';
+        const list = document.getElementById('epgChannelList');
         
-        if (data.channels.length === 0) {
-            select.innerHTML = '<option value="">No channels found</option>';
+        if (data.channels.length === 0 && epgSearchState.offset === 0) {
+            list.innerHTML = '<div class="list-group-item text-muted">No channels found. Try different search terms.</div>';
+            epgSearchState.hasMore = false;
+            loader.style.display = 'none';
+            epgSearchState.loading = false;
             return;
         }
         
+        // Append channels to list
         data.channels.forEach(ch => {
-            select.innerHTML += `<option value="${ch.id}">${ch.display_name} (${ch.channel_id})</option>`;
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'list-group-item list-group-item-action';
+            item.dataset.id = ch.id;
+            item.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${escapeHtml(ch.display_name)}</strong>
+                        <small class="text-muted ms-2">(${escapeHtml(ch.channel_id)})</small>
+                    </div>
+                    <small class="text-muted">${ch.program_count || 0} programs</small>
+                </div>
+            `;
+            item.onclick = () => selectEpgChannel(ch.id, ch.display_name, ch.channel_id);
+            list.appendChild(item);
         });
+        
+        epgSearchState.offset += data.channels.length;
+        epgSearchState.hasMore = epgSearchState.offset < data.total;
+        
     } catch (error) {
         console.error('Error searching EPG channels:', error);
+        document.getElementById('epgChannelList').innerHTML = '<div class="list-group-item text-danger">Error loading channels</div>';
+    } finally {
+        loader.style.display = 'none';
+        epgSearchState.loading = false;
+    }
+}
+
+// Set up scroll handler for lazy loading EPG channels
+function setupEpgChannelScroll() {
+    const container = document.getElementById('epgChannelListContainer');
+    if (container) {
+        container.addEventListener('scroll', () => {
+            const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+            if (scrollBottom < 50 && epgSearchState.hasMore && !epgSearchState.loading) {
+                searchEpgChannels(false);
+            }
+        });
     }
 }
 
 async function saveManualMapping() {
     const channelId = document.getElementById('manualMappingChannelId').value;
     const epgChannelId = document.getElementById('manualMappingEpgChannel').value;
+    const timeOffset = parseInt(document.getElementById('manualMappingTimeOffset').value) || 0;
     
     if (!channelId || !epgChannelId) {
         alert('Please select an EPG channel');
@@ -1507,20 +1948,46 @@ async function saveManualMapping() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 channel_id: parseInt(channelId),
-                epg_channel_id: parseInt(epgChannelId)
+                epg_channel_id: parseInt(epgChannelId),
+                time_offset_hours: timeOffset
             })
         });
         
         if (response.ok) {
+            const mapping = await response.json();
             manualMappingModal.hide();
-            loadMappings();
-            alert('✓ Mapping created');
+            
+            // Update the row in place instead of reloading
+            const row = document.querySelector(`tr[data-channel-id="${channelId}"]`);
+            if (row) {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 4) {
+                    // Update mapping cell
+                    cells[2].innerHTML = `<span class="text-success">${mapping.epg_display_name || 'EPG #' + epgChannelId}</span>`;
+                    // Update match info cell
+                    cells[3].innerHTML = '<span class="badge bg-primary">Manual</span> 100%';
+                }
+                // Update actions - replace create mapping button with delete button
+                const actionsDiv = cells[4].querySelector('.btn-group');
+                if (actionsDiv) {
+                    const createBtn = actionsDiv.querySelector('button[onclick^="showManualMappingModal"]');
+                    if (createBtn) {
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.className = 'btn btn-outline-danger btn-sm';
+                        deleteBtn.setAttribute('onclick', `deleteMapping(${mapping.id}, ${channelId})`);
+                        deleteBtn.setAttribute('title', 'Delete mapping');
+                        deleteBtn.innerHTML = '<i class="bi bi-trash"></i>';
+                        createBtn.replaceWith(deleteBtn);
+                    }
+                }
+            }
+            showToast('Mapping created', 'success');
         } else {
             const error = await response.json();
-            alert('Error: ' + (error.error || 'Failed to create mapping'));
+            showToast('Error: ' + (error.error || 'Failed to create mapping'), 'error');
         }
     } catch (error) {
-        alert('Error: ' + error.message);
+        showToast('Error: ' + error.message, 'error');
     }
 }
 
@@ -1940,6 +2407,77 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+function showToast(message, type = 'success') {
+    // Create toast container if it doesn't exist
+    let toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        toastContainer.style.zIndex = '1050';
+        document.body.appendChild(toastContainer);
+    }
+    
+    const toastId = 'toast-' + Date.now();
+    const bgClass = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : 'bg-info';
+    
+    const toastHtml = `
+        <div id="${toastId}" class="toast align-items-center text-white ${bgClass} border-0" role="alert">
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement);
+    toast.show();
+    
+    // Remove from DOM after hidden
+    toastElement.addEventListener('hidden.bs.toast', () => toastElement.remove());
+}
+
+async function hideChannel(accountId, channelName) {    
+    try {
+        const response = await fetch('/api/filters', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                account_id: accountId,
+                name: `Hide: ${channelName}`,
+                filter_type: 'channel_name',
+                filter_action: 'blacklist',
+                filter_value: channelName,
+                enabled: true
+            })
+        });
+        
+        if (response.ok) {
+            showToast(`Channel "${channelName}" hidden`, 'success');
+            // Find and update the row to show filtered badge, or remove it
+            const rows = document.querySelectorAll('#mappings-list tbody tr');
+            for (const row of rows) {
+                const nameCell = row.querySelector('td:first-child');
+                if (nameCell && nameCell.textContent.trim().replace(/Filtered$/, '').trim() === channelName) {
+                    // Add filtered badge if not already present
+                    if (!nameCell.querySelector('.badge')) {
+                        nameCell.innerHTML += '<span class="badge bg-secondary ms-1">Filtered</span>';
+                    }
+                    // Optionally fade the row to indicate it's filtered
+                    row.style.opacity = '0.5';
+                    break;
+                }
+            }
+        } else {
+            const error = await response.json();
+            showToast('Error: ' + (error.error || 'Failed to hide channel'), 'error');
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'error');
+    }
 }
 
 // ============================================================================

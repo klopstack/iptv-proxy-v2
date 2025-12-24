@@ -32,31 +32,68 @@ from difflib import SequenceMatcher
 from typing import Dict, Iterator, List, Optional, Set, Tuple
 
 from models import Channel, ChannelEpgMapping, ChannelTag, EpgChannel, EpgSource, FccFacility, Tag, db
+from services.epg_match_rules_service import EpgMatchRulesService
 
 logger = logging.getLogger(__name__)
 
 # Major broadcast networks that should match EPG network channels
 MAJOR_BROADCAST_NETWORKS = {"ABC", "NBC", "CBS", "FOX", "PBS", "CW", "ION"}
 
-# Common country code mappings from tags to XMLTV ID suffixes
-COUNTRY_TAG_TO_SUFFIX = {
-    "US": [".us", ".us2", "us"],
-    "UK": [".uk", "uk"],
-    "CA": [".ca", "ca"],
-    "AU": [".au", "au"],
-    "DE": [".de", "de"],
-    "FR": [".fr", "fr"],
-    "ES": [".es", "es"],
-    "IT": [".it", "it"],
-    "NL": [".nl", "nl"],
-    "BE": [".be", "be"],
-    "PL": [".pl", "pl"],
-    "PT": [".pt", "pt"],
-    "BR": [".br", "br"],
-    "MX": [".mx", "mx"],
-    "IN": [".in", "in"],
-    "JP": [".jp", "jp"],
+# Fallback generic EPG channel IDs for networks without local market coverage
+# Used as last resort when no local station EPG data is available
+# Maps network name to (epg_channel_id, display_name) tuples in priority order
+NETWORK_FALLBACK_EPG_IDS = {
+    "CW": [("CW.us2", "CW")],
+    # Add more networks as generic feeds become available
+    # "ABC": [("ABC.National.Feed.us2", "ABC National Feed")],
+    # "CBS": [("cbs-news", "CBS News 24/7")],  # Not a real affiliate substitute
+    # "NBC": [("nbc-news-now", "NBC News NOW")],  # Not a real affiliate substitute
 }
+
+# PPV (Pay-Per-View) category patterns
+# PPV channels update their names dynamically when events are scheduled,
+# so they should not have traditional EPG mappings.
+# These patterns match the category NAME (not channel names).
+# Based on analysis of actual IPTV provider data, PPV categories typically
+# have "PPV" somewhere in their category name.
+PPV_CATEGORY_PATTERNS = [
+    r"\bPPV\b",  # Most common: "UK| DAZN PPV", "US| ESPN+ PPV", "NL| MAX PPV"
+    r"PAY[\s-]?PER[\s-]?VIEW",  # "Pay-Per-View", "Pay Per View", "PAY-PER-VIEW"
+    # Note: We intentionally don't match generic "EVENT" categories as those
+    # are often legitimate sports channels with regular EPG data.
+    # PPV categories almost always have "PPV" in the name explicitly.
+]
+
+# PPV placeholder name patterns
+# When no event is scheduled, PPV channels have generic placeholder names
+# When an event IS scheduled, the provider changes the channel name to the event title
+# We detect "inactive" PPV channels by matching these placeholder patterns.
+#
+# Based on analysis of actual IPTV provider channel names:
+# - Inactive: "UK: DAZN PPV 1 ᴿᴬᵂ", "US: ESPN PLUS 01 PPV", "NL: MAX PPV 1 - NO EVENT STREAMING -"
+# - Active: "UK: DAZN PPV 1 - UFC 300: Jones vs Miocic", "EPL 01: 20:00 Manchester United vs Newcastle"
+PPV_PLACEHOLDER_PATTERNS = [
+    # Explicit "NO EVENT" markers (very common)
+    r"NO\s+EVENT\s+STREAMING",  # "NO EVENT STREAMING", "- NO EVENT STREAMING -"
+    r"NO\s+EVENT\s+SCHEDULED",  # Less common variant
+    r"NO\s+SCHEDULED\s+EVENT",  # Another variant
+    # Basic numbered PPV channels without event info: "PPV 1", "PPV 2", "PPV-01"
+    r"^(?:[A-Z]{2}[:\s])?(?:[A-Z0-9\+\s]+)?PPV[\s\-]*\d+\s*(?:ᴿᴬᵂ|ᴴᴰ|⁴ᴷ|4K|HD|SD)?$",
+    # Event channels with just numbers: "EVENT 1", "VIDIO EVENT 1"
+    r"EVENT\s+\d+\s*$",
+    # Empty event slots: "PPV 1 -", "UFC 09:", ":MAX NL 05"
+    r"(?:PPV|UFC|NBA|NHL|MLB|MLS|WNBA)\s*\d+\s*[:\-]?\s*$",
+    # Placeholder colon format: ":Viaplay NL  14", ":MAX US 03"
+    r"^:?\s*(?:[A-Z]+\s+)?(?:Viaplay|MAX|ESPN)\s+[A-Z]{2}\s+\d+\s*$",
+    # Coming Soon/TBA placeholders
+    r"^(?:COMING\s+SOON|TBA|TBD|OFFLINE).*$",
+    # Florugby/generic sport numbered: "Florugby 00", "Florugby 01"
+    r"^[A-Za-z]+\s+\d{2}\s*$",
+    # Empty fixture slots: "GaaGo Fixtures 10:", "LOI 06 |"
+    r"Fixtures?\s+\d+\s*[:\|]?\s*$",
+    # NIFL/GAA empty: "NIFL 5 |", "ULSTER GAA 06 |"
+    r"(?:NIFL|GAA|ULSTER)\s*\d+\s*\|?\s*$",
+]
 
 
 def extract_callsign_from_xmltv_id(xmltv_id: str) -> Optional[str]:
@@ -139,6 +176,144 @@ def normalize_xmltv_url(url: str) -> str:
         owner, repo, path = match.groups()
         return f"https://raw.githubusercontent.com/{owner}/{repo}/{path}"
     return url
+
+
+def is_ppv_channel(channel: Channel) -> bool:
+    """
+    Determine if a channel is a Pay-Per-View (PPV) channel.
+
+    PPV channels dynamically update their names when events are scheduled,
+    so they should not have traditional EPG mappings. Instead, they should
+    be excluded from automatic EPG matching.
+
+    Detection is based on category name patterns.
+
+    Args:
+        channel: Channel to check
+
+    Returns:
+        True if the channel appears to be a PPV channel
+
+    Examples:
+        Category "PPV EVENTS" -> True
+        Category "US| PAY-PER-VIEW" -> True
+        Category "UFC EVENTS" -> True
+        Category "US| ENTERTAINMENT" -> False
+    """
+    if not channel.category:
+        return False
+
+    category_name = channel.category.category_name.upper()
+
+    for pattern in PPV_CATEGORY_PATTERNS:
+        if re.search(pattern, category_name, re.IGNORECASE):
+            logger.debug(
+                f"Channel '{channel.name}' identified as PPV "
+                f"(category='{channel.category.category_name}', pattern='{pattern}')"
+            )
+            return True
+
+    return False
+
+
+def is_ppv_category(category_name: str) -> bool:
+    """
+    Determine if a category name indicates a PPV (Pay-Per-View) category.
+
+    PPV channels update their names dynamically when events are scheduled,
+    so they should not have traditional EPG mappings. This function checks
+    if a category name matches PPV patterns.
+
+    Args:
+        category_name: The category name to check
+
+    Returns:
+        True if the category appears to be a PPV category
+
+    Examples:
+        "UK| DAZN PPV" -> True
+        "US| ESPN+ PPV ⱽᴵᴾ" -> True
+        "NL| MAX PPV" -> True
+        "UK| SPORTS" -> False
+        "US| ENTERTAINMENT" -> False
+    """
+    if not category_name:
+        return False
+
+    upper_name = category_name.upper()
+
+    for pattern in PPV_CATEGORY_PATTERNS:
+        if re.search(pattern, upper_name, re.IGNORECASE):
+            return True
+
+    return False
+
+
+def is_ppv_placeholder_name(name: str) -> bool:
+    """
+    Check if a channel name is a PPV placeholder (no event scheduled).
+
+    PPV channels from providers have placeholder names like "PPV 1", "PPV EVENT 2"
+    when no event is scheduled. When an event IS scheduled, the provider changes
+    the channel name to the actual event title (e.g., "UFC 300: Main Event").
+
+    This function detects placeholder names to determine if a PPV channel
+    should be hidden (placeholder) or shown (actual event scheduled).
+
+    Args:
+        name: The channel name to check
+
+    Returns:
+        True if the name matches a placeholder pattern (no event)
+        False if the name appears to be an actual event title
+
+    Examples:
+        "UK: DAZN PPV 1 - NO EVENT STREAMING -" -> True (placeholder)
+        "UFC 09:" -> True (placeholder)
+        "UK: DAZN PPV 1 - UFC 300: Jones vs Miocic" -> False (actual event)
+        "BOXING: Fury vs Joshua" -> False (actual event)
+    """
+    if not name:
+        return True  # Empty name is treated as placeholder
+
+    # Normalize the name for comparison
+    normalized = name.strip().upper()
+
+    # Check against placeholder patterns
+    # Use re.search() to find patterns anywhere in the string
+    for pattern in PPV_PLACEHOLDER_PATTERNS:
+        if re.search(pattern, normalized, re.IGNORECASE):
+            logger.debug(f"Channel name '{name}' matches placeholder pattern '{pattern}'")
+            return True
+
+    return False
+
+
+def get_ppv_event_title(channel: Channel) -> Optional[str]:
+    """
+    Extract the event title from a PPV channel that has an active event.
+
+    When a PPV channel has an event scheduled, the channel name becomes
+    the event title. This function returns that title for use in EPG generation.
+
+    Args:
+        channel: The PPV channel to extract the event title from
+
+    Returns:
+        The event title if the channel has an active event, None if placeholder
+
+    Examples:
+        Channel name "UFC 300: Main Event" -> "UFC 300: Main Event"
+        Channel name "PPV 1" -> None (placeholder)
+    """
+    if not channel.name:
+        return None
+
+    if is_ppv_placeholder_name(channel.name):
+        return None
+
+    # The channel name IS the event title
+    return channel.name.strip()
 
 
 # ============================================================================
@@ -515,7 +690,7 @@ class EpgService:
         Build an index of EPG channels by callsign for tag-based matching.
 
         Extracts callsigns from EPG channel IDs (e.g., "WCTI-DT.us_locals1" -> "WCTI")
-        and strips common suffixes (-DT, -TV, -HD, etc.) to match against callsign tags.
+        and strips common suffixes (-DT, -TV, -HD, -LD, etc.) to match against callsign tags.
 
         Args:
             epg_channels: List of EPG channels to index
@@ -535,8 +710,10 @@ class EpgService:
                     # Store the full callsign
                     epg_by_callsign[callsign_upper] = ec
 
-                    # Also store base callsign without common suffixes (-DT, -TV, -HD, -CD, -LP, etc.)
-                    base_callsign = re.sub(r"-(DT|TV|HD|CD|LP|FM|DT2?|TV2?)$", "", callsign_upper, flags=re.IGNORECASE)
+                    # Also store base callsign without common suffixes (-DT, -TV, -HD, -LD, -CD, -LP, etc.)
+                    base_callsign = re.sub(
+                        r"-(DT|TV|HD|LD|CD|LP|FM|DT2?|TV2?|LD2?)$", "", callsign_upper, flags=re.IGNORECASE
+                    )
                     if base_callsign != callsign_upper and len(base_callsign) >= 3:
                         # Only add base if not already present (prefer exact match)
                         if base_callsign not in epg_by_callsign:
@@ -588,14 +765,95 @@ class EpgService:
         quality_tags = {"HD", "SD", "4K", "UHD", "FHD", "RAW", "60FPS", "30FPS", "HEVC", "H264", "H265"}
         country_tags = {"US", "USA", "UK", "CA", "AU", "DE", "FR", "ES", "IT", "MX", "BR", "JP"}
         network_set = {"ABC", "NBC", "CBS", "FOX", "PBS", "CW", "ION", "MY", "ME", "MYTV", "METV"}
+        # US state abbreviations to filter out as separate location tags
+        state_abbrevs = {
+            "AL",
+            "AK",
+            "AZ",
+            "AR",
+            "CA",
+            "CO",
+            "CT",
+            "DE",
+            "FL",
+            "GA",
+            "HI",
+            "ID",
+            "IL",
+            "IN",
+            "IA",
+            "KS",
+            "KY",
+            "LA",
+            "ME",
+            "MD",
+            "MA",
+            "MI",
+            "MN",
+            "MS",
+            "MO",
+            "MT",
+            "NE",
+            "NV",
+            "NH",
+            "NJ",
+            "NM",
+            "NY",
+            "NC",
+            "ND",
+            "OH",
+            "OK",
+            "OR",
+            "PA",
+            "RI",
+            "SC",
+            "SD",
+            "TN",
+            "TX",
+            "UT",
+            "VT",
+            "VA",
+            "WA",
+            "WV",
+            "WI",
+            "WY",
+            "DC",
+        }
 
         potential_locations = channel_tags - quality_tags - country_tags - network_set
-        # Also filter out numeric-only tags and very short tags
-        potential_locations = {t for t in potential_locations if len(t) >= 3 and not t.isdigit()}
+        # Also filter out numeric-only tags, very short tags, and standalone state codes
+        potential_locations = {
+            t for t in potential_locations if len(t) >= 3 and not t.isdigit() and t not in state_abbrevs
+        }
+
+        # Extract DMA tags (format: DMA:MARKET_NAME or just the market name)
+        dma_locations: Set[str] = set()
+        for tag in channel_tags:
+            if tag.startswith("DMA:"):
+                # Extract DMA name and process it
+                dma_name = tag[4:]  # Remove "DMA:" prefix
+                # Convert underscores to spaces and also remove common DMA suffixes
+                dma_name = dma_name.replace("_", " ").replace(" AND ", "-").replace(" ANN ", "-")
+                dma_locations.add(dma_name)
+                logger.debug(f"FCC lookup: Extracted DMA tag: {dma_name}")
 
         # Convert underscores to spaces in location tags (tags like "LAS_VEGAS" → "LAS VEGAS")
         # This is needed because tags often store multi-word locations with underscores
-        potential_locations = {t.replace("_", " ") for t in potential_locations}
+        # Also handle state suffixes (e.g., "MERIDIAN_MS" → "MERIDIAN" and "BINGHAMPTON_NY" → "BINGHAMPTON")
+        processed_locations: Set[str] = set()
+        for loc in potential_locations:
+            # Replace underscores with spaces
+            loc_spaced = loc.replace("_", " ")
+            processed_locations.add(loc_spaced)
+
+            # If location ends with a state code (e.g., "MERIDIAN MS"), also add just the city
+            parts = loc_spaced.split()
+            if len(parts) >= 2 and parts[-1] in state_abbrevs:
+                city_only = " ".join(parts[:-1])
+                processed_locations.add(city_only)
+                logger.debug(f"FCC lookup: Extracted city from location tag: {city_only} (from {loc})")
+
+        potential_locations = processed_locations
 
         # For multi-word locations (e.g., "HAMPTON ROADS", "LAS VEGAS"), also try:
         # 1. Individual words (for cases like "HAMPTON ROADS" where city is just "HAMPTON")
@@ -645,6 +903,8 @@ class EpgService:
             # Remove potential callsigns (we handle those separately)
             for cs in potential_callsigns:
                 name_for_city = re.sub(rf"\b{re.escape(cs)}\b", "", name_for_city)
+            # Split on slashes and hyphens to handle multi-city names like "GREENSBORO/HIGH POINT/WINSTON-SALEM"
+            name_for_city = name_for_city.replace("/", " ").replace("-", " ")
             # Clean up and get remaining words
             remaining_words = [w.strip() for w in name_for_city.split() if len(w.strip()) >= 3]
             if remaining_words:
@@ -696,9 +956,13 @@ class EpgService:
                 ]
             elif network:
                 # Filter by network (case-insensitive contains)
+                # Also check if the callsign contains the network name (e.g., WCWG for CW)
                 network_upper = network.upper()
                 facilities = [
-                    f for f in facilities if f.network_affiliation and network_upper in f.network_affiliation.upper()
+                    f
+                    for f in facilities
+                    if (f.network_affiliation and network_upper in f.network_affiliation.upper())
+                    or (f.callsign and network_upper in f.callsign.upper())
                 ]
 
             if len(facilities) == 1:
@@ -750,6 +1014,14 @@ class EpgService:
         # This handles cases like Raleigh where the ABC affiliate (WTVD) is licensed to Durham
         # but serves the "Raleigh-Durham" DMA
         if network:
+            # First try explicit DMA tags
+            for dma in dma_locations:
+                result = try_fcc_lookup(dma, with_channel=False, use_dma=True)
+                if result:
+                    logger.debug(f"FCC lookup: Found match via DMA tag for dma={dma}, " f"network={network}: {result}")
+                    return result
+
+            # Then try potential locations as DMA searches
             for location in potential_locations:
                 result = try_fcc_lookup(location, with_channel=False, use_dma=True)
                 if result:
@@ -779,7 +1051,8 @@ class EpgService:
         source_id: Optional[int] = None,
         category_id: Optional[int] = None,
         skip_matched_threshold: float = 0.85,
-        batch_size: int = 100,
+        batch_size: int = 50,
+        include_filtered: bool = False,
     ) -> Dict:
         """
         Attempt to match channels from an account to EPG channels.
@@ -797,24 +1070,38 @@ class EpgService:
             category_id: Optional - limit to channels in specific category
             skip_matched_threshold: Skip channels with existing match at or above
                                     this confidence (default 0.85)
-            batch_size: Number of channels to process before committing (default 100)
+            batch_size: Number of channels to process before committing (default 50).
+                       Smaller batches reduce memory usage and provide more frequent
+                       progress updates for long-running operations.
+            include_filtered: Include filtered out (is_visible=False) channels (default False).
+                            By default, only visible channels are matched.
 
         Returns:
             Dict with matching statistics
+
+        Note:
+            For accounts with thousands of channels, this operation may take several
+            minutes. The process commits in batches to prevent data loss if interrupted.
         """
         stats = {
             "total_channels": 0,
             "skipped_existing": 0,
+            "skipped_ppv": 0,
             "matched_exact_id": 0,
             "matched_callsign_tag": 0,
+            "matched_callsign_name": 0,
             "matched_fcc_lookup": 0,
             "matched_exact_name": 0,
             "matched_fuzzy": 0,
+            "matched_network_fallback": 0,
             "unmatched": 0,
         }
 
         # Get channels for this account, optionally filtered by category
+        # By default, only match visible (non-filtered) channels
         query = Channel.query.filter_by(account_id=account_id, is_active=True)
+        if not include_filtered:
+            query = query.filter_by(is_visible=True)
         if category_id:
             query = query.filter_by(category_id=category_id)
         channels = query.all()
@@ -823,7 +1110,10 @@ class EpgService:
         filter_desc = ""
         if category_id:
             filter_desc = f" in category {category_id}"
-        logger.info(f"EPG matching: Found {len(channels)} active channels{filter_desc} for account {account_id}")
+        visibility_desc = " (visible only)" if not include_filtered else " (including filtered)"
+        logger.info(
+            f"EPG matching: Found {len(channels)} active channels{filter_desc}{visibility_desc} for account {account_id}"
+        )
 
         # Get all EPG channels
         epg_query = EpgChannel.query
@@ -873,6 +1163,9 @@ class EpgService:
         country_tags_by_stream: Dict[str, Set[str]] = {}
         callsign_tags_by_stream: Dict[str, Set[str]] = {}
 
+        # Get country suffix mappings for country tag detection
+        country_suffix_map = EpgMatchRulesService.get_country_suffix_mappings()
+
         for i in range(0, len(stream_ids), BATCH_SIZE):
             batch = stream_ids[i : i + BATCH_SIZE]
             tag_rows = (
@@ -890,7 +1183,7 @@ class EpgService:
                 all_tags_by_stream[stream_id].add(tag_upper)
 
                 # Track country tags separately
-                if tag_upper in COUNTRY_TAG_TO_SUFFIX:
+                if tag_upper in country_suffix_map:
                     if stream_id not in country_tags_by_stream:
                         country_tags_by_stream[stream_id] = set()
                     country_tags_by_stream[stream_id].add(tag_upper)
@@ -910,15 +1203,27 @@ class EpgService:
         channels_processed = 0
 
         for channel in channels:
+            logger.debug(f"EPG matching: Processing channel '{channel.name}' (stream_id={channel.stream_id})")
+
+            # Skip PPV channels - they update dynamically and don't have traditional EPG
+            if is_ppv_channel(channel):
+                stats["skipped_ppv"] += 1
+                logger.debug(f"  -> Skipping PPV channel (category='{channel.category.category_name}')")
+                continue
+
             # Skip if already has a manual override mapping
             if channel.id in existing_mappings:
                 existing = existing_mappings[channel.id]
                 if existing.is_override:
                     stats["skipped_existing"] += 1
+                    logger.debug(f"  -> Skipping (has manual override mapping)")
                     continue
                 # Skip if existing match is good enough
                 if existing.confidence and existing.confidence >= skip_matched_threshold:
                     stats["skipped_existing"] += 1
+                    logger.debug(
+                        f"  -> Skipping (existing match confidence {existing.confidence:.2f} >= {skip_matched_threshold})"
+                    )
                     continue
 
             matched_epg = None
@@ -931,26 +1236,30 @@ class EpgService:
             # Strategy 1: Exact match on epg_channel_id from provider
             # Skip obviously bad/placeholder EPG IDs (too short or generic)
             if channel.epg_channel_id and len(channel.epg_channel_id) > 3:
+                logger.debug(f"  Strategy 1: Checking provider EPG ID '{channel.epg_channel_id}'")
                 epg_id_lower = channel.epg_channel_id.lower()
                 if epg_id_lower in epg_by_id:
                     matched_epg = epg_by_id[epg_id_lower]
                     match_type = "provider"
                     confidence = 1.0
                     stats["matched_exact_id"] += 1
+                    logger.info(f"  ✓ Matched via provider EPG ID: '{channel.name}' -> '{matched_epg.display_name}'")
 
             # Strategy 2: Callsign tag match (for US broadcast stations)
             # Match channel's callsign tags (e.g., "WCTI") to EPG channel IDs (e.g., "WCTI-DT.us")
             if not matched_epg and "US" in channel_country_tags:
                 channel_callsign_tags = callsign_tags_by_stream.get(channel.stream_id, set())
+                if channel_callsign_tags:
+                    logger.debug(f"  Strategy 2: Checking callsign tags: {channel_callsign_tags}")
                 for callsign_tag in channel_callsign_tags:
                     if callsign_tag in epg_by_callsign:
                         matched_epg = epg_by_callsign[callsign_tag]
                         match_type = "callsign_tag"
                         confidence = 0.97  # High confidence for callsign match
                         stats["matched_callsign_tag"] += 1
-                        logger.debug(
-                            f"EPG match via callsign tag: '{channel.name}' -> "
-                            f"'{matched_epg.display_name}' (tag={callsign_tag})"
+                        logger.info(
+                            f"  ✓ Matched via callsign tag: '{channel.name}' -> "
+                            f"'{matched_epg.display_name}' (tag={callsign_tag}, confidence={confidence:.2f})"
                         )
                         break
 
@@ -961,6 +1270,7 @@ class EpgService:
                 # Find network tags for this channel
                 channel_network_tags = channel_all_tags & MAJOR_BROADCAST_NETWORKS
                 if channel_network_tags:
+                    logger.debug(f"  Strategy 3: FCC lookup with networks={channel_network_tags}")
                     # Try FCC lookup
                     fcc_callsign = EpgService._lookup_fcc_callsign(
                         channel.cleaned_name or channel.name,
@@ -968,15 +1278,16 @@ class EpgService:
                         channel_network_tags,
                     )
                     if fcc_callsign:
+                        logger.debug(f"    Found FCC callsign: {fcc_callsign}")
                         fcc_upper = fcc_callsign.upper()
                         # Try exact FCC callsign first
                         if fcc_upper in epg_by_callsign:
                             matched_epg = epg_by_callsign[fcc_upper]
                         else:
-                            # Strip suffix (-TV, -DT, etc.) and try base callsign
-                            # FCC uses -TV suffix, EPG often uses -DT
+                            # Strip suffix (-TV, -DT, -LD, etc.) and try base callsign
+                            # FCC uses -TV suffix, EPG often uses -DT or -LD
                             base_callsign = re.sub(
-                                r"-(DT|TV|HD|CD|LP|FM|DT2?|TV2?)$", "", fcc_upper, flags=re.IGNORECASE
+                                r"-(DT|TV|HD|LD|CD|LP|FM|DT2?|TV2?|LD2?)$", "", fcc_upper, flags=re.IGNORECASE
                             )
                             if base_callsign in epg_by_callsign:
                                 matched_epg = epg_by_callsign[base_callsign]
@@ -985,22 +1296,52 @@ class EpgService:
                             match_type = "fcc_lookup"
                             confidence = 0.93  # High confidence but slightly less than direct callsign tag
                             stats["matched_fcc_lookup"] += 1
-                            logger.debug(
-                                f"EPG match via FCC lookup: '{channel.name}' -> "
-                                f"'{matched_epg.display_name}' (callsign={fcc_callsign})"
+                            logger.info(
+                                f"  ✓ Matched via FCC lookup: '{channel.name}' -> "
+                                f"'{matched_epg.display_name}' (callsign={fcc_callsign}, confidence={confidence:.2f})"
                             )
 
-            # Strategy 4: Exact match on cleaned name
+            # Strategy 4: Callsign extracted from channel name (for US broadcast stations)
+            # Extract callsign from channel name (e.g., "US: CBS 13 (WSVF-CD2)" -> "WSVF")
+            # and match to EPG channels with the same base callsign
+            # This is after FCC lookup since it's less authoritative - useful for stations
+            # not in FCC database or EPG sources like us_locals1 with minimal metadata
+            if not matched_epg and "US" in channel_country_tags:
+                from services.fcc_facility_service import FccFacilityService
+
+                logger.debug(f"  Strategy 4: Extracting callsign from name")
+                extracted_callsign = FccFacilityService.extract_callsign_from_name(channel.name)
+                if extracted_callsign:
+                    logger.debug(f"    Extracted callsign: {extracted_callsign}")
+                    extracted_upper = extracted_callsign.upper()
+                    if extracted_upper in epg_by_callsign:
+                        matched_epg = epg_by_callsign[extracted_upper]
+                        match_type = "callsign_name"
+                        confidence = 0.92  # Slightly lower than FCC lookup
+                        stats["matched_callsign_name"] += 1
+                        logger.info(
+                            f"  ✓ Matched via callsign from name: '{channel.name}' -> "
+                            f"'{matched_epg.display_name}' (callsign={extracted_callsign}, confidence={confidence:.2f})"
+                        )
+
+            # Strategy 5: Exact match on cleaned name
             if not matched_epg and channel.cleaned_name:
                 normalized = EpgService._normalize_name(channel.cleaned_name)
+                logger.debug(f"  Strategy 5: Checking exact name match (normalized='{normalized}')")
                 if normalized and normalized in epg_by_name:
                     matched_epg = epg_by_name[normalized]
                     match_type = "auto_exact"
                     confidence = 0.95
                     stats["matched_exact_name"] += 1
+                    logger.info(
+                        f"  ✓ Matched via exact name: '{channel.name}' -> '{matched_epg.display_name}' (confidence={confidence:.2f})"
+                    )
 
-            # Strategy 5: Fuzzy match (includes token matching, contains, country filtering, etc.)
+            # Strategy 6: Fuzzy match (includes token matching, contains, country filtering, etc.)
             if not matched_epg:
+                logger.info(
+                    f"  Strategy 6: Starting fuzzy search for '{channel.name}' (cleaned: '{channel.cleaned_name or channel.name}')"
+                )
                 best_match, best_score = EpgService._fuzzy_match(
                     channel.cleaned_name or channel.name,
                     epg_channels,
@@ -1011,6 +1352,38 @@ class EpgService:
                     match_type = "auto_fuzzy"
                     confidence = best_score
                     stats["matched_fuzzy"] += 1
+                    logger.info(
+                        f"  ✓ Matched via fuzzy match: '{channel.name}' -> '{matched_epg.display_name}' (confidence={confidence:.2f})"
+                    )
+                else:
+                    logger.info(
+                        f"  ✗ No fuzzy match found for '{channel.name}'"
+                        + (f" (best_score={best_score:.2f} < 0.75)" if best_match else "")
+                    )
+
+            # Strategy 7: Network fallback (for US broadcast stations with no local EPG)
+            # Fall back to generic network feed when no local station EPG data exists
+            # Uses lower confidence (< 0.80) to indicate this is a fallback match
+            if not matched_epg and "US" in channel_country_tags:
+                channel_all_tags = all_tags_by_stream.get(channel.stream_id, set())
+                channel_network_tags = channel_all_tags & MAJOR_BROADCAST_NETWORKS
+                for network in channel_network_tags:
+                    if network in NETWORK_FALLBACK_EPG_IDS:
+                        fallback_options = NETWORK_FALLBACK_EPG_IDS[network]
+                        for fallback_id, fallback_name in fallback_options:
+                            fallback_lower = fallback_id.lower()
+                            if fallback_lower in epg_by_id:
+                                matched_epg = epg_by_id[fallback_lower]
+                                match_type = "network_fallback"
+                                confidence = 0.75  # Below 0.80 to indicate fallback
+                                stats["matched_network_fallback"] += 1
+                                logger.info(
+                                    f"EPG fallback to generic network: '{channel.name}' -> "
+                                    f"'{matched_epg.display_name}' (network={network}, no local EPG available)"
+                                )
+                                break
+                    if matched_epg:
+                        break
 
             if matched_epg and match_type:
                 # Create or update mapping
@@ -1021,6 +1394,7 @@ class EpgService:
                         mapping.mapping_type = match_type
                         mapping.confidence = confidence
                         mapping.updated_at = datetime.utcnow()
+                        logger.debug(f"  Updated existing mapping")
                 else:
                     mapping = ChannelEpgMapping(
                         channel_id=channel.id,
@@ -1029,23 +1403,45 @@ class EpgService:
                         confidence=confidence,
                     )
                     db.session.add(mapping)
+                    logger.debug(f"  Created new mapping")
             else:
                 stats["unmatched"] += 1
+                logger.debug(f"  ✗ No match found for '{channel.name}'")
 
-            # Commit in batches
+            # Commit in batches and flush session to prevent memory buildup
             channels_processed += 1
             if channels_processed % batch_size == 0:
                 db.session.commit()
-                logger.debug(f"EPG matching: Processed {channels_processed}/{len(channels)} channels")
+                db.session.flush()  # Clear session cache to prevent memory issues
+                elapsed_pct = (channels_processed / len(channels)) * 100
+                matched_so_far = sum(
+                    [
+                        stats["matched_exact_id"],
+                        stats["matched_callsign_tag"],
+                        stats["matched_callsign_name"],
+                        stats["matched_fcc_lookup"],
+                        stats["matched_exact_name"],
+                        stats["matched_fuzzy"],
+                        stats["matched_network_fallback"],
+                    ]
+                )
+                logger.info(
+                    f"EPG matching progress: {channels_processed}/{len(channels)} channels "
+                    f"({elapsed_pct:.1f}%) - {matched_so_far} matched, {stats['unmatched']} unmatched, "
+                    f"{stats['skipped_existing']} skipped, {stats['skipped_ppv']} PPV"
+                )
 
         # Final commit for any remaining
         db.session.commit()
 
         logger.info(
             f"EPG matching for account {account_id}{filter_desc}: "
-            f"skipped={stats['skipped_existing']}, exact_id={stats['matched_exact_id']}, "
-            f"callsign_tag={stats['matched_callsign_tag']}, fcc_lookup={stats['matched_fcc_lookup']}, "
+            f"skipped_existing={stats['skipped_existing']}, skipped_ppv={stats['skipped_ppv']}, "
+            f"exact_id={stats['matched_exact_id']}, "
+            f"callsign_tag={stats['matched_callsign_tag']}, callsign_name={stats['matched_callsign_name']}, "
+            f"fcc_lookup={stats['matched_fcc_lookup']}, "
             f"exact_name={stats['matched_exact_name']}, fuzzy={stats['matched_fuzzy']}, "
+            f"network_fallback={stats['matched_network_fallback']}, "
             f"unmatched={stats['unmatched']}"
         )
 
@@ -1082,8 +1478,9 @@ class EpgService:
 
         channel_id_lower = epg_channel_id.lower()
 
-        # Check for known country suffixes
-        for country_tag, suffixes in COUNTRY_TAG_TO_SUFFIX.items():
+        # Check for known country suffixes from database
+        country_suffix_map = EpgMatchRulesService.get_country_suffix_mappings()
+        for country_tag, suffixes in country_suffix_map.items():
             for suffix in suffixes:
                 if channel_id_lower.endswith(suffix):
                     return country_tag
@@ -1114,11 +1511,14 @@ class EpgService:
             .all()
         )
 
+        # Get country suffix mappings from database
+        country_suffix_map = EpgMatchRulesService.get_country_suffix_mappings()
+
         # Filter to just country codes
         country_codes = set()
         for (tag_name,) in tag_names:
             tag_upper = tag_name.upper()
-            if tag_upper in COUNTRY_TAG_TO_SUFFIX:
+            if tag_upper in country_suffix_map:
                 country_codes.add(tag_upper)
 
         return country_codes
@@ -1333,6 +1733,12 @@ class EpgService:
             # Names are too different in length - likely not a match
             return 0.0, "none"
 
+        # Additional early exit: skip if length difference is too large (>30 chars)
+        length_diff = abs(len(norm_channel) - len(norm_epg))
+        if length_diff > 30:
+            return 0.0, "none"
+
+        # SequenceMatcher is expensive - only use for promising candidates
         seq_score = SequenceMatcher(None, norm_channel, norm_epg).ratio()
 
         # Only return fuzzy scores above a high threshold (0.85)
@@ -1378,10 +1784,28 @@ class EpgService:
         if not normalized_name:
             return None, 0.0
 
+        logger.info(
+            f"    Fuzzy matching '{channel_name}' (normalized: '{normalized_name}') against {len(epg_channels)} EPG channels"
+        )
+
+        # Early exit: if we have country tags, filter EPG channels by country first
+        # This significantly reduces the search space
+        search_channels = epg_channels
+        if country_tags:
+            country_filtered = [
+                ec
+                for ec in epg_channels
+                if not ec.channel_id or EpgService._extract_country_from_epg_id(ec.channel_id) in country_tags
+            ]
+            # If country filtering removed everything, fall back to full list
+            if country_filtered:
+                search_channels = country_filtered
+                logger.debug(f"    Filtered to {len(search_channels)} channels matching country tags {country_tags}")
+
         # Track all candidates with their scores
         candidates: List[Tuple[EpgChannel, float, str, bool]] = []  # (epg, score, type, country_match)
 
-        for ec in epg_channels:
+        for ec in search_channels:
             names_to_check = [ec.display_name] if ec.display_name else []
             if ec.display_names_json:
                 try:
@@ -1406,11 +1830,23 @@ class EpgService:
                     best_name_score = score
                     best_name_type = match_type
 
+                    # Early exit: if we found a perfect match, no need to check more names
+                    if score >= 1.0:
+                        break
+
             if best_name_score >= min_score:
                 candidates.append((ec, best_name_score, best_name_type, country_match))
 
+                # Early exit: if we found a perfect country-matched channel, return it immediately
+                if best_name_score >= 1.0 and country_match:
+                    logger.debug(f"    Found perfect match: '{ec.display_name}' (score=1.0, country_match=True)")
+                    return ec, 1.0
+
         if not candidates:
+            logger.info(f"    No candidates found with score >= {min_score}")
             return None, 0.0
+
+        logger.info(f"    Found {len(candidates)} candidate(s) with score >= {min_score}")
 
         # Sort candidates: first by country match (True first), then by score descending
         candidates.sort(key=lambda x: (x[3], x[1]), reverse=True)
@@ -1418,14 +1854,16 @@ class EpgService:
         best_match, best_score, best_match_type, country_matched = candidates[0]
 
         # Log match details
-        match_info = f"EPG match: '{channel_name}' -> '{best_match.display_name}' "
+        match_info = f"    Best match: '{best_match.display_name}' "
         match_info += f"(score={best_score:.2f}, type={best_match_type}"
         if country_matched:
             match_info += ", country_match=True"
         if len(candidates) > 1:
-            match_info += f", {len(candidates)} candidates"
+            # Show runner-up
+            runner_up = candidates[1]
+            match_info += f", runner_up='{runner_up[0].display_name}' (score={runner_up[1]:.2f})"
         match_info += ")"
-        logger.debug(match_info)
+        logger.info(match_info)
 
         return best_match, best_score
 
@@ -1681,6 +2119,9 @@ class EpgService:
         stream_ids = [c.stream_id for c in channels]
         country_tags_by_stream: Dict[str, Set[str]] = {}
 
+        # Get country suffix mappings for country tag detection
+        country_suffix_map = EpgMatchRulesService.get_country_suffix_mappings()
+
         for i in range(0, len(stream_ids), BATCH_SIZE):
             batch = stream_ids[i : i + BATCH_SIZE]
             tag_rows = (
@@ -1691,7 +2132,7 @@ class EpgService:
             )
             for stream_id, tag_name in tag_rows:
                 tag_upper = tag_name.upper()
-                if tag_upper in COUNTRY_TAG_TO_SUFFIX:
+                if tag_upper in country_suffix_map:
                     if stream_id not in country_tags_by_stream:
                         country_tags_by_stream[stream_id] = set()
                     country_tags_by_stream[stream_id].add(tag_upper)
@@ -2002,6 +2443,7 @@ class EpgService:
                     "with_provider_epg": with_provider_epg,
                     "with_epg_mapping": with_mapping,
                     "coverage_percent": round((with_mapping / total * 100), 1) if total > 0 else 0,
+                    "is_ppv": is_ppv_category(category.category_name),
                 }
             )
 
@@ -2045,6 +2487,7 @@ class EpgService:
         channel_epg_ids: List[str],
         xml_content: bytes,
         channel_link_map: Optional[Dict[str, Tuple[str, int]]] = None,
+        mapping_offset_map: Optional[Dict[str, int]] = None,
     ) -> bytes:
         """
         Generate filtered EPG XML containing only specified channels.
@@ -2057,6 +2500,8 @@ class EpgService:
             xml_content: Source XMLTV XML content (may be gzipped)
             channel_link_map: Optional mapping of channel_epg_id -> (source_epg_id, time_offset_hours)
                               All EPG IDs should be lowercase.
+            mapping_offset_map: Optional mapping of epg_channel_id -> time_offset_hours
+                               for direct mappings with time offset (from ChannelEpgMapping)
 
         Returns:
             Filtered XMLTV XML as bytes
@@ -2071,6 +2516,10 @@ class EpgService:
         # Use provided channel_link_map or empty dict
         if channel_link_map is None:
             channel_link_map = {}
+
+        # Use provided mapping_offset_map or empty dict
+        if mapping_offset_map is None:
+            mapping_offset_map = {}
 
         # Build reverse lookup: source_epg_id -> list of (target_epg_id, time_offset)
         source_to_targets: Dict[str, List[Tuple[str, int]]] = {}
@@ -2114,7 +2563,17 @@ class EpgService:
                     if channel_id in requested_ids:
                         if channel_id not in programmes_by_channel:
                             programmes_by_channel[channel_id] = []
-                        programmes_by_channel[channel_id].append(_copy_element(elem))
+                        prog_copy = _copy_element(elem)
+                        # Apply mapping offset if present
+                        mapping_offset = mapping_offset_map.get(channel_id, 0)
+                        if mapping_offset != 0:
+                            start = prog_copy.get("start")
+                            stop = prog_copy.get("stop")
+                            if start:
+                                prog_copy.set("start", shift_xmltv_time(start, mapping_offset))
+                            if stop:
+                                prog_copy.set("stop", shift_xmltv_time(stop, mapping_offset))
+                        programmes_by_channel[channel_id].append(prog_copy)
 
                     # Check if this is a source channel for any linked channels
                     if channel_id in source_to_targets:
@@ -2198,6 +2657,43 @@ class EpgService:
         return link_map
 
     @staticmethod
+    def _build_mapping_offset_map(channel_ids: List[int]) -> Dict[str, int]:
+        """
+        Build a mapping of EPG channel IDs to their time offsets from ChannelEpgMapping.
+
+        For channels with a manual EPG mapping that has a non-zero time offset,
+        returns a dict mapping the EPG channel's XMLTV ID to the offset.
+
+        Args:
+            channel_ids: List of channel IDs (db primary keys) to check
+
+        Returns:
+            Dict mapping epg_channel_xmltv_id (lowercase) -> time_offset_hours
+        """
+        if not channel_ids:
+            return {}
+
+        offset_map: Dict[str, int] = {}
+
+        # Query mappings with non-zero time offset
+        mappings = (
+            ChannelEpgMapping.query.filter(
+                ChannelEpgMapping.channel_id.in_(channel_ids),
+                ChannelEpgMapping.time_offset_hours != 0,
+            )
+            .options(db.joinedload(ChannelEpgMapping.epg_channel))
+            .all()
+        )
+
+        for mapping in mappings:
+            if mapping.epg_channel and mapping.epg_channel.channel_id:
+                # Use the XMLTV channel ID (lowercase) as the key
+                xmltv_id = mapping.epg_channel.channel_id.lower()
+                offset_map[xmltv_id] = mapping.time_offset_hours
+
+        return offset_map
+
+    @staticmethod
     def generate_epg_for_channels(
         channels: List[Channel],
         account_xml_cache: Optional[Dict[int, bytes]] = None,
@@ -2222,11 +2718,15 @@ class EpgService:
         if not channels:
             return b'<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="iptv-proxy-v2"></tv>\n'
 
+        channel_ids = [ch.id for ch in channels]
+
         # Build channel link map if enabled
         channel_link_map: Dict[str, Tuple[str, int]] = {}
         if use_channel_links:
-            channel_ids = [ch.id for ch in channels]
             channel_link_map = EpgService._build_channel_link_map(channel_ids)
+
+        # Build mapping offset map for time shifts from ChannelEpgMapping
+        mapping_offset_map = EpgService._build_mapping_offset_map(channel_ids)
 
         # Group channels by account
         channels_by_account: Dict[int, List[Channel]] = {}
@@ -2283,8 +2783,10 @@ class EpgService:
             if not xml_content:
                 continue
 
-            # Generate filtered EPG for this account's channels with channel links
-            filtered_xml = EpgService.generate_filtered_epg(epg_ids, xml_content, channel_link_map=channel_link_map)
+            # Generate filtered EPG for this account's channels with channel links and mapping offsets
+            filtered_xml = EpgService.generate_filtered_epg(
+                epg_ids, xml_content, channel_link_map=channel_link_map, mapping_offset_map=mapping_offset_map
+            )
 
             # Parse and merge into combined result
             try:
@@ -2323,3 +2825,263 @@ def _copy_element(elem: ET.Element) -> ET.Element:
     for child in elem:
         new_elem.append(_copy_element(child))
     return new_elem
+
+
+def update_ppv_channel_visibility(account_id: Optional[int] = None) -> Dict[str, int]:
+    """
+    Update visibility of PPV channels based on channel name changes.
+
+    PPV channels from IPTV providers have placeholder names like "PPV 1" when no
+    event is scheduled. When an event IS scheduled, the provider changes the
+    channel name to the event title (e.g., "UFC 300: Main Event").
+
+    This function:
+    1. Finds all PPV channels (by tag or category)
+    2. Checks if channel name is a placeholder (no event) or event title
+    3. Hides placeholder channels, shows channels with event titles
+
+    Note: PPV channels don't have external EPG data. Detection is purely based
+    on the channel name in the playlist.
+
+    Args:
+        account_id: Optional account ID to limit updates to specific account
+
+    Returns:
+        Dict with statistics: {
+            'total_ppv_channels': int,
+            'channels_shown': int,
+            'channels_hidden': int,
+            'events_detected': int
+        }
+    """
+    stats = {
+        "total_ppv_channels": 0,
+        "channels_shown": 0,
+        "channels_hidden": 0,
+        "events_detected": 0,
+    }
+
+    # Get all channels with PPV tag
+    ppv_tag = Tag.query.filter_by(name="PPV").first()
+    if not ppv_tag:
+        logger.info("No PPV tag found, skipping PPV channel visibility update")
+        return stats
+
+    # Query for channels with PPV tag
+    query = (
+        db.session.query(Channel)
+        .join(
+            ChannelTag, db.and_(Channel.account_id == ChannelTag.account_id, Channel.stream_id == ChannelTag.stream_id)
+        )
+        .filter(ChannelTag.tag_id == ppv_tag.id, Channel.is_active == True)  # noqa: E712
+    )
+
+    if account_id:
+        query = query.filter(Channel.account_id == account_id)
+
+    ppv_channels = query.all()
+    stats["total_ppv_channels"] = len(ppv_channels)
+
+    if not ppv_channels:
+        logger.info("No PPV channels found")
+        return stats
+
+    logger.info(f"Checking {len(ppv_channels)} PPV channel(s) for visibility updates")
+
+    # Update each PPV channel's visibility based on its name
+    for channel in ppv_channels:
+        # Check if channel name is a placeholder (no event) or actual event title
+        is_placeholder = is_ppv_placeholder_name(channel.name)
+
+        if is_placeholder:
+            # Placeholder name - hide the channel
+            if channel.is_visible:
+                channel.is_visible = False
+                stats["channels_hidden"] += 1
+                logger.info(f"Hiding PPV channel '{channel.name}' (placeholder name)")
+        else:
+            # Actual event title - show the channel
+            stats["events_detected"] += 1
+            if not channel.is_visible:
+                channel.is_visible = True
+                stats["channels_shown"] += 1
+                logger.info(f"Showing PPV channel with event: '{channel.name}'")
+
+    # Commit all visibility changes
+    try:
+        db.session.commit()
+        logger.info(
+            f"PPV visibility update complete: "
+            f"{stats['events_detected']} events detected, "
+            f"{stats['channels_shown']} shown, {stats['channels_hidden']} hidden"
+        )
+    except Exception as e:
+        logger.error(f"Error committing PPV visibility changes: {e}")
+        db.session.rollback()
+
+    return stats
+
+
+def generate_ppv_epg_entries(account_id: Optional[int] = None, duration_hours: int = 8) -> List[Dict]:
+    """
+    Generate synthetic EPG entries for active PPV channels.
+
+    Since PPV channels don't have external EPG data, we generate EPG entries
+    using the channel name as the program title. This allows the EPG to show
+    what event is currently scheduled on each PPV channel.
+
+    Args:
+        account_id: Optional account ID to limit to specific account
+        duration_hours: How long each PPV event should appear in EPG (default: 8 hours)
+
+    Returns:
+        List of EPG program entries in XMLTV format:
+        [
+            {
+                'channel_id': 'ppv-101-12345',
+                'title': 'UFC 300: Main Event',
+                'start': '20231215180000 +0000',
+                'stop': '20231216020000 +0000',
+                'desc': 'Pay-Per-View Event',
+                'category': 'Sports'
+            },
+            ...
+        ]
+    """
+    programs = []
+
+    # Get all visible PPV channels (only those with active events)
+    ppv_tag = Tag.query.filter_by(name="PPV").first()
+    if not ppv_tag:
+        return programs
+
+    query = (
+        db.session.query(Channel)
+        .join(
+            ChannelTag, db.and_(Channel.account_id == ChannelTag.account_id, Channel.stream_id == ChannelTag.stream_id)
+        )
+        .filter(
+            ChannelTag.tag_id == ppv_tag.id,
+            Channel.is_active == True,  # noqa: E712
+            Channel.is_visible == True,  # noqa: E712
+        )
+    )
+
+    if account_id:
+        query = query.filter(Channel.account_id == account_id)
+
+    active_ppv_channels = query.all()
+
+    if not active_ppv_channels:
+        return programs
+
+    # Generate EPG entry for each active PPV channel
+    now = datetime.utcnow()
+    end_time = now + timedelta(hours=duration_hours)
+
+    # Format times in XMLTV format
+    start_str = now.strftime("%Y%m%d%H%M%S") + " +0000"
+    stop_str = end_time.strftime("%Y%m%d%H%M%S") + " +0000"
+
+    for channel in active_ppv_channels:
+        event_title = get_ppv_event_title(channel)
+        if not event_title:
+            continue
+
+        # Generate a unique EPG channel ID for this PPV channel
+        epg_channel_id = f"ppv-{channel.stream_id}-{channel.account_id}"
+
+        program = {
+            "channel_id": epg_channel_id,
+            "title": event_title,
+            "start": start_str,
+            "stop": stop_str,
+            "desc": "Pay-Per-View Event",
+            "category": "Sports",  # Most PPV is sports-related
+        }
+        programs.append(program)
+
+        logger.debug(f"Generated PPV EPG entry for '{event_title}' on channel {channel.stream_id}")
+
+    logger.info(f"Generated {len(programs)} PPV EPG entries")
+    return programs
+
+
+def get_ppv_epg_xmltv(account_id: Optional[int] = None, duration_hours: int = 8) -> bytes:
+    """
+    Generate XMLTV data for active PPV channels.
+
+    This creates a valid XMLTV document containing channel definitions
+    and program entries for all active PPV events.
+
+    Args:
+        account_id: Optional account ID to limit to specific account
+        duration_hours: How long each PPV event should appear in EPG
+
+    Returns:
+        XMLTV XML data as bytes
+    """
+    root = ET.Element("tv")
+    root.set("source-info-name", "IPTV Proxy PPV EPG")
+    root.set("generator-info-name", "iptv-proxy-v2")
+
+    # Get active PPV channels
+    ppv_tag = Tag.query.filter_by(name="PPV").first()
+    if not ppv_tag:
+        return ET.tostring(root, encoding="unicode", xml_declaration=True).encode("utf-8")
+
+    query = (
+        db.session.query(Channel)
+        .join(
+            ChannelTag, db.and_(Channel.account_id == ChannelTag.account_id, Channel.stream_id == ChannelTag.stream_id)
+        )
+        .filter(
+            ChannelTag.tag_id == ppv_tag.id,
+            Channel.is_active == True,  # noqa: E712
+            Channel.is_visible == True,  # noqa: E712
+        )
+    )
+
+    if account_id:
+        query = query.filter(Channel.account_id == account_id)
+
+    active_ppv_channels = query.all()
+
+    if not active_ppv_channels:
+        return ET.tostring(root, encoding="unicode", xml_declaration=True).encode("utf-8")
+
+    # Time for programs
+    now = datetime.utcnow()
+    end_time = now + timedelta(hours=duration_hours)
+    start_str = now.strftime("%Y%m%d%H%M%S") + " +0000"
+    stop_str = end_time.strftime("%Y%m%d%H%M%S") + " +0000"
+
+    # Add channels and programs
+    for channel in active_ppv_channels:
+        event_title = get_ppv_event_title(channel)
+        if not event_title:
+            continue
+
+        epg_channel_id = f"ppv-{channel.stream_id}-{channel.account_id}"
+
+        # Add channel element
+        channel_elem = ET.SubElement(root, "channel", id=epg_channel_id)
+        display_name = ET.SubElement(channel_elem, "display-name")
+        display_name.text = event_title
+
+        if channel.stream_icon:
+            icon = ET.SubElement(channel_elem, "icon", src=channel.stream_icon)  # noqa: F841
+
+        # Add program element
+        programme = ET.SubElement(root, "programme", start=start_str, stop=stop_str, channel=epg_channel_id)
+
+        title_elem = ET.SubElement(programme, "title", lang="en")
+        title_elem.text = event_title
+
+        desc_elem = ET.SubElement(programme, "desc", lang="en")
+        desc_elem.text = "Pay-Per-View Event"
+
+        category_elem = ET.SubElement(programme, "category", lang="en")
+        category_elem.text = "Sports"
+
+    return ET.tostring(root, encoding="unicode", xml_declaration=True).encode("utf-8")

@@ -57,10 +57,14 @@ def get_all_categories():
     - account_id (optional): Filter to specific account
     - include_empty (optional): Include categories with no visible channels (default: false)
     - include_epg (optional): Include EPG coverage stats (default: false)
+    - include_ppv (optional): Include PPV categories (default: true)
     """
+    from services.epg_service import is_ppv_category
+
     account_id = request.args.get("account_id", type=int)
     include_empty = request.args.get("include_empty", "false").lower() == "true"
     include_epg = request.args.get("include_epg", "false").lower() == "true"
+    include_ppv = request.args.get("include_ppv", "true").lower() == "true"
 
     # Build query for categories with visible/hidden channel counts
     # Also count channels with provider EPG IDs
@@ -143,6 +147,10 @@ def get_all_categories():
 
     result = []
     for cat in categories:
+        # Skip PPV categories if not requested
+        if not include_ppv and is_ppv_category(cat.category_name):
+            continue
+
         cat_data = {
             "id": cat.id,
             "category_id": cat.category_id,
@@ -153,6 +161,7 @@ def get_all_categories():
             "hidden_count": int(cat.hidden_count or 0),
             "total_count": int(cat.visible_count or 0) + int(cat.hidden_count or 0),
             "with_epg_id_count": int(cat.with_epg_id_count or 0),
+            "is_ppv": is_ppv_category(cat.category_name),
         }
 
         if include_epg:

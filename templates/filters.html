@@ -234,7 +234,9 @@ async function loadTagsForFilter() {
     }
 }
 
-loadAccounts().then(() => loadFilters());
+loadAccounts().then(() => {
+    loadFilters();
+});
 
 // Initialize event listeners after DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {

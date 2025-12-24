@@ -1,0 +1,1168 @@
+{% extends "base.html" %}
+
+{% block title %}FCC Match Patterns - IPTV Proxy{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">FCC Match Patterns</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('fcc_match_patterns.configurable_patterns') }}" class="btn btn-sm btn-outline-primary me-2">
+            <i class="bi bi-gear"></i> Configurable Patterns
+        </a>
+        <button class="btn btn-sm btn-warning me-2" id="reset-defaults-btn" title="Reset all patterns to defaults">
+            <i class="bi bi-arrow-counterclockwise"></i> Reset Defaults
+        </button>
+        <button class="btn btn-sm btn-success" id="test-patterns-btn">
+            <i class="bi bi-bug"></i> Test Patterns
+        </button>
+    </div>
+</div>
+
+<!-- Info Alert -->
+<div class="alert alert-info mb-4">
+    <i class="bi bi-info-circle"></i>
+    <strong>FCC Match Patterns</strong> configure how the FCC database lookup works during EPG matching.
+    These patterns control network detection, channel number extraction, location parsing, and matching strategies.
+    Patterns are processed in priority order (lower numbers first).
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="networks-tab" data-bs-toggle="tab" data-bs-target="#networks" type="button">
+            <i class="bi bi-broadcast"></i> Networks
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="channel-patterns-tab" data-bs-toggle="tab" data-bs-target="#channel-patterns" type="button">
+            <i class="bi bi-hash"></i> Channel Patterns
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="location-patterns-tab" data-bs-toggle="tab" data-bs-target="#location-patterns" type="button">
+            <i class="bi bi-geo-alt"></i> Location Patterns
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="strategies-tab" data-bs-toggle="tab" data-bs-target="#strategies" type="button">
+            <i class="bi bi-diagram-3"></i> Match Strategies
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="mainTabsContent">
+    <!-- Networks Tab -->
+    <div class="tab-pane fade show active" id="networks" role="tabpanel">
+        <div class="mb-3">
+            <button class="btn btn-sm btn-primary" id="create-network-btn">
+                <i class="bi bi-plus-circle"></i> New Network
+            </button>
+        </div>
+        <div id="networks-list">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Channel Patterns Tab -->
+    <div class="tab-pane fade" id="channel-patterns" role="tabpanel">
+        <div class="mb-3">
+            <button class="btn btn-sm btn-primary" id="create-channel-pattern-btn">
+                <i class="bi bi-plus-circle"></i> New Channel Pattern
+            </button>
+        </div>
+        <div id="channel-patterns-list">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Location Patterns Tab -->
+    <div class="tab-pane fade" id="location-patterns" role="tabpanel">
+        <div class="mb-3">
+            <button class="btn btn-sm btn-primary" id="create-location-pattern-btn">
+                <i class="bi bi-plus-circle"></i> New Location Pattern
+            </button>
+        </div>
+        <div id="location-patterns-list">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Strategies Tab -->
+    <div class="tab-pane fade" id="strategies" role="tabpanel">
+        <div class="mb-3">
+            <button class="btn btn-sm btn-primary" id="create-strategy-btn">
+                <i class="bi bi-plus-circle"></i> New Strategy
+            </button>
+        </div>
+        <div id="strategies-list">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Network Modal -->
+<div class="modal fade" id="networkModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="networkModalTitle">New Network</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="networkForm">
+                    <input type="hidden" id="network-id">
+                    <div class="mb-3">
+                        <label for="network-name" class="form-label">Name *</label>
+                        <input type="text" class="form-control" id="network-name" placeholder="e.g., NBC" required>
+                        <small class="form-text text-muted">Short identifier used in code</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="network-display-name" class="form-label">Display Name</label>
+                        <input type="text" class="form-control" id="network-display-name" placeholder="e.g., NBC - National Broadcasting Company">
+                    </div>
+                    <div class="mb-3">
+                        <label for="network-description" class="form-label">Description</label>
+                        <textarea class="form-control" id="network-description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="network-fcc-pattern" class="form-label">FCC Affiliation Pattern *</label>
+                        <input type="text" class="form-control" id="network-fcc-pattern" placeholder="e.g., %NBC%" required>
+                        <small class="form-text text-muted">SQL LIKE pattern to match in FCC network_affiliation field</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="network-tag-patterns" class="form-label">Tag Patterns (JSON array)</label>
+                        <input type="text" class="form-control" id="network-tag-patterns" placeholder='["NBC", "NBCU"]'>
+                        <small class="form-text text-muted">Channel tags that indicate this network</small>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="network-priority" class="form-label">Priority</label>
+                            <input type="number" class="form-control" id="network-priority" value="100">
+                            <small class="form-text text-muted">Lower = higher priority</small>
+                        </div>
+                        <div class="col-md-6 mb-3 d-flex align-items-end">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="network-enabled" checked>
+                                <label class="form-check-label" for="network-enabled">Enabled</label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-network-btn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Channel Pattern Modal -->
+<div class="modal fade" id="channelPatternModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="channelPatternModalTitle">New Channel Pattern</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="channelPatternForm">
+                    <input type="hidden" id="channel-pattern-id">
+                    <div class="mb-3">
+                        <label for="channel-pattern-name" class="form-label">Name *</label>
+                        <input type="text" class="form-control" id="channel-pattern-name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="channel-pattern-description" class="form-label">Description</label>
+                        <textarea class="form-control" id="channel-pattern-description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="channel-pattern-pattern" class="form-label">Regex Pattern *</label>
+                        <input type="text" class="form-control font-monospace" id="channel-pattern-pattern" required>
+                        <small class="form-text text-muted">Use capture group for channel number. Example: <code>\b(?:NBC|ABC|CBS)\s*(\d{1,2})\b</code></small>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="channel-pattern-capture-group" class="form-label">Capture Group</label>
+                            <input type="number" class="form-control" id="channel-pattern-capture-group" value="1" min="1">
+                            <small class="form-text text-muted">Which regex group contains the channel number (1-based)</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Networks</label>
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" id="channel-pattern-networks-btn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                                    All Networks
+                                </button>
+                                <div class="dropdown-menu p-2" style="max-height: 250px; overflow-y: auto;" id="channel-pattern-networks-dropdown">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+                            <small class="form-text text-muted">Select networks or leave unchecked for all</small>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="channel-pattern-priority" class="form-label">Priority</label>
+                            <input type="number" class="form-control" id="channel-pattern-priority" value="100">
+                        </div>
+                        <div class="col-md-6 mb-3 d-flex align-items-end">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="channel-pattern-enabled" checked>
+                                <label class="form-check-label" for="channel-pattern-enabled">Enabled</label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-channel-pattern-btn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Location Pattern Modal -->
+<div class="modal fade" id="locationPatternModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="locationPatternModalTitle">New Location Pattern</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="locationPatternForm">
+                    <input type="hidden" id="location-pattern-id">
+                    <div class="mb-3">
+                        <label for="location-pattern-name" class="form-label">Name *</label>
+                        <input type="text" class="form-control" id="location-pattern-name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="location-pattern-description" class="form-label">Description</label>
+                        <textarea class="form-control" id="location-pattern-description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="location-pattern-pattern" class="form-label">Regex Pattern *</label>
+                        <input type="text" class="form-control font-monospace" id="location-pattern-pattern" required>
+                        <small class="form-text text-muted">Example: <code>^([A-Z_]+)_([A-Z]{2})$</code> for CITY_STATE format</small>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="location-pattern-extract-city" checked>
+                                <label class="form-check-label" for="location-pattern-extract-city">Extract City</label>
+                            </div>
+                            <div class="mt-2">
+                                <label for="location-pattern-city-group" class="form-label">City Capture Group</label>
+                                <input type="number" class="form-control" id="location-pattern-city-group" value="1" min="0">
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="location-pattern-extract-state" checked>
+                                <label class="form-check-label" for="location-pattern-extract-state">Extract State</label>
+                            </div>
+                            <div class="mt-2">
+                                <label for="location-pattern-state-group" class="form-label">State Capture Group</label>
+                                <input type="number" class="form-control" id="location-pattern-state-group" value="2" min="0">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="location-pattern-priority" class="form-label">Priority</label>
+                            <input type="number" class="form-control" id="location-pattern-priority" value="100">
+                        </div>
+                        <div class="col-md-6 mb-3 d-flex align-items-end">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="location-pattern-enabled" checked>
+                                <label class="form-check-label" for="location-pattern-enabled">Enabled</label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-location-pattern-btn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Strategy Modal -->
+<div class="modal fade" id="strategyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="strategyModalTitle">New Match Strategy</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="strategyForm">
+                    <input type="hidden" id="strategy-id">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="strategy-name" class="form-label">Name *</label>
+                            <input type="text" class="form-control" id="strategy-name" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="strategy-type" class="form-label">Strategy Type *</label>
+                            <select class="form-select" id="strategy-type" required>
+                                <option value="city_state_channel">City + State + Channel</option>
+                                <option value="state_channel">State + Channel</option>
+                                <option value="city_dma_channel">City/DMA + Channel</option>
+                                <option value="state_only">State Only</option>
+                                <option value="city_dma_only">City/DMA Only</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="strategy-description" class="form-label">Description</label>
+                        <textarea class="form-control" id="strategy-description" rows="2"></textarea>
+                    </div>
+                    <div class="card mb-3">
+                        <div class="card-header">Required Information</div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="strategy-require-network" checked>
+                                        <label class="form-check-label" for="strategy-require-network">Network</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="strategy-require-channel-number">
+                                        <label class="form-check-label" for="strategy-require-channel-number">Channel Number</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="strategy-require-state">
+                                        <label class="form-check-label" for="strategy-require-state">State</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="strategy-require-city">
+                                        <label class="form-check-label" for="strategy-require-city">City</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card mb-3">
+                        <div class="card-header">FCC Fields to Match</div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="strategy-match-community-state" checked>
+                                        <label class="form-check-label" for="strategy-match-community-state">Community State</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="strategy-match-community-city" checked>
+                                        <label class="form-check-label" for="strategy-match-community-city">Community City</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="strategy-match-nielsen-dma" checked>
+                                        <label class="form-check-label" for="strategy-match-nielsen-dma">Nielsen DMA</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="strategy-priority" class="form-label">Priority</label>
+                            <input type="number" class="form-control" id="strategy-priority" value="100">
+                        </div>
+                        <div class="col-md-6 mb-3 d-flex align-items-end">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="strategy-enabled" checked>
+                                <label class="form-check-label" for="strategy-enabled">Enabled</label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-strategy-btn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Test Patterns Modal -->
+<div class="modal fade" id="testModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Test FCC Patterns</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="test-channel-name" class="form-label">Channel Name</label>
+                    <input type="text" class="form-control" id="test-channel-name" placeholder="e.g., US: NBC 13 HD [MONTANA]">
+                </div>
+                <div class="mb-3">
+                    <label for="test-tags" class="form-label">Tags (comma-separated)</label>
+                    <input type="text" class="form-control" id="test-tags" placeholder="e.g., NBC, HD, US, MONTANA">
+                </div>
+                <button type="button" class="btn btn-primary mb-3" id="run-test-btn">
+                    <i class="bi bi-play"></i> Run Test
+                </button>
+                <div id="test-results" style="display: none;">
+                    <h6>Results:</h6>
+                    <pre id="test-results-content" class="bg-light p-3 rounded"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// API base URL
+const API_BASE = '/api/fcc-match-patterns';
+
+// Store loaded networks for use in selectors
+let availableNetworks = [];
+
+// Load data on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadNetworks();
+    loadChannelPatterns();
+    loadLocationPatterns();
+    loadStrategies();
+});
+
+// ============================================================================
+// Networks
+// ============================================================================
+
+async function loadNetworks() {
+    try {
+        const response = await fetch(`${API_BASE}/networks`);
+        const networks = await response.json();
+        availableNetworks = networks;
+        renderNetworks(networks);
+        populateNetworkSelector();
+    } catch (error) {
+        console.error('Error loading networks:', error);
+        document.getElementById('networks-list').innerHTML = '<div class="alert alert-danger">Failed to load networks</div>';
+    }
+}
+
+function populateNetworkSelector() {
+    const dropdown = document.getElementById('channel-pattern-networks-dropdown');
+    if (!dropdown) return;
+    
+    let html = '';
+    for (const network of availableNetworks) {
+        html += `
+            <div class="form-check">
+                <input class="form-check-input network-checkbox" type="checkbox" value="${network.name}" id="net-check-${network.name}">
+                <label class="form-check-label" for="net-check-${network.name}">${network.name}</label>
+            </div>
+        `;
+    }
+    dropdown.innerHTML = html;
+    
+    // Update button text when checkboxes change
+    dropdown.querySelectorAll('.network-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateNetworkButtonText);
+    });
+}
+
+function updateNetworkButtonText() {
+    const btn = document.getElementById('channel-pattern-networks-btn');
+    const checked = document.querySelectorAll('#channel-pattern-networks-dropdown .network-checkbox:checked');
+    if (checked.length === 0) {
+        btn.textContent = 'All Networks';
+    } else if (checked.length <= 3) {
+        btn.textContent = Array.from(checked).map(c => c.value).join(', ');
+    } else {
+        btn.textContent = `${checked.length} networks selected`;
+    }
+}
+
+function getSelectedNetworks() {
+    const checked = document.querySelectorAll('#channel-pattern-networks-dropdown .network-checkbox:checked');
+    if (checked.length === 0) return null;
+    return Array.from(checked).map(c => c.value);
+}
+
+function setSelectedNetworks(networks) {
+    // Uncheck all first
+    document.querySelectorAll('#channel-pattern-networks-dropdown .network-checkbox').forEach(cb => {
+        cb.checked = false;
+    });
+    
+    // Check the specified networks
+    if (networks && Array.isArray(networks)) {
+        networks.forEach(name => {
+            const cb = document.getElementById(`net-check-${name}`);
+            if (cb) cb.checked = true;
+        });
+    }
+    
+    updateNetworkButtonText();
+}
+
+function renderNetworks(networks) {
+    const container = document.getElementById('networks-list');
+    if (networks.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No network patterns defined. Click "New Network" to create one.</div>';
+        return;
+    }
+
+    let html = `
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Priority</th>
+                    <th>Name</th>
+                    <th>Display Name</th>
+                    <th>FCC Pattern</th>
+                    <th>Tags</th>
+                    <th>Enabled</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    for (const network of networks) {
+        const tagBadges = (network.tag_patterns || []).map(t => `<span class="badge bg-secondary me-1">${t}</span>`).join('');
+        html += `
+            <tr>
+                <td>${network.priority}</td>
+                <td><strong>${network.name}</strong></td>
+                <td>${network.display_name || ''}</td>
+                <td><code>${network.fcc_affiliation_pattern}</code></td>
+                <td>${tagBadges}</td>
+                <td><span class="badge ${network.enabled ? 'bg-success' : 'bg-secondary'}">${network.enabled ? 'Yes' : 'No'}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="editNetwork(${network.id})">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteNetwork(${network.id})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+document.getElementById('create-network-btn').addEventListener('click', () => {
+    document.getElementById('networkModalTitle').textContent = 'New Network';
+    document.getElementById('networkForm').reset();
+    document.getElementById('network-id').value = '';
+    document.getElementById('network-enabled').checked = true;
+    new bootstrap.Modal(document.getElementById('networkModal')).show();
+});
+
+async function editNetwork(id) {
+    try {
+        const response = await fetch(`${API_BASE}/networks/${id}`);
+        const network = await response.json();
+
+        document.getElementById('networkModalTitle').textContent = 'Edit Network';
+        document.getElementById('network-id').value = network.id;
+        document.getElementById('network-name').value = network.name;
+        document.getElementById('network-display-name').value = network.display_name || '';
+        document.getElementById('network-description').value = network.description || '';
+        document.getElementById('network-fcc-pattern').value = network.fcc_affiliation_pattern;
+        document.getElementById('network-tag-patterns').value = network.tag_patterns ? JSON.stringify(network.tag_patterns) : '';
+        document.getElementById('network-priority').value = network.priority;
+        document.getElementById('network-enabled').checked = network.enabled;
+
+        new bootstrap.Modal(document.getElementById('networkModal')).show();
+    } catch (error) {
+        alert('Error loading network: ' + error.message);
+    }
+}
+
+document.getElementById('save-network-btn').addEventListener('click', async () => {
+    const id = document.getElementById('network-id').value;
+    let tagPatterns = null;
+    try {
+        const tagStr = document.getElementById('network-tag-patterns').value.trim();
+        if (tagStr) {
+            tagPatterns = JSON.parse(tagStr);
+        }
+    } catch (e) {
+        alert('Invalid tag patterns JSON');
+        return;
+    }
+
+    const data = {
+        name: document.getElementById('network-name').value,
+        display_name: document.getElementById('network-display-name').value,
+        description: document.getElementById('network-description').value,
+        fcc_affiliation_pattern: document.getElementById('network-fcc-pattern').value,
+        tag_patterns: tagPatterns,
+        priority: parseInt(document.getElementById('network-priority').value),
+        enabled: document.getElementById('network-enabled').checked
+    };
+
+    try {
+        const url = id ? `${API_BASE}/networks/${id}` : `${API_BASE}/networks`;
+        const response = await fetch(url, {
+            method: id ? 'PUT' : 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to save');
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('networkModal')).hide();
+        loadNetworks();
+    } catch (error) {
+        alert('Error saving network: ' + error.message);
+    }
+});
+
+async function deleteNetwork(id) {
+    if (!confirm('Delete this network pattern?')) return;
+    try {
+        await fetch(`${API_BASE}/networks/${id}`, {method: 'DELETE'});
+        loadNetworks();
+    } catch (error) {
+        alert('Error deleting network: ' + error.message);
+    }
+}
+
+// ============================================================================
+// Channel Patterns
+// ============================================================================
+
+async function loadChannelPatterns() {
+    try {
+        const response = await fetch(`${API_BASE}/channel-patterns`);
+        const patterns = await response.json();
+        renderChannelPatterns(patterns);
+    } catch (error) {
+        console.error('Error loading channel patterns:', error);
+        document.getElementById('channel-patterns-list').innerHTML = '<div class="alert alert-danger">Failed to load patterns</div>';
+    }
+}
+
+function renderChannelPatterns(patterns) {
+    const container = document.getElementById('channel-patterns-list');
+    if (patterns.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No channel patterns defined.</div>';
+        return;
+    }
+
+    let html = `
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Priority</th>
+                    <th>Name</th>
+                    <th>Pattern</th>
+                    <th>Capture Group</th>
+                    <th>Networks</th>
+                    <th>Enabled</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    for (const pattern of patterns) {
+        const networkBadges = pattern.networks 
+            ? pattern.networks.map(n => `<span class="badge bg-info me-1">${n}</span>`).join('')
+            : '<span class="text-muted">All</span>';
+        html += `
+            <tr>
+                <td>${pattern.priority}</td>
+                <td><strong>${pattern.name}</strong></td>
+                <td><code class="small">${escapeHtml(pattern.pattern)}</code></td>
+                <td>${pattern.capture_group}</td>
+                <td>${networkBadges}</td>
+                <td><span class="badge ${pattern.enabled ? 'bg-success' : 'bg-secondary'}">${pattern.enabled ? 'Yes' : 'No'}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="editChannelPattern(${pattern.id})">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteChannelPattern(${pattern.id})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+document.getElementById('create-channel-pattern-btn').addEventListener('click', () => {
+    document.getElementById('channelPatternModalTitle').textContent = 'New Channel Pattern';
+    document.getElementById('channelPatternForm').reset();
+    document.getElementById('channel-pattern-id').value = '';
+    document.getElementById('channel-pattern-enabled').checked = true;
+    setSelectedNetworks(null);
+    new bootstrap.Modal(document.getElementById('channelPatternModal')).show();
+});
+
+async function editChannelPattern(id) {
+    try {
+        const response = await fetch(`${API_BASE}/channel-patterns/${id}`);
+        const pattern = await response.json();
+
+        document.getElementById('channelPatternModalTitle').textContent = 'Edit Channel Pattern';
+        document.getElementById('channel-pattern-id').value = pattern.id;
+        document.getElementById('channel-pattern-name').value = pattern.name;
+        document.getElementById('channel-pattern-description').value = pattern.description || '';
+        document.getElementById('channel-pattern-pattern').value = pattern.pattern;
+        document.getElementById('channel-pattern-capture-group').value = pattern.capture_group;
+        setSelectedNetworks(pattern.networks);
+        document.getElementById('channel-pattern-priority').value = pattern.priority;
+        document.getElementById('channel-pattern-enabled').checked = pattern.enabled;
+
+        new bootstrap.Modal(document.getElementById('channelPatternModal')).show();
+    } catch (error) {
+        alert('Error loading pattern: ' + error.message);
+    }
+}
+
+document.getElementById('save-channel-pattern-btn').addEventListener('click', async () => {
+    const id = document.getElementById('channel-pattern-id').value;
+    const networks = getSelectedNetworks();
+
+    const data = {
+        name: document.getElementById('channel-pattern-name').value,
+        description: document.getElementById('channel-pattern-description').value,
+        pattern: document.getElementById('channel-pattern-pattern').value,
+        capture_group: parseInt(document.getElementById('channel-pattern-capture-group').value),
+        networks: networks,
+        priority: parseInt(document.getElementById('channel-pattern-priority').value),
+        enabled: document.getElementById('channel-pattern-enabled').checked
+    };
+
+    try {
+        const url = id ? `${API_BASE}/channel-patterns/${id}` : `${API_BASE}/channel-patterns`;
+        const response = await fetch(url, {
+            method: id ? 'PUT' : 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to save');
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('channelPatternModal')).hide();
+        loadChannelPatterns();
+    } catch (error) {
+        alert('Error saving pattern: ' + error.message);
+    }
+});
+
+async function deleteChannelPattern(id) {
+    if (!confirm('Delete this channel pattern?')) return;
+    try {
+        await fetch(`${API_BASE}/channel-patterns/${id}`, {method: 'DELETE'});
+        loadChannelPatterns();
+    } catch (error) {
+        alert('Error deleting pattern: ' + error.message);
+    }
+}
+
+// ============================================================================
+// Location Patterns
+// ============================================================================
+
+async function loadLocationPatterns() {
+    try {
+        const response = await fetch(`${API_BASE}/location-patterns`);
+        const patterns = await response.json();
+        renderLocationPatterns(patterns);
+    } catch (error) {
+        console.error('Error loading location patterns:', error);
+        document.getElementById('location-patterns-list').innerHTML = '<div class="alert alert-danger">Failed to load patterns</div>';
+    }
+}
+
+function renderLocationPatterns(patterns) {
+    const container = document.getElementById('location-patterns-list');
+    if (patterns.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No location patterns defined.</div>';
+        return;
+    }
+
+    let html = `
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Priority</th>
+                    <th>Name</th>
+                    <th>Pattern</th>
+                    <th>Extracts</th>
+                    <th>Groups</th>
+                    <th>Enabled</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    for (const pattern of patterns) {
+        const extracts = [];
+        if (pattern.extract_city) extracts.push('City');
+        if (pattern.extract_state) extracts.push('State');
+        html += `
+            <tr>
+                <td>${pattern.priority}</td>
+                <td><strong>${pattern.name}</strong></td>
+                <td><code class="small">${escapeHtml(pattern.pattern)}</code></td>
+                <td>${extracts.join(', ') || 'None'}</td>
+                <td>City: ${pattern.city_group}, State: ${pattern.state_group}</td>
+                <td><span class="badge ${pattern.enabled ? 'bg-success' : 'bg-secondary'}">${pattern.enabled ? 'Yes' : 'No'}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="editLocationPattern(${pattern.id})">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteLocationPattern(${pattern.id})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+document.getElementById('create-location-pattern-btn').addEventListener('click', () => {
+    document.getElementById('locationPatternModalTitle').textContent = 'New Location Pattern';
+    document.getElementById('locationPatternForm').reset();
+    document.getElementById('location-pattern-id').value = '';
+    document.getElementById('location-pattern-enabled').checked = true;
+    document.getElementById('location-pattern-extract-city').checked = true;
+    document.getElementById('location-pattern-extract-state').checked = true;
+    new bootstrap.Modal(document.getElementById('locationPatternModal')).show();
+});
+
+async function editLocationPattern(id) {
+    try {
+        const response = await fetch(`${API_BASE}/location-patterns/${id}`);
+        const pattern = await response.json();
+
+        document.getElementById('locationPatternModalTitle').textContent = 'Edit Location Pattern';
+        document.getElementById('location-pattern-id').value = pattern.id;
+        document.getElementById('location-pattern-name').value = pattern.name;
+        document.getElementById('location-pattern-description').value = pattern.description || '';
+        document.getElementById('location-pattern-pattern').value = pattern.pattern;
+        document.getElementById('location-pattern-extract-city').checked = pattern.extract_city;
+        document.getElementById('location-pattern-extract-state').checked = pattern.extract_state;
+        document.getElementById('location-pattern-city-group').value = pattern.city_group;
+        document.getElementById('location-pattern-state-group').value = pattern.state_group;
+        document.getElementById('location-pattern-priority').value = pattern.priority;
+        document.getElementById('location-pattern-enabled').checked = pattern.enabled;
+
+        new bootstrap.Modal(document.getElementById('locationPatternModal')).show();
+    } catch (error) {
+        alert('Error loading pattern: ' + error.message);
+    }
+}
+
+document.getElementById('save-location-pattern-btn').addEventListener('click', async () => {
+    const id = document.getElementById('location-pattern-id').value;
+
+    const data = {
+        name: document.getElementById('location-pattern-name').value,
+        description: document.getElementById('location-pattern-description').value,
+        pattern: document.getElementById('location-pattern-pattern').value,
+        extract_city: document.getElementById('location-pattern-extract-city').checked,
+        extract_state: document.getElementById('location-pattern-extract-state').checked,
+        city_group: parseInt(document.getElementById('location-pattern-city-group').value),
+        state_group: parseInt(document.getElementById('location-pattern-state-group').value),
+        priority: parseInt(document.getElementById('location-pattern-priority').value),
+        enabled: document.getElementById('location-pattern-enabled').checked
+    };
+
+    try {
+        const url = id ? `${API_BASE}/location-patterns/${id}` : `${API_BASE}/location-patterns`;
+        const response = await fetch(url, {
+            method: id ? 'PUT' : 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to save');
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('locationPatternModal')).hide();
+        loadLocationPatterns();
+    } catch (error) {
+        alert('Error saving pattern: ' + error.message);
+    }
+});
+
+async function deleteLocationPattern(id) {
+    if (!confirm('Delete this location pattern?')) return;
+    try {
+        await fetch(`${API_BASE}/location-patterns/${id}`, {method: 'DELETE'});
+        loadLocationPatterns();
+    } catch (error) {
+        alert('Error deleting pattern: ' + error.message);
+    }
+}
+
+// ============================================================================
+// Strategies
+// ============================================================================
+
+async function loadStrategies() {
+    try {
+        const response = await fetch(`${API_BASE}/strategies`);
+        const strategies = await response.json();
+        renderStrategies(strategies);
+    } catch (error) {
+        console.error('Error loading strategies:', error);
+        document.getElementById('strategies-list').innerHTML = '<div class="alert alert-danger">Failed to load strategies</div>';
+    }
+}
+
+function renderStrategies(strategies) {
+    const container = document.getElementById('strategies-list');
+    if (strategies.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No match strategies defined.</div>';
+        return;
+    }
+
+    let html = `
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Priority</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Requirements</th>
+                    <th>Matches</th>
+                    <th>Enabled</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    for (const strategy of strategies) {
+        const reqs = [];
+        if (strategy.require_network) reqs.push('Network');
+        if (strategy.require_channel_number) reqs.push('Channel #');
+        if (strategy.require_state) reqs.push('State');
+        if (strategy.require_city) reqs.push('City');
+
+        const matches = [];
+        if (strategy.match_community_state) matches.push('State');
+        if (strategy.match_community_city) matches.push('City');
+        if (strategy.match_nielsen_dma) matches.push('DMA');
+
+        html += `
+            <tr>
+                <td>${strategy.priority}</td>
+                <td><strong>${strategy.name}</strong></td>
+                <td><code>${strategy.strategy_type}</code></td>
+                <td>${reqs.join(', ') || 'None'}</td>
+                <td>${matches.join(', ') || 'None'}</td>
+                <td><span class="badge ${strategy.enabled ? 'bg-success' : 'bg-secondary'}">${strategy.enabled ? 'Yes' : 'No'}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="editStrategy(${strategy.id})">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteStrategy(${strategy.id})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+document.getElementById('create-strategy-btn').addEventListener('click', () => {
+    document.getElementById('strategyModalTitle').textContent = 'New Match Strategy';
+    document.getElementById('strategyForm').reset();
+    document.getElementById('strategy-id').value = '';
+    document.getElementById('strategy-enabled').checked = true;
+    document.getElementById('strategy-require-network').checked = true;
+    document.getElementById('strategy-match-community-state').checked = true;
+    document.getElementById('strategy-match-community-city').checked = true;
+    document.getElementById('strategy-match-nielsen-dma').checked = true;
+    new bootstrap.Modal(document.getElementById('strategyModal')).show();
+});
+
+async function editStrategy(id) {
+    try {
+        const response = await fetch(`${API_BASE}/strategies/${id}`);
+        const strategy = await response.json();
+
+        document.getElementById('strategyModalTitle').textContent = 'Edit Match Strategy';
+        document.getElementById('strategy-id').value = strategy.id;
+        document.getElementById('strategy-name').value = strategy.name;
+        document.getElementById('strategy-type').value = strategy.strategy_type;
+        document.getElementById('strategy-description').value = strategy.description || '';
+        document.getElementById('strategy-require-network').checked = strategy.require_network;
+        document.getElementById('strategy-require-channel-number').checked = strategy.require_channel_number;
+        document.getElementById('strategy-require-state').checked = strategy.require_state;
+        document.getElementById('strategy-require-city').checked = strategy.require_city;
+        document.getElementById('strategy-match-community-state').checked = strategy.match_community_state;
+        document.getElementById('strategy-match-community-city').checked = strategy.match_community_city;
+        document.getElementById('strategy-match-nielsen-dma').checked = strategy.match_nielsen_dma;
+        document.getElementById('strategy-priority').value = strategy.priority;
+        document.getElementById('strategy-enabled').checked = strategy.enabled;
+
+        new bootstrap.Modal(document.getElementById('strategyModal')).show();
+    } catch (error) {
+        alert('Error loading strategy: ' + error.message);
+    }
+}
+
+document.getElementById('save-strategy-btn').addEventListener('click', async () => {
+    const id = document.getElementById('strategy-id').value;
+
+    const data = {
+        name: document.getElementById('strategy-name').value,
+        description: document.getElementById('strategy-description').value,
+        strategy_type: document.getElementById('strategy-type').value,
+        require_network: document.getElementById('strategy-require-network').checked,
+        require_channel_number: document.getElementById('strategy-require-channel-number').checked,
+        require_state: document.getElementById('strategy-require-state').checked,
+        require_city: document.getElementById('strategy-require-city').checked,
+        match_community_state: document.getElementById('strategy-match-community-state').checked,
+        match_community_city: document.getElementById('strategy-match-community-city').checked,
+        match_nielsen_dma: document.getElementById('strategy-match-nielsen-dma').checked,
+        priority: parseInt(document.getElementById('strategy-priority').value),
+        enabled: document.getElementById('strategy-enabled').checked
+    };
+
+    try {
+        const url = id ? `${API_BASE}/strategies/${id}` : `${API_BASE}/strategies`;
+        const response = await fetch(url, {
+            method: id ? 'PUT' : 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to save');
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('strategyModal')).hide();
+        loadStrategies();
+    } catch (error) {
+        alert('Error saving strategy: ' + error.message);
+    }
+});
+
+async function deleteStrategy(id) {
+    if (!confirm('Delete this match strategy?')) return;
+    try {
+        await fetch(`${API_BASE}/strategies/${id}`, {method: 'DELETE'});
+        loadStrategies();
+    } catch (error) {
+        alert('Error deleting strategy: ' + error.message);
+    }
+}
+
+// ============================================================================
+// Testing & Utilities
+// ============================================================================
+
+document.getElementById('test-patterns-btn').addEventListener('click', () => {
+    document.getElementById('test-results').style.display = 'none';
+    new bootstrap.Modal(document.getElementById('testModal')).show();
+});
+
+document.getElementById('run-test-btn').addEventListener('click', async () => {
+    const channelName = document.getElementById('test-channel-name').value;
+    const tagsStr = document.getElementById('test-tags').value;
+    const tags = tagsStr.split(',').map(t => t.trim().toUpperCase()).filter(t => t);
+
+    try {
+        const response = await fetch(`${API_BASE}/test`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({channel_name: channelName, tags: tags})
+        });
+
+        const result = await response.json();
+        document.getElementById('test-results-content').textContent = JSON.stringify(result, null, 2);
+        document.getElementById('test-results').style.display = 'block';
+    } catch (error) {
+        alert('Test failed: ' + error.message);
+    }
+});
+
+document.getElementById('reset-defaults-btn').addEventListener('click', async () => {
+    if (!confirm('This will delete all custom FCC match patterns and restore defaults. Continue?')) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/reset-defaults`, {method: 'POST'});
+        if (response.ok) {
+            alert('Defaults restored successfully');
+            loadNetworks();
+            loadChannelPatterns();
+            loadLocationPatterns();
+            loadStrategies();
+        } else {
+            const error = await response.json();
+            alert('Error: ' + error.error);
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+});
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

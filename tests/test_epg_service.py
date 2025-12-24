@@ -5,7 +5,18 @@ import gzip
 
 import pytest
 
-from models import Account, Category, Channel, ChannelEpgMapping, ChannelLink, EpgChannel, EpgSource, db
+from models import (
+    Account,
+    Category,
+    Channel,
+    ChannelEpgMapping,
+    ChannelLink,
+    ChannelTag,
+    EpgChannel,
+    EpgSource,
+    Tag,
+    db,
+)
 from services.epg_service import (
     EAST_TAGS,
     WEST_TAGS,
@@ -1927,4 +1938,99 @@ class TestFccEnhancedEpgMatching:
                 FccFacility.query.filter_by(facility_id=99999).delete()
                 FccCorrection.query.filter_by(callsign="WXYZ-LD").delete()
                 FccFacilityService.clear_corrections_cache()
+                db.session.commit()
+
+    def test_network_fallback_for_unmatched_cw(self, app):
+        """Test that channels fall back to generic network EPG when no local EPG exists.
+
+        This tests the scenario where a CW affiliate in a market without local EPG
+        coverage falls back to the generic CW.us2 feed with lower confidence.
+        """
+        from services.epg_service import EpgService
+
+        with app.app_context():
+            # Create an account
+            account = Account(
+                name="Fallback Test Account",
+                server="http://test.example.com",
+                username="testuser",
+                password="testpass",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            # Create the generic CW EPG channel (like CW.us2)
+            source = EpgSource(
+                name="Generic EPG",
+                source_type="xmltv",
+                url="http://test.com/epg.xml",
+                enabled=True,
+            )
+            db.session.add(source)
+            db.session.commit()
+
+            cw_epg = EpgChannel(
+                source_id=source.id,
+                channel_id="CW.us2",
+                display_name="CW",
+            )
+            db.session.add(cw_epg)
+            db.session.commit()
+
+            # Create a CW channel from a market without local EPG
+            channel = Channel(
+                account_id=account.id,
+                stream_id="cw_laredo",
+                name="US: CW 13 LAREDO TX",
+                cleaned_name="CW 13 LAREDO TX",
+                category_id=1,
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            # Add US and CW tags
+            us_tag = Tag.query.filter_by(name="US").first()
+            if not us_tag:
+                us_tag = Tag(name="US")
+                db.session.add(us_tag)
+                db.session.commit()
+
+            cw_tag = Tag.query.filter_by(name="CW").first()
+            if not cw_tag:
+                cw_tag = Tag(name="CW")
+                db.session.add(cw_tag)
+                db.session.commit()
+
+            for tag in [us_tag, cw_tag]:
+                channel_tag = ChannelTag(
+                    account_id=account.id,
+                    stream_id=channel.stream_id,
+                    tag_id=tag.id,
+                )
+                db.session.add(channel_tag)
+            db.session.commit()
+
+            try:
+                # Run the matching
+                stats = EpgService.match_channels_to_epg(account.id)
+
+                # Check that it matched via network_fallback
+                assert stats["matched_network_fallback"] == 1, f"Expected network_fallback=1, got {stats}"
+                assert stats["unmatched"] == 0, f"Expected no unmatched, got {stats}"
+
+                # Verify the mapping has correct confidence
+                mapping = ChannelEpgMapping.query.filter_by(channel_id=channel.id).first()
+                assert mapping is not None, "Mapping should exist"
+                assert mapping.mapping_type == "network_fallback"
+                assert mapping.confidence == 0.75  # Below 0.80 to indicate fallback
+
+            finally:
+                # Cleanup
+                ChannelEpgMapping.query.filter_by(channel_id=channel.id).delete()
+                ChannelTag.query.filter_by(account_id=account.id).delete()
+                Channel.query.filter_by(account_id=account.id).delete()
+                Account.query.filter_by(id=account.id).delete()
+                EpgChannel.query.filter_by(source_id=source.id).delete()
+                EpgSource.query.filter_by(id=source.id).delete()
                 db.session.commit()

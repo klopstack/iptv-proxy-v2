@@ -250,6 +250,251 @@ class PlaylistConfigUpdateSchema(Schema):
 
 
 # ============================================================================
+# EPG Match Rules Schemas
+# ============================================================================
+
+# Valid values for EPG match rules
+EPG_MATCH_TYPES = [
+    "provider_id",
+    "callsign_tag",
+    "callsign_name",
+    "fcc_lookup",
+    "exact_name",
+    "fuzzy_name",
+    "tag_based",
+    "category_pattern",
+    "network_fallback",
+    "regex",
+]
+
+EPG_MATCH_ACTIONS = ["map_epg", "skip", "use_fallback"]
+
+EPG_MATCH_SOURCES = [
+    "channel_name",
+    "cleaned_name",
+    "category_name",
+    "epg_channel_id",
+    "tags",
+]
+
+EPG_EXCLUSION_TYPES = ["category_name", "channel_name", "tag"]
+
+
+class EpgMatchRuleSetCreateSchema(Schema):
+    """Schema for creating a new EPG match ruleset"""
+
+    name = fields.Str(required=True, validate=lambda x: 1 <= len(x) <= 100)
+    description = fields.Str(validate=lambda x: len(x) <= 500, load_default="")
+    is_default = fields.Bool(load_default=False)
+    enabled = fields.Bool(load_default=True)
+    priority = fields.Int(validate=lambda x: x > 0, load_default=100)
+
+
+class EpgMatchRuleSetUpdateSchema(Schema):
+    """Schema for updating an EPG match ruleset"""
+
+    name = fields.Str(validate=lambda x: 1 <= len(x) <= 100)
+    description = fields.Str(validate=lambda x: len(x) <= 500)
+    is_default = fields.Bool()
+    enabled = fields.Bool()
+    priority = fields.Int(validate=lambda x: x > 0)
+
+
+class EpgMatchRuleCreateSchema(Schema):
+    """Schema for creating a new EPG match rule"""
+
+    ruleset_id = fields.Int(required=True, validate=lambda x: x > 0)
+    name = fields.Str(required=True, validate=lambda x: 1 <= len(x) <= 100)
+    description = fields.Str(validate=lambda x: len(x) <= 500, load_default="")
+    match_type = fields.Str(required=True, validate=lambda x: x in EPG_MATCH_TYPES)
+    source = fields.Str(validate=lambda x: x in EPG_MATCH_SOURCES, load_default="cleaned_name")
+    pattern = fields.Str(validate=lambda x: len(x) <= 500, load_default=None, allow_none=True)
+    action = fields.Str(validate=lambda x: x in EPG_MATCH_ACTIONS, load_default="map_epg")
+    min_confidence = fields.Float(validate=lambda x: 0 <= x <= 1, load_default=0.75)
+    required_tags = fields.List(fields.Str(validate=lambda x: 1 <= len(x) <= 100), load_default=None, allow_none=True)
+    excluded_tags = fields.List(fields.Str(validate=lambda x: 1 <= len(x) <= 100), load_default=None, allow_none=True)
+    fallback_epg_id = fields.Str(validate=lambda x: len(x) <= 100, load_default=None, allow_none=True)
+    category_pattern = fields.Str(validate=lambda x: len(x) <= 500, load_default=None, allow_none=True)
+    category_exclude_pattern = fields.Str(validate=lambda x: len(x) <= 500, load_default=None, allow_none=True)
+    country_codes = fields.List(fields.Str(validate=lambda x: 2 <= len(x) <= 5), load_default=None, allow_none=True)
+    epg_source_ids = fields.List(fields.Int(validate=lambda x: x > 0), load_default=None, allow_none=True)
+    time_offset_hours = fields.Int(validate=lambda x: -24 <= x <= 24, load_default=0)
+    priority = fields.Int(validate=lambda x: 1 <= x <= 1000, load_default=100)
+    enabled = fields.Bool(load_default=True)
+    stop_on_match = fields.Bool(load_default=True)
+
+    @validates("pattern")
+    def validate_pattern(self, value):
+        """Validate regex pattern if provided"""
+        if value:
+            try:
+                re.compile(value)
+            except re.error as e:
+                raise ValidationError(f"Invalid regex pattern: {e}")
+
+    @validates("category_pattern")
+    def validate_category_pattern(self, value):
+        """Validate category regex pattern if provided"""
+        if value:
+            try:
+                re.compile(value)
+            except re.error as e:
+                raise ValidationError(f"Invalid category regex pattern: {e}")
+
+    @validates("category_exclude_pattern")
+    def validate_category_exclude_pattern(self, value):
+        """Validate category exclude regex pattern if provided"""
+        if value:
+            try:
+                re.compile(value)
+            except re.error as e:
+                raise ValidationError(f"Invalid category exclude regex pattern: {e}")
+
+
+class EpgMatchRuleUpdateSchema(Schema):
+    """Schema for updating an EPG match rule"""
+
+    name = fields.Str(validate=lambda x: 1 <= len(x) <= 100)
+    description = fields.Str(validate=lambda x: len(x) <= 500)
+    match_type = fields.Str(validate=lambda x: x in EPG_MATCH_TYPES)
+    source = fields.Str(validate=lambda x: x in EPG_MATCH_SOURCES)
+    pattern = fields.Str(validate=lambda x: len(x) <= 500, allow_none=True)
+    action = fields.Str(validate=lambda x: x in EPG_MATCH_ACTIONS)
+    min_confidence = fields.Float(validate=lambda x: 0 <= x <= 1)
+    required_tags = fields.List(fields.Str(validate=lambda x: 1 <= len(x) <= 100), allow_none=True)
+    excluded_tags = fields.List(fields.Str(validate=lambda x: 1 <= len(x) <= 100), allow_none=True)
+    fallback_epg_id = fields.Str(validate=lambda x: len(x) <= 100, allow_none=True)
+    category_pattern = fields.Str(validate=lambda x: len(x) <= 500, allow_none=True)
+    category_exclude_pattern = fields.Str(validate=lambda x: len(x) <= 500, allow_none=True)
+    country_codes = fields.List(fields.Str(validate=lambda x: 2 <= len(x) <= 5), allow_none=True)
+    epg_source_ids = fields.List(fields.Int(validate=lambda x: x > 0), allow_none=True)
+    time_offset_hours = fields.Int(validate=lambda x: -24 <= x <= 24)
+    priority = fields.Int(validate=lambda x: 1 <= x <= 1000)
+    enabled = fields.Bool()
+    stop_on_match = fields.Bool()
+
+    class Meta:
+        unknown = EXCLUDE  # Ignore unknown fields like ruleset_id
+
+    @validates("pattern")
+    def validate_pattern(self, value):
+        """Validate regex pattern if provided"""
+        if value:
+            try:
+                re.compile(value)
+            except re.error as e:
+                raise ValidationError(f"Invalid regex pattern: {e}")
+
+
+class EpgExclusionPatternCreateSchema(Schema):
+    """Schema for creating a new EPG exclusion pattern"""
+
+    name = fields.Str(required=True, validate=lambda x: 1 <= len(x) <= 100)
+    description = fields.Str(validate=lambda x: len(x) <= 500, load_default="")
+    pattern_type = fields.Str(required=True, validate=lambda x: x in EPG_EXCLUSION_TYPES)
+    pattern = fields.Str(required=True, validate=lambda x: 1 <= len(x) <= 500)
+    is_regex = fields.Bool(load_default=True)
+    hide_channel = fields.Bool(load_default=False)
+    enabled = fields.Bool(load_default=True)
+    priority = fields.Int(validate=lambda x: 1 <= x <= 1000, load_default=100)
+
+    @validates("pattern")
+    def validate_pattern(self, value):
+        """Ensure pattern is not just whitespace"""
+        if not value or not value.strip():
+            raise ValidationError("Pattern cannot be empty or whitespace")
+
+
+class EpgExclusionPatternUpdateSchema(Schema):
+    """Schema for updating an EPG exclusion pattern"""
+
+    name = fields.Str(validate=lambda x: 1 <= len(x) <= 100)
+    description = fields.Str(validate=lambda x: len(x) <= 500)
+    pattern_type = fields.Str(validate=lambda x: x in EPG_EXCLUSION_TYPES)
+    pattern = fields.Str(validate=lambda x: 1 <= len(x) <= 500)
+    is_regex = fields.Bool()
+    hide_channel = fields.Bool()
+    enabled = fields.Bool()
+    priority = fields.Int(validate=lambda x: 1 <= x <= 1000)
+
+    class Meta:
+        unknown = EXCLUDE
+
+
+class AccountEpgMatchRuleSetAssignSchema(Schema):
+    """Schema for assigning an EPG match ruleset to an account"""
+
+    ruleset_id = fields.Int(required=True, validate=lambda x: x > 0)
+    priority = fields.Int(load_default=100, validate=lambda x: 1 <= x <= 1000)
+
+
+# EPG Channel Name Mapping match types
+EPG_NAME_MAPPING_MATCH_TYPES = ["exact", "contains", "prefix", "suffix", "regex"]
+
+
+class EpgChannelNameMappingCreateSchema(Schema):
+    """Schema for creating a new EPG channel name mapping"""
+
+    name = fields.Str(required=True, validate=lambda x: 1 <= len(x) <= 100)
+    description = fields.Str(validate=lambda x: len(x) <= 500, load_default="")
+    old_name = fields.Str(required=True, validate=lambda x: 1 <= len(x) <= 200)
+    new_name = fields.Str(required=True, validate=lambda x: 1 <= len(x) <= 200)
+    match_type = fields.Str(
+        load_default="contains",
+        validate=lambda x: x in EPG_NAME_MAPPING_MATCH_TYPES,
+    )
+    case_sensitive = fields.Bool(load_default=False)
+    priority = fields.Int(validate=lambda x: 1 <= x <= 1000, load_default=100)
+    enabled = fields.Bool(load_default=True)
+
+    @validates("old_name")
+    def validate_old_name(self, value):
+        """Ensure old_name is not just whitespace"""
+        if not value or not value.strip():
+            raise ValidationError("Old name cannot be empty or whitespace")
+
+    @validates("new_name")
+    def validate_new_name(self, value):
+        """Ensure new_name is not just whitespace"""
+        if not value or not value.strip():
+            raise ValidationError("New name cannot be empty or whitespace")
+
+    @validates_schema
+    def validate_regex_pattern(self, data, **kwargs):
+        """Validate regex pattern if match_type is regex"""
+        if data.get("match_type") == "regex" and data.get("old_name"):
+            try:
+                re.compile(data["old_name"])
+            except re.error as e:
+                raise ValidationError(f"Invalid regex pattern: {e}")
+
+
+class EpgChannelNameMappingUpdateSchema(Schema):
+    """Schema for updating an EPG channel name mapping"""
+
+    name = fields.Str(validate=lambda x: 1 <= len(x) <= 100)
+    description = fields.Str(validate=lambda x: len(x) <= 500)
+    old_name = fields.Str(validate=lambda x: 1 <= len(x) <= 200)
+    new_name = fields.Str(validate=lambda x: 1 <= len(x) <= 200)
+    match_type = fields.Str(validate=lambda x: x in EPG_NAME_MAPPING_MATCH_TYPES)
+    case_sensitive = fields.Bool()
+    priority = fields.Int(validate=lambda x: 1 <= x <= 1000)
+    enabled = fields.Bool()
+
+    @validates_schema
+    def validate_regex_pattern(self, data, **kwargs):
+        """Validate regex pattern if match_type is regex"""
+        if data.get("match_type") == "regex" and data.get("old_name"):
+            try:
+                re.compile(data["old_name"])
+            except re.error as e:
+                raise ValidationError(f"Invalid regex pattern: {e}")
+
+    class Meta:
+        unknown = EXCLUDE
+
+
+# ============================================================================
 # Validation Helpers
 # ============================================================================
 

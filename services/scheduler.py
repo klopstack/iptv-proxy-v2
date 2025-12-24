@@ -345,6 +345,8 @@ class SyncScheduler:
 
     def _sync_epg_sources(self):
         """Sync all enabled EPG sources"""
+        from services.epg_service import update_ppv_channel_visibility
+
         sources = EpgSource.query.filter_by(enabled=True).all()
         logger.info(f"Syncing {len(sources)} EPG source(s)")
 
@@ -358,6 +360,20 @@ class SyncScheduler:
                         f"{stats.get('channels_added', 0)} added, "
                         f"{stats.get('channels_updated', 0)} updated"
                     )
+
+                    # Update PPV visibility for provider sources
+                    if source.source_type == "provider" and source.account:
+                        try:
+                            ppv_stats = update_ppv_channel_visibility(source.account.id)
+                            logger.info(
+                                f"PPV visibility updated for {source.account.name}: "
+                                f"{ppv_stats['events_detected']} events detected, "
+                                f"{ppv_stats['channels_shown']} shown, "
+                                f"{ppv_stats['channels_hidden']} hidden"
+                            )
+                        except Exception as e:
+                            logger.warning(f"Failed to update PPV visibility: {e}")
+
             except Exception as e:
                 logger.error(f"Error syncing EPG source {source.name}: {e}")
 

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from models import Account, Category, Channel, EpgChannel, EpgSource, db
+from models import Account, Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
 
 
 @pytest.fixture
@@ -186,6 +186,248 @@ class TestEpgSources:
         response = client.delete(f"/api/epg/sources/{test_epg_source}")
         assert response.status_code == 200
         assert response.json["success"] is True
+
+    def test_get_epg_sources_includes_used_mapping_count(self, app, client, test_account):
+        """Test that EPG sources include used_mapping_count"""
+        with app.app_context():
+            # Create a source
+            source = EpgSource(
+                name="Test Source With Mappings",
+                source_type="provider",
+                account_id=test_account,
+                enabled=True,
+            )
+            db.session.add(source)
+            db.session.flush()
+
+            # Create an EPG channel in that source
+            epg_channel = EpgChannel(
+                source_id=source.id,
+                channel_id="epg_test_ch",
+                display_name="Test EPG Ch",
+            )
+            db.session.add(epg_channel)
+            db.session.flush()
+
+            # Create a category and channel
+            category = Category(
+                account_id=test_account,
+                category_id="test_cat",
+                category_name="Test Category",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=test_account,
+                stream_id="test_ch",
+                name="Test Channel",
+                category_id=category.id,
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.flush()
+
+            # Create a mapping
+            mapping = ChannelEpgMapping(
+                channel_id=channel.id,
+                epg_channel_id=epg_channel.id,
+                mapping_type="manual",
+                confidence=1.0,
+            )
+            db.session.add(mapping)
+            db.session.commit()
+
+            source_id = source.id
+
+        # Test the endpoint
+        response = client.get("/api/epg/sources")
+        assert response.status_code == 200
+        sources = response.json
+        source_data = next((s for s in sources if s["id"] == source_id), None)
+        assert source_data is not None
+        assert "used_mapping_count" in source_data
+        assert source_data["used_mapping_count"] == 1
+
+    def test_get_source_mappings_not_found(self, app, client):
+        """Test getting mappings for non-existent source"""
+        response = client.get("/api/epg/sources/999/mappings")
+        assert response.status_code == 404
+
+    def test_get_source_mappings_empty(self, app, client, test_epg_source):
+        """Test getting mappings when source has no mappings"""
+        response = client.get(f"/api/epg/sources/{test_epg_source}/mappings")
+        assert response.status_code == 200
+        data = response.json
+        assert data["source_id"] == test_epg_source
+        assert data["total"] == 0
+        assert data["mappings"] == []
+
+    def test_get_source_mappings_with_data(self, app, client, test_account):
+        """Test getting mappings for a source with data"""
+        with app.app_context():
+            # Create a source
+            source = EpgSource(
+                name="Test Source",
+                source_type="provider",
+                account_id=test_account,
+                enabled=True,
+            )
+            db.session.add(source)
+            db.session.flush()
+
+            # Create an EPG channel
+            epg_channel = EpgChannel(
+                source_id=source.id,
+                channel_id="epg_ch_1",
+                display_name="EPG Channel 1",
+            )
+            db.session.add(epg_channel)
+            db.session.flush()
+
+            # Create category and channel
+            category = Category(
+                account_id=test_account,
+                category_id="cat_1",
+                category_name="Category 1",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=test_account,
+                stream_id="ch_1",
+                name="Channel 1",
+                cleaned_name="Channel 1 Clean",
+                category_id=category.id,
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.flush()
+
+            # Create mapping
+            mapping = ChannelEpgMapping(
+                channel_id=channel.id,
+                epg_channel_id=epg_channel.id,
+                mapping_type="auto_fuzzy",
+                confidence=0.85,
+            )
+            db.session.add(mapping)
+            db.session.commit()
+
+            source_id = source.id
+
+        # Test the endpoint
+        response = client.get(f"/api/epg/sources/{source_id}/mappings")
+        assert response.status_code == 200
+        data = response.json
+        assert data["source_id"] == source_id
+        assert data["total"] == 1
+        assert len(data["mappings"]) == 1
+        mapping_data = data["mappings"][0]
+        assert mapping_data["channel_name"] == "Channel 1"
+        assert mapping_data["epg_channel_name"] == "EPG Channel 1"
+        assert mapping_data["mapping_type"] == "auto_fuzzy"
+        assert mapping_data["confidence"] == 0.85
+        assert mapping_data["category_name"] == "Category 1"  # category_name from Category model
+
+    def test_get_source_mappings_with_search(self, app, client, test_account):
+        """Test searching source mappings"""
+        with app.app_context():
+            # Create a source
+            source = EpgSource(
+                name="Search Test Source",
+                source_type="provider",
+                account_id=test_account,
+                enabled=True,
+            )
+            db.session.add(source)
+            db.session.flush()
+
+            # Create EPG channels
+            epg_ch1 = EpgChannel(source_id=source.id, channel_id="epg1", display_name="CNN News")
+            epg_ch2 = EpgChannel(source_id=source.id, channel_id="epg2", display_name="ESPN Sports")
+            db.session.add_all([epg_ch1, epg_ch2])
+            db.session.flush()
+
+            # Create channels and mappings
+            category = Category(account_id=test_account, category_id="c1", category_name="Cat")
+            db.session.add(category)
+            db.session.flush()
+
+            ch1 = Channel(
+                account_id=test_account, stream_id="s1", name="CNN HD", category_id=category.id, is_active=True
+            )
+            ch2 = Channel(
+                account_id=test_account, stream_id="s2", name="ESPN HD", category_id=category.id, is_active=True
+            )
+            db.session.add_all([ch1, ch2])
+            db.session.flush()
+
+            m1 = ChannelEpgMapping(channel_id=ch1.id, epg_channel_id=epg_ch1.id, mapping_type="manual", confidence=1.0)
+            m2 = ChannelEpgMapping(channel_id=ch2.id, epg_channel_id=epg_ch2.id, mapping_type="manual", confidence=1.0)
+            db.session.add_all([m1, m2])
+            db.session.commit()
+
+            source_id = source.id
+
+        # Search for CNN
+        response = client.get(f"/api/epg/sources/{source_id}/mappings?search=CNN")
+        assert response.status_code == 200
+        data = response.json
+        assert data["total"] == 1
+        assert data["mappings"][0]["channel_name"] == "CNN HD"
+
+    def test_get_source_mappings_pagination(self, app, client, test_account):
+        """Test pagination of source mappings"""
+        with app.app_context():
+            source = EpgSource(name="Pagination Test", source_type="provider", account_id=test_account, enabled=True)
+            db.session.add(source)
+            db.session.flush()
+
+            category = Category(account_id=test_account, category_id="pag", category_name="Pag Cat")
+            db.session.add(category)
+            db.session.flush()
+
+            # Create multiple mappings
+            for i in range(5):
+                epg_ch = EpgChannel(source_id=source.id, channel_id=f"epg{i}", display_name=f"EPG {i}")
+                db.session.add(epg_ch)
+                db.session.flush()
+
+                ch = Channel(
+                    account_id=test_account,
+                    stream_id=f"ch{i}",
+                    name=f"Channel {i}",
+                    category_id=category.id,
+                    is_active=True,
+                )
+                db.session.add(ch)
+                db.session.flush()
+
+                mapping = ChannelEpgMapping(
+                    channel_id=ch.id, epg_channel_id=epg_ch.id, mapping_type="manual", confidence=1.0
+                )
+                db.session.add(mapping)
+
+            db.session.commit()
+            source_id = source.id
+
+        # Test pagination
+        response = client.get(f"/api/epg/sources/{source_id}/mappings?limit=2&offset=0")
+        assert response.status_code == 200
+        data = response.json
+        assert data["total"] == 5
+        assert len(data["mappings"]) == 2
+        assert data["offset"] == 0
+        assert data["limit"] == 2
+
+        # Get next page
+        response = client.get(f"/api/epg/sources/{source_id}/mappings?limit=2&offset=2")
+        assert response.status_code == 200
+        data = response.json
+        assert len(data["mappings"]) == 2
+        assert data["offset"] == 2
 
 
 # ============================================================================
@@ -412,6 +654,94 @@ class TestEpgMappings:
         assert response.status_code == 200
         assert response.json["success"] is True
 
+    def test_bulk_delete_mappings_missing_account_id(self, app, client):
+        """Test bulk delete with missing account_id"""
+        response = client.post(
+            "/api/epg/mappings/bulk-delete",
+            json={"category_id": 1},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        assert "account_id is required" in response.json["error"]
+
+    def test_bulk_delete_mappings_missing_category_id(self, app, client):
+        """Test bulk delete with missing category_id"""
+        response = client.post(
+            "/api/epg/mappings/bulk-delete",
+            json={"account_id": 1},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        assert "category_id is required" in response.json["error"]
+
+    def test_bulk_delete_mappings_success(self, app, client, test_account, test_epg_source):
+        """Test bulk delete of mappings in a category"""
+        from models import Category, Channel, ChannelEpgMapping, EpgChannel
+
+        with app.app_context():
+            # Create a category
+            category = Category(
+                account_id=test_account,
+                category_id="cat1",
+                category_name="Test Category",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            # Create EPG channel
+            epg_ch = EpgChannel(
+                source_id=test_epg_source,
+                channel_id="epg1",
+                display_name="EPG Channel",
+            )
+            db.session.add(epg_ch)
+            db.session.flush()
+
+            # Create channels with mappings
+            channel_ids = []
+            for i in range(3):
+                ch = Channel(
+                    account_id=test_account,
+                    stream_id=f"stream{i}",
+                    name=f"Channel {i}",
+                    category_id=category.id,
+                    is_active=True,
+                )
+                db.session.add(ch)
+                db.session.flush()
+                channel_ids.append(ch.id)
+
+                mapping = ChannelEpgMapping(
+                    channel_id=ch.id,
+                    epg_channel_id=epg_ch.id,
+                    mapping_type="manual",
+                    confidence=1.0,
+                )
+                db.session.add(mapping)
+
+            db.session.commit()
+            category_id = category.id
+
+        # Bulk delete
+        response = client.post(
+            "/api/epg/mappings/bulk-delete",
+            json={"account_id": test_account, "category_id": category_id},
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        assert response.json["success"] is True
+        assert response.json["deleted_count"] == 3
+
+    def test_bulk_delete_mappings_empty_category(self, app, client, test_account):
+        """Test bulk delete when category has no channels"""
+        response = client.post(
+            "/api/epg/mappings/bulk-delete",
+            json={"account_id": test_account, "category_id": 999},
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        assert response.json["deleted_count"] == 0
+
 
 # ============================================================================
 # EPG Coverage Tests
@@ -465,15 +795,14 @@ class TestEpgMatching:
         response = client.post("/api/epg/match/999")
         assert response.status_code == 404
 
-    @patch("services.epg_service.EpgService.match_channels_to_epg")
+    @patch("services.epg_match_rules_service.EpgMatchRulesService.match_channels_with_rules")
     def test_match_channels_success(self, mock_match, app, client, test_account):
-        """Test successful channel matching"""
+        """Test successful channel matching (redirects to rule-based matching)"""
         mock_match.return_value = {
             "total_channels": 20,
             "skipped_existing": 2,
-            "matched_exact_id": 10,
-            "matched_exact_name": 5,
-            "matched_fuzzy": 3,
+            "excluded": 0,
+            "matched": 18,
             "unmatched": 0,
         }
 

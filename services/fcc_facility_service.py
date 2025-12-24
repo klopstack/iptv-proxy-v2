@@ -27,6 +27,7 @@ Key fields used:
 import io
 import logging
 import zipfile
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -90,20 +91,54 @@ VOD_EXCLUSION_TAGS = {
 }
 
 
+@dataclass
+class CachedFccCorrection:
+    """Cached FCC correction data to avoid SQLAlchemy DetachedInstanceError.
+
+    When ORM objects are cached and accessed outside the session,
+    lazy-loaded attributes cause DetachedInstanceError. This dataclass
+    holds all needed attributes as plain Python types.
+    """
+
+    callsign: str
+    facility_id: Optional[int]
+    network_affiliation: Optional[str]
+    tv_virtual_channel: Optional[str]
+    nielsen_dma: Optional[str]
+    community_city: Optional[str]
+    community_state: Optional[str]
+
+    @classmethod
+    def from_orm(cls, correction: "FccCorrection") -> "CachedFccCorrection":
+        """Create from ORM object while still in session."""
+        return cls(
+            callsign=correction.callsign,
+            facility_id=correction.facility_id,
+            network_affiliation=correction.network_affiliation,
+            tv_virtual_channel=correction.tv_virtual_channel,
+            nielsen_dma=correction.nielsen_dma,
+            community_city=correction.community_city,
+            community_state=correction.community_state,
+        )
+
+
 class FccFacilityService:
     """Service for managing FCC facility data"""
 
     # Cache corrections to avoid repeated DB queries
-    _corrections_cache: Optional[Dict[str, "FccCorrection"]] = None
+    _corrections_cache: Optional[Dict[str, CachedFccCorrection]] = None
     _corrections_cache_time: Optional[datetime] = None
     CORRECTIONS_CACHE_TTL = 300  # 5 minutes
 
     @classmethod
-    def get_corrections(cls) -> Dict[str, "FccCorrection"]:
+    def get_corrections(cls) -> Dict[str, CachedFccCorrection]:
         """Get all FCC corrections, cached for performance.
 
+        Returns CachedFccCorrection dataclasses instead of ORM objects to avoid
+        DetachedInstanceError when accessing attributes outside the session.
+
         Returns:
-            Dict mapping callsign (uppercase) to FccCorrection object
+            Dict mapping callsign (uppercase) to CachedFccCorrection object
         """
         now = datetime.now()
 
@@ -118,7 +153,7 @@ class FccFacilityService:
         # Refresh cache
         try:
             corrections = FccCorrection.query.all()
-            cls._corrections_cache = {c.callsign.upper(): c for c in corrections}
+            cls._corrections_cache = {c.callsign.upper(): CachedFccCorrection.from_orm(c) for c in corrections}
             cls._corrections_cache_time = now
             logger.debug(f"Loaded {len(cls._corrections_cache)} FCC corrections into cache")
         except Exception as e:
@@ -777,17 +812,19 @@ class FccFacilityService:
 
         name_upper = channel_name.upper()
 
-        # Pattern for callsigns: K or W followed by 2-4 letters, optionally with -TV, -DT, etc.
-        callsign_pattern = r"[KW][A-Z]{2,4}(?:-(?:TV|DT|CD|HD|LP|FM))?"
+        # Pattern for callsigns: K or W followed by 2-4 letters, optionally with suffix
+        # Suffixes can include: -TV, -DT, -CD, -HD, -LP, -LD, -FM
+        # And may have a subchannel number like -CD2, -LD2, -DT2
+        callsign_pattern = r"[KW][A-Z]{2,4}(?:-(?:TV|DT|CD|HD|LP|LD|FM)\d?)?"
 
         # First, try to find callsign in parentheses - most reliable
-        # Handle patterns like "(KABC)" or "(KABC-TV)" or "(WSVW/WHSV)"
+        # Handle patterns like "(KABC)" or "(KABC-TV)" or "(WSVW/WHSV)" or "(WSVF-CD2)"
         paren_pattern = rf"\(({callsign_pattern})(?:/[A-Z]{{3,5}})?\)"
         paren_match = re.search(paren_pattern, name_upper)
         if paren_match:
             callsign = paren_match.group(1)
-            # Strip any suffix for consistency
-            callsign = re.sub(r"-(?:TV|DT|CD|HD|LP|FM)$", "", callsign)
+            # Strip any suffix for consistency (including subchannel numbers)
+            callsign = re.sub(r"-(?:TV|DT|CD|HD|LP|LD|FM)\d?$", "", callsign)
             if len(callsign) >= 3:
                 return callsign
 
@@ -796,8 +833,8 @@ class FccFacilityService:
         matches = re.findall(rf"\b({callsign_pattern})\b", name_upper)
         if matches:
             for match in matches:
-                # Strip any suffix
-                callsign = re.sub(r"-(?:TV|DT|CD|HD|LP|FM)$", "", match)
+                # Strip any suffix (including subchannel numbers)
+                callsign = re.sub(r"-(?:TV|DT|CD|HD|LP|LD|FM)\d?$", "", match)
                 # Require at least 4 characters for non-parenthesized matches
                 if len(callsign) >= 4:
                     return callsign

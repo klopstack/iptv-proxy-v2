@@ -40,6 +40,12 @@
                             <label class="form-check-label" for="showEpg">Show EPG coverage information</label>
                         </div>
                     </div>
+                    <div class="col-md-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="hidePpv" checked>
+                            <label class="form-check-label" for="hidePpv">Hide PPV categories</label>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -105,6 +111,7 @@ async function loadCategories() {
     const accountId = document.getElementById('accountFilter').value;
     const includeEmpty = document.getElementById('showEmpty').checked;
     const includeEpg = document.getElementById('showEpg').checked;
+    const hidePpv = document.getElementById('hidePpv').checked;
     
     document.getElementById('categoriesContent').innerHTML = `
         <div class="text-center py-5">
@@ -114,7 +121,7 @@ async function loadCategories() {
     `;
     
     try {
-        let url = `/api/categories?include_empty=${includeEmpty}&include_epg=${includeEpg}`;
+        let url = `/api/categories?include_empty=${includeEmpty}&include_epg=${includeEpg}&include_ppv=${!hidePpv}`;
         if (accountId) {
             url += `&account_id=${accountId}`;
         }
@@ -140,7 +147,7 @@ async function loadCategories() {
     }
 }
 
-function displayCategories() {
+async function displayCategories() {
     const searchTerm = document.getElementById('categorySearch').value.toLowerCase();
     const accountId = document.getElementById('accountFilter').value;
     
@@ -150,6 +157,22 @@ function displayCategories() {
         filtered = filtered.filter(cat => 
             cat.category_name.toLowerCase().includes(searchTerm)
         );
+    }
+    
+    // Load all filters to check which categories are blocked
+    let activeFilters = [];
+    try {
+        const response = await fetch('/api/filters');
+        if (response.ok) {
+            const allFilters = await response.json();
+            activeFilters = allFilters.filter(f => 
+                f.filter_type === 'category' && 
+                f.filter_action === 'blacklist' &&
+                f.enabled
+            );
+        }
+    } catch (error) {
+        console.error('Error loading filters:', error);
     }
     
     // Group by account if showing all accounts
@@ -192,7 +215,7 @@ function displayCategories() {
             `;
             
             for (const cat of data.categories.sort((a, b) => a.category_name.localeCompare(b.category_name))) {
-                html += renderCategoryCard(cat);
+                html += renderCategoryCard(cat, activeFilters);
             }
             
             html += `
@@ -205,7 +228,7 @@ function displayCategories() {
         html = `<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 g-3">`;
         
         for (const cat of filtered.sort((a, b) => a.category_name.localeCompare(b.category_name))) {
-            html += renderCategoryCard(cat);
+            html += renderCategoryCard(cat, activeFilters);
         }
         
         html += `</div>`;
@@ -214,13 +237,25 @@ function displayCategories() {
     document.getElementById('categoriesContent').innerHTML = html;
 }
 
-function renderCategoryCard(cat) {
+function renderCategoryCard(cat, activeFilters = []) {
     const visiblePercent = cat.total_count > 0 
         ? Math.round((cat.visible_count / cat.total_count) * 100) 
         : 0;
     
     const progressColor = visiblePercent >= 80 ? 'success' : 
                           visiblePercent >= 50 ? 'warning' : 'danger';
+    
+    // Check if this category has an active filter
+    const isBlocked = activeFilters.some(f => 
+        f.account_id === cat.account_id && 
+        f.filter_value === cat.category_name
+    );
+    
+    // Set button style based on filter state
+    const filterBtnClass = isBlocked ? 'btn-danger' : 'btn-outline-secondary';
+    const filterBtnIcon = isBlocked ? 'bi-eye-slash-fill' : 'bi-eye-slash';
+    const filterBtnText = isBlocked ? 'Hidden' : 'Hide';
+    const filterBtnTitle = isBlocked ? 'This category is hidden - click to show' : 'Hide this category';
     
     // EPG coverage info
     let epgInfo = '';
@@ -288,11 +323,13 @@ function renderCategoryCard(cat) {
                            title="Preview channels in this category">
                             <i class="bi bi-eye"></i> Preview
                         </a>
-                        <a href="/filters?account=${cat.account_id}&category=${encodeURIComponent(cat.category_name)}" 
-                           class="btn btn-outline-secondary" 
-                           title="Add filter for this category">
-                            <i class="bi bi-funnel"></i> Filter
-                        </a>
+                        <button type="button"
+                                class="btn ${filterBtnClass} filter-toggle-btn" 
+                                data-account-id="${cat.account_id}"
+                                data-category-name="${cat.category_name}"
+                                title="${filterBtnTitle}">
+                            <i class="bi ${filterBtnIcon}"></i> <span class="filter-text">${filterBtnText}</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -300,10 +337,157 @@ function renderCategoryCard(cat) {
     `;
 }
 
+// Filter toggle functionality
+async function toggleCategoryFilter(accountId, categoryName, button) {
+    const filterText = button.querySelector('.filter-text');
+    const icon = button.querySelector('i');
+    
+    try {
+        // Disable button during API call
+        button.disabled = true;
+        filterText.textContent = 'Loading...';
+        
+        // Check if filter already exists
+        const response = await fetch(`/api/filters`);
+        const filters = await response.json();
+        
+        const existingFilter = filters.find(f => 
+            f.account_id === accountId && 
+            f.filter_type === 'category' &&
+            f.filter_value === categoryName
+        );
+        
+        if (existingFilter) {
+            // Toggle existing filter
+            const updateResponse = await fetch(`/api/filters/${existingFilter.id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    enabled: !existingFilter.enabled
+                })
+            });
+            
+            if (!updateResponse.ok) {
+                throw new Error('Failed to toggle filter');
+            }
+            
+            const updatedFilter = await updateResponse.json();
+            
+            // Update button state
+            if (updatedFilter.enabled) {
+                button.classList.remove('btn-outline-secondary');
+                button.classList.add('btn-danger');
+                icon.className = 'bi bi-eye-slash-fill';
+                filterText.textContent = 'Hidden';
+                button.title = 'This category is hidden - click to show';
+            } else {
+                button.classList.remove('btn-danger');
+                button.classList.add('btn-outline-secondary');
+                icon.className = 'bi bi-eye-slash';
+                filterText.textContent = 'Hide';
+                button.title = 'Hide this category';
+            }
+            
+            // Show success message
+            showToast(updatedFilter.enabled ? 'Category hidden' : 'Category shown', 'success');
+        } else {
+            // Create new filter
+            const createResponse = await fetch('/api/filters', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    account_id: accountId,
+                    name: `Hide: ${categoryName}`,
+                    filter_type: 'category',
+                    filter_action: 'blacklist',
+                    filter_value: categoryName,
+                    enabled: true
+                })
+            });
+            
+            if (!createResponse.ok) {
+                const errorData = await createResponse.json();
+                throw new Error(errorData.error || 'Failed to create filter');
+            }
+            
+            // Update button state to show it's now hidden
+            button.classList.remove('btn-outline-secondary');
+            button.classList.add('btn-danger');
+            icon.className = 'bi bi-eye-slash-fill';
+            filterText.textContent = 'Hidden';
+            button.title = 'This category is hidden - click to show';
+            
+            showToast('Category hidden', 'success');
+        }
+    } catch (error) {
+        console.error('Error toggling filter:', error);
+        showToast(`Error: ${error.message}`, 'danger');
+        
+        // Reset button state
+        button.classList.remove('btn-danger');
+        button.classList.add('btn-outline-secondary');
+        icon.className = 'bi bi-eye-slash';
+        filterText.textContent = 'Hide';
+    } finally {
+        button.disabled = false;
+    }
+}
+
+// Toast notification helper
+function showToast(message, type = 'info') {
+    // Create toast container if it doesn't exist
+    let toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '9999';
+        document.body.appendChild(toastContainer);
+    }
+    
+    // Create toast element
+    const toastId = 'toast-' + Date.now();
+    const toastHtml = `
+        <div id="${toastId}" class="toast align-items-center text-white bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
+    toast.show();
+    
+    // Remove toast element after it's hidden
+    toastElement.addEventListener('hidden.bs.toast', () => {
+        toastElement.remove();
+    });
+}
+
 // Event listeners
 document.getElementById('accountFilter').addEventListener('change', loadCategories);
 document.getElementById('showEmpty').addEventListener('change', loadCategories);
 document.getElementById('showEpg').addEventListener('change', loadCategories);
+document.getElementById('hidePpv').addEventListener('change', loadCategories);
+
+// Delegate filter button clicks
+document.addEventListener('click', function(e) {
+    const filterBtn = e.target.closest('.filter-toggle-btn');
+    if (filterBtn) {
+        const accountId = parseInt(filterBtn.dataset.accountId);
+        const categoryName = filterBtn.dataset.categoryName;
+        toggleCategoryFilter(accountId, categoryName, filterBtn);
+    }
+});
 
 // Debounced search
 let searchTimeout;

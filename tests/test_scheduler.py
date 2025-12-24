@@ -82,7 +82,7 @@ class TestSyncScheduler:
 
         with app.app_context():
             scheduler = SyncScheduler(app, interval_hours=1)
-            scheduler._sync_all()
+            scheduler._sync_accounts()
 
             # Verify sync was called for the enabled account
             mock_sync.assert_called()
@@ -95,7 +95,7 @@ class TestSyncScheduler:
         with app.app_context():
             scheduler = SyncScheduler(app, interval_hours=1)
             # Should not raise exception
-            scheduler._sync_all()
+            scheduler._sync_accounts()
             assert "error" in caplog.text.lower()
 
     def test_scheduler_skips_disabled_accounts(self, app, test_account):
@@ -108,7 +108,7 @@ class TestSyncScheduler:
 
             with patch("services.sync_service.ChannelSyncService.sync_account") as mock_sync:
                 scheduler = SyncScheduler(app, interval_hours=1)
-                scheduler._sync_all()
+                scheduler._sync_accounts()
 
                 # sync_account should not be called for disabled accounts
                 mock_sync.assert_not_called()
