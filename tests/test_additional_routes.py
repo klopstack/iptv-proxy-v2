@@ -1,27 +1,12 @@
 """
 Tests for remaining app.py routes to reach 80% coverage
+
+Uses shared fixtures from conftest.py for proper test isolation.
 """
 
 import pytest
 
-
-@pytest.fixture
-def client():
-    """Test client fixture"""
-    import os
-
-    os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-    from app import app, db
-
-    app.config["TESTING"] = True
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-
-    with app.test_client() as client:
-        with app.app_context():
-            db.create_all()
-        yield client
-        with app.app_context():
-            db.drop_all()
+# client fixture is provided by conftest.py
 
 
 @pytest.fixture

@@ -1,28 +1,12 @@
 """
 Tests for Ruleset and Tag Rule API endpoints
-"""
 
-import os
+Uses shared fixtures from conftest.py for proper test isolation.
+"""
 
 import pytest
 
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-
-from app import app, db
-
-
-@pytest.fixture
-def client():
-    """Test client fixture"""
-    app.config["TESTING"] = True
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-
-    with app.test_client() as client:
-        with app.app_context():
-            db.create_all()
-        yield client
-        with app.app_context():
-            db.drop_all()
+# client fixture is provided by conftest.py
 
 
 class TestRulesetAPI:

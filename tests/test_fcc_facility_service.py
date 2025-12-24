@@ -190,19 +190,7 @@ class TestNetworkDetectionFromName:
 class TestFccFacilitySync:
     """Tests for syncing facility records to database"""
 
-    @pytest.fixture
-    def app(self):
-        """Create test Flask app with database"""
-        from app import app
-
-        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-        app.config["TESTING"] = True
-
-        with app.app_context():
-            db.create_all()
-            yield app
-            db.session.remove()
-            db.drop_all()
+    # Uses app fixture from conftest.py
 
     def test_sync_creates_new_records(self, app):
         """Test that sync creates new facility records"""
@@ -251,16 +239,9 @@ class TestFccFacilityLookup:
     """Tests for facility lookup methods"""
 
     @pytest.fixture
-    def app_with_data(self):
-        """Create test Flask app with sample facility data"""
-        from app import app
-
-        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-        app.config["TESTING"] = True
-
+    def app_with_data(self, app):
+        """Create test Flask app with sample facility data - uses conftest app"""
         with app.app_context():
-            db.create_all()
-
             # Add sample facilities
             facilities = [
                 FccFacility(
@@ -313,8 +294,6 @@ class TestFccFacilityLookup:
             db.session.commit()
 
             yield app
-            db.session.remove()
-            db.drop_all()
 
     def test_lookup_by_callsign_exact(self, app_with_data):
         """Test exact callsign lookup"""
@@ -395,16 +374,9 @@ class TestFccFacilityStats:
     """Tests for facility statistics"""
 
     @pytest.fixture
-    def app_with_data(self):
-        """Create test Flask app with sample facility data"""
-        from app import app
-
-        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-        app.config["TESTING"] = True
-
+    def app_with_data(self, app):
+        """Create test Flask app with sample facility data - uses conftest app"""
         with app.app_context():
-            db.create_all()
-
             # Add sample facilities
             facilities = [
                 FccFacility(facility_id=1, callsign="KABC-TV", service_code="DTV", network_affiliation="ABC"),
@@ -417,8 +389,6 @@ class TestFccFacilityStats:
             db.session.commit()
 
             yield app
-            db.session.remove()
-            db.drop_all()
 
     def test_get_stats(self, app_with_data):
         """Test getting facility statistics"""
@@ -431,18 +401,11 @@ class TestFccFacilityStats:
             assert "LPT" in stats["by_service_code"]
             assert stats["by_service_code"]["LPT"] == 1
 
-    def test_get_stats_empty_db(self):
+    def test_get_stats_empty_db(self, app):
         """Test getting stats with empty database"""
-        from app import app
-
-        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-        app.config["TESTING"] = True
-
         with app.app_context():
-            db.create_all()
             stats = FccFacilityService.get_stats()
             assert stats["total_facilities"] == 0
-            db.drop_all()
 
 
 class TestCallsignExtraction:
@@ -500,16 +463,9 @@ class TestDmaAndNetworkLists:
     """Tests for DMA and network list methods"""
 
     @pytest.fixture
-    def app_with_dma_data(self):
-        """Create test app with DMA data"""
-        from app import app
-
-        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-        app.config["TESTING"] = True
-
+    def app_with_dma_data(self, app):
+        """Create test app with DMA data - uses conftest app"""
         with app.app_context():
-            db.create_all()
-
             facilities = [
                 FccFacility(
                     facility_id=1,
@@ -549,8 +505,6 @@ class TestDmaAndNetworkLists:
             db.session.commit()
 
             yield app
-            db.session.remove()
-            db.drop_all()
 
     def test_get_dma_list(self, app_with_dma_data):
         """Test getting list of DMAs"""

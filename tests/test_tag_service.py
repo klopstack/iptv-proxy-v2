@@ -1,32 +1,19 @@
 """
 Tests for TagService
-"""
 
-import os
+Uses shared fixtures from conftest.py for proper test isolation.
+"""
 
 import pytest
 
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-
-from app import app, db
-from models import Account, AccountRuleSet, RuleSet, TagRule
+from models import Account, AccountRuleSet, RuleSet, TagRule, db
 from services.tag_service import TagService
 
-
-@pytest.fixture
-def test_app():
-    """Test app fixture with database"""
-    app.config["TESTING"] = True
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-
-    with app.app_context():
-        db.create_all()
-        yield app
-        db.drop_all()
+# app fixture is provided by conftest.py
 
 
 @pytest.fixture
-def sample_ruleset(test_app):
+def sample_ruleset(app):
     """Create a sample ruleset with rules"""
     with app.app_context():
         ruleset = RuleSet(
@@ -79,7 +66,7 @@ def sample_ruleset(test_app):
 
 
 @pytest.fixture
-def sample_account(test_app, sample_ruleset):
+def sample_account(app, sample_ruleset):
     """Create a sample account"""
     with app.app_context():
         account = Account(
@@ -101,7 +88,7 @@ def sample_account(test_app, sample_ruleset):
 class TestTagExtraction:
     """Test tag extraction functionality"""
 
-    def test_extract_tags_with_prefix(self, test_app, sample_ruleset):
+    def test_extract_tags_with_prefix(self, app, sample_ruleset):
         """Test extracting tags from prefix pattern"""
         with app.app_context():
             rules = TagRule.query.filter_by(ruleset_id=sample_ruleset).all()
@@ -114,7 +101,7 @@ class TestTagExtraction:
             assert "US" in tags
             assert cleaned_name == "CNN News"
 
-    def test_extract_tags_with_multiple_patterns(self, test_app, sample_ruleset):
+    def test_extract_tags_with_multiple_patterns(self, app, sample_ruleset):
         """Test extracting multiple tags"""
         with app.app_context():
             rules = TagRule.query.filter_by(ruleset_id=sample_ruleset).all()
@@ -129,7 +116,7 @@ class TestTagExtraction:
             assert "4K" in tags
             assert "ESPN" in cleaned_name
 
-    def test_extract_tags_with_regex(self, test_app, sample_ruleset):
+    def test_extract_tags_with_regex(self, app, sample_ruleset):
         """Test regex pattern matching"""
         with app.app_context():
             rules = TagRule.query.filter_by(ruleset_id=sample_ruleset).all()
@@ -141,7 +128,7 @@ class TestTagExtraction:
 
             assert "4K" in tags
 
-    def test_normalize_tag_name(self, test_app):
+    def test_normalize_tag_name(self, app):
         """Test tag name normalization"""
         with app.app_context():
             # Test superscript conversion
@@ -159,7 +146,7 @@ class TestTagExtraction:
 class TestRulesetRetrieval:
     """Test ruleset and rule retrieval for accounts"""
 
-    def test_get_rules_for_account_with_assigned_ruleset(self, test_app, sample_account, sample_ruleset):
+    def test_get_rules_for_account_with_assigned_ruleset(self, app, sample_account, sample_ruleset):
         """Test getting rules for account with assigned ruleset"""
         with app.app_context():
             account = db.session.get(Account, sample_account)
@@ -169,7 +156,7 @@ class TestRulesetRetrieval:
             assert len(rules) == 3
             assert all(isinstance(rule, TagRule) for rule in rules)
 
-    def test_get_rules_for_account_with_default_ruleset(self, test_app):
+    def test_get_rules_for_account_with_default_ruleset(self, app):
         """Test getting rules for account without assigned ruleset (uses default)"""
         with app.app_context():
             # Create a default ruleset
@@ -208,7 +195,7 @@ class TestRulesetRetrieval:
             assert len(rules) == 1
             assert rules[0].tag_name == "TEST"
 
-    def test_get_rules_for_account_no_rules(self, test_app):
+    def test_get_rules_for_account_no_rules(self, app):
         """Test getting rules for account when no rulesets exist"""
         with app.app_context():
             account = Account(
@@ -230,7 +217,7 @@ class TestRulesetRetrieval:
 class TestPatternMatching:
     """Test pattern matching methods"""
 
-    def test_match_pattern_prefix(self, test_app):
+    def test_match_pattern_prefix(self, app):
         """Test prefix pattern matching"""
         with app.app_context():
             matched, match_text = TagService._match_pattern("US| Channel", "US|", "prefix")
@@ -240,7 +227,7 @@ class TestPatternMatching:
             matched, match_text = TagService._match_pattern("Channel US|", "US|", "prefix")
             assert matched is False
 
-    def test_match_pattern_suffix(self, test_app):
+    def test_match_pattern_suffix(self, app):
         """Test suffix pattern matching"""
         with app.app_context():
             matched, match_text = TagService._match_pattern("Channel HD", "HD", "suffix")
@@ -250,14 +237,14 @@ class TestPatternMatching:
             matched, match_text = TagService._match_pattern("HD Channel", "HD", "suffix")
             assert matched is False
 
-    def test_match_pattern_contains(self, test_app):
+    def test_match_pattern_contains(self, app):
         """Test contains pattern matching"""
         with app.app_context():
             matched, match_text = TagService._match_pattern("Channel 4K HD", "4K", "contains")
             assert matched is True
             assert match_text == "4K"
 
-    def test_match_pattern_regex(self, test_app):
+    def test_match_pattern_regex(self, app):
         """Test regex pattern matching"""
         with app.app_context():
             matched, match_obj = TagService._match_pattern("Channel 4K", r"\b4K\b", "regex")
@@ -269,7 +256,7 @@ class TestPatternMatching:
             matched, match_obj = TagService._match_pattern("Channel X4KUHD", r"\b4K\b", "regex")
             assert matched is False
 
-    def test_match_pattern_case_insensitive(self, test_app):
+    def test_match_pattern_case_insensitive(self, app):
         """Test case-insensitive matching"""
         with app.app_context():
             matched, match_text = TagService._match_pattern("us| Channel", "US|", "prefix")
@@ -279,7 +266,7 @@ class TestPatternMatching:
 class TestDefaultRulesetCreation:
     """Test default ruleset creation"""
 
-    def test_create_default_ruleset(self, test_app):
+    def test_create_default_ruleset(self, app):
         """Test creating default ruleset"""
         with app.app_context():
             ruleset = TagService.create_default_ruleset(db.session)
@@ -289,7 +276,7 @@ class TestDefaultRulesetCreation:
             assert ruleset.is_default is True
             assert len(ruleset.rules) > 0
 
-    def test_create_default_ruleset_idempotent(self, test_app):
+    def test_create_default_ruleset_idempotent(self, app):
         """Test that creating default ruleset twice returns same ruleset"""
         with app.app_context():
             ruleset1 = TagService.create_default_ruleset(db.session)
@@ -301,7 +288,7 @@ class TestDefaultRulesetCreation:
 class TestSpecialTagTypes:
     """Test special tag behaviors like __LOCATION__, __CALLSIGN__, __CLEANUP__"""
 
-    def test_location_extraction(self, test_app):
+    def test_location_extraction(self, app):
         """Test __LOCATION__ tag extraction"""
         with app.app_context():
             ruleset = RuleSet(name="Test", enabled=True, priority=100)
@@ -331,7 +318,7 @@ class TestSpecialTagTypes:
             assert "[" not in cleaned_name
             assert "]" not in cleaned_name
 
-    def test_cleanup_tag(self, test_app):
+    def test_cleanup_tag(self, app):
         """Test __CLEANUP__ tag that removes without creating tag"""
         with app.app_context():
             ruleset = RuleSet(name="Test", enabled=True, priority=100)
@@ -366,7 +353,7 @@ class TestSpecialTagTypes:
 class TestTagRuleReplacement:
     """Test tag rule replacement functionality"""
 
-    def test_simple_replacement(self, test_app, sample_ruleset):
+    def test_simple_replacement(self, app, sample_ruleset):
         """Test replacing text instead of removing it"""
         with app.app_context():
             # Create a rule that replaces typo "DISCTRICT" with "DISTRICT"
@@ -394,7 +381,7 @@ class TestTagRuleReplacement:
             assert "DISCTRICT" not in cleaned_name
             assert cleaned_name == "ABC 7 DISTRICT OF COLUMBIA"
 
-    def test_replacement_case_insensitive(self, test_app, sample_ruleset):
+    def test_replacement_case_insensitive(self, app, sample_ruleset):
         """Test that replacement works case-insensitively"""
         with app.app_context():
             rule = TagRule(
@@ -420,7 +407,7 @@ class TestTagRuleReplacement:
             assert "DISTRICT" in cleaned_name
             assert "DISCTRICT" not in cleaned_name
 
-    def test_replacement_with_tag(self, test_app, sample_ruleset):
+    def test_replacement_with_tag(self, app, sample_ruleset):
         """Test replacement that also creates a tag"""
         with app.app_context():
             rule = TagRule(
@@ -446,7 +433,7 @@ class TestTagRuleReplacement:
             assert "HD" in tags
             assert "ESPN HD" == cleaned_name.strip()
 
-    def test_replacement_with_regex(self, test_app, sample_ruleset):
+    def test_replacement_with_regex(self, app, sample_ruleset):
         """Test replacement with regex pattern"""
         with app.app_context():
             rule = TagRule(
@@ -472,7 +459,7 @@ class TestTagRuleReplacement:
             # Multiple spaces should be reduced
             assert "  " not in cleaned_name
 
-    def test_no_replacement_when_remove_false(self, test_app, sample_ruleset):
+    def test_no_replacement_when_remove_false(self, app, sample_ruleset):
         """Test that replacement is not applied when remove_from_name is False"""
         with app.app_context():
             rule = TagRule(
@@ -500,7 +487,7 @@ class TestTagRuleReplacement:
             # But name should NOT be modified because remove_from_name is False
             assert cleaned_name == "ESPN 4K"
 
-    def test_replacement_none_means_remove(self, test_app, sample_ruleset):
+    def test_replacement_none_means_remove(self, app, sample_ruleset):
         """Test that None replacement means remove (backward compatible)"""
         with app.app_context():
             rule = TagRule(

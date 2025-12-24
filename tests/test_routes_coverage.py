@@ -1,6 +1,8 @@
 """
 Additional tests to boost route coverage to 80%+
 Tests cover: channel_health, channel_links, rulesets, playlists, filters routes
+
+Uses shared fixtures from conftest.py for proper test isolation.
 """
 import json
 
@@ -8,27 +10,7 @@ import pytest
 
 from models import Account, Category, Channel, ChannelHealthConfig, Credential, Filter, db
 
-
-@pytest.fixture
-def app():
-    """Create test Flask app with in-memory database."""
-    from app import app as flask_app
-
-    flask_app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-    flask_app.config["TESTING"] = True
-    flask_app.config["WTF_CSRF_ENABLED"] = False
-
-    with flask_app.app_context():
-        db.create_all()
-        yield flask_app
-        db.session.remove()
-        db.drop_all()
-
-
-@pytest.fixture
-def client(app):
-    """Create test client."""
-    return app.test_client()
+# app and client fixtures are provided by conftest.py
 
 
 @pytest.fixture

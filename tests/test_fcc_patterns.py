@@ -1,9 +1,9 @@
 """
 Tests for FCC match patterns routes to boost coverage
+
+Uses shared fixtures from conftest.py for proper test isolation.
 """
 import json
-
-import pytest
 
 from models import (
     CallsignSuffix,
@@ -17,26 +17,7 @@ from models import (
     db,
 )
 
-
-@pytest.fixture
-def app():
-    """Create test Flask app with in-memory database."""
-    from app import app as flask_app
-
-    flask_app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-    flask_app.config["TESTING"] = True
-    flask_app.config["WTF_CSRF_ENABLED"] = False
-
-    with flask_app.app_context():
-        db.create_all()
-        yield flask_app
-        db.session.rollback()
-
-
-@pytest.fixture
-def client(app):
-    """Create test client."""
-    return app.test_client()
+# app and client fixtures are provided by conftest.py
 
 
 class TestFccMatchPatternsPages:

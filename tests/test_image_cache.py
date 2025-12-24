@@ -1,5 +1,7 @@
 """
 Tests for image cache service and routes
+
+Uses shared fixtures from conftest.py for proper test isolation.
 """
 import tempfile
 from datetime import datetime, timedelta
@@ -7,16 +9,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app import app
-from models import CachedImage, db
+from models import CachedImage
+
+# client fixture is provided by conftest.py
+# For tests needing special image cache setup, use image_cache_client instead
 
 
 @pytest.fixture
-def client():
-    """Create a test client with in-memory database and temp cache dir"""
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-    app.config["TESTING"] = True
-
+def image_cache_client(app):
+    """Create a test client with temp cache dir for image cache tests"""
     with tempfile.TemporaryDirectory() as tmpdir:
         # Reset the global image cache instance
         import services.image_cache_service as cache_module
@@ -26,11 +27,7 @@ def client():
         # Patch the default cache dir to use temp directory
         with patch.dict("os.environ", {"IMAGE_CACHE_DIR": tmpdir}):
             with app.test_client() as client:
-                with app.app_context():
-                    db.create_all()
-                    yield client
-                    db.session.remove()
-                    db.drop_all()
+                yield client
 
             # Reset singleton after tests
             cache_module._image_cache = None
@@ -147,7 +144,7 @@ class TestImageCacheService:
 class TestImageCacheServiceWithDB:
     """Tests for ImageCacheService that require database"""
 
-    def test_cache_image_success(self, client, temp_cache_dir):
+    def test_cache_image_success(self, app, temp_cache_dir):
         """Test successful image caching"""
         from services.image_cache_service import ImageCacheService
 
@@ -175,8 +172,9 @@ class TestImageCacheServiceWithDB:
             assert cached.content_type == "image/png"
             assert cached.fetch_count == 1
 
-    def test_cache_image_already_cached(self, client, temp_cache_dir):
+    def test_cache_image_already_cached(self, app, temp_cache_dir):
         """Test that already cached images are not re-fetched"""
+        from models import db
         from services.image_cache_service import ImageCacheService
 
         with app.app_context():
@@ -203,8 +201,9 @@ class TestImageCacheServiceWithDB:
 
             assert result == url_hash
 
-    def test_get_stats(self, client, temp_cache_dir):
+    def test_get_stats(self, app, temp_cache_dir):
         """Test cache statistics"""
+        from models import db
         from services.image_cache_service import ImageCacheService
 
         with app.app_context():
@@ -233,23 +232,23 @@ class TestImageCacheServiceWithDB:
 class TestImageRoutes:
     """Tests for image cache API routes"""
 
-    def test_serve_cached_icon_invalid_hash(self, client):
+    def test_serve_cached_icon_invalid_hash(self, image_cache_client):
         """Test serving icon with invalid hash format"""
-        response = client.get("/icon/invalid")
+        response = image_cache_client.get("/icon/invalid")
         assert response.status_code == 400
 
-        response = client.get("/icon/tooshort")
+        response = image_cache_client.get("/icon/tooshort")
         assert response.status_code == 400
 
-    def test_serve_cached_icon_not_found(self, client):
+    def test_serve_cached_icon_not_found(self, image_cache_client):
         """Test serving icon that doesn't exist"""
         valid_hash = "a" * 64
-        response = client.get(f"/icon/{valid_hash}")
+        response = image_cache_client.get(f"/icon/{valid_hash}")
         assert response.status_code == 404
 
-    def test_get_cache_stats(self, client):
+    def test_get_cache_stats(self, image_cache_client):
         """Test cache stats endpoint"""
-        response = client.get("/api/image-cache/stats")
+        response = image_cache_client.get("/api/image-cache/stats")
         assert response.status_code == 200
 
         data = response.get_json()
@@ -257,9 +256,9 @@ class TestImageRoutes:
         assert "cached" in data
         assert "total_size_bytes" in data
 
-    def test_list_cache_entries(self, client):
+    def test_list_cache_entries(self, image_cache_client):
         """Test listing cache entries"""
-        response = client.get("/api/image-cache/entries")
+        response = image_cache_client.get("/api/image-cache/entries")
         assert response.status_code == 200
 
         data = response.get_json()
@@ -267,8 +266,10 @@ class TestImageRoutes:
         assert "entries" in data
         assert isinstance(data["entries"], list)
 
-    def test_list_cache_entries_with_filter(self, client):
+    def test_list_cache_entries_with_filter(self, app, image_cache_client):
         """Test listing cache entries with status filter"""
+        from models import db
+
         with app.app_context():
             # Add test entries
             for i, status in enumerate(["cached", "error"]):
@@ -280,23 +281,25 @@ class TestImageRoutes:
                 db.session.add(cached)
             db.session.commit()
 
-        response = client.get("/api/image-cache/entries?status=cached")
+        response = image_cache_client.get("/api/image-cache/entries?status=cached")
         assert response.status_code == 200
 
         data = response.get_json()
         assert data["total"] == 1
         assert all(e["status"] == "cached" for e in data["entries"])
 
-    def test_fetch_and_cache_icon_no_url(self, client):
+    def test_fetch_and_cache_icon_no_url(self, image_cache_client):
         """Test fetch endpoint without URL"""
-        response = client.post("/icon/fetch", json={})
+        response = image_cache_client.post("/icon/fetch", json={})
         assert response.status_code == 400
 
         data = response.get_json()
         assert "error" in data
 
-    def test_cleanup_cache(self, client):
+    def test_cleanup_cache(self, app, image_cache_client):
         """Test cache cleanup endpoint"""
+        from models import db
+
         with app.app_context():
             # Add expired entry
             cached = CachedImage(
@@ -308,15 +311,17 @@ class TestImageRoutes:
             db.session.add(cached)
             db.session.commit()
 
-        response = client.post("/api/image-cache/cleanup?delete_files=false")
+        response = image_cache_client.post("/api/image-cache/cleanup?delete_files=false")
         assert response.status_code == 200
 
         data = response.get_json()
         assert data["success"] is True
         assert data["removed_count"] >= 1
 
-    def test_delete_cache_entry(self, client):
+    def test_delete_cache_entry(self, app, image_cache_client):
         """Test deleting a cache entry"""
+        from models import db
+
         with app.app_context():
             cached = CachedImage(
                 url_hash="todelete" + "0" * 56,
@@ -327,25 +332,25 @@ class TestImageRoutes:
             db.session.commit()
             entry_id = cached.id
 
-        response = client.delete(f"/api/image-cache/entries/{entry_id}")
+        response = image_cache_client.delete(f"/api/image-cache/entries/{entry_id}")
         assert response.status_code == 200
 
         # Verify deleted
         with app.app_context():
             assert CachedImage.query.get(entry_id) is None
 
-    def test_delete_cache_entry_not_found(self, client):
+    def test_delete_cache_entry_not_found(self, image_cache_client):
         """Test deleting non-existent cache entry"""
-        response = client.delete("/api/image-cache/entries/99999")
+        response = image_cache_client.delete("/api/image-cache/entries/99999")
         assert response.status_code == 404
 
 
 class TestPlaylistIconProxy:
     """Tests for playlist generation with icon proxying"""
 
-    def test_playlist_with_proxy_icons(self, client):
+    def test_playlist_with_proxy_icons(self, app, image_cache_client):
         """Test that proxy_icons parameter rewrites icon URLs"""
-        from models import Account, Category, Channel, Credential
+        from models import Account, Category, Channel, Credential, db
 
         with app.app_context():
             # Create test account with channel
@@ -376,13 +381,13 @@ class TestPlaylistIconProxy:
             account_id = account.id
 
         # Test without proxy_icons - should have original URL
-        response = client.get(f"/playlist/{account_id}.m3u")
+        response = image_cache_client.get(f"/playlist/{account_id}.m3u")
         assert response.status_code == 200
         content = response.data.decode("utf-8")
         assert "https://external.com/icon.png" in content
 
         # Test with proxy_icons - should have proxied URL
-        response = client.get(f"/playlist/{account_id}.m3u?proxy_icons=true")
+        response = image_cache_client.get(f"/playlist/{account_id}.m3u?proxy_icons=true")
         assert response.status_code == 200
         content = response.data.decode("utf-8")
         assert "/icon/" in content

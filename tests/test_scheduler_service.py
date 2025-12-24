@@ -1,5 +1,7 @@
 """
 Tests for the scheduler service to improve coverage
+
+Uses shared fixtures from conftest.py for proper test isolation.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -16,26 +18,19 @@ from services.scheduler import (
     SyncScheduler,
 )
 
-
-@pytest.fixture
-def app():
-    """Create test Flask app with in-memory database."""
-    from app import app as flask_app
-
-    flask_app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-    flask_app.config["TESTING"] = True
-    flask_app.config["WTF_CSRF_ENABLED"] = False
-
-    with flask_app.app_context():
-        db.create_all()
-        yield flask_app
-        db.session.rollback()
+# app fixture is provided by conftest.py
 
 
 @pytest.fixture
 def scheduler(app):
     """Create a scheduler instance for testing."""
-    return SyncScheduler(app, interval_hours=6)
+    sched = SyncScheduler(app, interval_hours=6)
+    yield sched
+    # Always cleanup after test
+    if sched.running:
+        sched.stop()
+    if sched.thread and sched.thread.is_alive():
+        sched.thread.join(timeout=1)
 
 
 class TestSyncSchedulerInit:

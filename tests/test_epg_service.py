@@ -2034,3 +2034,80 @@ class TestFccEnhancedEpgMatching:
                 EpgChannel.query.filter_by(source_id=source.id).delete()
                 EpgSource.query.filter_by(id=source.id).delete()
                 db.session.commit()
+
+
+class TestShiftXmltvTime:
+    """Tests for shift_xmltv_time utility function"""
+
+    def test_shift_positive_hours(self):
+        """Test shifting time by positive hours"""
+        result = shift_xmltv_time("20240101120000 +0000", 2)
+        assert result == "20240101140000 +0000"
+
+    def test_shift_negative_hours(self):
+        """Test shifting time by negative hours"""
+        result = shift_xmltv_time("20240101120000 +0000", -2)
+        assert result == "20240101100000 +0000"
+
+    def test_shift_zero_hours(self):
+        """Test shifting by zero hours"""
+        result = shift_xmltv_time("20240101120000 +0000", 0)
+        assert result == "20240101120000 +0000"
+
+    def test_shift_across_day_boundary(self):
+        """Test shifting across midnight"""
+        result = shift_xmltv_time("20240101230000 +0000", 3)
+        assert result == "20240102020000 +0000"
+
+    def test_shift_invalid_time(self):
+        """Test shifting with invalid time format"""
+        result = shift_xmltv_time("invalid", 2)
+        # Should return original on error
+        assert result == "invalid"
+
+    def test_shift_empty_time(self):
+        """Test shifting with empty time"""
+        result = shift_xmltv_time("", 2)
+        assert result == ""
+
+
+class TestDecompressContentExtended:
+    """Extended tests for decompress_content utility function"""
+
+    def test_decompress_gzip(self):
+        """Test decompressing gzip content"""
+        original = b"Hello, World!"
+        compressed = gzip.compress(original)
+        result = decompress_content(compressed)
+        assert result == original
+
+    def test_decompress_uncompressed(self):
+        """Test that uncompressed content is returned as-is"""
+        original = b"Hello, World!"
+        result = decompress_content(original)
+        assert result == original
+
+    def test_decompress_empty(self):
+        """Test decompressing empty content"""
+        result = decompress_content(b"")
+        assert result == b""
+
+
+class TestEastWestTags:
+    """Tests for EAST_TAGS and WEST_TAGS constants"""
+
+    def test_east_tags_exist(self):
+        """Test that EAST_TAGS constant exists"""
+        assert isinstance(EAST_TAGS, (set, frozenset, list, tuple))
+        assert len(EAST_TAGS) > 0
+
+    def test_west_tags_exist(self):
+        """Test that WEST_TAGS constant exists"""
+        assert isinstance(WEST_TAGS, (set, frozenset, list, tuple))
+        assert len(WEST_TAGS) > 0
+
+    def test_no_overlap(self):
+        """Test that EAST and WEST tags don't overlap"""
+        east_set = set(EAST_TAGS)
+        west_set = set(WEST_TAGS)
+        assert east_set.isdisjoint(west_set)

@@ -6,13 +6,10 @@ Tests the configurable EPG matching rules system including:
 - EpgMatchRule CRUD
 - EpgExclusionPattern CRUD
 - Rule-based channel matching
+
+Uses shared fixtures from conftest.py for proper test isolation.
 """
-import os
-
 import pytest
-
-# Set database path before importing models
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from models import (
     Account,
@@ -27,25 +24,7 @@ from models import (
     db,
 )
 
-
-@pytest.fixture
-def app():
-    """Create application fixture"""
-    from app import app as flask_app
-
-    flask_app.config["TESTING"] = True
-    flask_app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-
-    with flask_app.app_context():
-        db.create_all()
-        yield flask_app
-        db.drop_all()
-
-
-@pytest.fixture
-def client(app):
-    """Test client fixture"""
-    return app.test_client()
+# app and client fixtures are provided by conftest.py
 
 
 @pytest.fixture
@@ -1661,3 +1640,1514 @@ class TestRulePreviewExtended:
         data = response.get_json()
         # Should match - category is "UK Sports", not PPV
         assert data["total_count"] >= 1
+
+
+class TestChannelNameMappingsService:
+    """Tests for channel name mapping service methods"""
+
+    def test_apply_exact_mapping(self, app):
+        """Test applying exact channel name mapping"""
+        from services.epg_match_rules_service import CachedChannelNameMapping, EpgMatchRulesService
+
+        with app.app_context():
+            mapping = CachedChannelNameMapping(
+                id=1,
+                name="Fox to FOX",
+                old_name="Fox News",
+                new_name="FOX News Channel",
+                match_type="exact",
+                case_sensitive=False,
+            )
+
+            result, mapping_name = EpgMatchRulesService.apply_channel_name_mappings("Fox News", [mapping])
+            assert result == "FOX News Channel"
+            assert mapping_name == "Fox to FOX"
+
+    def test_apply_exact_mapping_case_sensitive(self, app):
+        """Test case sensitive exact mapping"""
+        from services.epg_match_rules_service import CachedChannelNameMapping, EpgMatchRulesService
+
+        with app.app_context():
+            mapping = CachedChannelNameMapping(
+                id=1,
+                name="Case Sensitive",
+                old_name="ESPN",
+                new_name="ESPN HD",
+                match_type="exact",
+                case_sensitive=True,
+            )
+
+            # Should not match different case
+            result, _ = EpgMatchRulesService.apply_channel_name_mappings("espn", [mapping])
+            assert result == "espn"  # Unchanged
+
+            # Should match exact case
+            result, name = EpgMatchRulesService.apply_channel_name_mappings("ESPN", [mapping])
+            assert result == "ESPN HD"
+            assert name == "Case Sensitive"
+
+    def test_apply_contains_mapping(self, app):
+        """Test applying contains channel name mapping"""
+        from services.epg_match_rules_service import CachedChannelNameMapping, EpgMatchRulesService
+
+        with app.app_context():
+            mapping = CachedChannelNameMapping(
+                id=1,
+                name="Remove HD",
+                old_name=" HD",
+                new_name="",
+                match_type="contains",
+                case_sensitive=False,
+            )
+
+            result, _ = EpgMatchRulesService.apply_channel_name_mappings("ESPN HD Channel", [mapping])
+            assert result == "ESPN Channel"
+
+    def test_apply_prefix_mapping(self, app):
+        """Test applying prefix channel name mapping"""
+        from services.epg_match_rules_service import CachedChannelNameMapping, EpgMatchRulesService
+
+        with app.app_context():
+            mapping = CachedChannelNameMapping(
+                id=1,
+                name="Remove US prefix",
+                old_name="US| ",
+                new_name="",
+                match_type="prefix",
+                case_sensitive=False,
+            )
+
+            result, _ = EpgMatchRulesService.apply_channel_name_mappings("US| ESPN", [mapping])
+            assert result == "ESPN"
+
+    def test_apply_suffix_mapping(self, app):
+        """Test applying suffix channel name mapping"""
+        from services.epg_match_rules_service import CachedChannelNameMapping, EpgMatchRulesService
+
+        with app.app_context():
+            mapping = CachedChannelNameMapping(
+                id=1,
+                name="Remove SD suffix",
+                old_name=" SD",
+                new_name=" HD",
+                match_type="suffix",
+                case_sensitive=False,
+            )
+
+            result, _ = EpgMatchRulesService.apply_channel_name_mappings("ESPN SD", [mapping])
+            assert result == "ESPN HD"
+
+    def test_apply_regex_mapping(self, app):
+        """Test applying regex channel name mapping"""
+        from services.epg_match_rules_service import CachedChannelNameMapping, EpgMatchRulesService
+
+        with app.app_context():
+            mapping = CachedChannelNameMapping(
+                id=1,
+                name="Remove 4K markers",
+                old_name=r"\s*\[?4K\]?\s*",
+                new_name=" ",
+                match_type="regex",
+                case_sensitive=False,
+            )
+
+            result, _ = EpgMatchRulesService.apply_channel_name_mappings("ESPN [4K] Sports", [mapping])
+            assert "4K" not in result
+
+    def test_apply_mapping_empty_name(self, app):
+        """Test that empty name returns unchanged"""
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            result, mapping = EpgMatchRulesService.apply_channel_name_mappings("", [])
+            assert result == ""
+            assert mapping is None
+
+    def test_apply_mapping_invalid_regex(self, app):
+        """Test that invalid regex is skipped gracefully"""
+        from services.epg_match_rules_service import CachedChannelNameMapping, EpgMatchRulesService
+
+        with app.app_context():
+            mapping = CachedChannelNameMapping(
+                id=1,
+                name="Invalid Regex",
+                old_name="[invalid",  # Invalid regex
+                new_name="test",
+                match_type="regex",
+                case_sensitive=False,
+            )
+
+            # Should not raise, just skip the invalid pattern
+            result, _ = EpgMatchRulesService.apply_channel_name_mappings("Some Channel", [mapping])
+            assert result == "Some Channel"
+
+
+class TestNetworkDetection:
+    """Tests for network detection from tags"""
+
+    def test_detect_network_direct_tag(self, app):
+        """Test detecting network from direct tag match"""
+        from models import FccMatchNetwork
+        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+
+        with app.app_context():
+            clear_fcc_pattern_cache()
+
+            # Create a network
+            network = FccMatchNetwork(
+                name="NBC",
+                display_name="NBC",
+                fcc_affiliation_pattern="%NBC%",
+                enabled=True,
+                priority=10,
+            )
+            db.session.add(network)
+            db.session.commit()
+
+            result = EpgMatchRulesService.detect_network_from_tags({"NBC", "HD", "US"})
+            assert result is not None
+            assert result.name == "NBC"
+
+            clear_fcc_pattern_cache()
+
+    def test_detect_network_tag_pattern(self, app):
+        """Test detecting network from tag patterns"""
+        import json
+
+        from models import FccMatchNetwork
+        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+
+        with app.app_context():
+            clear_fcc_pattern_cache()
+
+            # Create a network with tag patterns
+            network = FccMatchNetwork(
+                name="FOX",
+                display_name="FOX",
+                fcc_affiliation_pattern="%FOX%",
+                tag_patterns=json.dumps(["FOXNEWS", "FOX-HD"]),
+                enabled=True,
+                priority=10,
+            )
+            db.session.add(network)
+            db.session.commit()
+
+            result = EpgMatchRulesService.detect_network_from_tags({"FOXNEWS", "HD"})
+            assert result is not None
+            assert result.name == "FOX"
+
+            clear_fcc_pattern_cache()
+
+    def test_detect_network_no_match(self, app):
+        """Test that no network is detected when no match"""
+        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+
+        with app.app_context():
+            clear_fcc_pattern_cache()
+
+            result = EpgMatchRulesService.detect_network_from_tags({"UNKNOWN", "HD", "US"})
+            assert result is None
+
+
+class TestExclusionPatternTypes:
+    """Tests for different exclusion pattern types"""
+
+    def test_exclude_by_channel_name_regex(self, app):
+        """Test excluding channel by name with regex pattern"""
+        from models import Account, Category, Channel, EpgExclusionPattern
+        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+
+        with app.app_context():
+            clear_fcc_pattern_cache()
+
+            account = Account(
+                name="Exclusion Test Account",
+                server="http://test.server.com",
+                username="extest",
+                password="testpass",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            pattern = EpgExclusionPattern(
+                name="PPV Regex",
+                pattern_type="channel_name",
+                pattern=r"PPV\s*\d+",
+                is_regex=True,
+                enabled=True,
+                priority=10,
+            )
+            db.session.add(pattern)
+
+            category = Category(
+                account_id=account.id,
+                category_id=1,
+                category_name="Sports",
+            )
+            db.session.add(category)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="exc1",
+                name="PPV 123",
+                category_id=category.id,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            should_exclude, name, hide = EpgMatchRulesService.should_exclude_channel(channel)
+            assert should_exclude is True
+            assert name == "PPV Regex"
+
+            clear_fcc_pattern_cache()
+
+    def test_exclude_by_tag(self, app):
+        """Test excluding channel by tag"""
+        from models import Account, Category, Channel, ChannelTag, EpgExclusionPattern, Tag
+        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+
+        with app.app_context():
+            clear_fcc_pattern_cache()
+
+            account = Account(
+                name="Tag Exclusion Test",
+                server="http://test.server.com",
+                username="tagtest",
+                password="testpass",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            pattern = EpgExclusionPattern(
+                name="PPV Tag",
+                pattern_type="tag",
+                pattern="PPV",
+                is_regex=False,
+                enabled=True,
+                priority=10,
+            )
+            db.session.add(pattern)
+
+            category = Category(
+                account_id=account.id,
+                category_id=1,
+                category_name="Sports",
+            )
+            db.session.add(category)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="tagch1",
+                name="Some Event",
+                category_id=category.id,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            # Create PPV tag
+            tag = Tag(name="PPV")
+            db.session.add(tag)
+            db.session.commit()
+
+            # Associate tag with channel
+            channel_tag = ChannelTag(account_id=account.id, stream_id="tagch1", tag_id=tag.id)
+            db.session.add(channel_tag)
+            db.session.commit()
+
+            should_exclude, name, hide = EpgMatchRulesService.should_exclude_channel(channel)
+            assert should_exclude is True
+            assert name == "PPV Tag"
+
+            clear_fcc_pattern_cache()
+
+
+class TestNormalizeName:
+    """Tests for name normalization"""
+
+    def test_normalize_lowercase(self, app):
+        """Test that names are lowercased"""
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            result = EpgMatchRulesService._normalize_name("ESPN HD")
+            assert result == "espn hd"
+
+    def test_normalize_removes_special_chars(self, app):
+        """Test that special characters are removed"""
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            result = EpgMatchRulesService._normalize_name("ESPN-HD!")
+            assert result == "espnhd"
+
+    def test_normalize_collapses_whitespace(self, app):
+        """Test that multiple spaces are collapsed"""
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            result = EpgMatchRulesService._normalize_name("ESPN   HD   Sports")
+            assert result == "espn hd sports"
+
+    def test_normalize_empty_string(self, app):
+        """Test normalizing empty string"""
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            result = EpgMatchRulesService._normalize_name("")
+            assert result == ""
+
+
+class TestCachedDataclasses:
+    """Tests for cached dataclass creation"""
+
+    def test_cached_fcc_network_from_orm(self, app):
+        """Test creating CachedFccNetwork from ORM object"""
+        import json
+
+        from models import FccMatchNetwork
+        from services.epg_match_rules_service import CachedFccNetwork
+
+        with app.app_context():
+            network = FccMatchNetwork(
+                name="NBC",
+                display_name="NBC",
+                fcc_affiliation_pattern="%NBC%",
+                tag_patterns=json.dumps(["NBC-HD", "NBCSPORTS"]),
+                enabled=True,
+                priority=10,
+            )
+            db.session.add(network)
+            db.session.commit()
+
+            cached = CachedFccNetwork.from_orm(network)
+            assert cached.name == "NBC"
+            assert cached.fcc_affiliation_pattern == "%NBC%"
+            assert cached.tag_patterns == ["NBC-HD", "NBCSPORTS"]
+
+    def test_cached_channel_name_mapping_from_orm(self, app):
+        """Test creating CachedChannelNameMapping from ORM object"""
+        from models import EpgChannelNameMapping
+        from services.epg_match_rules_service import CachedChannelNameMapping
+
+        with app.app_context():
+            mapping = EpgChannelNameMapping(
+                name="Test Mapping",
+                old_name="Old Channel",
+                new_name="New Channel",
+                match_type="exact",
+                case_sensitive=True,
+                enabled=True,
+                priority=10,
+            )
+            db.session.add(mapping)
+            db.session.commit()
+
+            cached = CachedChannelNameMapping.from_orm(mapping)
+            assert cached.name == "Test Mapping"
+            assert cached.old_name == "Old Channel"
+            assert cached.new_name == "New Channel"
+            assert cached.match_type == "exact"
+            assert cached.case_sensitive is True
+
+    def test_cached_channel_pattern_from_orm(self, app):
+        """Test creating CachedChannelPattern from ORM object"""
+        import json
+
+        from models import FccMatchChannelPattern
+        from services.epg_match_rules_service import CachedChannelPattern
+
+        with app.app_context():
+            pattern = FccMatchChannelPattern(
+                name="Network Number",
+                pattern=r"(\d{1,2})\s*(?:HD|SD)",
+                capture_group=1,
+                networks=json.dumps(["NBC", "ABC"]),
+                enabled=True,
+                priority=10,
+            )
+            db.session.add(pattern)
+            db.session.commit()
+
+            cached = CachedChannelPattern.from_orm(pattern)
+            assert cached.name == "Network Number"
+            assert cached.capture_group == 1
+            assert cached.networks == ["NBC", "ABC"]
+
+    def test_cached_location_pattern_from_orm(self, app):
+        """Test creating CachedLocationPattern from ORM object"""
+        from models import FccMatchLocationPattern
+        from services.epg_match_rules_service import CachedLocationPattern
+
+        with app.app_context():
+            pattern = FccMatchLocationPattern(
+                name="City State",
+                pattern=r"\[([A-Z]+),\s*([A-Z]{2})\]",
+                extract_city=True,
+                extract_state=True,
+                city_group=1,
+                state_group=2,
+                enabled=True,
+                priority=10,
+            )
+            db.session.add(pattern)
+            db.session.commit()
+
+            cached = CachedLocationPattern.from_orm(pattern)
+            assert cached.name == "City State"
+            assert cached.extract_city is True
+            assert cached.extract_state is True
+            assert cached.city_group == 1
+            assert cached.state_group == 2
+
+    def test_cached_exclusion_pattern_from_orm(self, app):
+        """Test creating CachedExclusionPattern from ORM object"""
+        from models import EpgExclusionPattern
+        from services.epg_match_rules_service import CachedExclusionPattern
+
+        with app.app_context():
+            pattern = EpgExclusionPattern(
+                name="PPV Pattern",
+                pattern_type="category_name",
+                pattern="PPV",
+                is_regex=False,
+                hide_channel=True,
+                enabled=True,
+                priority=10,
+            )
+            db.session.add(pattern)
+            db.session.commit()
+
+            cached = CachedExclusionPattern.from_orm(pattern)
+            assert cached.name == "PPV Pattern"
+            assert cached.pattern_type == "category_name"
+            assert cached.pattern == "PPV"
+            assert cached.is_regex is False
+            assert cached.hide_channel is True
+
+
+class TestCacheLoading:
+    """Tests for cache loading methods"""
+
+    def test_get_quality_tags_from_db(self, app):
+        """Test loading quality tags from database"""
+        from models import QualityTag
+        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+
+        with app.app_context():
+            clear_fcc_pattern_cache()
+
+            # Create some quality tags
+            tag1 = QualityTag(tag_name="HD", enabled=True, exclude_from_location=True)
+            tag2 = QualityTag(tag_name="4K", enabled=True, exclude_from_location=True)
+            db.session.add_all([tag1, tag2])
+            db.session.commit()
+
+            tags = EpgMatchRulesService.get_quality_tags()
+            assert "HD" in tags
+            assert "4K" in tags
+
+            clear_fcc_pattern_cache()
+
+    def test_get_country_tags_from_db(self, app):
+        """Test loading country tags from database"""
+        from models import CountryTag
+        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+
+        with app.app_context():
+            clear_fcc_pattern_cache()
+
+            # Create some country tags
+            tag1 = CountryTag(tag_name="US", enabled=True, exclude_from_location=True)
+            tag2 = CountryTag(tag_name="UK", enabled=True, exclude_from_location=True)
+            db.session.add_all([tag1, tag2])
+            db.session.commit()
+
+            tags = EpgMatchRulesService.get_country_tags()
+            assert "US" in tags
+            assert "UK" in tags
+
+            clear_fcc_pattern_cache()
+
+    def test_get_callsign_suffixes_from_db(self, app):
+        """Test loading callsign suffixes from database"""
+        from models import CallsignSuffix
+        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+
+        with app.app_context():
+            clear_fcc_pattern_cache()
+
+            # Create some callsign suffixes
+            s1 = CallsignSuffix(suffix="-TV", enabled=True, try_on_miss=True, priority=1)
+            s2 = CallsignSuffix(suffix="-DT", enabled=True, try_on_miss=True, priority=2)
+            db.session.add_all([s1, s2])
+            db.session.commit()
+
+            suffixes = EpgMatchRulesService.get_callsign_suffixes()
+            assert "-TV" in suffixes
+            assert "-DT" in suffixes
+
+            clear_fcc_pattern_cache()
+
+    def test_get_country_suffix_mappings_from_db(self, app):
+        """Test loading country suffix mappings from database"""
+        import json
+
+        from models import EpgCountrySuffix
+        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+
+        with app.app_context():
+            clear_fcc_pattern_cache()
+
+            # Create a country suffix mapping
+            mapping = EpgCountrySuffix(
+                country_code="US",
+                country_name="United States",
+                epg_suffixes=json.dumps([".us", ".us2"]),
+                enabled=True,
+                priority=1,
+            )
+            db.session.add(mapping)
+            db.session.commit()
+
+            mappings = EpgMatchRulesService.get_country_suffix_mappings()
+            assert "US" in mappings
+            assert ".us" in mappings["US"]
+
+            clear_fcc_pattern_cache()
+
+
+class TestGetSourceValue:
+    """Tests for _get_source_value helper method"""
+
+    def test_get_channel_name(self, app):
+        """Test getting channel_name source"""
+        from services.epg_match_rules_service import EpgMatchRule, EpgMatchRulesService
+
+        with app.app_context():
+            # Create a minimal mock channel
+            class MockChannel:
+                name = "ESPN HD"
+                cleaned_name = "ESPN"
+                category = None
+                epg_channel_id = "ESPN.us"
+
+            channel = MockChannel()
+            result = EpgMatchRulesService._get_source_value(channel, EpgMatchRule.SOURCE_CHANNEL_NAME)
+            assert result == "ESPN HD"
+
+    def test_get_cleaned_name(self, app):
+        """Test getting cleaned_name source"""
+        from services.epg_match_rules_service import EpgMatchRule, EpgMatchRulesService
+
+        with app.app_context():
+
+            class MockChannel:
+                name = "ESPN HD"
+                cleaned_name = "ESPN"
+                category = None
+                epg_channel_id = "ESPN.us"
+
+            channel = MockChannel()
+            result = EpgMatchRulesService._get_source_value(channel, EpgMatchRule.SOURCE_CLEANED_NAME)
+            assert result == "ESPN"
+
+    def test_get_epg_channel_id(self, app):
+        """Test getting epg_channel_id source"""
+        from services.epg_match_rules_service import EpgMatchRule, EpgMatchRulesService
+
+        with app.app_context():
+
+            class MockChannel:
+                name = "ESPN HD"
+                cleaned_name = "ESPN"
+                category = None
+                epg_channel_id = "ESPN.us"
+
+            channel = MockChannel()
+            result = EpgMatchRulesService._get_source_value(channel, EpgMatchRule.SOURCE_EPG_CHANNEL_ID)
+            assert result == "ESPN.us"
+
+    def test_get_category_name(self, app):
+        """Test getting category_name source"""
+        from services.epg_match_rules_service import EpgMatchRule, EpgMatchRulesService
+
+        with app.app_context():
+
+            class MockCategory:
+                category_name = "Sports"
+
+            class MockChannel:
+                name = "ESPN HD"
+                cleaned_name = "ESPN"
+                category = MockCategory()
+                epg_channel_id = "ESPN.us"
+
+            channel = MockChannel()
+            result = EpgMatchRulesService._get_source_value(channel, EpgMatchRule.SOURCE_CATEGORY_NAME)
+            assert result == "Sports"
+
+    def test_get_source_with_name_mapping(self, app):
+        """Test getting source value with name mapping applied"""
+        from services.epg_match_rules_service import CachedChannelNameMapping, EpgMatchRule, EpgMatchRulesService
+
+        with app.app_context():
+
+            class MockChannel:
+                name = "Fox News"
+                cleaned_name = "Fox News"
+                category = None
+                epg_channel_id = None
+
+            mapping = CachedChannelNameMapping(
+                id=1,
+                name="Fox to FOX",
+                old_name="Fox News",
+                new_name="FOX News Channel",
+                match_type="exact",
+                case_sensitive=False,
+            )
+
+            channel = MockChannel()
+            result = EpgMatchRulesService._get_source_value(channel, EpgMatchRule.SOURCE_CHANNEL_NAME, [mapping])
+            assert result == "FOX News Channel"
+
+
+class TestGetChannelTags:
+    """Tests for _get_channel_tags helper"""
+
+    def test_get_channel_tags(self, app):
+        """Test getting tags for a channel"""
+        from models import Account, ChannelTag, Tag
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            # Create account
+            account = Account(
+                name="Tag Test Account",
+                server="test.server.com",
+                username="tagtest",
+                password="testpass",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            # Create tags
+            tag1 = Tag(name="HD")
+            tag2 = Tag(name="SPORTS")
+            db.session.add_all([tag1, tag2])
+            db.session.commit()
+
+            # Associate tags with channel
+            channel_tag1 = ChannelTag(account_id=account.id, stream_id="test123", tag_id=tag1.id)
+            channel_tag2 = ChannelTag(account_id=account.id, stream_id="test123", tag_id=tag2.id)
+            db.session.add_all([channel_tag1, channel_tag2])
+            db.session.commit()
+
+            # Get tags
+            tags = EpgMatchRulesService._get_channel_tags(account.id, "test123")
+            assert "HD" in tags
+            assert "SPORTS" in tags
+
+    def test_get_channel_tags_none(self, app):
+        """Test getting tags for channel with no tags"""
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            tags = EpgMatchRulesService._get_channel_tags(999999, "nonexistent")
+            assert tags == set()
+
+
+class TestFccStrategies:
+    """Tests for FCC matching strategies"""
+
+    def test_get_fcc_strategies(self, app):
+        """Test getting FCC matching strategies from DB"""
+        from models import FccMatchStrategy
+        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+
+        with app.app_context():
+            clear_fcc_pattern_cache()
+
+            # Create a strategy
+            strategy = FccMatchStrategy(
+                name="Test Strategy",
+                strategy_type="state_channel",
+                description="Test",
+                require_channel_number=True,
+                require_state=True,
+                require_city=False,
+                enabled=True,
+                priority=10,
+            )
+            db.session.add(strategy)
+            db.session.commit()
+
+            strategies = EpgMatchRulesService.get_fcc_strategies()
+            assert len(strategies) >= 1
+            assert any(s.name == "Test Strategy" for s in strategies)
+
+            clear_fcc_pattern_cache()
+
+    def test_get_fcc_location_patterns(self, app):
+        """Test getting FCC location patterns from DB"""
+        from models import FccMatchLocationPattern
+        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+
+        with app.app_context():
+            clear_fcc_pattern_cache()
+
+            # Create a location pattern
+            pattern = FccMatchLocationPattern(
+                name="Bracket City State",
+                pattern=r"\[([A-Z]+),\s*([A-Z]{2})\]",
+                extract_city=True,
+                extract_state=True,
+                city_group=1,
+                state_group=2,
+                enabled=True,
+                priority=10,
+            )
+            db.session.add(pattern)
+            db.session.commit()
+
+            patterns = EpgMatchRulesService.get_fcc_location_patterns()
+            assert len(patterns) >= 1
+            assert any(p.name == "Bracket City State" for p in patterns)
+
+            clear_fcc_pattern_cache()
+
+    def test_get_network_names(self, app):
+        """Test getting network names set"""
+        from models import FccMatchNetwork
+        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+
+        with app.app_context():
+            clear_fcc_pattern_cache()
+
+            # Create networks
+            net1 = FccMatchNetwork(
+                name="NBC",
+                display_name="NBC",
+                fcc_affiliation_pattern="%NBC%",
+                enabled=True,
+                priority=10,
+            )
+            net2 = FccMatchNetwork(
+                name="ABC",
+                display_name="ABC",
+                fcc_affiliation_pattern="%ABC%",
+                enabled=True,
+                priority=20,
+            )
+            db.session.add_all([net1, net2])
+            db.session.commit()
+
+            names = EpgMatchRulesService.get_network_names()
+            assert "NBC" in names
+            assert "ABC" in names
+
+            clear_fcc_pattern_cache()
+
+
+class TestExclusionPatternCaching:
+    """Tests for exclusion pattern caching"""
+
+    def test_get_enabled_exclusion_patterns(self, app):
+        """Test getting enabled exclusion patterns with caching"""
+        from models import EpgExclusionPattern
+        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+
+        with app.app_context():
+            clear_fcc_pattern_cache()
+
+            # Create exclusion patterns
+            p1 = EpgExclusionPattern(
+                name="PPV Pattern",
+                pattern_type="category_name",
+                pattern="PPV",
+                is_regex=False,
+                enabled=True,
+                priority=10,
+            )
+            p2 = EpgExclusionPattern(
+                name="Adult Pattern",
+                pattern_type="channel_name",
+                pattern="XXX",
+                is_regex=False,
+                enabled=True,
+                priority=20,
+            )
+            db.session.add_all([p1, p2])
+            db.session.commit()
+
+            patterns = EpgMatchRulesService.get_enabled_exclusion_patterns()
+            assert len(patterns) >= 2
+            assert patterns[0].name == "PPV Pattern"  # Lower priority first
+
+            clear_fcc_pattern_cache()
+
+
+class TestApplyMatchRule:
+    """Tests for _apply_match_rule method"""
+
+    def test_apply_match_rule_skip_action(self, app):
+        """Test match rule with skip action returns None"""
+        from models import Category, EpgChannel, EpgMatchRule, EpgSource
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            # Create account and channel
+            account = Account(name="Test", server="test.com")
+            db.session.add(account)
+            db.session.flush()
+
+            category = Category(
+                account_id=account.id,
+                category_id="1",
+                category_name="News",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="100",
+                name="Test Channel",
+                cleaned_name="Test Channel",
+                category_id=category.id,
+            )
+            db.session.add(channel)
+
+            # Create EPG source and channels
+            source = EpgSource(name="Test", source_type="xmltv_url", url="http://test.com")
+            db.session.add(source)
+            db.session.flush()
+
+            epg_channel = EpgChannel(
+                source_id=source.id,
+                channel_id="test.us",
+                display_name="Test",
+            )
+            db.session.add(epg_channel)
+            db.session.commit()
+
+            # Create rule with skip action
+            rule = EpgMatchRule(
+                ruleset_id=1,
+                name="Skip Rule",
+                match_type="provider_id",
+                action="skip",
+            )
+
+            result = EpgMatchRulesService._apply_match_rule(
+                channel=channel,
+                rule=rule,
+                epg_channels=[epg_channel],
+                epg_by_id={"test.us": epg_channel},
+                epg_by_name={"test": epg_channel},
+                epg_by_callsign={},
+                channel_tags=set(),
+                country_tags=set(),
+            )
+            assert result is None
+
+    def test_apply_match_rule_fallback_action(self, app):
+        """Test match rule with fallback action"""
+        from models import Category, EpgChannel, EpgMatchRule, EpgSource
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            account = Account(name="Test", server="test.com")
+            db.session.add(account)
+            db.session.flush()
+
+            category = Category(
+                account_id=account.id,
+                category_id="1",
+                category_name="News",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="100",
+                name="Test Channel",
+                cleaned_name="Test Channel",
+                category_id=category.id,
+            )
+            db.session.add(channel)
+
+            source = EpgSource(name="Test", source_type="xmltv_url", url="http://test.com")
+            db.session.add(source)
+            db.session.flush()
+
+            epg_channel = EpgChannel(
+                source_id=source.id,
+                channel_id="fallback.us",
+                display_name="Fallback",
+            )
+            db.session.add(epg_channel)
+            db.session.commit()
+
+            rule = EpgMatchRule(
+                ruleset_id=1,
+                name="Fallback Rule",
+                match_type="provider_id",
+                action="use_fallback",
+                fallback_epg_id="fallback.us",
+            )
+
+            result = EpgMatchRulesService._apply_match_rule(
+                channel=channel,
+                rule=rule,
+                epg_channels=[epg_channel],
+                epg_by_id={"fallback.us": epg_channel},
+                epg_by_name={},
+                epg_by_callsign={},
+                channel_tags=set(),
+                country_tags=set(),
+            )
+            assert result is not None
+            assert result[0].channel_id == "fallback.us"
+            assert result[1] == 1.0
+
+    def test_apply_match_rule_callsign_tag(self, app):
+        """Test match rule with callsign_tag match type"""
+        from models import Category, EpgChannel, EpgMatchRule, EpgSource
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            account = Account(name="Test", server="test.com")
+            db.session.add(account)
+            db.session.flush()
+
+            category = Category(
+                account_id=account.id,
+                category_id="1",
+                category_name="News",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="100",
+                name="KABC News",
+                cleaned_name="KABC News",
+                category_id=category.id,
+            )
+            db.session.add(channel)
+
+            source = EpgSource(name="Test", source_type="xmltv_url", url="http://test.com")
+            db.session.add(source)
+            db.session.flush()
+
+            epg_channel = EpgChannel(
+                source_id=source.id,
+                channel_id="kabc.us",
+                display_name="KABC",
+            )
+            db.session.add(epg_channel)
+            db.session.commit()
+
+            rule = EpgMatchRule(
+                ruleset_id=1,
+                name="Callsign Tag Rule",
+                match_type="callsign_tag",
+            )
+
+            # Channel has KABC as a tag
+            result = EpgMatchRulesService._apply_match_rule(
+                channel=channel,
+                rule=rule,
+                epg_channels=[epg_channel],
+                epg_by_id={},
+                epg_by_name={},
+                epg_by_callsign={"KABC": epg_channel},
+                channel_tags={"KABC"},  # Callsign-like tag
+                country_tags=set(),
+            )
+            assert result is not None
+            assert result[0].display_name == "KABC"
+            assert result[1] == 0.95
+
+    def test_apply_match_rule_callsign_from_name(self, app):
+        """Test match rule with callsign_name match type"""
+        from models import Category, EpgChannel, EpgMatchRule, EpgSource
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            account = Account(name="Test", server="test.com")
+            db.session.add(account)
+            db.session.flush()
+
+            category = Category(
+                account_id=account.id,
+                category_id="1",
+                category_name="News",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="100",
+                name="WABC News Channel",
+                cleaned_name="WABC News Channel",
+                category_id=category.id,
+            )
+            db.session.add(channel)
+
+            source = EpgSource(name="Test", source_type="xmltv_url", url="http://test.com")
+            db.session.add(source)
+            db.session.flush()
+
+            epg_channel = EpgChannel(
+                source_id=source.id,
+                channel_id="wabc.us",
+                display_name="WABC",
+            )
+            db.session.add(epg_channel)
+            db.session.commit()
+
+            rule = EpgMatchRule(
+                ruleset_id=1,
+                name="Callsign Name Rule",
+                match_type="callsign_name",
+                source="channel_name",
+            )
+
+            result = EpgMatchRulesService._apply_match_rule(
+                channel=channel,
+                rule=rule,
+                epg_channels=[epg_channel],
+                epg_by_id={},
+                epg_by_name={},
+                epg_by_callsign={"WABC": epg_channel},
+                channel_tags=set(),
+                country_tags=set(),
+            )
+            assert result is not None
+            assert result[0].display_name == "WABC"
+            assert result[1] == 0.9
+
+    def test_apply_match_rule_fuzzy_name(self, app):
+        """Test match rule with fuzzy_name match type"""
+        from models import Category, EpgChannel, EpgMatchRule, EpgSource
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            account = Account(name="Test", server="test.com")
+            db.session.add(account)
+            db.session.flush()
+
+            category = Category(
+                account_id=account.id,
+                category_id="1",
+                category_name="Sports",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="100",
+                name="ESPN Sports Network",
+                cleaned_name="ESPN Sports Network",
+                category_id=category.id,
+            )
+            db.session.add(channel)
+
+            source = EpgSource(name="Test", source_type="xmltv_url", url="http://test.com")
+            db.session.add(source)
+            db.session.flush()
+
+            epg_channel = EpgChannel(
+                source_id=source.id,
+                channel_id="espn.us",
+                display_name="ESPN Sports",
+            )
+            db.session.add(epg_channel)
+            db.session.commit()
+
+            rule = EpgMatchRule(
+                ruleset_id=1,
+                name="Fuzzy Name Rule",
+                match_type="fuzzy_name",
+                source="cleaned_name",
+                min_confidence=0.5,  # Lower threshold for test
+            )
+
+            result = EpgMatchRulesService._apply_match_rule(
+                channel=channel,
+                rule=rule,
+                epg_channels=[epg_channel],
+                epg_by_id={},
+                epg_by_name={"espn sports": epg_channel},
+                epg_by_callsign={},
+                channel_tags=set(),
+                country_tags=set(),
+            )
+            assert result is not None
+            assert result[0].channel_id == "espn.us"
+
+    def test_apply_match_rule_regex(self, app):
+        """Test match rule with regex match type"""
+        from models import Category, EpgChannel, EpgMatchRule, EpgSource
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            account = Account(name="Test", server="test.com")
+            db.session.add(account)
+            db.session.flush()
+
+            category = Category(
+                account_id=account.id,
+                category_id="1",
+                category_name="Sports",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="100",
+                name="ID:hbo.us| HBO",
+                cleaned_name="ID:hbo.us| HBO",
+                category_id=category.id,
+            )
+            db.session.add(channel)
+
+            source = EpgSource(name="Test", source_type="xmltv_url", url="http://test.com")
+            db.session.add(source)
+            db.session.flush()
+
+            epg_channel = EpgChannel(
+                source_id=source.id,
+                channel_id="hbo.us",
+                display_name="HBO",
+            )
+            db.session.add(epg_channel)
+            db.session.commit()
+
+            rule = EpgMatchRule(
+                ruleset_id=1,
+                name="Regex Rule",
+                match_type="regex",
+                source="channel_name",
+                pattern=r"ID:([a-z.]+)\|",  # Extract ID from name
+            )
+
+            result = EpgMatchRulesService._apply_match_rule(
+                channel=channel,
+                rule=rule,
+                epg_channels=[epg_channel],
+                epg_by_id={"hbo.us": epg_channel},
+                epg_by_name={},
+                epg_by_callsign={},
+                channel_tags=set(),
+                country_tags=set(),
+            )
+            assert result is not None
+            assert result[0].channel_id == "hbo.us"
+            assert result[1] == 0.9
+
+    def test_apply_match_rule_tag_based(self, app):
+        """Test match rule with tag_based match type"""
+        from models import Category, EpgChannel, EpgMatchRule, EpgSource
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            account = Account(name="Test", server="test.com")
+            db.session.add(account)
+            db.session.flush()
+
+            category = Category(
+                account_id=account.id,
+                category_id="1",
+                category_name="Local",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="100",
+                name="Local News",
+                cleaned_name="Local News",
+                category_id=category.id,
+            )
+            db.session.add(channel)
+
+            source = EpgSource(name="Test", source_type="xmltv_url", url="http://test.com")
+            db.session.add(source)
+            db.session.flush()
+
+            epg_channel = EpgChannel(
+                source_id=source.id,
+                channel_id="nbc",
+                display_name="NBC",
+            )
+            db.session.add(epg_channel)
+            db.session.commit()
+
+            rule = EpgMatchRule(
+                ruleset_id=1,
+                name="Tag Rule",
+                match_type="tag_based",
+                pattern=r"^(NBC|CBS|ABC)$",
+            )
+
+            result = EpgMatchRulesService._apply_match_rule(
+                channel=channel,
+                rule=rule,
+                epg_channels=[epg_channel],
+                epg_by_id={"nbc": epg_channel},
+                epg_by_name={},
+                epg_by_callsign={},
+                channel_tags={"NBC", "LOCAL"},
+                country_tags=set(),
+            )
+            assert result is not None
+            assert result[0].channel_id == "nbc"
+            assert result[1] == 0.85
+
+    def test_apply_match_rule_category_pattern(self, app):
+        """Test match rule with category_pattern match type"""
+        from models import Category, EpgChannel, EpgMatchRule, EpgSource
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            account = Account(name="Test", server="test.com")
+            db.session.add(account)
+            db.session.flush()
+
+            category = Category(
+                account_id=account.id,
+                category_id="1",
+                category_name="US | Sports",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="100",
+                name="ESPN",
+                cleaned_name="ESPN",
+                category_id=category.id,
+            )
+            db.session.add(channel)
+
+            source = EpgSource(name="Test", source_type="xmltv_url", url="http://test.com")
+            db.session.add(source)
+            db.session.flush()
+
+            epg_channel = EpgChannel(
+                source_id=source.id,
+                channel_id="espn.us",
+                display_name="ESPN",
+            )
+            db.session.add(epg_channel)
+            db.session.commit()
+
+            rule = EpgMatchRule(
+                ruleset_id=1,
+                name="Category Pattern Rule",
+                match_type="category_pattern",
+                pattern=r"US.*Sports",
+                source="cleaned_name",
+            )
+
+            result = EpgMatchRulesService._apply_match_rule(
+                channel=channel,
+                rule=rule,
+                epg_channels=[epg_channel],
+                epg_by_id={},
+                epg_by_name={"espn": epg_channel},
+                epg_by_callsign={},
+                channel_tags=set(),
+                country_tags=set(),
+            )
+            assert result is not None
+            assert result[0].channel_id == "espn.us"
+            assert result[1] == 0.8
+
+    def test_apply_match_rule_network_fallback(self, app):
+        """Test match rule with network_fallback match type"""
+        from models import Category, EpgChannel, EpgMatchRule, EpgSource
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            account = Account(name="Test", server="test.com")
+            db.session.add(account)
+            db.session.flush()
+
+            category = Category(
+                account_id=account.id,
+                category_id="1",
+                category_name="Local",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="100",
+                name="NBC News",
+                cleaned_name="NBC News",
+                category_id=category.id,
+            )
+            db.session.add(channel)
+
+            source = EpgSource(name="Test", source_type="xmltv_url", url="http://test.com")
+            db.session.add(source)
+            db.session.flush()
+
+            epg_channel = EpgChannel(
+                source_id=source.id,
+                channel_id="nbc.us",
+                display_name="NBC",
+            )
+            db.session.add(epg_channel)
+            db.session.commit()
+
+            rule = EpgMatchRule(
+                ruleset_id=1,
+                name="Network Fallback Rule",
+                match_type="network_fallback",
+            )
+
+            result = EpgMatchRulesService._apply_match_rule(
+                channel=channel,
+                rule=rule,
+                epg_channels=[epg_channel],
+                epg_by_id={"nbc.us": epg_channel},
+                epg_by_name={},
+                epg_by_callsign={},
+                channel_tags={"NBC"},  # Has NBC tag
+                country_tags=set(),
+            )
+            assert result is not None
+            assert result[0].channel_id == "nbc.us"
+            assert result[1] == 0.6
+
+
+class TestNormalizeCallsign:
+    """Tests for _normalize_callsign method"""
+
+    def test_normalize_callsign_with_suffix(self, app):
+        """Test normalizing callsigns with common suffixes"""
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            # Standard suffixes should be removed
+            assert EpgMatchRulesService._normalize_callsign("KABC-TV") == "KABC"
+            assert EpgMatchRulesService._normalize_callsign("WABC-DT") == "WABC"
+            assert EpgMatchRulesService._normalize_callsign("KCBS-HD") == "KCBS"
+
+    def test_normalize_callsign_without_suffix(self, app):
+        """Test normalizing callsigns without suffixes"""
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            assert EpgMatchRulesService._normalize_callsign("KABC") == "KABC"
+            assert EpgMatchRulesService._normalize_callsign("WGN") == "WGN"
+
+    def test_normalize_callsign_empty(self, app):
+        """Test normalizing empty or None callsigns"""
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            assert EpgMatchRulesService._normalize_callsign("") == ""
+            assert EpgMatchRulesService._normalize_callsign(None) == ""
+
+
+class TestMatchRuleFilters:
+    """Tests for match rule filters (category, country, tags)"""
+
+    def test_match_channels_with_category_filter(self, app):
+        """Test that match rules with category filter are applied correctly"""
+        from models import Category, EpgChannel, EpgMatchRule, EpgMatchRuleSet, EpgSource
+        from services.epg_match_rules_service import EpgMatchRulesService
+
+        with app.app_context():
+            account = Account(name="Test", server="test.com")
+            db.session.add(account)
+            db.session.flush()
+
+            category_sports = Category(
+                account_id=account.id,
+                category_id="1",
+                category_name="Sports",
+            )
+            category_news = Category(
+                account_id=account.id,
+                category_id="2",
+                category_name="News",
+            )
+            db.session.add_all([category_sports, category_news])
+            db.session.flush()
+
+            channel_espn = Channel(
+                account_id=account.id,
+                stream_id="100",
+                name="ESPN",
+                cleaned_name="ESPN",
+                category_id=category_sports.id,
+            )
+            channel_cnn = Channel(
+                account_id=account.id,
+                stream_id="101",
+                name="CNN",
+                cleaned_name="CNN",
+                category_id=category_news.id,
+            )
+            db.session.add_all([channel_espn, channel_cnn])
+
+            source = EpgSource(name="Test", source_type="xmltv_url", url="http://test.com")
+            db.session.add(source)
+            db.session.flush()
+
+            epg_espn = EpgChannel(
+                source_id=source.id,
+                channel_id="espn.us",
+                display_name="ESPN",
+            )
+            db.session.add(epg_espn)
+            db.session.commit()
+
+            ruleset = EpgMatchRuleSet(name="Test", enabled=True, priority=10)
+            db.session.add(ruleset)
+            db.session.flush()
+
+            # Rule only applies to Sports category
+            rule = EpgMatchRule(
+                ruleset_id=ruleset.id,
+                name="Sports Only Rule",
+                match_type="exact_name",
+                source="cleaned_name",
+                category_pattern=r"^Sports$",
+                priority=10,
+                enabled=True,
+            )
+            db.session.add(rule)
+            db.session.commit()
+
+            # ESPN should match (Sports category)
+            result = EpgMatchRulesService._apply_match_rule(
+                channel=channel_espn,
+                rule=rule,
+                epg_channels=[epg_espn],
+                epg_by_id={"espn.us": epg_espn},
+                epg_by_name={"espn": epg_espn},
+                epg_by_callsign={},
+                channel_tags=set(),
+                country_tags=set(),
+            )
+            # ESPN with exact_name match should match
+            assert result is not None
+            assert result[0].display_name == "ESPN"
