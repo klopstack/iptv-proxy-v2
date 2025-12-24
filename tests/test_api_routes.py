@@ -278,8 +278,10 @@ def test_preview_channels_all(app, client, test_channel_with_tags):
         assert "tags" in channel
         assert isinstance(channel["tags"], list)
         assert len(channel["tags"]) == 2  # HD and US
-        assert "HD" in channel["tags"]
-        assert "US" in channel["tags"]
+        # Tags now include source info: [{"name": "HD", "source": "extraction"}, ...]
+        tag_names = [t["name"] if isinstance(t, dict) else t for t in channel["tags"]]
+        assert "HD" in tag_names
+        assert "US" in tag_names
 
 
 def test_preview_channels_with_pagination(app, client, test_account):
@@ -442,11 +444,13 @@ def test_get_channel_details(app, client, test_channel_with_tags, test_account):
         assert data["account_name"] == "Test Account"
         assert data["category"] == "Test Category"
 
-        # Check tags are included
+        # Check tags are included (tags now include source info)
         assert "tags" in data
         assert len(data["tags"]) == 2
-        assert "HD" in data["tags"]
-        assert "US" in data["tags"]
+        # Tags now include source info: [{"name": "HD", "source": "extraction"}, ...]
+        tag_names = [t["name"] if isinstance(t, dict) else t for t in data["tags"]]
+        assert "HD" in tag_names
+        assert "US" in tag_names
 
         # Check other fields are present
         assert "stream_type" in data

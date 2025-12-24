@@ -3,12 +3,14 @@ EPG (Electronic Program Guide) management routes
 """
 import json
 import logging
+from datetime import datetime
+from typing import Dict, List
 
 from flask import Blueprint, jsonify, request
 
 from error_handling import handle_errors
 from models import Account, ChannelEpgMapping, EpgChannel, EpgSource, SdLineup, SdStation, db
-from services.epg_service import EpgService
+from services.epg_service import EpgService, make_sd_xmltv_id, normalize_xmltv_url
 from services.iptv_service import IPTVService
 from services.schedules_direct import SchedulesDirectClient, SchedulesDirectError, validate_credentials
 
@@ -16,6 +18,99 @@ logger = logging.getLogger(__name__)
 
 # Create blueprint
 epg_bp = Blueprint("epg", __name__)
+
+
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+
+def _sync_sd_channels_to_epg(source: EpgSource, channels: List[Dict]) -> Dict:
+    """
+    Sync Schedules Direct channels to EpgChannel records.
+
+    Args:
+        source: The EpgSource for Schedules Direct
+        channels: List of channel dicts from SchedulesDirectClient.get_lineup_channels()
+
+    Returns:
+        Dict with sync statistics
+    """
+    stats = {
+        "channels_added": 0,
+        "channels_updated": 0,
+        "channels_removed": 0,
+    }
+
+    now = datetime.utcnow()
+    seen_channel_ids = set()
+
+    # Get existing channels for this source
+    existing = {ec.channel_id: ec for ec in EpgChannel.query.filter_by(source_id=source.id).all()}
+
+    for channel in channels:
+        station_id = channel.get("stationID")
+        if not station_id:
+            continue
+
+        # Create XMLTV-style channel ID for SD stations
+        channel_id = make_sd_xmltv_id(station_id)
+        seen_channel_ids.add(channel_id)
+
+        # Build display names list - include callsign and full name
+        display_names = []
+        callsign = channel.get("callsign")
+        name = channel.get("name")
+        if callsign:
+            display_names.append(callsign)
+        if name and name != callsign:
+            display_names.append(name)
+
+        primary_name = callsign or name or f"Station {station_id}"
+
+        # Get logo URL if available
+        logo_url = None
+        logo_info = channel.get("logo")
+        if logo_info and isinstance(logo_info, dict):
+            logo_url = logo_info.get("url")
+
+        if channel_id in existing:
+            # Update existing channel
+            ec = existing[channel_id]
+            ec.display_name = primary_name
+            ec.display_names_json = json.dumps(display_names) if display_names else None
+            ec.icon_url = logo_url
+            ec.last_seen = now
+            ec.updated_at = now
+            stats["channels_updated"] += 1
+        else:
+            # Create new channel
+            ec = EpgChannel(
+                source_id=source.id,
+                channel_id=channel_id,
+                display_name=primary_name,
+                display_names_json=json.dumps(display_names) if display_names else None,
+                icon_url=logo_url,
+                program_count=0,  # Will be updated when schedules are fetched
+                last_seen=now,
+            )
+            db.session.add(ec)
+            stats["channels_added"] += 1
+
+    # Count channels not seen (but don't delete them)
+    for channel_id in existing:
+        if channel_id not in seen_channel_ids:
+            stats["channels_removed"] += 1
+
+    db.session.commit()
+
+    logger.info(
+        f"SD sync for source {source.id} ({source.name}): "
+        f"added={stats['channels_added']}, updated={stats['channels_updated']}, "
+        f"not_seen={stats['channels_removed']}"
+    )
+
+    return stats
 
 
 # ============================================================================
@@ -42,6 +137,11 @@ def get_epg_sources():
                 "last_sync_status": s.last_sync_status,
                 "last_sync_message": s.last_sync_message,
                 "channel_count": s.channel_count,
+                "xmltv_grabber": s.xmltv_grabber,
+                "xmltv_config_name": s.xmltv_config_name,
+                "xmltv_days": s.xmltv_days,
+                "xmltv_offset": s.xmltv_offset,
+                "xmltv_extra_args": s.xmltv_extra_args,
             }
             for s in sources
         ]
@@ -59,7 +159,7 @@ def create_epg_source():
     if not data.get("source_type"):
         return jsonify({"error": "Source type is required"}), 400
 
-    valid_types = ["provider", "schedules_direct", "xmltv_url", "xmltv_file"]
+    valid_types = ["provider", "schedules_direct", "xmltv_url", "xmltv_file", "xmltv_grabber"]
     if data["source_type"] not in valid_types:
         return jsonify({"error": f"Invalid source type. Must be one of: {valid_types}"}), 400
 
@@ -69,6 +169,11 @@ def create_epg_source():
             return jsonify({"error": "Account ID is required for provider sources"}), 400
         Account.query.get_or_404(data["account_id"])
 
+    # Validate xmltv_grabber fields
+    if data["source_type"] == "xmltv_grabber":
+        if not data.get("xmltv_grabber"):
+            return jsonify({"error": "XMLTV grabber name is required"}), 400
+
     source = EpgSource(
         name=data["name"],
         source_type=data["source_type"],
@@ -77,6 +182,11 @@ def create_epg_source():
         sd_username=data.get("sd_username"),
         sd_password=data.get("sd_password"),
         sd_lineup=data.get("sd_lineup"),
+        xmltv_grabber=data.get("xmltv_grabber"),
+        xmltv_config_name=data.get("xmltv_config_name"),
+        xmltv_days=data.get("xmltv_days", 7),
+        xmltv_offset=data.get("xmltv_offset", 0),
+        xmltv_extra_args=data.get("xmltv_extra_args"),
         priority=data.get("priority", 100),
         enabled=data.get("enabled", True),
     )
@@ -118,6 +228,16 @@ def update_epg_source(source_id):
         source.sd_password = data["sd_password"]
     if "sd_lineup" in data:
         source.sd_lineup = data["sd_lineup"]
+    if "xmltv_grabber" in data:
+        source.xmltv_grabber = data["xmltv_grabber"]
+    if "xmltv_config_name" in data:
+        source.xmltv_config_name = data["xmltv_config_name"]
+    if "xmltv_days" in data:
+        source.xmltv_days = data["xmltv_days"]
+    if "xmltv_offset" in data:
+        source.xmltv_offset = data["xmltv_offset"]
+    if "xmltv_extra_args" in data:
+        source.xmltv_extra_args = data["xmltv_extra_args"]
 
     db.session.commit()
 
@@ -173,7 +293,13 @@ def sync_epg_source(source_id):
 
         import requests
 
-        response = requests.get(source.url, timeout=120)
+        # Normalize URL (e.g., convert GitHub blob URLs to raw URLs)
+        url = normalize_xmltv_url(source.url)
+        if url != source.url:
+            logger.info(f"Normalized XMLTV URL: {source.url} -> {url}")
+
+        # Use 10 minute timeout for large XMLTV files from rate-limited servers
+        response = requests.get(url, timeout=600)
         response.raise_for_status()
 
         stats = EpgService.sync_epg_source(source, response.content)
@@ -187,8 +313,96 @@ def sync_epg_source(source_id):
         )
 
     elif source.source_type == "schedules_direct":
-        # TODO: Implement Schedules Direct integration
-        return jsonify({"error": "Schedules Direct integration not yet implemented"}), 501
+        # Validate SD credentials are configured
+        if not source.sd_username or not source.sd_password:
+            return jsonify({"error": "Schedules Direct credentials not configured"}), 400
+
+        if not source.sd_lineup:
+            return jsonify({"error": "No Schedules Direct lineup selected"}), 400
+
+        try:
+            # Initialize SD client and authenticate
+            sd_client = SchedulesDirectClient(source.sd_username, source.sd_password)
+            sd_client.authenticate()
+
+            # Get channels from the configured lineup
+            channels = sd_client.get_lineup_channels(source.sd_lineup)
+
+            if not channels:
+                source.last_sync = db.func.now()
+                source.last_sync_status = "error"
+                source.last_sync_message = "No channels found in lineup"
+                db.session.commit()
+                return jsonify({"error": "No channels found in lineup"}), 400
+
+            # Sync channels to EpgChannel records
+            stats = _sync_sd_channels_to_epg(source, channels)
+
+            source.last_sync = db.func.now()
+            source.last_sync_status = "success"
+            source.last_sync_message = (
+                f"Synced {stats['channels_added'] + stats['channels_updated']} channels from Schedules Direct"
+            )
+            source.channel_count = stats["channels_added"] + stats["channels_updated"]
+            db.session.commit()
+
+            return jsonify(
+                {
+                    "success": True,
+                    "message": source.last_sync_message,
+                    "stats": stats,
+                }
+            )
+
+        except SchedulesDirectError as e:
+            logger.error(f"Schedules Direct error for source {source_id}: {e}")
+            source.last_sync = db.func.now()
+            source.last_sync_status = "error"
+            source.last_sync_message = str(e)
+            db.session.commit()
+            return jsonify({"error": f"Schedules Direct error: {e}"}), 500
+
+    elif source.source_type == "xmltv_grabber":
+        # XMLTV Grabber - run tv_grab_* tools
+        from services.xmltv_grabber_service import XmltvGrabberService
+
+        if not source.xmltv_grabber:
+            return jsonify({"error": "No XMLTV grabber configured for this source"}), 400
+
+        # Parse extra args if provided
+        extra_args = None
+        if source.xmltv_extra_args:
+            import json
+
+            try:
+                extra_args = json.loads(source.xmltv_extra_args)
+            except json.JSONDecodeError:
+                logger.warning(f"Invalid xmltv_extra_args for source {source_id}")
+
+        success, xml_content, error = XmltvGrabberService.run_grabber(
+            grabber_name=source.xmltv_grabber,
+            config_name=source.xmltv_config_name,
+            days=source.xmltv_days or 7,
+            offset=source.xmltv_offset or 0,
+            extra_args=extra_args,
+        )
+
+        if not success:
+            source.last_sync = db.func.now()
+            source.last_sync_status = "error"
+            source.last_sync_message = error
+            db.session.commit()
+            return jsonify({"error": f"XMLTV grabber failed: {error}"}), 500
+
+        stats = EpgService.sync_epg_source(source, xml_content)
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Synced {stats['channels_added'] + stats['channels_updated']} channels",
+                "stats": stats,
+            }
+        )
 
     else:
         return jsonify({"error": f"Unknown source type: {source.source_type}"}), 400
@@ -262,17 +476,36 @@ def get_epg_channels():
 @epg_bp.route("/api/epg/match/<int:account_id>", methods=["POST"])
 @handle_errors(return_json=True, default_message="Error matching channels to EPG")
 def match_channels_to_epg(account_id):
-    """Run automatic EPG matching for an account's channels"""
+    """Run automatic EPG matching for an account's channels
+
+    Query parameters:
+    - source_id: Optional EPG source to match against
+    - category_id: Optional category to limit matching to
+    - skip_threshold: Skip channels with existing match at or above this confidence (default 0.85)
+    """
     Account.query.get_or_404(account_id)
 
     source_id = request.args.get("source_id", type=int)
+    category_id = request.args.get("category_id", type=int)
+    skip_threshold = request.args.get("skip_threshold", default=0.85, type=float)
 
-    stats = EpgService.match_channels_to_epg(account_id, source_id)
+    stats = EpgService.match_channels_to_epg(
+        account_id,
+        source_id=source_id,
+        category_id=category_id,
+        skip_matched_threshold=skip_threshold,
+    )
 
+    matched_count = (
+        stats["matched_exact_id"]
+        + stats.get("matched_callsign_tag", 0)
+        + stats["matched_exact_name"]
+        + stats["matched_fuzzy"]
+    )
     return jsonify(
         {
             "success": True,
-            "message": f"Matched {stats['matched_exact_id'] + stats['matched_exact_name'] + stats['matched_fuzzy']} channels",
+            "message": f"Matched {matched_count} channels, skipped {stats['skipped_existing']} already matched",
             "stats": stats,
         }
     )
@@ -284,7 +517,9 @@ def get_epg_mappings():
 
     Query parameters:
     - account_id: Filter by account
-    - unmapped_only: Show only unmapped channels if true
+    - category_id: Filter by category (internal DB id)
+    - view_mode: 'all', 'mapped', or 'unmapped' (default: 'all')
+    - unmapped_only: (deprecated) Show only unmapped channels if true
     - show_filtered: Include channels that are filtered out (default: false)
     - limit: Max results
     - offset: Pagination offset
@@ -292,12 +527,16 @@ def get_epg_mappings():
     from models import Channel
 
     account_id = request.args.get("account_id", type=int)
-    unmapped_only = request.args.get("unmapped_only", "false").lower() == "true"
+    category_id = request.args.get("category_id", type=int)
+    view_mode = request.args.get("view_mode", "all")
+    # Support legacy unmapped_only parameter
+    if request.args.get("unmapped_only", "false").lower() == "true":
+        view_mode = "unmapped"
     show_filtered = request.args.get("show_filtered", "false").lower() == "true"
     limit = request.args.get("limit", 100, type=int)
     offset = request.args.get("offset", 0, type=int)
 
-    if unmapped_only:
+    if view_mode == "unmapped":
         # Get channels without mappings
         mapped_ids = db.session.query(ChannelEpgMapping.channel_id).distinct()
 
@@ -310,6 +549,9 @@ def get_epg_mappings():
         if account_id:
             query = query.filter_by(account_id=account_id)
 
+        if category_id:
+            query = query.filter_by(category_id=category_id)
+
         total = query.count()
         channels = query.order_by(Channel.name).offset(offset).limit(limit).all()
 
@@ -319,25 +561,32 @@ def get_epg_mappings():
                 "offset": offset,
                 "limit": limit,
                 "has_more": offset + len(channels) < total,
+                "view_mode": view_mode,
                 "unmapped_channels": [
                     {
                         "id": c.id,
+                        "stream_id": c.stream_id,
                         "name": c.name,
                         "cleaned_name": c.cleaned_name,
                         "epg_channel_id": c.epg_channel_id,
                         "account_id": c.account_id,
+                        "category_id": c.category_id,
+                        "category_name": c.category.category_name if c.category else None,
                         "is_visible": c.is_visible,
                     }
                     for c in channels
                 ],
             }
         )
-    else:
-        # Get mappings
+    elif view_mode == "mapped":
+        # Get mappings (existing behavior)
         query = db.session.query(ChannelEpgMapping).join(Channel, ChannelEpgMapping.channel_id == Channel.id)
 
         if account_id:
             query = query.filter(Channel.account_id == account_id)
+
+        if category_id:
+            query = query.filter(Channel.category_id == category_id)
 
         # By default, only show visible (non-filtered) channels
         if not show_filtered:
@@ -352,10 +601,13 @@ def get_epg_mappings():
                 "offset": offset,
                 "limit": limit,
                 "has_more": offset + len(mappings) < total,
+                "view_mode": view_mode,
                 "mappings": [
                     {
                         "id": m.id,
                         "channel_id": m.channel_id,
+                        "stream_id": m.channel.stream_id if m.channel else None,
+                        "account_id": m.channel.account_id if m.channel else None,
                         "channel_name": m.channel.name if m.channel else None,
                         "epg_channel_id": m.epg_channel_id,
                         "epg_display_name": m.epg_channel.display_name if m.epg_channel else None,
@@ -365,6 +617,69 @@ def get_epg_mappings():
                         "is_visible": m.channel.is_visible if m.channel else True,
                     }
                     for m in mappings
+                ],
+            }
+        )
+    else:
+        # view_mode == "all" - return all channels with mapping info if available
+        from sqlalchemy.orm import aliased
+
+        query = Channel.query.filter(Channel.is_active == True)  # noqa: E712
+
+        if not show_filtered:
+            query = query.filter(Channel.is_visible == True)  # noqa: E712
+
+        if account_id:
+            query = query.filter_by(account_id=account_id)
+
+        if category_id:
+            query = query.filter_by(category_id=category_id)
+
+        total = query.count()
+        channels = query.order_by(Channel.name).offset(offset).limit(limit).all()
+
+        # Get mappings for these channels in one query
+        channel_ids = [c.id for c in channels]
+        mappings_by_channel = {}
+        if channel_ids:
+            mappings = db.session.query(ChannelEpgMapping).filter(ChannelEpgMapping.channel_id.in_(channel_ids)).all()
+            for m in mappings:
+                mappings_by_channel[m.channel_id] = m
+
+        return jsonify(
+            {
+                "total": total,
+                "offset": offset,
+                "limit": limit,
+                "has_more": offset + len(channels) < total,
+                "view_mode": view_mode,
+                "channels": [
+                    {
+                        "id": c.id,
+                        "stream_id": c.stream_id,
+                        "name": c.name,
+                        "cleaned_name": c.cleaned_name,
+                        "epg_channel_id": c.epg_channel_id,
+                        "account_id": c.account_id,
+                        "category_id": c.category_id,
+                        "category_name": c.category.category_name if c.category else None,
+                        "is_visible": c.is_visible,
+                        "mapping": {
+                            "id": mappings_by_channel[c.id].id,
+                            "epg_channel_id": mappings_by_channel[c.id].epg_channel_id,
+                            "epg_display_name": (
+                                mappings_by_channel[c.id].epg_channel.display_name
+                                if mappings_by_channel[c.id].epg_channel
+                                else None
+                            ),
+                            "mapping_type": mappings_by_channel[c.id].mapping_type,
+                            "confidence": mappings_by_channel[c.id].confidence,
+                            "is_override": mappings_by_channel[c.id].is_override,
+                        }
+                        if c.id in mappings_by_channel
+                        else None,
+                    }
+                    for c in channels
                 ],
             }
         )
@@ -591,31 +906,55 @@ def get_sd_lineups():
 
     Query parameters:
         source_id: EPG source ID
+
+    Returns:
+        JSON object with:
+        - lineups: Array of lineup objects
+        - account_lineups: Number of lineups on SD account (from API)
+        - max_lineups: Maximum lineups allowed (typically 4)
     """
     source_id = request.args.get("source_id", type=int)
 
     if not source_id:
         return jsonify({"success": False, "error": "source_id is required"}), 400
 
-    _source = EpgSource.query.get_or_404(source_id)  # noqa: F841 (validates source exists)
+    source = EpgSource.query.get_or_404(source_id)
 
     # Get lineups from database
     lineups = SdLineup.query.filter_by(epg_source_id=source_id).all()
 
+    # Get account status to determine lineup limits
+    account_lineups = 0
+    max_lineups = 4  # SD default limit
+    try:
+        if source.sd_username and source.sd_password:
+            client = SchedulesDirectClient(source.sd_username, source.sd_password)
+            client.authenticate()
+            status = client.get_status()
+            account_lineups = len(status.get("lineups", []))
+            account_info = status.get("account", {})
+            max_lineups = account_info.get("maxLineups", 4)
+    except Exception as e:
+        logger.warning(f"Could not get SD account status: {e}")
+
     return jsonify(
-        [
-            {
-                "id": lineup.id,
-                "lineup_id": lineup.lineup_id,
-                "name": lineup.name,
-                "location": lineup.location,
-                "lineup_type": lineup.lineup_type,
-                "transport": lineup.transport,
-                "channel_count": lineup.channel_count,
-                "last_sync": lineup.last_sync.isoformat() if lineup.last_sync else None,
-            }
-            for lineup in lineups
-        ]
+        {
+            "lineups": [
+                {
+                    "id": lineup.id,
+                    "lineup_id": lineup.lineup_id,
+                    "name": lineup.name,
+                    "location": lineup.location,
+                    "lineup_type": lineup.lineup_type,
+                    "transport": lineup.transport,
+                    "channel_count": lineup.channel_count,
+                    "last_sync": lineup.last_sync.isoformat() if lineup.last_sync else None,
+                }
+                for lineup in lineups
+            ],
+            "account_lineups": account_lineups,
+            "max_lineups": max_lineups,
+        }
     )
 
 
@@ -641,11 +980,42 @@ def add_sd_lineup():
     if source.source_type != "schedules_direct":
         return jsonify({"error": "Source is not a Schedules Direct source"}), 400
 
-    # Check if lineup already exists
+    # Check if lineup already exists in our database
     existing = SdLineup.query.filter_by(epg_source_id=source.id, lineup_id=data["lineup_id"]).first()
 
     if existing:
         return jsonify({"error": "Lineup already added to this source"}), 409
+
+    # Check SD account lineup limit before adding
+    try:
+        if source.sd_username and source.sd_password:
+            client = SchedulesDirectClient(source.sd_username, source.sd_password)
+            client.authenticate()
+            status = client.get_status()
+            account_lineups = status.get("lineups", [])
+            account_info = status.get("account", {})
+            max_lineups = account_info.get("maxLineups", 4)
+
+            # Check if lineup is already on the SD account
+            account_lineup_ids = [lineup.get("lineup") for lineup in account_lineups]
+            if data["lineup_id"] not in account_lineup_ids:
+                # Need to add to SD account - check limit
+                if len(account_lineups) >= max_lineups:
+                    return (
+                        jsonify(
+                            {
+                                "error": f"Schedules Direct account limit reached ({max_lineups} lineups). "
+                                "Please remove a lineup before adding a new one.",
+                                "limit_reached": True,
+                                "current_count": len(account_lineups),
+                                "max_lineups": max_lineups,
+                            }
+                        ),
+                        400,
+                    )
+    except SchedulesDirectError as e:
+        logger.warning(f"Could not check SD account limit: {e}")
+        # Continue anyway - the add_lineup call will fail if at limit
 
     # Create lineup record
     lineup = SdLineup(
@@ -723,6 +1093,19 @@ def sync_sd_lineup_impl(source: EpgSource, lineup: SdLineup) -> dict:
 
     client = SchedulesDirectClient(source.sd_username, source.sd_password)
     client.authenticate()
+
+    # First, try to add the lineup to the SD account (if not already added)
+    # This is required before we can fetch channel data
+    try:
+        client.add_lineup(lineup.lineup_id)
+        logger.info(f"Added lineup {lineup.lineup_id} to SD account")
+    except SchedulesDirectError as e:
+        # Code 2100 = DUPLICATE_LINEUP means it's already added, which is fine
+        if e.code != 2100:
+            logger.warning(f"Could not add lineup to SD account: {e}")
+            # Re-raise if it's a more serious error
+            if e.code not in (2100, 2102):  # 2102 = UNKNOWN_LINEUP (might work anyway)
+                raise
 
     # Get channels from SD
     channels = client.get_lineup_channels(lineup.lineup_id)
@@ -1077,3 +1460,132 @@ def get_sd_status():
     status = client.get_system_status()
 
     return jsonify(status)
+
+
+# ============================================================================
+# API Routes - XMLTV Grabbers
+# ============================================================================
+
+
+@epg_bp.route("/api/xmltv/grabbers", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error getting XMLTV grabbers")
+def get_xmltv_grabbers():
+    """Get list of installed XMLTV grabbers"""
+    from services.xmltv_grabber_service import XmltvGrabberService
+
+    grabbers = XmltvGrabberService.get_installed_grabbers()
+
+    return jsonify(
+        [
+            {
+                "name": g.name,
+                "description": g.description,
+                "path": g.path,
+                "capabilities": g.capabilities,
+            }
+            for g in grabbers
+        ]
+    )
+
+
+@epg_bp.route("/api/xmltv/grabbers/<string:grabber_name>", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error getting grabber info")
+def get_xmltv_grabber(grabber_name):
+    """Get information about a specific XMLTV grabber"""
+    from services.xmltv_grabber_service import XmltvGrabberService
+
+    grabber = XmltvGrabberService.get_grabber_by_name(grabber_name)
+
+    if not grabber:
+        return jsonify({"error": f"Grabber '{grabber_name}' not found"}), 404
+
+    return jsonify(
+        {
+            "name": grabber.name,
+            "description": grabber.description,
+            "path": grabber.path,
+            "capabilities": grabber.capabilities,
+        }
+    )
+
+
+@epg_bp.route("/api/xmltv/grabbers/<string:grabber_name>/channels", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error getting grabber channels")
+def get_xmltv_grabber_channels(grabber_name):
+    """Get available channels from an XMLTV grabber"""
+    from services.xmltv_grabber_service import XmltvGrabberService
+
+    config_name = request.args.get("config_name")
+
+    success, channels, error = XmltvGrabberService.get_grabber_channels(grabber_name, config_name)
+
+    if not success:
+        return jsonify({"error": error}), 500
+
+    return jsonify({"channels": channels, "count": len(channels)})
+
+
+@epg_bp.route("/api/xmltv/grabbers/<string:grabber_name>/test", methods=["POST"])
+@handle_errors(return_json=True, default_message="Error testing grabber")
+def test_xmltv_grabber(grabber_name):
+    """Test an XMLTV grabber configuration"""
+    from services.xmltv_grabber_service import XmltvGrabberService
+
+    data = request.json or {}
+    config_name = data.get("config_name")
+
+    result = XmltvGrabberService.test_grabber(grabber_name, config_name)
+
+    return jsonify(result)
+
+
+@epg_bp.route("/api/xmltv/configs", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error getting grabber configs")
+def get_xmltv_configs():
+    """Get list of saved grabber configurations"""
+    from services.xmltv_grabber_service import XmltvGrabberService
+
+    grabber_name = request.args.get("grabber_name")
+
+    configs = XmltvGrabberService.list_grabber_configs(grabber_name)
+
+    return jsonify({"configs": configs, "count": len(configs)})
+
+
+@epg_bp.route("/api/xmltv/configs/<string:config_name>", methods=["POST"])
+@handle_errors(return_json=True, default_message="Error saving grabber config")
+def save_xmltv_config(config_name):
+    """Save a grabber configuration"""
+    from services.xmltv_grabber_service import XmltvGrabberService
+
+    data = request.json or {}
+
+    if not data.get("grabber_name"):
+        return jsonify({"error": "grabber_name is required"}), 400
+
+    config_data = data.get("config_data")
+
+    success, message = XmltvGrabberService.configure_grabber(
+        data["grabber_name"],
+        config_name,
+        config_data,
+    )
+
+    if success:
+        return jsonify({"success": True, "message": message})
+    else:
+        return jsonify({"error": message}), 400
+
+
+@epg_bp.route("/api/xmltv/configs/<string:config_name>", methods=["DELETE"])
+@handle_errors(return_json=True, default_message="Error deleting grabber config")
+def delete_xmltv_config(config_name):
+    """Delete a grabber configuration"""
+    from services.xmltv_grabber_service import XmltvGrabberService
+
+    success, message = XmltvGrabberService.delete_grabber_config(config_name)
+
+    if success:
+        return jsonify({"success": True, "message": message})
+    else:
+        return jsonify({"error": message}), 404

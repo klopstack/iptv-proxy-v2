@@ -45,6 +45,16 @@ class TestSchedulerAPI:
         mock_scheduler.running = True
         mock_scheduler.interval_hours = 6
         mock_scheduler.interval_seconds = 21600
+        mock_scheduler.get_status.return_value = {
+            "running": True,
+            "interval_hours": 6,
+            "interval_seconds": 21600,
+            "syncs": {
+                "accounts": {"interval_hours": 6, "last_sync": None, "next_sync": None, "overdue": True},
+                "epg": {"interval_hours": 12, "last_sync": None, "next_sync": None, "overdue": True},
+                "fcc": {"interval_hours": 168, "last_sync": None, "next_sync": None, "overdue": True},
+            },
+        }
 
         with patch("routes.api._scheduler", mock_scheduler):
             response = client.get("/api/scheduler/status")
@@ -117,6 +127,9 @@ class TestSchedulerAPI:
         """Test successful scheduler restart"""
         mock_scheduler = MagicMock()
         mock_scheduler.interval_hours = 6
+        mock_scheduler.account_interval_hours = 6
+        mock_scheduler.epg_interval_hours = 12
+        mock_scheduler.fcc_interval_hours = 168
 
         with patch("routes.api._scheduler", mock_scheduler):
             response = client.post(
@@ -133,6 +146,9 @@ class TestSchedulerAPI:
         """Test scheduler restart with new interval"""
         mock_scheduler = MagicMock()
         mock_scheduler.interval_hours = 6
+        mock_scheduler.account_interval_hours = 12
+        mock_scheduler.epg_interval_hours = 12
+        mock_scheduler.fcc_interval_hours = 168
 
         with patch("routes.api._scheduler", mock_scheduler):
             response = client.post(
@@ -141,7 +157,8 @@ class TestSchedulerAPI:
                 content_type="application/json",
             )
             assert response.status_code == 200
-            assert response.json["interval_hours"] == 12
+            # The response includes account_interval_hours which was set via interval_hours
+            assert response.json["account_interval_hours"] == 12
             mock_scheduler.stop.assert_called_once()
             mock_scheduler.start.assert_called_once()
 

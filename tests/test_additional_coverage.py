@@ -395,11 +395,11 @@ class TestEpgServiceFuzzyMatch:
             db.session.add(source)
             db.session.flush()
 
-            # Create EPG channels
+            # Create EPG channels - use "ESPN HD" which strips to match "ESPN"
             epg_channel = EpgChannel(
                 source_id=source.id,
                 channel_id="espn",
-                display_name="ESPN Sports",
+                display_name="ESPN HD",
             )
             db.session.add(epg_channel)
             db.session.commit()
@@ -407,8 +407,9 @@ class TestEpgServiceFuzzyMatch:
             channels = [epg_channel]
             result, score = EpgService._fuzzy_match("ESPN", channels)
 
-            # Should find a match
-            assert score >= 0.5 or result is not None
+            # Should find a match (ESPN HD -> ESPN via exact_stripped)
+            assert result is not None
+            assert score >= 0.75
 
 
 class TestEpgServiceProviderSource:

@@ -9,6 +9,9 @@
         <button class="btn btn-sm btn-danger me-2" id="cleanup-orphan-tags-btn" title="Delete tags with no associated channels">
             <i class="bi bi-trash"></i> Cleanup Orphan Tags
         </button>
+        <button class="btn btn-sm btn-success me-2" id="import-ruleset-btn" title="Import ruleset from JSON file">
+            <i class="bi bi-upload"></i> Import Ruleset
+        </button>
         <button class="btn btn-sm btn-primary me-2" id="create-default-ruleset-btn">
             <i class="bi bi-plus-circle"></i> Create Default Ruleset
         </button>
@@ -193,6 +196,11 @@
                             </div>
                         </div>
                     </div>
+                    <div class="mb-3">
+                        <label for="rule-replacement" class="form-label">Replacement (optional)</label>
+                        <input type="text" class="form-control" id="rule-replacement" placeholder="Leave blank to just remove">
+                        <small class="form-text text-muted">Text to replace the matched pattern with (e.g., fix "DISCTRICT" → "DISTRICT")</small>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -217,6 +225,43 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Import Ruleset Modal -->
+<div class="modal fade" id="importRulesetModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Import Ruleset</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="importRulesetForm">
+                    <div class="mb-3">
+                        <label for="import-file" class="form-label">Select JSON File</label>
+                        <input type="file" class="form-control" id="import-file" accept=".json" required>
+                        <small class="form-text text-muted">Select an exported ruleset JSON file</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="import-rename" class="form-label">Rename (optional)</label>
+                        <input type="text" class="form-control" id="import-rename" placeholder="Leave blank to use original name">
+                        <small class="form-text text-muted">Specify a new name if you want to rename the imported ruleset</small>
+                    </div>
+                    <div id="import-preview" class="alert alert-info" style="display: none;">
+                        <strong>Preview:</strong>
+                        <div id="import-preview-content"></div>
+                    </div>
+                    <div id="import-error" class="alert alert-danger" style="display: none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="do-import-btn" disabled>
+                    <i class="bi bi-upload"></i> Import
+                </button>
             </div>
         </div>
     </div>
@@ -383,6 +428,9 @@ async function loadRulesets(preserveExpanded = false) {
                                     </button>
                                     <button class="btn btn-sm btn-outline-info" data-action="show-assign" data-ruleset-id="${ruleset.id}">
                                         <i class="bi bi-link"></i> Assign
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-success" data-action="export" data-ruleset-id="${ruleset.id}" title="Export ruleset to JSON">
+                                        <i class="bi bi-download"></i>
                                     </button>
                                     <button class="btn btn-sm btn-outline-secondary" data-action="edit" data-ruleset-id="${ruleset.id}">
                                         <i class="bi bi-pencil"></i>
@@ -575,6 +623,133 @@ async function createDefaultRuleset() {
 }
 
 // ============================================================================
+// Export/Import Functions
+// ============================================================================
+
+async function exportRuleset(rulesetId) {
+    try {
+        const response = await fetch(`/api/rulesets/${rulesetId}/export`);
+        if (!response.ok) {
+            throw new Error('Failed to export ruleset');
+        }
+        
+        const data = await response.json();
+        const filename = `${data.ruleset.name.replace(/[^a-zA-Z0-9]/g, '_')}_ruleset.json`;
+        
+        // Create download
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        alert('Error exporting ruleset: ' + error.message);
+    }
+}
+
+function showImportRulesetModal() {
+    document.getElementById('importRulesetForm').reset();
+    document.getElementById('import-preview').style.display = 'none';
+    document.getElementById('import-error').style.display = 'none';
+    document.getElementById('do-import-btn').disabled = true;
+    new bootstrap.Modal(document.getElementById('importRulesetModal')).show();
+}
+
+let importData = null;
+
+function handleImportFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            importData = JSON.parse(e.target.result);
+            
+            // Validate structure
+            if (importData.type !== 'iptv-proxy-ruleset') {
+                throw new Error('Invalid file format: not a ruleset export');
+            }
+            if (!importData.ruleset) {
+                throw new Error('Invalid file format: missing ruleset data');
+            }
+            
+            // Show preview
+            const preview = document.getElementById('import-preview');
+            const previewContent = document.getElementById('import-preview-content');
+            previewContent.innerHTML = `
+                <ul class="mb-0 mt-2">
+                    <li><strong>Name:</strong> ${escapeHtml(importData.ruleset.name)}</li>
+                    <li><strong>Description:</strong> ${escapeHtml(importData.ruleset.description || '(none)')}</li>
+                    <li><strong>Rules:</strong> ${importData.ruleset.rules ? importData.ruleset.rules.length : 0}</li>
+                    <li><strong>Priority:</strong> ${importData.ruleset.priority || 100}</li>
+                </ul>
+            `;
+            preview.style.display = 'block';
+            document.getElementById('import-error').style.display = 'none';
+            document.getElementById('do-import-btn').disabled = false;
+        } catch (error) {
+            importData = null;
+            document.getElementById('import-preview').style.display = 'none';
+            const errorDiv = document.getElementById('import-error');
+            errorDiv.textContent = 'Error reading file: ' + error.message;
+            errorDiv.style.display = 'block';
+            document.getElementById('do-import-btn').disabled = true;
+        }
+    };
+    reader.readAsText(file);
+}
+
+async function doImportRuleset() {
+    if (!importData) return;
+    
+    const btn = document.getElementById('do-import-btn');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Importing...';
+    
+    try {
+        // Add rename if specified
+        const rename = document.getElementById('import-rename').value.trim();
+        if (rename) {
+            importData.rename = rename;
+        } else {
+            delete importData.rename;
+        }
+        
+        const response = await fetch('/api/rulesets/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(importData)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('importRulesetModal')).hide();
+            alert(`Successfully imported ruleset "${result.name}" with ${result.rules_imported} rules!` +
+                  (result.rules_skipped > 0 ? `\n(${result.rules_skipped} rules were skipped due to errors)` : ''));
+            await loadRulesets();
+        } else {
+            const errorDiv = document.getElementById('import-error');
+            errorDiv.textContent = result.error || 'Failed to import ruleset';
+            errorDiv.style.display = 'block';
+        }
+    } catch (error) {
+        const errorDiv = document.getElementById('import-error');
+        errorDiv.textContent = 'Error importing ruleset: ' + error.message;
+        errorDiv.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    }
+}
+
+// ============================================================================
 // Rules Management
 // ============================================================================
 
@@ -684,6 +859,7 @@ async function editRule(ruleId) {
     document.getElementById('rule-pattern').value = rule.pattern;
     document.getElementById('rule-priority').value = rule.priority;
     document.getElementById('rule-remove-from-name').checked = rule.remove_from_name;
+    document.getElementById('rule-replacement').value = rule.replacement || '';
     document.getElementById('rule-enabled').checked = rule.enabled;
     
     new bootstrap.Modal(document.getElementById('ruleModal')).show();
@@ -700,6 +876,7 @@ async function saveRule() {
         pattern: document.getElementById('rule-pattern').value,
         priority: parseInt(document.getElementById('rule-priority').value),
         remove_from_name: document.getElementById('rule-remove-from-name').checked,
+        replacement: document.getElementById('rule-replacement').value || null,
         enabled: document.getElementById('rule-enabled').checked
     };
     
@@ -1360,6 +1537,21 @@ document.addEventListener('DOMContentLoaded', () => {
         createRulesetBtn.addEventListener('click', () => showCreateRulesetModal());
     }
 
+    const importRulesetBtn = document.getElementById('import-ruleset-btn');
+    if (importRulesetBtn) {
+        importRulesetBtn.addEventListener('click', () => showImportRulesetModal());
+    }
+
+    const importFileInput = document.getElementById('import-file');
+    if (importFileInput) {
+        importFileInput.addEventListener('change', handleImportFileSelect);
+    }
+
+    const doImportBtn = document.getElementById('do-import-btn');
+    if (doImportBtn) {
+        doImportBtn.addEventListener('click', () => doImportRuleset());
+    }
+
     const processAllTagsBtn = document.getElementById('process-all-tags-btn');
     if (processAllTagsBtn) {
         processAllTagsBtn.addEventListener('click', () => processAllAccountTags());
@@ -1407,6 +1599,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
                 case 'show-assign':
                     await showAssignRuleset(rulesetId);
+                    break;
+                case 'export':
+                    await exportRuleset(rulesetId);
                     break;
                 case 'edit':
                     await editRuleset(rulesetId);

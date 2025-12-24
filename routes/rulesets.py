@@ -107,6 +107,7 @@ def get_ruleset(ruleset_id):
                     "tag_name": r.tag_name,
                     "source": r.source,
                     "remove_from_name": r.remove_from_name,
+                    "replacement": r.replacement,
                     "priority": r.priority,
                     "enabled": r.enabled,
                 }
@@ -197,6 +198,7 @@ def get_ruleset_rules(ruleset_id):
                 "tag_name": r.tag_name,
                 "source": r.source,
                 "remove_from_name": r.remove_from_name,
+                "replacement": r.replacement,
                 "priority": r.priority,
                 "enabled": r.enabled,
             }
@@ -231,6 +233,7 @@ def get_tag_rules():
                 "tag_name": r.tag_name,
                 "source": r.source,
                 "remove_from_name": r.remove_from_name,
+                "replacement": r.replacement,
                 "priority": r.priority,
                 "enabled": r.enabled,
             }
@@ -250,14 +253,23 @@ def create_tag_rule():
     if not ruleset:
         return jsonify({"error": f"RuleSet {data['ruleset_id']} not found"}), 404
 
+    # Normalize tag_name for consistency (except special tags)
+    tag_name = data["tag_name"]
+    special_tags = {"__CLEANUP__", "__LOCATION__", "__CALLSIGN__", "__CAPTURE__"}
+    if tag_name not in special_tags:
+        normalized = TagService.normalize_tag_name(tag_name)
+        if normalized:
+            tag_name = normalized
+
     rule = TagRule(
         name=data["name"],
         pattern=data["pattern"],
         pattern_type=data["pattern_type"],
-        tag_name=data["tag_name"],
+        tag_name=tag_name,
         source=data["source"],
         ruleset_id=data["ruleset_id"],
         remove_from_name=data.get("remove_from_name", True),
+        replacement=data.get("replacement"),
         priority=data.get("priority", 100),
         enabled=data.get("enabled", True),
     )
@@ -278,6 +290,7 @@ def create_tag_rule():
                 "tag_name": rule.tag_name,
                 "source": rule.source,
                 "remove_from_name": rule.remove_from_name,
+                "replacement": rule.replacement,
                 "priority": rule.priority,
                 "enabled": rule.enabled,
             }
@@ -293,12 +306,23 @@ def update_tag_rule(rule_id):
     rule = TagRule.query.get_or_404(rule_id)
     data = request.validated_data
 
+    # Normalize tag_name if provided (except special tags)
+    if "tag_name" in data:
+        tag_name = data["tag_name"]
+        special_tags = {"__CLEANUP__", "__LOCATION__", "__CALLSIGN__", "__CAPTURE__"}
+        if tag_name not in special_tags:
+            normalized = TagService.normalize_tag_name(tag_name)
+            if normalized:
+                tag_name = normalized
+        rule.tag_name = tag_name
+
     rule.name = data.get("name", rule.name)
     rule.pattern = data.get("pattern", rule.pattern)
     rule.pattern_type = data.get("pattern_type", rule.pattern_type)
-    rule.tag_name = data.get("tag_name", rule.tag_name)
     rule.source = data.get("source", rule.source)
     rule.remove_from_name = data.get("remove_from_name", rule.remove_from_name)
+    if "replacement" in data:
+        rule.replacement = data["replacement"]
     rule.priority = data.get("priority", rule.priority)
     rule.enabled = data.get("enabled", rule.enabled)
 
@@ -314,6 +338,7 @@ def update_tag_rule(rule_id):
             "tag_name": rule.tag_name,
             "source": rule.source,
             "remove_from_name": rule.remove_from_name,
+            "replacement": rule.replacement,
             "priority": rule.priority,
             "enabled": rule.enabled,
         }
@@ -347,4 +372,146 @@ def create_default_tag_rules():
             "count": len(ruleset.rules),
             "message": f"Created default ruleset with {len(ruleset.rules)} rules",
         }
+    )
+
+
+# ============================================================================
+# API Routes - Ruleset Export/Import
+# ============================================================================
+
+
+@rulesets_bp.route("/api/rulesets/<int:ruleset_id>/export", methods=["GET"])
+def export_ruleset(ruleset_id):
+    """Export a ruleset with all its rules as JSON for backup or sharing"""
+    ruleset = RuleSet.query.get_or_404(ruleset_id)
+
+    export_data = {
+        "version": "1.0",
+        "type": "iptv-proxy-ruleset",
+        "ruleset": {
+            "name": ruleset.name,
+            "description": ruleset.description,
+            "is_default": ruleset.is_default,
+            "enabled": ruleset.enabled,
+            "priority": ruleset.priority,
+            "rules": [
+                {
+                    "name": r.name,
+                    "pattern": r.pattern,
+                    "pattern_type": r.pattern_type,
+                    "tag_name": r.tag_name,
+                    "source": r.source,
+                    "remove_from_name": r.remove_from_name,
+                    "replacement": r.replacement,
+                    "priority": r.priority,
+                    "enabled": r.enabled,
+                }
+                for r in sorted(ruleset.rules, key=lambda x: (x.priority, x.id))
+            ],
+        },
+    }
+
+    response = jsonify(export_data)
+    response.headers["Content-Disposition"] = f'attachment; filename="{ruleset.name.replace(" ", "_")}_ruleset.json"'
+    return response
+
+
+@rulesets_bp.route("/api/rulesets/import", methods=["POST"])
+@handle_errors(return_json=True, default_message="Error importing ruleset")
+def import_ruleset():
+    """Import a ruleset from JSON export data
+
+    Request body should contain the exported JSON structure.
+    Optionally include 'rename' field to use a different name.
+    """
+    data = request.json
+
+    if not data:
+        return jsonify({"error": "No JSON data provided"}), 400
+
+    # Validate structure
+    if data.get("type") != "iptv-proxy-ruleset":
+        return jsonify({"error": "Invalid export format: missing or invalid 'type' field"}), 400
+
+    ruleset_data = data.get("ruleset")
+    if not ruleset_data:
+        return jsonify({"error": "Invalid export format: missing 'ruleset' field"}), 400
+
+    # Use provided rename or original name
+    name = data.get("rename") or ruleset_data.get("name")
+    if not name:
+        return jsonify({"error": "Ruleset name is required"}), 400
+
+    # Check if name already exists
+    existing = RuleSet.query.filter_by(name=name).first()
+    if existing:
+        return (
+            jsonify(
+                {"error": f"Ruleset with name '{name}' already exists. Use 'rename' field to specify a different name."}
+            ),
+            409,
+        )
+
+    # Create the ruleset
+    ruleset = RuleSet(
+        name=name,
+        description=ruleset_data.get("description", ""),
+        is_default=ruleset_data.get("is_default", False),
+        enabled=ruleset_data.get("enabled", True),
+        priority=ruleset_data.get("priority", 100),
+    )
+    db.session.add(ruleset)
+    db.session.flush()  # Get the ID
+
+    # Create the rules
+    rules_data = ruleset_data.get("rules", [])
+    rules_created = 0
+    for rule_data in rules_data:
+        # Validate required fields
+        required_fields = ["name", "pattern", "pattern_type", "tag_name", "source"]
+        missing = [f for f in required_fields if not rule_data.get(f)]
+        if missing:
+            logger.warning(f"Skipping rule with missing fields: {missing}")
+            continue
+
+        # Validate pattern_type
+        if rule_data["pattern_type"] not in ["prefix", "suffix", "contains", "regex"]:
+            logger.warning(f"Skipping rule with invalid pattern_type: {rule_data['pattern_type']}")
+            continue
+
+        # Validate source
+        if rule_data["source"] not in ["channel_name", "category_name", "both"]:
+            logger.warning(f"Skipping rule with invalid source: {rule_data['source']}")
+            continue
+
+        rule = TagRule(
+            ruleset_id=ruleset.id,
+            name=rule_data["name"],
+            pattern=rule_data["pattern"],
+            pattern_type=rule_data["pattern_type"],
+            tag_name=rule_data["tag_name"],
+            source=rule_data["source"],
+            remove_from_name=rule_data.get("remove_from_name", True),
+            replacement=rule_data.get("replacement"),
+            priority=rule_data.get("priority", 100),
+            enabled=rule_data.get("enabled", True),
+        )
+        db.session.add(rule)
+        rules_created += 1
+
+    db.session.commit()
+    cache_service.clear_all()
+
+    return (
+        jsonify(
+            {
+                "success": True,
+                "id": ruleset.id,
+                "name": ruleset.name,
+                "rules_imported": rules_created,
+                "rules_skipped": len(rules_data) - rules_created,
+                "message": f"Successfully imported ruleset '{ruleset.name}' with {rules_created} rules",
+            }
+        ),
+        201,
     )

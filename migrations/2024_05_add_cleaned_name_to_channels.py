@@ -8,48 +8,42 @@ Migration: 2024_05_add_cleaned_name_to_channels
 Created: 2024-12-19
 """
 
-import os
-import sys
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from models import db
+import sqlite3
 
 
-def upgrade():
-    """Add cleaned_name column to channels table"""
+def get_description():
+    return "Add cleaned_name column to channels table"
 
-    # SQLite doesn't support ALTER TABLE ADD COLUMN with constraints easily,
-    # but we can add a simple column
-    with db.engine.connect() as conn:
+
+def migrate(db_path):
+    """
+    Add cleaned_name column to channels table.
+
+    Args:
+        db_path: Path to the SQLite database
+
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Check if column already exists
+        cursor.execute("PRAGMA table_info(channels)")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        if "cleaned_name" in columns:
+            conn.close()
+            return (True, "cleaned_name column already exists, skipping")
+
         # Add cleaned_name column (nullable initially for existing rows)
-        conn.execute(db.text("ALTER TABLE channels ADD COLUMN cleaned_name VARCHAR(500)"))
+        cursor.execute("ALTER TABLE channels ADD COLUMN cleaned_name VARCHAR(500)")
+
         conn.commit()
+        conn.close()
 
-        print("✓ Added cleaned_name column to channels table")
+        return (True, "Added cleaned_name column to channels table")
 
-
-def downgrade():
-    """Remove cleaned_name column from channels table"""
-
-    # SQLite doesn't support DROP COLUMN directly, would need table recreation
-    # For now, just document that downgrade requires manual intervention
-    raise NotImplementedError(
-        "SQLite doesn't support DROP COLUMN. " "To downgrade, recreate the channels table without cleaned_name column."
-    )
-
-
-if __name__ == "__main__":
-    import os
-
-    # Set DATABASE_URL to local path if not set
-    if not os.getenv("DATABASE_URL"):
-        db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "iptv_proxy.db")
-        os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
-
-    from app import app
-
-    with app.app_context():
-        print("Running migration: Add cleaned_name to channels")
-        upgrade()
-        print("Migration completed successfully!")
+    except Exception as e:
+        return (False, f"Failed to add cleaned_name column: {e}")

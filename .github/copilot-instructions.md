@@ -99,6 +99,44 @@ python app.py  # Auto-creates tables on startup
 # Or: flask init-db
 ```
 
+**Creating Migrations:**
+Migrations live in `migrations/` and are named with a date prefix (e.g., `2024_19_add_tag_rule_replacement.py`). Each migration must have a `migrate(db_path)` function that receives the database path as a string and returns `(success: bool, message: str)`:
+
+```python
+"""Description of what this migration does"""
+import logging
+import sqlite3
+
+logger = logging.getLogger(__name__)
+
+def migrate(db_path):
+    """Add/modify database schema"""
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    try:
+        # Check if change already applied (idempotent)
+        cursor.execute("PRAGMA table_info(table_name)")
+        columns = [row[1] for row in cursor.fetchall()]
+        
+        if "new_column" not in columns:
+            cursor.execute("ALTER TABLE table_name ADD COLUMN new_column VARCHAR(255)")
+            conn.commit()
+            return True, "Added new_column"
+        else:
+            return True, "new_column already exists, skipping"
+    finally:
+        conn.close()
+```
+
+**Migration Guidelines:**
+- Always make migrations idempotent (safe to run multiple times)
+- Check if changes exist before applying
+- Use raw sqlite3, not SQLAlchemy (migrations receive db_path string)
+- Return `(True, "message")` for success, `(False, "error")` for failure
+- Run migrations with: `python run_migrations.py`
+- In Docker: `docker exec -it iptv-proxy-v2 python run_migrations.py`
+
 **Testing:**
 ```bash
 pip install -r requirements-dev.txt

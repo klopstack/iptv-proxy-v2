@@ -1,0 +1,291 @@
+# Vulture whitelist file
+# These are false positives that vulture incorrectly identifies as dead code
+#
+# Flask route functions are registered via decorators and called by the framework
+# SQLAlchemy model columns are accessed dynamically by the ORM
+# Marshmallow schemas validators are called by the framework
+
+# Flask CLI commands
+init_db  # noqa: vulture
+
+# Error handlers - registered via decorators
+not_found
+forbidden
+bad_request
+internal_error
+service_unavailable
+handle_db_error
+
+# SQLAlchemy model columns/relationships - accessed by ORM
+parent_id
+matched_channels_json
+broadcast_language
+error_message
+nielsen_dma_rank
+facility_status
+
+# Marshmallow schema validators - called by framework
+validate_server
+validate_filter_value
+validate_pattern
+validate_tag_name
+validate_accounts
+validate_tags
+
+# Marshmallow Meta classes and unknown attribute
+Meta
+unknown
+
+# Marshmallow schema classes used by routes
+CredentialCreateSchema
+CredentialUpdateSchema
+AccountRuleSetAssignSchema
+PlaylistConfigUpdateSchema
+
+# Flask route functions - registered via @blueprint.route() decorators
+# accounts.py
+get_accounts
+create_account
+update_account
+delete_account
+test_account
+get_account_categories
+get_account_stats
+get_account_filters
+sync_account_channels
+get_sync_status
+process_account_tags
+get_account_tags
+search_account_tags
+get_account_rulesets
+assign_ruleset_to_account
+remove_ruleset_from_account
+get_channel_details
+preview_account_playlist
+preview_filter_matches
+cleanup_orphan_tags
+get_credentials
+add_credential
+update_credential
+delete_credential
+test_credential
+get_account_connection_status
+
+# api.py
+get_all_categories
+get_tags
+clear_all_cache
+preview_channels
+get_scheduler_status
+restart_scheduler
+stop_scheduler
+start_scheduler
+
+# channel_links.py
+get_channel_links
+get_channel_link
+create_channel_link
+update_channel_link
+delete_channel_link
+bulk_create_channel_links
+delete_auto_detected_links
+get_links_for_channel
+
+# epg.py
+get_epg_sources
+create_epg_source
+update_epg_source
+delete_epg_source
+get_epg_channels
+get_epg_mappings
+create_epg_mapping
+delete_epg_mapping
+get_epg_coverage
+create_account_epg_source
+test_sd_credentials
+search_sd_lineups
+get_sd_lineups
+add_sd_lineup
+sync_sd_lineup
+remove_sd_lineup
+get_sd_lineup_stations
+match_sd_stations
+get_sd_status
+get_xmltv_grabbers
+get_xmltv_grabber
+get_xmltv_grabber_channels
+test_xmltv_grabber
+get_xmltv_configs
+save_xmltv_config
+delete_xmltv_config
+
+# filters.py
+get_filters
+create_filter
+update_filter
+delete_filter
+
+# images.py
+serve_cached_icon
+fetch_and_cache_icon
+get_cache_stats
+cleanup_cache
+list_cache_entries
+delete_cache_entry
+
+# playlists.py
+get_playlist_configs
+create_playlist_config
+update_playlist_config
+delete_playlist_config
+preview_playlist_config
+generate_playlist
+generate_playlist_from_config_by_id
+generate_playlist_from_config_by_name
+proxy_epg
+generate_epg_from_config
+generate_epg_from_config_by_name
+
+# rulesets.py
+get_rulesets
+create_ruleset
+get_ruleset
+update_ruleset
+delete_ruleset
+get_ruleset_rules
+get_tag_rules
+create_tag_rule
+update_tag_rule
+delete_tag_rule
+create_default_tag_rules
+
+# stations.py
+sync_fcc_facilities
+get_fcc_stats
+lookup_fcc_callsign
+lookup_fcc_city
+lookup_fcc_dma
+
+# streams.py
+proxy_stream_ts
+proxy_stream_m3u8
+stream_status
+active_streams
+release_stream
+cleanup_streams
+test_stream
+
+# web.py
+index
+accounts_page
+filters_page
+test_page
+categories_page
+rulesets_page
+settings_page
+epg_page
+stations_page
+
+# EPG service - used internally
+decompress_content
+parse_xmltv
+_get_channel_country_tags
+event  # xml iteration variable
+
+# FCC facility service - public API methods
+get_download_url
+get_city_for_callsign
+get_callsigns_for_city
+
+# Filter service
+invalidate_account
+
+# Image cache service - used for error tracking
+error_message
+get_or_cache
+
+# IPTV service - VOD/Series methods for future use
+get_vod_categories
+get_vod_streams
+get_series_categories
+get_series
+
+# Quality service - public API methods
+get_quality_tags
+sort_by_quality
+get_duplicates_info
+
+# Schedules Direct - API constants and data class fields
+SD_API_VERSION
+MAX_SCHEDULES_PER_REQUEST
+MAX_ARTWORK_PER_REQUEST
+MAX_DESCRIPTIONS_PER_REQUEST
+ENTITY_TYPES
+title_language
+description_language
+role
+billing_order
+name_id
+character_name
+body
+content_warning
+year
+duration
+quality_ratings
+venue
+game_date
+teams
+total_episodes
+total_seasons
+md5
+resource_id
+episode_title
+original_air_date
+show_type
+genres
+content_advisory
+official_url
+keywords
+recommendations
+awards
+has_image_artwork
+has_episode_artwork
+has_season_artwork
+has_series_artwork
+has_movie_artwork
+has_sports_artwork
+hash
+
+# Schedules Direct - data class properties and methods
+title
+season_episode
+is_movie
+is_episode
+is_sports
+_check_rate_limit_error
+get_available_services
+get_available_countries
+get_transmitters
+check_client_version
+preview_lineup
+remove_lineup
+get_lineups
+get_schedules
+get_programs
+get_schedule_md5s
+get_generic_description
+get_program_cross_reference
+get_program_artwork
+get_program_artwork_single
+get_celebrity_images
+get_image
+get_sports_status
+delete_message
+is_ip_blocked
+search_stations
+
+# Sync service
+get_sync_status
+
+# XMLTV grabber service
+GrabberConfig

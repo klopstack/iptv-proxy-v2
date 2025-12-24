@@ -1282,18 +1282,43 @@ class SchedulesDirectClient:
         """
         Get Schedules Direct system status.
 
+        Note: The /status endpoint requires authentication. We'll try to check
+        if the API is reachable by hitting a public endpoint.
+
         Returns:
             Dict with system status info
         """
         try:
-            response = self.session.get(
-                f"{SD_API_BASE}/status",
-                timeout=30,
+            # The /status endpoint requires authentication now
+            # Instead, check if the API is reachable via a public endpoint
+            response = requests.get(
+                f"{SD_API_BASE}/available",
+                headers={"User-Agent": USER_AGENT},
+                timeout=10,
             )
-            return response.json()
-        except Exception as e:
+
+            if response.status_code == 200:
+                return {
+                    "status": "online",
+                    "message": "Schedules Direct API is reachable",
+                    "date": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+                }
+            else:
+                return {
+                    "status": "degraded",
+                    "message": f"API returned status code {response.status_code}",
+                    "date": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+                }
+        except requests.Timeout:
+            return {"status": "offline", "message": "Connection timed out"}
+        except requests.ConnectionError:
+            return {"status": "offline", "message": "Could not connect to Schedules Direct"}
+        except requests.RequestException as e:
             logger.error(f"Failed to get system status: {e}")
-            return {"error": str(e)}
+            return {"status": "error", "message": str(e)}
+        except Exception as e:
+            logger.error(f"Failed to parse system status: {e}")
+            return {"status": "error", "message": str(e)}
 
 
 def validate_credentials(username: str, password: str) -> Dict[str, Any]:

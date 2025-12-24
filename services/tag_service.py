@@ -61,9 +61,13 @@ class TagService:
                                 normalized_capture = TagService.normalize_tag_name(captured)
                                 if normalized_capture:
                                     tags.add(normalized_capture)
-                                # Remove the full match from channel name
+                                # Remove or replace the full match from channel name
                                 if rule.remove_from_name and can_remove_from_channel:
-                                    cleaned_name = TagService._remove_text(cleaned_name, match_text)
+                                    replacement = getattr(rule, "replacement", None)
+                                    if replacement is not None:
+                                        cleaned_name = TagService._replace_text(cleaned_name, match_text, replacement)
+                                    else:
+                                        cleaned_name = TagService._remove_text(cleaned_name, match_text)
                             except IndexError:
                                 logger.warning(f"Rule '{rule.name}' uses __CAPTURE__ but regex has no capture group")
                         else:
@@ -95,15 +99,25 @@ class TagService:
                             # Replace parentheses with just the call sign text
                             cleaned_name = cleaned_name.replace(match_text, callsign)
                     elif rule.tag_name != "__CLEANUP__":
-                        # Regular tag
-                        tags.add(rule.tag_name)
-                        # Remove from channel name if requested and appropriate
+                        # Regular tag - normalize for consistency
+                        normalized_tag = TagService.normalize_tag_name(rule.tag_name)
+                        if normalized_tag:
+                            tags.add(normalized_tag)
+                        # Remove or replace in channel name if requested and appropriate
                         if rule.remove_from_name and can_remove_from_channel and match_text:
-                            cleaned_name = TagService._remove_text(cleaned_name, match_text)
+                            replacement = getattr(rule, "replacement", None)
+                            if replacement is not None:
+                                cleaned_name = TagService._replace_text(cleaned_name, match_text, replacement)
+                            else:
+                                cleaned_name = TagService._remove_text(cleaned_name, match_text)
                     else:
-                        # Cleanup-only rule - just remove
+                        # Cleanup-only rule - just remove or replace
                         if rule.remove_from_name and can_remove_from_channel and match_text:
-                            cleaned_name = TagService._remove_text(cleaned_name, match_text)
+                            replacement = getattr(rule, "replacement", None)
+                            if replacement is not None:
+                                cleaned_name = TagService._replace_text(cleaned_name, match_text, replacement)
+                            else:
+                                cleaned_name = TagService._remove_text(cleaned_name, match_text)
 
                     # Stop searching after first match for this rule
                     break
@@ -180,6 +194,28 @@ class TagService:
         return result
 
     @staticmethod
+    def _replace_text(original: str, to_replace: str, replacement: str) -> str:
+        """
+        Replace text in original string with replacement (case-insensitive).
+        Preserves the rest of the string structure.
+        """
+        if not to_replace:
+            return original
+
+        # Case-insensitive replacement - find the actual position
+        upper_orig = original.upper()
+        upper_replace = to_replace.upper()
+
+        pos = upper_orig.find(upper_replace)
+        if pos == -1:
+            return original
+
+        # Replace the text
+        result = original[:pos] + replacement + original[pos + len(to_replace) :]
+
+        return result
+
+    @staticmethod
     def _cleanup_name(name: str) -> str:
         """
         Clean up channel name after tag extraction:
@@ -245,8 +281,9 @@ class TagService:
         for char, replacement in superscript_map.items():
             normalized = normalized.replace(char, replacement)
 
-        # Remove extra spaces and special characters, keep alphanumeric and basic separators
-        normalized = re.sub(r"[^\w\s-]", "", normalized)
+        # Remove extra spaces and special characters, keep alphanumeric, basic separators, and colons
+        # Colons are preserved for categorized tags like "Network:FOX", "DMA:Boston", "State:CA"
+        normalized = re.sub(r"[^\w\s:\-]", "", normalized)
         normalized = re.sub(r"\s+", "_", normalized)
         normalized = re.sub(r"_+", "_", normalized)
         normalized = normalized.strip("_")
@@ -261,6 +298,28 @@ class TagService:
             return ""
 
         return normalized
+
+    @staticmethod
+    def normalize_filter_tags(tags: list) -> list:
+        """
+        Normalize a list of tag names for case-insensitive filtering.
+
+        This allows users to type 'network', 'Network', or 'NETWORK'
+        and match tags stored as 'NETWORK:FOX'.
+
+        Args:
+            tags: List of tag name strings from user input
+
+        Returns:
+            List of normalized (uppercase) tag names for database queries
+        """
+        normalized = []
+        for tag in tags:
+            if tag and isinstance(tag, str):
+                # Simple uppercase for filter matching
+                # Don't apply full normalization to preserve user's intent
+                normalized.append(tag.upper().strip())
+        return [t for t in normalized if t]
 
     @staticmethod
     def create_default_ruleset(db_session):
@@ -572,3 +631,131 @@ class TagService:
         all_rules.sort(key=lambda r: r._effective_priority)
 
         return all_rules
+
+    @staticmethod
+    def process_account_tags(account_id: int) -> dict:
+        """
+        Process tag extraction for an account's channels from the database.
+
+        This creates ChannelTag records based on tag extraction rules.
+        Should be called after channel sync to populate tag database records.
+
+        Args:
+            account_id: ID of the account to process
+
+        Returns:
+            Dict with processing statistics
+        """
+        from datetime import datetime
+
+        from models import Account, Channel, ChannelTag, Tag, db
+
+        account = db.session.get(Account, account_id)
+        if not account:
+            return {"success": False, "error": "Account not found"}
+
+        # Get active channels from database
+        db_channels = Channel.query.filter_by(account_id=account_id, is_active=True).all()
+
+        if not db_channels:
+            return {"success": False, "error": "Account not synced. Please sync channels first."}
+
+        # Mark start time for this processing run
+        processing_start = datetime.utcnow()
+
+        # Get tag rules for this account
+        tag_rules = TagService.get_rules_for_account(account)
+
+        # Build lookup of existing extraction-sourced channel tags
+        existing_tags = {}
+        for ct in ChannelTag.query.filter_by(account_id=account_id, source=ChannelTag.SOURCE_EXTRACTION).all():
+            key = (ct.stream_id, ct.tag_id)
+            existing_tags[key] = ct
+
+        # Process each channel
+        processed_count = 0
+        tag_counts: dict = {}
+        tags_created = 0
+        tags_updated = 0
+        channels_updated = 0
+
+        for channel in db_channels:
+            category_name = channel.category.category_name if channel.category else ""
+
+            # Extract tags and cleaned name
+            tags, cleaned_name = TagService.extract_tags(channel.name, category_name, tag_rules)
+
+            # Update cleaned name in database if changed
+            if channel.cleaned_name != cleaned_name:
+                channel.cleaned_name = cleaned_name
+                channel.updated_at = processing_start
+                channels_updated += 1
+
+            # Store tags
+            for tag_name in tags:
+                normalized_tag = TagService.normalize_tag_name(tag_name)
+
+                # Skip empty or too-short tags
+                if not normalized_tag or len(normalized_tag) < 2:
+                    continue
+
+                # Get or create tag
+                tag = Tag.query.filter_by(name=normalized_tag).first()
+                if not tag:
+                    tag = Tag(name=normalized_tag)
+                    db.session.add(tag)
+                    db.session.flush()
+
+                # Check if channel tag association exists (from extraction)
+                key = (channel.stream_id, tag.id)
+                if key in existing_tags:
+                    existing_tags[key].updated_at = processing_start
+                    tags_updated += 1
+                else:
+                    # Check if this tag exists from another source
+                    existing_other = ChannelTag.query.filter_by(
+                        account_id=account_id, stream_id=channel.stream_id, tag_id=tag.id
+                    ).first()
+                    if existing_other:
+                        tags_updated += 1
+                    else:
+                        channel_tag = ChannelTag(
+                            account_id=account_id,
+                            stream_id=channel.stream_id,
+                            tag_id=tag.id,
+                            source=ChannelTag.SOURCE_EXTRACTION,
+                            created_at=processing_start,
+                            updated_at=processing_start,
+                        )
+                        db.session.add(channel_tag)
+                        tags_created += 1
+
+                tag_counts[normalized_tag] = tag_counts.get(normalized_tag, 0) + 1
+
+            processed_count += 1
+
+        # Remove stale extraction-sourced tags
+        stale_tags = ChannelTag.query.filter(
+            ChannelTag.account_id == account_id,
+            ChannelTag.source == ChannelTag.SOURCE_EXTRACTION,
+            ChannelTag.updated_at < processing_start,
+        )
+        tags_removed = stale_tags.delete()
+
+        db.session.commit()
+
+        logger.info(
+            f"Processed tags for {processed_count} channels in account {account_id}: "
+            f"{tags_created} created, {tags_updated} updated, {tags_removed} removed"
+        )
+
+        return {
+            "success": True,
+            "processed": processed_count,
+            "unique_tags": len(tag_counts),
+            "tag_counts": tag_counts,
+            "tags_created": tags_created,
+            "tags_updated": tags_updated,
+            "tags_removed": tags_removed,
+            "channels_updated": channels_updated,
+        }

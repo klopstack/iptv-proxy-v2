@@ -1,4 +1,4 @@
-.PHONY: help install install-js test test-fast lint lint-js format clean run debug docker-build docker-run venv
+.PHONY: help install install-js test test-fast lint lint-js format clean run debug docker-build docker-run venv vulture vulture-all
 
 VENV = venv
 PYTHON = $(VENV)/bin/python
@@ -8,6 +8,7 @@ BLACK = $(VENV)/bin/black
 ISORT = $(VENV)/bin/isort
 FLAKE8 = $(VENV)/bin/flake8
 MYPY = $(VENV)/bin/mypy
+VULTURE = $(VENV)/bin/vulture
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -38,6 +39,12 @@ lint: install ## Run Python linting checks in venv
 	$(BLACK) --check .
 	$(ISORT) --check-only .
 	$(MYPY) app.py models.py services/ routes/
+
+vulture: install ## Find dead code with vulture
+	$(VULTURE) app.py models.py services/ routes/ schemas.py error_handling.py vulture_whitelist.py --min-confidence 80
+
+vulture-all: install ## Find dead code including lower confidence results
+	$(VULTURE) app.py models.py services/ routes/ schemas.py error_handling.py vulture_whitelist.py --min-confidence 60
 
 lint-js: ## Run JavaScript/HTML linting
 	npm run lint

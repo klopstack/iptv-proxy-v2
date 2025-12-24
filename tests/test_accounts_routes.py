@@ -249,9 +249,9 @@ class TestPreviewFilterMatches:
 
     def test_preview_tag_filter(self, app, client, test_account_with_channels):
         """Test preview with tag filter"""
-        # Create some tags for channels
+        # Create some tags for channels (use uppercase as that's the normalized format)
         with app.app_context():
-            tag = Tag(name="TestTag")
+            tag = Tag(name="TESTTAG")
             db.session.add(tag)
             db.session.flush()
 
@@ -263,6 +263,7 @@ class TestPreviewFilterMatches:
             db.session.add(channel_tag)
             db.session.commit()
 
+        # Test with mixed case input (should match due to case-insensitive normalization)
         response = client.post(
             f"/api/accounts/{test_account_with_channels}/preview-channels",
             json={"filter_type": "tag", "filter_value": "TestTag"},

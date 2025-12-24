@@ -5,5 +5,6 @@ flake8==7.0.0
 black==23.12.1
 mypy==1.7.1
 isort==5.13.2
+vulture==2.14
 types-requests>=2.31.0
 sqlalchemy[mypy]>=2.0.0

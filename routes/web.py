@@ -53,3 +53,9 @@ def settings_page():
 def epg_page():
     """EPG (Electronic Program Guide) management page"""
     return render_template("epg.html")
+
+
+@web_bp.route("/stations")
+def stations_page():
+    """FCC Station Database page"""
+    return render_template("stations.html")

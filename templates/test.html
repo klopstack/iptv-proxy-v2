@@ -368,7 +368,19 @@ async function loadMoreChannels() {
         
         for (const channel of data.channels) {
             const tagsHtml = channel.tags && channel.tags.length > 0 
-                ? channel.tags.map(tag => `<span class="badge bg-info me-1">${tag}</span>`).join('')
+                ? channel.tags.map(tag => {
+                    // Handle both old format (string) and new format ({name, source})
+                    const tagName = typeof tag === 'string' ? tag : tag.name;
+                    const tagSource = typeof tag === 'string' ? 'extraction' : (tag.source || 'extraction');
+                    // Color based on source: extraction=info, enrichment=success, manual=warning, sync=secondary
+                    const colorClass = {
+                        'extraction': 'bg-info',
+                        'enrichment': 'bg-success',
+                        'manual': 'bg-warning text-dark',
+                        'sync': 'bg-secondary'
+                    }[tagSource] || 'bg-info';
+                    return `<span class="badge ${colorClass} me-1" title="Source: ${tagSource}">${escapeHtml(tagName)}</span>`;
+                }).join('')
                 : '<span class="text-muted">No tags</span>';
             
             // Show duplicate count if channel has collapsed duplicates
@@ -396,6 +408,9 @@ async function loadMoreChannels() {
                     <td>${tagsHtml}</td>
                     <td class="text-nowrap">
                         <div class="btn-group btn-group-sm" role="group">
+                            <a class="btn btn-outline-success" href="/stream/${channel.account_id}/${channel.stream_id}.ts" target="_blank" title="Play stream" onclick="event.stopPropagation();">
+                                <i class="bi bi-play-fill"></i>
+                            </a>
                             <button class="btn btn-outline-primary" data-action="create-tag-rule" data-channel-name="${escapeHtml(channel.name)}" data-channel-id="${channel.id}" title="Create tag rule for this channel" onclick="event.stopPropagation();">
                                 <i class="bi bi-tag"></i>
                             </button>
@@ -534,9 +549,19 @@ async function showChannelDetails(accountId, streamId) {
         }
         const channel = await response.json();
         
-        // Format tags
+        // Format tags with source-based coloring
         const tagsHtml = channel.tags && channel.tags.length > 0
-            ? channel.tags.map(tag => `<span class="badge bg-info me-1">${escapeHtml(tag)}</span>`).join('')
+            ? channel.tags.map(tag => {
+                const tagName = typeof tag === 'string' ? tag : tag.name;
+                const tagSource = typeof tag === 'string' ? 'extraction' : (tag.source || 'extraction');
+                const colorClass = {
+                    'extraction': 'bg-info',
+                    'enrichment': 'bg-success',
+                    'manual': 'bg-warning text-dark',
+                    'sync': 'bg-secondary'
+                }[tagSource] || 'bg-info';
+                return `<span class="badge ${colorClass} me-1" title="Source: ${tagSource}">${escapeHtml(tagName)}</span>`;
+            }).join('')
             : '<span class="text-muted">No tags</span>';
         
         // Format dates
@@ -661,6 +686,29 @@ async function showChannelDetails(accountId, streamId) {
                 </div>
             </div>
             ` : ''}
+            
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h6 class="border-bottom pb-2">Playback</h6>
+                    <div class="btn-group" role="group">
+                        <a class="btn btn-success" href="/stream/${channel.account_id}/${channel.stream_id}.ts" target="_blank" title="Play TS stream">
+                            <i class="bi bi-play-fill"></i> Play TS
+                        </a>
+                        <a class="btn btn-outline-success" href="/stream/${channel.account_id}/${channel.stream_id}.m3u8" target="_blank" title="Play HLS stream">
+                            <i class="bi bi-play-fill"></i> Play HLS
+                        </a>
+                    </div>
+                    <div class="mt-2">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">Proxy URL</span>
+                            <input type="text" class="form-control" value="${window.location.origin}/stream/${channel.account_id}/${channel.stream_id}.ts" readonly>
+                            <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText('${window.location.origin}/stream/${channel.account_id}/${channel.stream_id}.ts'); this.innerHTML='<i class=\\'bi bi-check\\'></i>';">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         `;
     } catch (error) {
         console.error('Error loading channel details:', error);

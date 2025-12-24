@@ -553,21 +553,25 @@ class TestAPIEndpoints:
         client = SchedulesDirectClient("testuser", "testpass")
 
         mock_response = MagicMock()
-        mock_response.json.return_value = {"status": "Online"}
+        # The current implementation checks if the API is reachable
+        # by hitting /available and checking status_code
+        mock_response.status_code = 200
 
-        with patch.object(client.session, "get", return_value=mock_response):
+        with patch("services.schedules_direct.requests.get", return_value=mock_response):
             result = client.get_system_status()
 
-        assert result["status"] == "Online"
+        assert result["status"] == "online"
+        assert "reachable" in result["message"]
 
     def test_get_system_status_error(self):
         """Test get_system_status handles errors"""
         client = SchedulesDirectClient("testuser", "testpass")
 
-        with patch.object(client.session, "get", side_effect=Exception("Connection error")):
+        with patch("services.schedules_direct.requests.get", side_effect=Exception("Connection error")):
             result = client.get_system_status()
 
-        assert "error" in result
+        assert result["status"] == "error"
+        assert "Connection error" in result["message"]
 
 
 # ============================================================================

@@ -28,6 +28,17 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:////ap
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
 
+# SQLite configuration for better concurrency with background scheduler
+# - timeout: Wait up to 30 seconds for locks (default is 5)
+# - check_same_thread: Allow use across threads (required for scheduler)
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "connect_args": {
+        "timeout": 30,
+        "check_same_thread": False,
+    },
+    "pool_pre_ping": True,  # Verify connections before use
+}
+
 # Initialize extensions
 CORS(app)
 db.init_app(app)
@@ -49,11 +60,13 @@ logger = logging.getLogger(__name__)
 
 from routes.accounts import accounts_bp
 from routes.api import api_bp, set_scheduler
+from routes.channel_links import channel_links_bp
 from routes.epg import epg_bp
 from routes.filters import filters_bp
 from routes.images import images_bp
 from routes.playlists import playlists_bp
 from routes.rulesets import rulesets_bp
+from routes.stations import stations_bp
 from routes.streams import streams_bp
 from routes.web import web_bp
 
@@ -66,6 +79,8 @@ app.register_blueprint(api_bp)
 app.register_blueprint(streams_bp)
 app.register_blueprint(epg_bp)
 app.register_blueprint(images_bp)
+app.register_blueprint(channel_links_bp)
+app.register_blueprint(stations_bp)
 
 # Pass scheduler to API blueprint
 set_scheduler(sync_scheduler)

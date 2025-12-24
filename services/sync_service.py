@@ -4,13 +4,17 @@ Channel sync service for synchronizing channels from IPTV providers to local dat
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List
+from typing import Any, Dict, List, Optional, Set
 
-from models import Account, Category, Channel, db
+from models import Account, Category, Channel, ChannelLink, ChannelTag, Tag, db
 from services.iptv_service import IPTVService
 from services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
+
+# Tag names that indicate east/west variants (used for auto-detection)
+EAST_TAGS = {"EAST", "E", "ET", "EST", "EASTERN"}
+WEST_TAGS = {"WEST", "W", "PT", "PST", "PACIFIC", "WESTERN"}
 
 
 def get_iptv_service_for_account(account):
@@ -26,13 +30,13 @@ class ChannelSyncService:
     """Service for synchronizing channels from IPTV providers"""
 
     @staticmethod
-    def sync_account(account_id: int, force: bool = False) -> Dict:
+    def sync_account(account_id: int, _force: bool = False) -> Dict:
         """
         Sync channels and categories for a specific account
 
         Args:
             account_id: Account ID to sync
-            force: Force sync even if recently synced
+            _force: Force sync even if recently synced (reserved for future use)
 
         Returns:
             Dict with sync statistics
@@ -296,3 +300,135 @@ class ChannelSyncService:
             "inactive_channels": inactive,
             "last_sync": last_sync[0] if last_sync else None,
         }
+
+    @staticmethod
+    def detect_channel_links(account_id: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Auto-detect east/west channel links based on tags and cleaned names.
+
+        Channels with the same cleaned_name (base name) and opposite east/west
+        tags are linked. West channels get a -3 hour time offset from east.
+
+        Args:
+            account_id: Optional account ID to limit detection to. If None, all accounts.
+
+        Returns:
+            Dict with detection statistics
+        """
+        stats: Dict[str, Any] = {
+            "links_created": 0,
+            "links_skipped": 0,  # Already exist
+            "channels_processed": 0,
+            "errors": [],
+        }
+
+        # Get all channels (optionally filtered by account)
+        channel_query = Channel.query.filter_by(is_active=True)
+        if account_id:
+            channel_query = channel_query.filter_by(account_id=account_id)
+        channels = channel_query.all()
+
+        if not channels:
+            return stats
+
+        stats["channels_processed"] = len(channels)
+
+        # Load tags for all channels
+        channel_ids = [ch.id for ch in channels]
+        channel_stream_ids = {ch.id: ch.stream_id for ch in channels}
+        channel_account_ids = {ch.id: ch.account_id for ch in channels}
+
+        # Build channel_id -> set of tag names
+        channel_tags: Dict[int, Set[str]] = {ch.id: set() for ch in channels}
+
+        # Batch load tags
+        BATCH_SIZE = 500
+        for i in range(0, len(channel_ids), BATCH_SIZE):
+            batch_ids = channel_ids[i : i + BATCH_SIZE]
+            # We need to join through stream_id and account_id
+            for ch_id in batch_ids:
+                stream_id = channel_stream_ids[ch_id]
+                acc_id = channel_account_ids[ch_id]
+                tag_rows = (
+                    db.session.query(Tag.name)
+                    .join(ChannelTag, Tag.id == ChannelTag.tag_id)
+                    .filter(ChannelTag.account_id == acc_id, ChannelTag.stream_id == stream_id)
+                    .all()
+                )
+                for (tag_name,) in tag_rows:
+                    channel_tags[ch_id].add(tag_name.upper())
+
+        # Group channels by account and cleaned_name
+        # Structure: account_id -> cleaned_name -> list of (channel, variant)
+        grouped: Dict[int, Dict[str, List[tuple]]] = {}
+
+        for ch in channels:
+            acc_id = ch.account_id
+            base_name = (ch.cleaned_name or ch.name or "").lower().strip()
+
+            if not base_name:
+                continue
+
+            tags = channel_tags.get(ch.id, set())
+            variant = None
+            if tags & EAST_TAGS:
+                variant = "east"
+            elif tags & WEST_TAGS:
+                variant = "west"
+
+            if acc_id not in grouped:
+                grouped[acc_id] = {}
+            if base_name not in grouped[acc_id]:
+                grouped[acc_id][base_name] = []
+            grouped[acc_id][base_name].append((ch, variant))
+
+        # For each group with both east and west variants, create links
+        for acc_id, names in grouped.items():
+            for base_name, variants in names.items():
+                east_channels = [ch for ch, v in variants if v == "east"]
+                west_channels = [ch for ch, v in variants if v == "west"]
+                none_channels = [ch for ch, v in variants if v is None]
+
+                # If we have west but no explicit east, use the untagged channel as east
+                if west_channels and not east_channels and none_channels:
+                    east_channels = none_channels
+
+                # Link each west channel to the first east channel
+                if west_channels and east_channels:
+                    east_ch = east_channels[0]
+                    for west_ch in west_channels:
+                        # Check if link already exists
+                        existing = ChannelLink.query.filter_by(
+                            channel_id=west_ch.id,
+                            source_channel_id=east_ch.id,
+                        ).first()
+
+                        if existing:
+                            stats["links_skipped"] += 1
+                            continue
+
+                        # Create new link with -3 hour offset (west = east - 3 hours)
+                        link = ChannelLink(
+                            channel_id=west_ch.id,
+                            source_channel_id=east_ch.id,
+                            time_offset_hours=-3,
+                            link_type="time_shifted",
+                            auto_detected=True,
+                        )
+                        db.session.add(link)
+                        stats["links_created"] += 1
+                        logger.info(f"Auto-detected link: {west_ch.name} -> {east_ch.name} (-3h)")
+
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            stats["errors"].append(f"Database error: {str(e)}")
+            logger.error(f"Error saving channel links: {e}")
+
+        logger.info(
+            f"Channel link detection complete: {stats['links_created']} created, "
+            f"{stats['links_skipped']} skipped (existing)"
+        )
+
+        return stats

@@ -8,6 +8,7 @@ from flask import Blueprint, jsonify, request
 from error_handling import handle_errors
 from models import Account, Category, Channel, ChannelTag, Tag, db
 from services.cache_service import CacheService
+from services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
 
@@ -258,6 +259,8 @@ def preview_channels():
 
     # Parse tag filter
     filter_tags = [t.strip() for t in tags_param.split(",") if t.strip()] if tags_param else []
+    # Normalize for case-insensitive matching
+    filter_tags = TagService.normalize_filter_tags(filter_tags)
 
     # Build base query
     query = (
@@ -300,17 +303,17 @@ def preview_channels():
     tag_map = {}
     if stream_ids:
         channel_tags = (
-            db.session.query(ChannelTag.stream_id, Tag.name)
+            db.session.query(ChannelTag.stream_id, Tag.name, ChannelTag.source)
             .join(Tag, ChannelTag.tag_id == Tag.id)
             .filter(ChannelTag.stream_id.in_(stream_ids))
         )
         if account_id:
             channel_tags = channel_tags.filter(ChannelTag.account_id == account_id)
 
-        for stream_id, tag_name in channel_tags.all():
+        for stream_id, tag_name, source in channel_tags.all():
             if stream_id not in tag_map:
                 tag_map[stream_id] = []
-            tag_map[stream_id].append(tag_name)
+            tag_map[stream_id].append({"name": tag_name, "source": source})
 
     # Build response
     result = []
@@ -350,55 +353,86 @@ def preview_channels():
 
 @api_bp.route("/api/scheduler/status", methods=["GET"])
 def get_scheduler_status():
-    """Get scheduler status and configuration"""
+    """Get scheduler status and configuration including separate sync intervals"""
     if _scheduler is None:
         return jsonify({"error": "Scheduler not initialized"}), 500
 
-    return jsonify(
-        {
-            "running": _scheduler.running,
-            "interval_hours": _scheduler.interval_hours,
-            "interval_seconds": _scheduler.interval_seconds,
-        }
-    )
+    # Use the new detailed status method
+    return jsonify(_scheduler.get_status())
 
 
 @api_bp.route("/api/scheduler/restart", methods=["POST"])
 def restart_scheduler():
-    """Restart scheduler with new interval"""
+    """Restart scheduler with new intervals
+
+    Accepts JSON body with optional interval settings:
+    - interval_hours: Legacy single interval (sets account_interval_hours)
+    - account_interval_hours: IPTV account sync interval (1-168)
+    - epg_interval_hours: EPG source sync interval (1-336)
+    - fcc_interval_hours: FCC data sync interval (24-672)
+    """
     if _scheduler is None:
         return jsonify({"error": "Scheduler not initialized"}), 500
 
     data = request.get_json() or {}
-    new_interval = data.get("interval_hours")
 
-    if new_interval is not None:
+    # Handle legacy interval_hours (maps to account interval)
+    if "interval_hours" in data and "account_interval_hours" not in data:
+        data["account_interval_hours"] = data["interval_hours"]
+
+    # Validate and apply account interval
+    if "account_interval_hours" in data:
         try:
-            new_interval = int(new_interval)
-            if new_interval < 1 or new_interval > 168:  # 1 hour to 1 week
-                return jsonify({"error": "Interval must be between 1 and 168 hours"}), 400
+            interval = int(data["account_interval_hours"])
+            if interval < 1 or interval > 168:  # 1 hour to 1 week
+                return jsonify({"error": "Account interval must be between 1 and 168 hours"}), 400
+            _scheduler.account_interval_hours = interval
         except (ValueError, TypeError):
-            return jsonify({"error": "Invalid interval value"}), 400
+            return jsonify({"error": "Invalid account interval value"}), 400
 
-        # Stop and restart with new interval
-        _scheduler.stop()
-        _scheduler.interval_hours = new_interval
-        _scheduler.interval_seconds = new_interval * 3600
-        _scheduler.start()
+    # Validate and apply EPG interval
+    if "epg_interval_hours" in data:
+        try:
+            interval = int(data["epg_interval_hours"])
+            if interval < 1 or interval > 336:  # 1 hour to 2 weeks
+                return jsonify({"error": "EPG interval must be between 1 and 336 hours"}), 400
+            _scheduler.epg_interval_hours = interval
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid EPG interval value"}), 400
 
-        logger.info(f"Scheduler restarted with new interval: {new_interval} hours")
-        return jsonify(
-            {
-                "success": True,
-                "message": f"Scheduler restarted with {new_interval} hour interval",
-                "interval_hours": new_interval,
-            }
-        )
-    else:
-        # Just restart with current settings
-        _scheduler.stop()
-        _scheduler.start()
-        return jsonify({"success": True, "message": "Scheduler restarted", "interval_hours": _scheduler.interval_hours})
+    # Validate and apply FCC interval
+    if "fcc_interval_hours" in data:
+        try:
+            interval = int(data["fcc_interval_hours"])
+            if interval < 24 or interval > 672:  # 1 day to 4 weeks
+                return jsonify({"error": "FCC interval must be between 24 and 672 hours"}), 400
+            _scheduler.fcc_interval_hours = interval
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid FCC interval value"}), 400
+
+    # Restart scheduler
+    _scheduler.stop()
+    _scheduler.start()
+
+    logger.info(
+        f"Scheduler restarted with intervals: "
+        f"accounts={_scheduler.account_interval_hours}h, "
+        f"epg={_scheduler.epg_interval_hours}h, "
+        f"fcc={_scheduler.fcc_interval_hours}h"
+    )
+
+    return jsonify(
+        {
+            "success": True,
+            "message": "Scheduler restarted with updated intervals",
+            # Legacy compatibility
+            "interval_hours": _scheduler.interval_hours,
+            # Detailed intervals
+            "account_interval_hours": _scheduler.account_interval_hours,
+            "epg_interval_hours": _scheduler.epg_interval_hours,
+            "fcc_interval_hours": _scheduler.fcc_interval_hours,
+        }
+    )
 
 
 @api_bp.route("/api/scheduler/stop", methods=["POST"])

@@ -9,6 +9,36 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 
+class SyncMetadata(db.Model):  # type: ignore[name-defined]
+    """Stores scheduler sync state to persist across restarts"""
+
+    __tablename__ = "sync_metadata"
+
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(100), unique=True, nullable=False)  # e.g., 'last_full_sync', 'last_fcc_sync'
+    value = db.Column(db.Text)  # JSON or string value
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @staticmethod
+    def get(key, default=None):
+        """Get a metadata value by key"""
+        record = SyncMetadata.query.filter_by(key=key).first()
+        return record.value if record else default
+
+    @staticmethod
+    def set(key, value):
+        """Set a metadata value by key"""
+        record = SyncMetadata.query.filter_by(key=key).first()
+        if record:
+            record.value = value
+            record.updated_at = datetime.utcnow()
+        else:
+            record = SyncMetadata(key=key, value=value)
+            db.session.add(record)
+        db.session.commit()
+        return record
+
+
 class Account(db.Model):  # type: ignore[name-defined]
     """IPTV service account - can have multiple credentials for stream multiplexing"""
 
@@ -25,6 +55,8 @@ class Account(db.Model):  # type: ignore[name-defined]
         default="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     )
     enabled = db.Column(db.Boolean, default=True)
+    last_sync = db.Column(db.DateTime)  # Last time this account was synced
+    last_sync_status = db.Column(db.String(50))  # 'success', 'error'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -161,6 +193,7 @@ class TagRule(db.Model):  # type: ignore[name-defined]
     tag_name = db.Column(db.String(50), nullable=False)  # Tag to assign (e.g., "US", "RAW", "60fps")
     source = db.Column(db.String(20), nullable=False)  # Where to look: channel_name, category_name, both
     remove_from_name = db.Column(db.Boolean, default=True)  # Whether to remove the matched pattern from channel name
+    replacement = db.Column(db.String(255), nullable=True)  # Text to replace matched pattern with (None = just remove)
     priority = db.Column(db.Integer, default=100)  # Processing order (lower first)
     enabled = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -257,10 +290,17 @@ class ChannelTag(db.Model):  # type: ignore[name-defined]
 
     __tablename__ = "channel_tags"
 
+    # Tag sources - where the tag came from
+    SOURCE_EXTRACTION = "extraction"  # From tag extraction rules
+    SOURCE_ENRICHMENT = "enrichment"  # From FCC facility enrichment
+    SOURCE_MANUAL = "manual"  # User-created
+    SOURCE_SYNC = "sync"  # From channel sync process
+
     id = db.Column(db.Integer, primary_key=True)
     account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False, index=True)
     stream_id = db.Column(db.String(50), nullable=False)  # Stream ID from IPTV provider
     tag_id = db.Column(db.Integer, db.ForeignKey("tags.id"), nullable=False, index=True)
+    source = db.Column(db.String(20), default=SOURCE_EXTRACTION, nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -276,6 +316,66 @@ class ChannelTag(db.Model):  # type: ignore[name-defined]
 
     def __repr__(self):
         return f"<ChannelTag account={self.account_id} stream={self.stream_id} tag={self.tag_id}>"
+
+
+class ChannelLink(db.Model):  # type: ignore[name-defined]
+    """
+    Explicit links between channels that are duplicates/variants.
+
+    Used for:
+    - Time-shifted channels (East/West coast feeds)
+    - Simulcast channels (same content, different stream)
+    - HD/SD pairs (same content, different quality)
+
+    When generating EPG, if a channel has no direct EPG mapping but has a
+    ChannelLink, the source channel's EPG is used with optional time offset.
+    """
+
+    __tablename__ = "channel_links"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # The channel that needs EPG from another source
+    channel_id = db.Column(db.Integer, db.ForeignKey("channels.id", ondelete="CASCADE"), nullable=False)
+
+    # The "source" channel to get EPG from
+    source_channel_id = db.Column(db.Integer, db.ForeignKey("channels.id", ondelete="CASCADE"), nullable=False)
+
+    # Time offset in hours (e.g., -3 for west coast from east coast)
+    time_offset_hours = db.Column(db.Integer, default=0)
+
+    # Link type for clarity and filtering
+    link_type = db.Column(db.String(50), default="time_shifted")
+    # Types: "time_shifted", "simulcast", "hd_sd_pair"
+
+    # Whether this link was auto-detected or manually created
+    auto_detected = db.Column(db.Boolean, default=False)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    channel = db.relationship(
+        "Channel",
+        foreign_keys=[channel_id],
+        backref=db.backref("epg_links", cascade="all, delete-orphan"),
+    )
+    source_channel = db.relationship(
+        "Channel",
+        foreign_keys=[source_channel_id],
+        backref=db.backref("linked_channels", cascade="all, delete-orphan"),
+    )
+
+    __table_args__ = (
+        # Prevent duplicate links from same channel to same source
+        db.UniqueConstraint("channel_id", "source_channel_id", name="_channel_link_uc"),
+        db.Index("idx_channel_link_channel", "channel_id"),
+        db.Index("idx_channel_link_source", "source_channel_id"),
+    )
+
+    def __repr__(self):
+        offset_str = f" ({self.time_offset_hours:+d}h)" if self.time_offset_hours else ""
+        return f"<ChannelLink {self.channel_id} -> {self.source_channel_id}{offset_str}>"
 
 
 class ActiveStream(db.Model):  # type: ignore[name-defined]
@@ -332,13 +432,14 @@ class PlaylistConfig(db.Model):  # type: ignore[name-defined]
 
 
 class EpgSource(db.Model):  # type: ignore[name-defined]
-    """EPG data sources - provider XMLTV, Schedules Direct, external XMLTV files, etc."""
+    """EPG data sources - provider XMLTV, Schedules Direct, external XMLTV files, XMLTV grabbers, etc."""
 
     __tablename__ = "epg_sources"
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    source_type = db.Column(db.String(50), nullable=False)  # 'provider', 'schedules_direct', 'xmltv_url', 'xmltv_file'
+    # 'provider', 'schedules_direct', 'xmltv_url', 'xmltv_file', 'xmltv_grabber'
+    source_type = db.Column(db.String(50), nullable=False)
 
     # For provider sources, link to account
     account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=True, index=True)
@@ -350,6 +451,13 @@ class EpgSource(db.Model):  # type: ignore[name-defined]
     sd_username = db.Column(db.String(100))
     sd_password = db.Column(db.String(100))
     sd_lineup = db.Column(db.String(100))  # Schedules Direct lineup ID
+
+    # For XMLTV grabbers (e.g., tv_grab_zz_sdjson)
+    xmltv_grabber = db.Column(db.String(100))  # Grabber executable name
+    xmltv_config_name = db.Column(db.String(100))  # Configuration name
+    xmltv_days = db.Column(db.Integer, default=7)  # Days of EPG data to fetch
+    xmltv_offset = db.Column(db.Integer, default=0)  # Day offset to start from
+    xmltv_extra_args = db.Column(db.Text)  # JSON array of extra arguments
 
     # Source priority (lower = higher priority, used when merging EPG data)
     priority = db.Column(db.Integer, default=100)
@@ -541,3 +649,105 @@ class CachedImage(db.Model):  # type: ignore[name-defined]
 
     def __repr__(self):
         return f"<CachedImage {self.url_hash[:8]}... ({self.status})>"
+
+
+class FccFacility(db.Model):  # type: ignore[name-defined]
+    """FCC TV station facility data from the LMS database.
+
+    This table stores TV station registration information from the FCC's
+    Licensing and Management System (LMS) database. It provides authoritative
+    mapping between callsigns and their licensed cities/markets.
+
+    Data source: https://enterpriseefiling.fcc.gov/dataentry/public/tv/lmsDatabase.html
+    Download: facility.dat from the LMS database dump (pipe-delimited format)
+
+    Use cases:
+    - Look up city/market from callsign (EPG -> playlist matching)
+    - Look up callsign from city (playlist -> EPG matching)
+    - Identify network affiliations
+    - Group stations by DMA (Designated Market Area)
+    """
+
+    __tablename__ = "fcc_facilities"
+
+    id = db.Column(db.Integer, primary_key=True)
+    facility_id = db.Column(db.Integer, unique=True, index=True)  # FCC facility ID
+
+    # Station identification
+    callsign = db.Column(db.String(20), nullable=False, index=True)
+    service_code = db.Column(db.String(10))  # DTV, TV, LPT, LPD, etc.
+    station_type = db.Column(db.String(10))  # M=main, etc.
+
+    # Location info - key for matching
+    community_city = db.Column(db.String(100), index=True)  # Licensed city
+    community_state = db.Column(db.String(10), index=True)  # State code (2-letter)
+
+    # Channel info
+    channel = db.Column(db.String(10))  # RF channel number
+    tv_virtual_channel = db.Column(db.String(10))  # Virtual channel number
+
+    # Network/market info
+    network_affiliation = db.Column(db.String(100))  # ABC, NBC, CBS, FOX, etc.
+    nielsen_dma = db.Column(db.String(100))  # Nielsen DMA name (market)
+    nielsen_dma_rank = db.Column(db.Integer)  # DMA rank (parsed from name if available)
+
+    # Status
+    active = db.Column(db.Boolean, default=True)
+    facility_status = db.Column(db.String(20))  # LICEN, CP, etc.
+
+    # Timestamps
+    last_update = db.Column(db.DateTime)  # From FCC data
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        db.Index("idx_fcc_callsign_service", "callsign", "service_code"),
+        db.Index("idx_fcc_city_state", "community_city", "community_state"),
+        db.Index("idx_fcc_network", "network_affiliation"),
+        db.Index("idx_fcc_dma", "nielsen_dma"),
+    )
+
+    def __repr__(self):
+        return f"<FccFacility {self.callsign} ({self.community_city}, {self.community_state})>"
+
+
+class FccCorrection(db.Model):  # type: ignore[name-defined]
+    """Manual corrections to FCC facility data.
+
+    The FCC database often has incomplete or incorrect data for network affiliations,
+    virtual channels, etc. This table stores corrections that override the FCC data
+    when querying facilities.
+
+    Corrections are applied by matching on callsign (primary) and optionally
+    facility_id for more specific matches.
+
+    Example corrections:
+    - WBMA-LD: Set network_affiliation='ABC', tv_virtual_channel='33'
+    - WJLA-TV: Correct nielsen_dma spelling
+    """
+
+    __tablename__ = "fcc_corrections"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Match criteria - at minimum callsign is required
+    callsign = db.Column(db.String(20), nullable=False, index=True)
+    facility_id = db.Column(db.Integer, index=True)  # Optional - for more specific matches
+
+    # Fields that can be corrected (NULL means no correction, use original FCC value)
+    network_affiliation = db.Column(db.String(100))
+    tv_virtual_channel = db.Column(db.String(10))
+    nielsen_dma = db.Column(db.String(100))
+    community_city = db.Column(db.String(100))
+    community_state = db.Column(db.String(10))
+
+    # Metadata
+    reason = db.Column(db.Text)  # Why this correction was needed
+    source = db.Column(db.String(100))  # Where the correct info came from (e.g., Wikipedia, station website)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint("callsign", "facility_id", name="uq_fcc_correction_callsign_facility"),)
+
+    def __repr__(self):
+        return f"<FccCorrection {self.callsign}>"

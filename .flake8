@@ -9,7 +9,8 @@ exclude =
     .pytest_cache,
     instance,
     data,
-    migrations
+    migrations,
+    vulture_whitelist.py
 
 # Global ignores for legitimate cases:
 # E203: Whitespace before ':' - conflicts with black formatter in slices (e.g., list[start : end])

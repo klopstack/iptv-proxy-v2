@@ -5,20 +5,37 @@ Background scheduler for periodic channel synchronization
 import logging
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 import requests
 
-from models import Account, EpgSource
-from services.epg_service import EpgService
+from models import Account, EpgSource, SyncMetadata
+from services.epg_service import EpgService, normalize_xmltv_url
 from services.iptv_service import IPTVService
 from services.sync_service import ChannelSyncService
+from services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
 
+# Default sync intervals (in hours)
+DEFAULT_ACCOUNT_INTERVAL_HOURS = 6
+DEFAULT_EPG_INTERVAL_HOURS = 12
+DEFAULT_FCC_INTERVAL_HOURS = 168  # Weekly
+
+# Metadata keys for persistent sync state
+SYNC_KEY_LAST_ACCOUNT_SYNC = "last_account_sync"
+SYNC_KEY_LAST_EPG_SYNC = "last_epg_sync"
+SYNC_KEY_LAST_FCC_SYNC = "last_fcc_sync"
+
+# Metadata keys for interval settings (persisted)
+SYNC_KEY_ACCOUNT_INTERVAL = "account_sync_interval_hours"
+SYNC_KEY_EPG_INTERVAL = "epg_sync_interval_hours"
+SYNC_KEY_FCC_INTERVAL = "fcc_sync_interval_hours"
+
 
 class SyncScheduler:
-    """Scheduler for periodic channel sync"""
+    """Scheduler for periodic channel sync with persistent timing and separate intervals"""
 
     def __init__(self, app, interval_hours=6):
         """
@@ -26,13 +43,116 @@ class SyncScheduler:
 
         Args:
             app: Flask app instance
-            interval_hours: Hours between sync runs (default: 6)
+            interval_hours: Default hours between sync runs (default: 6)
+                           This is used as fallback if no specific intervals are set
         """
         self.app = app
+        # Legacy compatibility - this will be the account sync interval
         self.interval_hours = interval_hours
         self.interval_seconds = interval_hours * 3600
         self.running = False
         self.thread = None
+        # Check every minute for work to do
+        self._check_interval = 60
+
+        # Load persisted intervals or use defaults
+        with self.app.app_context():
+            self._account_interval_hours = self._load_interval(SYNC_KEY_ACCOUNT_INTERVAL, interval_hours)
+            self._epg_interval_hours = self._load_interval(SYNC_KEY_EPG_INTERVAL, DEFAULT_EPG_INTERVAL_HOURS)
+            self._fcc_interval_hours = self._load_interval(SYNC_KEY_FCC_INTERVAL, DEFAULT_FCC_INTERVAL_HOURS)
+
+    def _load_interval(self, key: str, default: int) -> int:
+        """Load an interval setting from persistent storage"""
+        try:
+            value = SyncMetadata.get(key)
+            if value:
+                try:
+                    return int(value)
+                except (ValueError, TypeError):
+                    pass
+        except Exception:
+            # Table might not exist yet (e.g., during testing)
+            pass
+        return default
+
+    def _save_interval(self, key: str, value: int):
+        """Save an interval setting to persistent storage"""
+        with self.app.app_context():
+            SyncMetadata.set(key, str(value))
+
+    @property
+    def account_interval_hours(self) -> int:
+        """Get IPTV account sync interval in hours"""
+        return self._account_interval_hours
+
+    @account_interval_hours.setter
+    def account_interval_hours(self, value: int):
+        """Set IPTV account sync interval in hours"""
+        self._account_interval_hours = value
+        self._save_interval(SYNC_KEY_ACCOUNT_INTERVAL, value)
+        # Keep legacy property in sync
+        self.interval_hours = value
+        self.interval_seconds = value * 3600
+
+    @property
+    def epg_interval_hours(self) -> int:
+        """Get EPG source sync interval in hours"""
+        return self._epg_interval_hours
+
+    @epg_interval_hours.setter
+    def epg_interval_hours(self, value: int):
+        """Set EPG source sync interval in hours"""
+        self._epg_interval_hours = value
+        self._save_interval(SYNC_KEY_EPG_INTERVAL, value)
+
+    @property
+    def fcc_interval_hours(self) -> int:
+        """Get FCC data sync interval in hours"""
+        return self._fcc_interval_hours
+
+    @fcc_interval_hours.setter
+    def fcc_interval_hours(self, value: int):
+        """Set FCC data sync interval in hours"""
+        self._fcc_interval_hours = value
+        self._save_interval(SYNC_KEY_FCC_INTERVAL, value)
+
+    def get_status(self) -> dict:
+        """Get detailed scheduler status including all sync types"""
+        with self.app.app_context():
+            now = datetime.now(timezone.utc)
+
+            def get_sync_info(key: str, interval_hours: int) -> dict:
+                """Get info about a specific sync type"""
+                last_sync = self._get_last_sync_time(key)
+                if last_sync:
+                    # Handle timezone-naive datetimes
+                    if last_sync.tzinfo is None:
+                        last_sync = last_sync.replace(tzinfo=timezone.utc)
+                    next_sync = last_sync + timedelta(hours=interval_hours)
+                    overdue = now >= next_sync
+                else:
+                    next_sync = None
+                    overdue = True
+
+                return {
+                    "interval_hours": interval_hours,
+                    "last_sync": last_sync.isoformat() if last_sync else None,
+                    "next_sync": next_sync.isoformat() if next_sync else None,
+                    "overdue": overdue,
+                }
+
+            return {
+                "running": self.running,
+                # Legacy compatibility
+                "interval_hours": self.interval_hours,
+                "interval_seconds": self.interval_seconds,
+                # Detailed sync info
+                "syncs": {
+                    "accounts": get_sync_info(SYNC_KEY_LAST_ACCOUNT_SYNC, self._account_interval_hours),
+                    "epg": get_sync_info(SYNC_KEY_LAST_EPG_SYNC, self._epg_interval_hours),
+                    "fcc": get_sync_info(SYNC_KEY_LAST_FCC_SYNC, self._fcc_interval_hours),
+                },
+            }
 
     def start(self):
         """Start the scheduler"""
@@ -52,47 +172,176 @@ class SyncScheduler:
             self.thread.join(timeout=5)
         logger.info("Sync scheduler stopped")
 
+    def _get_last_sync_time(self, key: str) -> Optional[datetime]:
+        """Get the last sync time from persistent storage"""
+        with self.app.app_context():
+            value = SyncMetadata.get(key)
+            if value:
+                try:
+                    return datetime.fromisoformat(value)
+                except (ValueError, TypeError):
+                    return None
+            return None
+
+    def _set_last_sync_time(self, key: str, when: Optional[datetime] = None):
+        """Set the last sync time in persistent storage"""
+        if when is None:
+            when = datetime.now(timezone.utc)
+        with self.app.app_context():
+            SyncMetadata.set(key, when.isoformat())
+
+    def _needs_sync(self, key: str, interval_hours: int) -> bool:
+        """Check if a sync is needed based on last sync time"""
+        last_sync = self._get_last_sync_time(key)
+        if last_sync is None:
+            return True
+
+        # Handle timezone-naive datetimes
+        if last_sync.tzinfo is None:
+            last_sync = last_sync.replace(tzinfo=timezone.utc)
+
+        next_sync = last_sync + timedelta(hours=interval_hours)
+        return datetime.now(timezone.utc) >= next_sync
+
     def _run(self):
-        """Main scheduler loop"""
-        # Wait a bit before first sync to let app start up
-        time.sleep(60)
+        """Main scheduler loop - checks periodically if sync is needed"""
+        # Wait a bit before first check to let app start up
+        time.sleep(30)
 
         while self.running:
             try:
-                self._sync_all()
+                self._check_and_sync()
             except Exception as e:
                 logger.error(f"Error in sync scheduler: {e}")
+                # Ensure we rollback any failed transaction
+                try:
+                    from models import db
+
+                    with self.app.app_context():
+                        db.session.rollback()
+                except Exception:
+                    pass
 
             # Sleep in small intervals so we can stop quickly
-            for _ in range(int(self.interval_seconds)):
+            for _ in range(self._check_interval):
                 if not self.running:
                     break
                 time.sleep(1)
 
-    def _sync_all(self):
-        """Sync all enabled accounts and EPG sources"""
+    def _check_and_sync(self):
+        """Check if any syncs are due and run them"""
         with self.app.app_context():
-            logger.info(f"Starting scheduled sync at {datetime.now(timezone.utc)}")
+            # Check if account/channel sync is needed
+            if self._needs_sync(SYNC_KEY_LAST_ACCOUNT_SYNC, self._account_interval_hours):
+                logger.info(f"Account sync due (interval: {self._account_interval_hours} hours)")
+                self._sync_accounts()
+                self._set_last_sync_time(SYNC_KEY_LAST_ACCOUNT_SYNC)
 
-            # Sync channels for all enabled accounts
-            accounts = Account.query.filter_by(enabled=True).all()
-            for account in accounts:
+            # Check if EPG sync is needed (uses its own interval)
+            if self._needs_sync(SYNC_KEY_LAST_EPG_SYNC, self._epg_interval_hours):
+                logger.info(f"EPG sync due (interval: {self._epg_interval_hours} hours)")
+                self._sync_epg_sources()
+                self._set_last_sync_time(SYNC_KEY_LAST_EPG_SYNC)
+
+            # Check if FCC sync is needed (configurable, default weekly)
+            if self._needs_sync(SYNC_KEY_LAST_FCC_SYNC, self._fcc_interval_hours):
+                logger.info(f"FCC sync due (interval: {self._fcc_interval_hours} hours)")
+                self._sync_fcc_data()
+                self._set_last_sync_time(SYNC_KEY_LAST_FCC_SYNC)
+
+    def _sync_accounts(self):
+        """Sync all enabled accounts and process their tags"""
+        from models import db
+
+        accounts = Account.query.filter_by(enabled=True).all()
+        logger.info(f"Syncing {len(accounts)} enabled account(s)")
+
+        for account in accounts:
+            try:
+                logger.info(f"Syncing account: {account.name}")
+                stats = ChannelSyncService.sync_account(account.id)
+                logger.info(
+                    f"Account {account.name} synced: "
+                    f"{stats['channels_added']} added, "
+                    f"{stats['channels_updated']} updated, "
+                    f"{stats['channels_deactivated']} deactivated"
+                )
+
+                # Process tag extraction for this account
+                self._process_account_tags(account)
+
+                # Update account's last sync time
+                account.last_sync = datetime.now(timezone.utc)
+                account.last_sync_status = "success"
+                db.session.commit()
+
+            except Exception as e:
+                logger.error(f"Error syncing account {account.name}: {e}")
+                # Update account's sync status to error
                 try:
-                    logger.info(f"Syncing account: {account.name}")
-                    stats = ChannelSyncService.sync_account(account.id)
-                    logger.info(
-                        f"Account {account.name} synced: "
-                        f"{stats['channels_added']} added, "
-                        f"{stats['channels_updated']} updated, "
-                        f"{stats['channels_deactivated']} deactivated"
-                    )
-                except Exception as e:
-                    logger.error(f"Error syncing account {account.name}: {e}")
+                    account.last_sync = datetime.now(timezone.utc)
+                    account.last_sync_status = "error"
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
 
-            # Sync all enabled EPG sources
-            self._sync_epg_sources()
+    def _process_account_tags(self, account):
+        """Process tag extraction for an account after channel sync"""
+        try:
+            logger.info(f"Processing tags for account: {account.name}")
+            stats = TagService.process_account_tags(account.id)
+            if stats.get("success"):
+                logger.info(
+                    f"Account {account.name} tags processed: "
+                    f"{stats.get('tags_created', 0)} created, "
+                    f"{stats.get('tags_updated', 0)} updated, "
+                    f"{stats.get('tags_removed', 0)} removed"
+                )
+            else:
+                logger.warning(f"Tag processing for {account.name}: {stats.get('error', 'Unknown error')}")
+        except Exception as e:
+            logger.error(f"Error processing tags for account {account.name}: {e}")
 
-            logger.info(f"Scheduled sync completed at {datetime.now(timezone.utc)}")
+    def _sync_fcc_data(self):
+        """Sync FCC facility data (runs weekly)"""
+        try:
+            from services.fcc_facility_service import FccFacilityService
+
+            logger.info("Starting weekly FCC facility data sync")
+            result = FccFacilityService.full_sync()
+            if result.get("success"):
+                stats = result.get("stats", {})
+                logger.info(
+                    f"FCC data synced: {stats.get('added', 0)} added, "
+                    f"{stats.get('updated', 0)} updated, {stats.get('total', 0)} total"
+                )
+            else:
+                logger.warning(f"FCC sync issue: {result.get('message', 'Unknown error')}")
+        except Exception as e:
+            logger.error(f"Error syncing FCC data: {e}")
+
+    def _apply_fcc_enrichment(self, account):
+        """Apply FCC-based tag enrichment to an account"""
+        try:
+            from services.fcc_facility_service import FccFacilityService
+
+            logger.info(f"Applying FCC enrichment for account: {account.name}")
+            options = {
+                "add_location_tags": True,
+                "add_network_tags": True,
+                "add_callsign_tags": True,
+            }
+            result = FccFacilityService.apply_channel_enrichment(account.id, options)
+            if result.get("success"):
+                logger.info(
+                    f"FCC enrichment for {account.name}: "
+                    f"{result.get('channels_enriched', 0)} channels enriched, "
+                    f"{result.get('tags_added', 0)} tags added"
+                )
+            else:
+                logger.warning(f"FCC enrichment issue for {account.name}: {result.get('error', 'Unknown')}")
+        except Exception as e:
+            logger.error(f"Error applying FCC enrichment for account {account.name}: {e}")
 
     def _sync_epg_sources(self):
         """Sync all enabled EPG sources"""
@@ -146,7 +395,13 @@ class SyncScheduler:
                 logger.warning(f"EPG source {source.name} has no URL configured")
                 return None
 
-            response = requests.get(source.url, timeout=120)
+            # Normalize URL (e.g., convert GitHub blob URLs to raw URLs)
+            url = normalize_xmltv_url(source.url)
+            if url != source.url:
+                logger.info(f"Normalized XMLTV URL: {source.url} -> {url}")
+
+            # Use 10 minute timeout for large XMLTV files from rate-limited servers
+            response = requests.get(url, timeout=600)
             response.raise_for_status()
             return EpgService.sync_epg_source(source, response.content)
 

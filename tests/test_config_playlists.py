@@ -75,10 +75,10 @@ def test_accounts_with_tags(app, test_accounts_with_channels):
     with app.app_context():
         data = test_accounts_with_channels
 
-        # Create tags
+        # Create tags - use uppercase names for case-insensitive matching
         tag_hd = Tag(name="HD")
         tag_4k = Tag(name="4K")
-        tag_sports = Tag(name="Sports")
+        tag_sports = Tag(name="SPORTS")
         db.session.add_all([tag_hd, tag_4k, tag_sports])
         db.session.flush()
 
@@ -243,7 +243,7 @@ def test_config_playlist_tag_match_any(client, test_accounts_with_tags):
             name="HD or Sports",
             include_accounts="[]",
             exclude_accounts="[]",
-            include_tags=json.dumps(["HD", "Sports"]),
+            include_tags=json.dumps(["HD", "SPORTS"]),
             exclude_tags="[]",
             tag_match_mode="any",
             enabled=True,
@@ -271,7 +271,7 @@ def test_config_playlist_tag_match_all(client, test_accounts_with_tags):
             name="HD AND Sports",
             include_accounts="[]",
             exclude_accounts="[]",
-            include_tags=json.dumps(["HD", "Sports"]),
+            include_tags=json.dumps(["HD", "SPORTS"]),
             exclude_tags="[]",
             tag_match_mode="all",
             enabled=True,

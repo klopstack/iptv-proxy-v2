@@ -266,6 +266,76 @@ class TestEpgMappings:
         assert "unmapped_channels" in data
         assert data["total"] >= 1
 
+    def test_get_epg_mappings_unmapped_with_category_filter(self, app, client, test_account):
+        """Test getting unmapped channels filtered by category"""
+        with app.app_context():
+            # Create two categories
+            cat1 = Category(
+                account_id=test_account,
+                category_id="cat_filter1",
+                category_name="Category 1",
+            )
+            cat2 = Category(
+                account_id=test_account,
+                category_id="cat_filter2",
+                category_name="Category 2",
+            )
+            db.session.add_all([cat1, cat2])
+            db.session.flush()
+
+            # Create channels in different categories
+            ch1 = Channel(
+                account_id=test_account,
+                stream_id="ch_cat1",
+                name="Channel in Cat1",
+                category_id=cat1.id,
+                is_active=True,
+                is_visible=True,
+            )
+            ch2 = Channel(
+                account_id=test_account,
+                stream_id="ch_cat2",
+                name="Channel in Cat2",
+                category_id=cat2.id,
+                is_active=True,
+                is_visible=True,
+            )
+            db.session.add_all([ch1, ch2])
+            db.session.commit()
+
+            # Test filter by category 1
+            response = client.get(
+                f"/api/epg/mappings?unmapped_only=true&account_id={test_account}&category_id={cat1.id}"
+            )
+            assert response.status_code == 200
+            data = response.json
+            assert "unmapped_channels" in data
+            # Should only return channels in cat1
+            for ch in data["unmapped_channels"]:
+                assert ch["category_id"] == cat1.id
+
+            # Test filter by category 2
+            response = client.get(
+                f"/api/epg/mappings?unmapped_only=true&account_id={test_account}&category_id={cat2.id}"
+            )
+            assert response.status_code == 200
+            data = response.json
+            # Should only return channels in cat2
+            for ch in data["unmapped_channels"]:
+                assert ch["category_id"] == cat2.id
+
+    def test_get_epg_mappings_unmapped_includes_category_info(self, app, client, test_channel, test_account):
+        """Test that unmapped channels include category info in response"""
+        response = client.get(f"/api/epg/mappings?unmapped_only=true&account_id={test_account}")
+        assert response.status_code == 200
+        data = response.json
+        assert "unmapped_channels" in data
+        assert len(data["unmapped_channels"]) > 0
+        # Check that category info is included
+        ch = data["unmapped_channels"][0]
+        assert "category_id" in ch
+        assert "category_name" in ch
+
     def test_create_epg_mapping_missing_channel_id(self, app, client):
         """Test creating mapping without channel_id"""
         response = client.post(
@@ -399,15 +469,19 @@ class TestEpgMatching:
     def test_match_channels_success(self, mock_match, app, client, test_account):
         """Test successful channel matching"""
         mock_match.return_value = {
+            "total_channels": 20,
+            "skipped_existing": 2,
             "matched_exact_id": 10,
             "matched_exact_name": 5,
             "matched_fuzzy": 3,
+            "unmatched": 0,
         }
 
         response = client.post(f"/api/epg/match/{test_account}")
         assert response.status_code == 200
         assert response.json["success"] is True
         assert "18 channels" in response.json["message"]
+        assert "skipped 2" in response.json["message"]
 
 
 # ============================================================================
@@ -495,8 +569,8 @@ class TestEpgSourceSync:
         assert response.status_code == 200
         assert response.json["success"] is True
 
-    def test_sync_schedules_direct_not_implemented(self, app, client):
-        """Test syncing Schedules Direct source returns 501"""
+    def test_sync_schedules_direct_missing_credentials(self, app, client):
+        """Test syncing Schedules Direct source without credentials returns 400"""
         with app.app_context():
             source = EpgSource(
                 name="SD Source",
@@ -508,7 +582,102 @@ class TestEpgSourceSync:
             source_id = source.id
 
         response = client.post(f"/api/epg/sources/{source_id}/sync")
-        assert response.status_code == 501
+        assert response.status_code == 400
+        assert "credentials" in response.json["error"].lower()
+
+    def test_sync_schedules_direct_missing_lineup(self, app, client):
+        """Test syncing Schedules Direct source without lineup returns 400"""
+        with app.app_context():
+            source = EpgSource(
+                name="SD Source",
+                source_type="schedules_direct",
+                sd_username="testuser",
+                sd_password="testpass",
+                enabled=True,
+            )
+            db.session.add(source)
+            db.session.commit()
+            source_id = source.id
+
+        response = client.post(f"/api/epg/sources/{source_id}/sync")
+        assert response.status_code == 400
+        assert "lineup" in response.json["error"].lower()
+
+    @patch("routes.epg.SchedulesDirectClient")
+    def test_sync_schedules_direct_success(self, mock_sd_client_class, app, client):
+        """Test successful Schedules Direct sync"""
+        with app.app_context():
+            source = EpgSource(
+                name="SD Source",
+                source_type="schedules_direct",
+                sd_username="testuser",
+                sd_password="testpass",
+                sd_lineup="USA-NY12345-X",
+                enabled=True,
+            )
+            db.session.add(source)
+            db.session.commit()
+            source_id = source.id
+
+        # Mock the SD client
+        mock_client = MagicMock()
+        mock_sd_client_class.return_value = mock_client
+        mock_client.get_lineup_channels.return_value = [
+            {
+                "stationID": "12345",
+                "callsign": "ESPN",
+                "name": "ESPN HD",
+                "logo": {"url": "http://example.com/espn.png"},
+            },
+            {
+                "stationID": "67890",
+                "callsign": "CNN",
+                "name": "CNN",
+                "logo": None,
+            },
+        ]
+
+        response = client.post(f"/api/epg/sources/{source_id}/sync")
+        assert response.status_code == 200
+        assert response.json["success"] is True
+        assert response.json["stats"]["channels_added"] == 2
+
+        # Verify EPG channels were created
+        with app.app_context():
+            epg_channels = EpgChannel.query.filter_by(source_id=source_id).all()
+            assert len(epg_channels) == 2
+
+            # Check channel details
+            channel_ids = {c.channel_id for c in epg_channels}
+            assert "I12345.json.schedulesdirect.org" in channel_ids
+            assert "I67890.json.schedulesdirect.org" in channel_ids
+
+    @patch("routes.epg.SchedulesDirectClient")
+    def test_sync_schedules_direct_error(self, mock_sd_client_class, app, client):
+        """Test Schedules Direct sync with API error"""
+        from services.schedules_direct import SchedulesDirectError
+
+        with app.app_context():
+            source = EpgSource(
+                name="SD Source",
+                source_type="schedules_direct",
+                sd_username="testuser",
+                sd_password="testpass",
+                sd_lineup="USA-NY12345-X",
+                enabled=True,
+            )
+            db.session.add(source)
+            db.session.commit()
+            source_id = source.id
+
+        # Mock the SD client to raise an error
+        mock_client = MagicMock()
+        mock_sd_client_class.return_value = mock_client
+        mock_client.authenticate.side_effect = SchedulesDirectError("Invalid credentials")
+
+        response = client.post(f"/api/epg/sources/{source_id}/sync")
+        assert response.status_code == 500
+        assert "Invalid credentials" in response.json["error"]
 
     def test_sync_unknown_source_type(self, app, client):
         """Test syncing source with unknown type returns 400"""
@@ -689,7 +858,9 @@ class TestSchedulesDirectAPI:
 
         response = client.get(f"/api/epg/sd/lineups?source_id={source_id}")
         assert response.status_code == 200
-        assert isinstance(response.json, list)
+        # Response is a dict with lineups array and metadata
+        assert "lineups" in response.json
+        assert isinstance(response.json["lineups"], list)
 
 
 # ============================================================================

@@ -249,3 +249,19 @@ def test_custom_exceptions_are_exceptions():
     assert issubclass(ResourceNotFoundError, Exception)
     assert issubclass(ServiceUnavailableError, Exception)
     assert issubclass(AuthorizationError, Exception)
+
+
+def test_handle_errors_resource_not_found_text_response():
+    """Test ResourceNotFoundError returns text response for non-JSON endpoints"""
+    app = Flask(__name__)
+
+    with app.app_context():
+
+        @handle_errors(return_json=False)
+        def test_func():
+            raise ResourceNotFoundError("Channel not found")
+
+        response = test_func()
+
+        assert response.status_code == 404
+        assert b"Channel not found" in response.data

@@ -361,3 +361,168 @@ class TestSpecialTagTypes:
             assert "__CLEANUP__" not in tags
             # Should remove the pipe
             assert "|" not in cleaned_name
+
+
+class TestTagRuleReplacement:
+    """Test tag rule replacement functionality"""
+
+    def test_simple_replacement(self, test_app, sample_ruleset):
+        """Test replacing text instead of removing it"""
+        with app.app_context():
+            # Create a rule that replaces typo "DISCTRICT" with "DISTRICT"
+            rule = TagRule(
+                ruleset_id=sample_ruleset,
+                name="Fix DISCTRICT typo",
+                pattern="DISCTRICT",
+                pattern_type="contains",
+                tag_name="__CLEANUP__",
+                source="channel_name",
+                remove_from_name=True,
+                replacement="DISTRICT",
+                priority=10,
+            )
+            db.session.add(rule)
+            db.session.commit()
+
+            rules = [rule]
+            channel_name = "ABC 7 DISCTRICT OF COLUMBIA"
+            category_name = "US Local"
+
+            tags, cleaned_name = TagService.extract_tags(channel_name, category_name, rules)
+
+            assert "DISTRICT" in cleaned_name
+            assert "DISCTRICT" not in cleaned_name
+            assert cleaned_name == "ABC 7 DISTRICT OF COLUMBIA"
+
+    def test_replacement_case_insensitive(self, test_app, sample_ruleset):
+        """Test that replacement works case-insensitively"""
+        with app.app_context():
+            rule = TagRule(
+                ruleset_id=sample_ruleset,
+                name="Fix lowercase typo",
+                pattern="disctrict",
+                pattern_type="contains",
+                tag_name="__CLEANUP__",
+                source="channel_name",
+                remove_from_name=True,
+                replacement="DISTRICT",
+                priority=10,
+            )
+            db.session.add(rule)
+            db.session.commit()
+
+            rules = [rule]
+            channel_name = "ABC 7 DISCTRICT OF COLUMBIA"
+            category_name = "US Local"
+
+            tags, cleaned_name = TagService.extract_tags(channel_name, category_name, rules)
+
+            assert "DISTRICT" in cleaned_name
+            assert "DISCTRICT" not in cleaned_name
+
+    def test_replacement_with_tag(self, test_app, sample_ruleset):
+        """Test replacement that also creates a tag"""
+        with app.app_context():
+            rule = TagRule(
+                ruleset_id=sample_ruleset,
+                name="Fix HD typo and tag",
+                pattern="HQ",
+                pattern_type="contains",
+                tag_name="HD",
+                source="channel_name",
+                remove_from_name=True,
+                replacement="HD",
+                priority=10,
+            )
+            db.session.add(rule)
+            db.session.commit()
+
+            rules = [rule]
+            channel_name = "ESPN HQ"
+            category_name = "Sports"
+
+            tags, cleaned_name = TagService.extract_tags(channel_name, category_name, rules)
+
+            assert "HD" in tags
+            assert "ESPN HD" == cleaned_name.strip()
+
+    def test_replacement_with_regex(self, test_app, sample_ruleset):
+        """Test replacement with regex pattern"""
+        with app.app_context():
+            rule = TagRule(
+                ruleset_id=sample_ruleset,
+                name="Fix multiple spaces",
+                pattern=r"\s{2,}",
+                pattern_type="regex",
+                tag_name="__CLEANUP__",
+                source="channel_name",
+                remove_from_name=True,
+                replacement=" ",
+                priority=10,
+            )
+            db.session.add(rule)
+            db.session.commit()
+
+            rules = [rule]
+            channel_name = "ABC  7   News"
+            category_name = "US Local"
+
+            tags, cleaned_name = TagService.extract_tags(channel_name, category_name, rules)
+
+            # Multiple spaces should be reduced
+            assert "  " not in cleaned_name
+
+    def test_no_replacement_when_remove_false(self, test_app, sample_ruleset):
+        """Test that replacement is not applied when remove_from_name is False"""
+        with app.app_context():
+            rule = TagRule(
+                ruleset_id=sample_ruleset,
+                name="Tag only, no replace",
+                pattern="ESPN",
+                pattern_type="contains",
+                tag_name="ESPN",
+                source="channel_name",
+                remove_from_name=False,
+                replacement="SPORTS",
+                priority=10,
+            )
+            db.session.add(rule)
+            db.session.commit()
+
+            rules = [rule]
+            channel_name = "ESPN 4K"
+            category_name = "Sports"
+
+            tags, cleaned_name = TagService.extract_tags(channel_name, category_name, rules)
+
+            # Tag should be added
+            assert "ESPN" in tags
+            # But name should NOT be modified because remove_from_name is False
+            assert cleaned_name == "ESPN 4K"
+
+    def test_replacement_none_means_remove(self, test_app, sample_ruleset):
+        """Test that None replacement means remove (backward compatible)"""
+        with app.app_context():
+            rule = TagRule(
+                ruleset_id=sample_ruleset,
+                name="Remove prefix",
+                pattern="US|",
+                pattern_type="prefix",
+                tag_name="US",
+                source="channel_name",
+                remove_from_name=True,
+                replacement=None,
+                priority=10,
+            )
+            db.session.add(rule)
+            db.session.commit()
+
+            rules = [rule]
+            channel_name = "US| CNN"
+            category_name = "News"
+
+            tags, cleaned_name = TagService.extract_tags(channel_name, category_name, rules)
+
+            assert "US" in tags
+            assert "US|" not in cleaned_name
+            assert cleaned_name.strip() == "CNN"
