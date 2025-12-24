@@ -15,7 +15,8 @@ exclude =
 # Global ignores for legitimate cases:
 # E203: Whitespace before ':' - conflicts with black formatter in slices (e.g., list[start : end])
 # E501: Line too long - reasonable limit (120 chars), some M3U8 format strings exceed this
-ignore = E203,E501
+# W503: Line break before binary operator - conflicts with black (black prefers breaks before operators)
+ignore = E203,E501,W503
 
 # Per-file ignores:
 # app.py E402: Flask application factory pattern requires imports after app initialization

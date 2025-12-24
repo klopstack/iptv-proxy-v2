@@ -249,6 +249,9 @@ class SyncScheduler:
                 self._sync_fcc_data()
                 self._set_last_sync_time(SYNC_KEY_LAST_FCC_SYNC)
 
+            # Run channel health scanning (runs continuously when idle)
+            self._scan_channel_health()
+
     def _sync_accounts(self):
         """Sync all enabled accounts and process their tags"""
         from models import db
@@ -301,6 +304,53 @@ class SyncScheduler:
                 logger.warning(f"Tag processing for {account.name}: {stats.get('error', 'Unknown error')}")
         except Exception as e:
             logger.error(f"Error processing tags for account {account.name}: {e}")
+
+    def _scan_channel_health(self):
+        """
+        Scan channel health for all enabled accounts.
+
+        This runs continuously when idle, checking channels for:
+        - Connection failures
+        - Black screens
+        - Invalid streams
+
+        Respects connection limits and reserves connections for client requests.
+        """
+        try:
+            from models import ChannelHealthConfig
+            from services.channel_health_service import ChannelHealthService
+
+            # Check if scanning is enabled
+            if not ChannelHealthConfig.get_bool("scanning_enabled", False):
+                return
+
+            # Get all enabled accounts
+            accounts = Account.query.filter_by(enabled=True).all()
+
+            for account in accounts:
+                try:
+                    # Check available connections
+                    available = ChannelHealthService.get_available_scan_connections(account.id)
+                    if available <= 0:
+                        logger.debug(f"No connections available for health scanning account {account.name}")
+                        continue
+
+                    # Scan a batch of channels
+                    result = ChannelHealthService.scan_channels(account.id, max_channels=5)
+
+                    if result.get("scanned", 0) > 0:
+                        logger.info(
+                            f"Health scan for {account.name}: "
+                            f"{result.get('scanned', 0)} scanned, "
+                            f"{result.get('healthy', 0)} healthy, "
+                            f"{result.get('failed', 0)} failed"
+                        )
+
+                except Exception as e:
+                    logger.error(f"Error scanning health for account {account.name}: {e}")
+
+        except Exception as e:
+            logger.error(f"Error in channel health scanning: {e}")
 
     def _sync_fcc_data(self):
         """Sync FCC facility data (runs weekly)"""

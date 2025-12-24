@@ -9,7 +9,7 @@ This module provides endpoints that:
 """
 
 import logging
-from typing import Generator
+from typing import Any, Dict, Generator, Tuple, Union
 
 import requests
 from flask import Blueprint, Response, abort, request, stream_with_context
@@ -278,7 +278,7 @@ def cleanup_streams():
 
 
 @streams_bp.route("/stream/<int:account_id>/<stream_id>/test")
-def test_stream(account_id: int, stream_id: str):
+def test_stream(account_id: int, stream_id: str) -> Union[Dict[str, Any], Tuple[Dict[str, Any], int]]:
     """
     Test stream connectivity without actually streaming.
 
@@ -290,45 +290,46 @@ def test_stream(account_id: int, stream_id: str):
 
     Useful for diagnosing stream issues.
     """
-    result = {
+    checks: Dict[str, Any] = {}
+    result: Dict[str, Any] = {
         "account_id": account_id,
         "stream_id": stream_id,
         "success": False,
-        "checks": {},
+        "checks": checks,
         "error": None,
     }
 
     # Check 1: Account exists
     account = db.session.get(Account, account_id)
     if not account:
-        result["checks"]["account_exists"] = False
+        checks["account_exists"] = False
         result["error"] = f"Account {account_id} not found"
         return result, 404
 
-    result["checks"]["account_exists"] = True
-    result["checks"]["account_enabled"] = account.enabled
+    checks["account_exists"] = True
+    checks["account_enabled"] = account.enabled
 
     if not account.enabled:
         result["error"] = "Account is disabled"
         return result, 403
 
-    result["checks"]["server"] = account.server
+    checks["server"] = account.server
 
     # Check 2: Credentials available
     credential = ConnectionManager.get_available_credential(account_id)
     if not credential:
-        result["checks"]["credential_available"] = False
+        checks["credential_available"] = False
         result["error"] = "No available credentials"
         return result, 503
 
-    result["checks"]["credential_available"] = True
+    checks["credential_available"] = True
     credential_id = getattr(credential, "id", None)
-    result["checks"]["credential_id"] = credential_id
+    checks["credential_id"] = credential_id
 
     # Check 3: Test upstream connectivity
     upstream_url = f"http://{account.server}/live/{credential.username}/{credential.password}/{stream_id}.ts"
     safe_url = f"http://{account.server}/live/{credential.username}/***/{stream_id}.ts"
-    result["checks"]["upstream_url"] = safe_url
+    checks["upstream_url"] = safe_url
 
     user_agent = account.user_agent or "okhttp/3.14.9"
 
@@ -341,8 +342,8 @@ def test_stream(account_id: int, stream_id: str):
             timeout=(10, 10),
             allow_redirects=True,
         )
-        result["checks"]["head_status"] = head_response.status_code
-        result["checks"]["head_headers"] = dict(head_response.headers)
+        checks["head_status"] = head_response.status_code
+        checks["head_headers"] = dict(head_response.headers)
 
         if head_response.status_code == 405:
             # HEAD not allowed, try GET with stream=True and close immediately
@@ -353,13 +354,13 @@ def test_stream(account_id: int, stream_id: str):
                 timeout=(10, 10),
                 stream=True,
             )
-            result["checks"]["get_status"] = get_response.status_code
-            result["checks"]["get_headers"] = dict(get_response.headers)
+            checks["get_status"] = get_response.status_code
+            checks["get_headers"] = dict(get_response.headers)
 
             # Read just a small chunk to verify streaming works
             chunk = next(get_response.iter_content(chunk_size=1024), None)
-            result["checks"]["received_data"] = chunk is not None
-            result["checks"]["data_size"] = len(chunk) if chunk else 0
+            checks["received_data"] = chunk is not None
+            checks["data_size"] = len(chunk) if chunk else 0
             get_response.close()
 
             if get_response.status_code == 200:
@@ -372,13 +373,13 @@ def test_stream(account_id: int, stream_id: str):
             result["error"] = f"Upstream returned HTTP {head_response.status_code}"
 
     except requests.exceptions.Timeout as e:
-        result["checks"]["timeout"] = True
+        checks["timeout"] = True
         result["error"] = f"Connection timed out: {e}"
     except requests.exceptions.ConnectionError as e:
-        result["checks"]["connection_error"] = True
+        checks["connection_error"] = True
         result["error"] = f"Connection failed: {e}"
     except Exception as e:
-        result["checks"]["exception"] = str(type(e).__name__)
+        checks["exception"] = str(type(e).__name__)
         result["error"] = str(e)
 
     return result

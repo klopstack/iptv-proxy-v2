@@ -276,7 +276,13 @@
                             <a class="nav-link {% if request.path == '/test' %}active{% endif %}" href="/test">
                                 <i class="bi bi-play-circle"></i> Preview Channels
                             </a>
-                        </li>                        <li class="nav-item">
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.path == '/channel-health' %}active{% endif %}" href="/channel-health">
+                                <i class="bi bi-heart-pulse"></i> Channel Health
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link {% if request.path == '/settings' %}active{% endif %}" href="/settings">
                                 <i class="bi bi-gear"></i> Settings
                             </a>

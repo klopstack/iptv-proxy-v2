@@ -29,7 +29,7 @@ import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
-from typing import Dict, Iterator, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
 
 from models import Channel, ChannelEpgMapping, ChannelTag, EpgChannel, EpgSource, FccFacility, Tag, db
 from services.epg_match_rules_service import EpgMatchRulesService
@@ -1216,7 +1216,7 @@ class EpgService:
                 existing = existing_mappings[channel.id]
                 if existing.is_override:
                     stats["skipped_existing"] += 1
-                    logger.debug(f"  -> Skipping (has manual override mapping)")
+                    logger.debug("  -> Skipping (has manual override mapping)")
                     continue
                 # Skip if existing match is good enough
                 if existing.confidence and existing.confidence >= skip_matched_threshold:
@@ -1309,7 +1309,7 @@ class EpgService:
             if not matched_epg and "US" in channel_country_tags:
                 from services.fcc_facility_service import FccFacilityService
 
-                logger.debug(f"  Strategy 4: Extracting callsign from name")
+                logger.debug("  Strategy 4: Extracting callsign from name")
                 extracted_callsign = FccFacilityService.extract_callsign_from_name(channel.name)
                 if extracted_callsign:
                     logger.debug(f"    Extracted callsign: {extracted_callsign}")
@@ -1394,7 +1394,7 @@ class EpgService:
                         mapping.mapping_type = match_type
                         mapping.confidence = confidence
                         mapping.updated_at = datetime.utcnow()
-                        logger.debug(f"  Updated existing mapping")
+                        logger.debug("  Updated existing mapping")
                 else:
                     mapping = ChannelEpgMapping(
                         channel_id=channel.id,
@@ -1403,7 +1403,7 @@ class EpgService:
                         confidence=confidence,
                     )
                     db.session.add(mapping)
-                    logger.debug(f"  Created new mapping")
+                    logger.debug("  Created new mapping")
             else:
                 stats["unmatched"] += 1
                 logger.debug(f"  ✗ No match found for '{channel.name}'")
@@ -2948,7 +2948,7 @@ def generate_ppv_epg_entries(account_id: Optional[int] = None, duration_hours: i
             ...
         ]
     """
-    programs = []
+    programs: List[Dict[str, Any]] = []
 
     # Get all visible PPV channels (only those with active events)
     ppv_tag = Tag.query.filter_by(name="PPV").first()

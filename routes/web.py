@@ -65,3 +65,9 @@ def epg_match_rules_page():
 def stations_page():
     """FCC Station Database page"""
     return render_template("stations.html")
+
+
+@web_bp.route("/channel-health")
+def channel_health_page():
+    """Channel Health Monitor page"""
+    return render_template("channel_health.html")

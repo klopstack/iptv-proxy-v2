@@ -280,7 +280,7 @@ class TestPPVEPGMatching:
             for i in range(3):
                 channel = Channel(
                     account_id=account.id,
-                    stream_id=f"200{i+2}",
+                    stream_id=f"200{i + 2}",
                     name=f"Filtered Channel {i}",
                     category_id=category.id,
                     is_active=True,

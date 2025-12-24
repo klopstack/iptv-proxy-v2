@@ -60,6 +60,7 @@ logger = logging.getLogger(__name__)
 
 from routes.accounts import accounts_bp
 from routes.api import api_bp, set_scheduler
+from routes.channel_health import channel_health_bp
 from routes.channel_links import channel_links_bp
 from routes.epg import epg_bp
 from routes.epg_match_rules import epg_match_rules_bp
@@ -85,6 +86,7 @@ app.register_blueprint(fcc_match_patterns_bp)
 app.register_blueprint(images_bp)
 app.register_blueprint(channel_links_bp)
 app.register_blueprint(stations_bp)
+app.register_blueprint(channel_health_bp)
 
 # Pass scheduler to API blueprint
 set_scheduler(sync_scheduler)

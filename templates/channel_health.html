@@ -1,0 +1,1083 @@
+{% extends "base.html" %}
+
+{% block title %}Channel Health - IPTV Proxy{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="bi bi-heart-pulse"></i> Channel Health Monitor</h1>
+    <div class="btn-toolbar">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-primary" id="refresh-btn">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Status Summary Cards -->
+<div class="row mb-4" id="summary-cards">
+    <div class="col-md-2">
+        <div class="card text-white bg-success h-100">
+            <div class="card-body text-center">
+                <h2 class="card-title" id="healthy-count">-</h2>
+                <p class="card-text mb-0"><i class="bi bi-check-circle"></i> Healthy</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-white bg-warning h-100">
+            <div class="card-body text-center">
+                <h2 class="card-title" id="degraded-count">-</h2>
+                <p class="card-text mb-0"><i class="bi bi-exclamation-triangle"></i> Degraded</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-white bg-danger h-100">
+            <div class="card-body text-center">
+                <h2 class="card-title" id="down-count">-</h2>
+                <p class="card-text mb-0"><i class="bi bi-x-circle"></i> Down</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-white bg-secondary h-100">
+            <div class="card-body text-center">
+                <h2 class="card-title" id="unknown-count">-</h2>
+                <p class="card-text mb-0"><i class="bi bi-question-circle"></i> Not Scanned</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-dark bg-light h-100">
+            <div class="card-body text-center">
+                <h2 class="card-title" id="ignored-count">-</h2>
+                <p class="card-text mb-0"><i class="bi bi-eye-slash"></i> Ignored</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card bg-info text-white h-100">
+            <div class="card-body text-center">
+                <h2 class="card-title" id="total-count">-</h2>
+                <p class="card-text mb-0"><i class="bi bi-collection"></i> Total</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Configuration and Scan Controls -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-gear"></i> Scan Settings</h5>
+            </div>
+            <div class="card-body">
+                <form id="config-form">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="scanning-enabled">
+                                <label class="form-check-label" for="scanning-enabled">
+                                    <strong>Enable Background Scanning</strong>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <button type="button" class="btn btn-info btn-sm" id="manual-scan-btn" disabled>
+                                <i class="bi bi-play"></i> Run Manual Scan
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="failure-threshold" class="form-label">Failures to Mark Down</label>
+                            <input type="number" class="form-control form-control-sm" id="failure-threshold" 
+                                   min="1" max="20" value="3">
+                            <small class="text-muted">Distinct failure periods required</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="min-hours-apart" class="form-label">Min Hours Between Failures</label>
+                            <input type="number" class="form-control form-control-sm" id="min-hours-apart" 
+                                   min="1" max="48" value="6">
+                            <small class="text-muted">Hours apart to count as distinct</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="analysis-duration" class="form-label">Analysis Duration (seconds)</label>
+                            <input type="number" class="form-control form-control-sm" id="analysis-duration" 
+                                   min="5" max="60" value="10">
+                            <small class="text-muted">How long to analyze each stream</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="reserved-connections" class="form-label">Reserved Connections</label>
+                            <input type="number" class="form-control form-control-sm" id="reserved-connections" 
+                                   min="1" max="10" value="1">
+                            <small class="text-muted">Always keep available for clients</small>
+                        </div>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="auto-disable" checked>
+                        <label class="form-check-label" for="auto-disable">
+                            Auto-disable channels marked as down
+                        </label>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="bi bi-check-lg"></i> Save Settings
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-activity"></i> Scan Status</h5>
+            </div>
+            <div class="card-body" id="scan-status-body">
+                <div class="text-center">
+                    <div class="spinner-border spinner-border-sm" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters and Channel List -->
+<div class="card">
+    <div class="card-header">
+        <div class="row align-items-center">
+            <div class="col-md-3">
+                <h5 class="mb-0"><i class="bi bi-list-ul"></i> Channel Health Details</h5>
+            </div>
+            <div class="col-md-9">
+                <div class="row g-2">
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="filter-account" style="min-width: 130px;">
+                            <option value="">All Accounts</option>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="filter-category" style="min-width: 150px;">
+                            <option value="">All Categories</option>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="filter-status" style="min-width: 120px;">
+                            <option value="">All Statuses</option>
+                            <option value="down">Down</option>
+                            <option value="degraded">Degraded</option>
+                            <option value="healthy">Healthy</option>
+                            <option value="unknown">Not Scanned</option>
+                            <option value="ignored">Ignored</option>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="filter-visibility" style="min-width: 100px;">
+                            <option value="">Visibility</option>
+                            <option value="visible">Visible</option>
+                            <option value="hidden">Hidden</option>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="filter-epg" style="min-width: 100px;">
+                            <option value="">EPG: Any</option>
+                            <option value="with">With EPG</option>
+                            <option value="without">Without EPG</option>
+                        </select>
+                    </div>
+                    <div class="col">
+                        <input type="text" class="form-control form-control-sm" id="filter-search" 
+                               placeholder="Search channels...">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive" style="max-height: 600px; overflow-y: auto;" id="channels-container">
+            <table class="table table-sm table-striped table-hover mb-0">
+                <thead class="sticky-top bg-light">
+                    <tr>
+                        <th style="width: 4%">
+                            <input type="checkbox" class="form-check-input" id="select-all">
+                        </th>
+                        <th style="width: 22%">Channel</th>
+                        <th style="width: 12%">Category</th>
+                        <th style="width: 10%">Status</th>
+                        <th style="width: 12%">Last Result</th>
+                        <th style="width: 10%">Last Check</th>
+                        <th style="width: 14%">EPG Info</th>
+                        <th style="width: 16%">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="channels-table">
+                    <tr>
+                        <td colspan="8" class="text-center py-4">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer">
+        <div class="row align-items-center">
+            <div class="col">
+                <span id="showing-count" class="text-muted"></span>
+            </div>
+            <div class="col-auto">
+                <nav aria-label="Channel pagination">
+                    <ul class="pagination pagination-sm mb-0" id="pagination">
+                    </ul>
+                </nav>
+            </div>
+            <div class="col-auto">
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-success" id="bulk-reenable-btn" disabled>
+                        <i class="bi bi-arrow-repeat"></i> Re-enable Selected
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="bulk-ignore-btn" disabled>
+                        <i class="bi bi-eye-slash"></i> Ignore Selected
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Channel History Modal -->
+<div class="modal fade" id="historyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-clock-history"></i> Health Check History
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6 id="history-channel-name" class="mb-3"></h6>
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Result</th>
+                                <th>Details</th>
+                                <th>Duration</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Test Channel Modal -->
+<div class="modal fade" id="testModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-play-circle"></i> Testing Channel
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center" id="test-modal-body">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Testing...</span>
+                </div>
+                <p class="mt-2">Analyzing stream...</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// State management
+let accounts = [];
+let categories = [];
+let currentPage = 1;
+let totalPages = 1;
+let totalChannels = 0;
+let isLoading = false;
+const perPage = 100;
+
+// Current filter state
+let filters = {
+    account_id: '',
+    category_id: '',
+    status: '',
+    visibility: '',
+    epg: '',
+    search: ''
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadAccounts();
+    loadConfig();
+    loadScanStatus();
+    loadSummary();
+    loadChannels();
+    
+    // Event listeners
+    document.getElementById('refresh-btn').addEventListener('click', () => {
+        loadScanStatus();
+        loadSummary();
+        loadChannels();
+    });
+    
+    document.getElementById('config-form').addEventListener('submit', saveConfig);
+    document.getElementById('manual-scan-btn').addEventListener('click', runManualScan);
+    document.getElementById('scanning-enabled').addEventListener('change', toggleScanning);
+    
+    // Filter change listeners
+    document.getElementById('filter-account').addEventListener('change', (e) => {
+        filters.account_id = e.target.value;
+        filters.category_id = ''; // Reset category when account changes
+        document.getElementById('filter-category').value = '';
+        loadCategories(); // Reload categories for the selected account
+        currentPage = 1;
+        loadSummary();
+        loadChannels();
+    });
+    
+    document.getElementById('filter-category').addEventListener('change', (e) => {
+        filters.category_id = e.target.value;
+        currentPage = 1;
+        loadSummary();
+        loadChannels();
+    });
+    
+    document.getElementById('filter-status').addEventListener('change', (e) => {
+        filters.status = e.target.value;
+        currentPage = 1;
+        loadChannels();
+    });
+    
+    document.getElementById('filter-visibility').addEventListener('change', (e) => {
+        filters.visibility = e.target.value;
+        currentPage = 1;
+        loadChannels();
+    });
+    
+    document.getElementById('filter-epg').addEventListener('change', (e) => {
+        filters.epg = e.target.value;
+        currentPage = 1;
+        loadChannels();
+    });
+    
+    document.getElementById('filter-search').addEventListener('input', debounce((e) => {
+        filters.search = e.target.value;
+        currentPage = 1;
+        loadChannels();
+    }, 300));
+    
+    document.getElementById('select-all').addEventListener('change', toggleSelectAll);
+    document.getElementById('bulk-reenable-btn').addEventListener('click', bulkReenable);
+    document.getElementById('bulk-ignore-btn').addEventListener('click', bulkIgnore);
+});
+
+async function loadAccounts() {
+    try {
+        const response = await fetch('/api/accounts');
+        const data = await response.json();
+        accounts = data.accounts || [];
+        
+        const select = document.getElementById('filter-account');
+        accounts.forEach(account => {
+            const option = document.createElement('option');
+            option.value = account.id;
+            option.textContent = account.name;
+            select.appendChild(option);
+        });
+        
+        // Load categories after accounts
+        loadCategories();
+    } catch (error) {
+        console.error('Error loading accounts:', error);
+    }
+}
+
+async function loadCategories() {
+    try {
+        let url = '/api/channel-health/categories';
+        if (filters.account_id) {
+            url += `?account_id=${filters.account_id}`;
+        }
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        categories = data.categories || [];
+        
+        const select = document.getElementById('filter-category');
+        // Clear existing options except the first one
+        while (select.options.length > 1) {
+            select.remove(1);
+        }
+        
+        categories.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.id;
+            option.textContent = cat.name;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading categories:', error);
+    }
+}
+
+async function loadConfig() {
+    try {
+        const response = await fetch('/api/channel-health/config');
+        const data = await response.json();
+        
+        if (data.success && data.config) {
+            const config = data.config;
+            document.getElementById('scanning-enabled').checked = 
+                config.scanning_enabled?.value === 'true';
+            document.getElementById('failure-threshold').value = 
+                config.failure_threshold?.value || '3';
+            document.getElementById('min-hours-apart').value = 
+                config.min_hours_apart?.value || '6';
+            document.getElementById('analysis-duration').value = 
+                config.analysis_duration_seconds?.value || '10';
+            document.getElementById('reserved-connections').value = 
+                config.reserved_connections?.value || '1';
+            document.getElementById('auto-disable').checked = 
+                config.auto_disable_down_channels?.value !== 'false';
+            
+            document.getElementById('manual-scan-btn').disabled = 
+                !document.getElementById('scanning-enabled').checked;
+        }
+    } catch (error) {
+        console.error('Error loading config:', error);
+    }
+}
+
+async function saveConfig(e) {
+    e.preventDefault();
+    
+    const config = {
+        failure_threshold: document.getElementById('failure-threshold').value,
+        min_hours_apart: document.getElementById('min-hours-apart').value,
+        analysis_duration_seconds: document.getElementById('analysis-duration').value,
+        reserved_connections: document.getElementById('reserved-connections').value,
+        auto_disable_down_channels: document.getElementById('auto-disable').checked ? 'true' : 'false',
+    };
+    
+    try {
+        const response = await fetch('/api/channel-health/config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            showToast('Settings saved successfully', 'success');
+        } else {
+            showToast('Error saving settings: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    } catch (error) {
+        showToast('Error saving settings: ' + error.message, 'danger');
+    }
+}
+
+async function toggleScanning() {
+    const enabled = document.getElementById('scanning-enabled').checked;
+    
+    try {
+        const response = await fetch('/api/channel-health/config/scanning_enabled', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: enabled ? 'true' : 'false' })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            document.getElementById('manual-scan-btn').disabled = !enabled;
+            showToast(enabled ? 'Scanning enabled' : 'Scanning disabled', 'success');
+            loadScanStatus();
+        }
+    } catch (error) {
+        console.error('Error toggling scanning:', error);
+        showToast('Error toggling scanning', 'danger');
+    }
+}
+
+async function loadScanStatus() {
+    try {
+        const response = await fetch('/api/channel-health/scan-status');
+        const data = await response.json();
+        
+        const body = document.getElementById('scan-status-body');
+        
+        if (data.success) {
+            let html = '';
+            
+            if (data.accounts) {
+                html = '<div class="small">';
+                data.accounts.forEach(acc => {
+                    const statusClass = acc.available_connections > 0 ? 'success' : 'warning';
+                    html += `
+                        <div class="d-flex justify-content-between mb-2">
+                            <span><strong>${escapeHtml(acc.account_name)}</strong></span>
+                            <span>
+                                <span class="badge bg-${statusClass}">${acc.available_connections} conn avail</span>
+                                <span class="badge bg-secondary">${acc.channels_to_scan} to scan</span>
+                            </span>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            body.innerHTML = html || '<p class="text-muted mb-0">No accounts configured</p>';
+        }
+    } catch (error) {
+        console.error('Error loading scan status:', error);
+    }
+}
+
+async function runManualScan() {
+    const accountId = document.getElementById('filter-account').value;
+    if (!accountId) {
+        showToast('Please select an account first', 'warning');
+        return;
+    }
+    
+    const btn = document.getElementById('manual-scan-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Scanning...';
+    
+    try {
+        const response = await fetch(`/api/channel-health/scan/${accountId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ max_channels: 20 })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            showToast(`Scanned ${data.scanned} channels: ${data.healthy} healthy, ${data.failed} failed`, 'success');
+            loadSummary();
+            loadChannels();
+            loadScanStatus();
+        } else {
+            showToast('Scan error: ' + (data.message || 'Unknown error'), 'warning');
+        }
+    } catch (error) {
+        showToast('Error running scan: ' + error.message, 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-play"></i> Run Manual Scan';
+    }
+}
+
+async function loadSummary() {
+    try {
+        let url = '/api/channel-health/summary';
+        const params = new URLSearchParams();
+        if (filters.account_id) params.append('account_id', filters.account_id);
+        if (filters.category_id) params.append('category_id', filters.category_id);
+        if (params.toString()) url += '?' + params.toString();
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.success) {
+            const summary = data.summary;
+            document.getElementById('healthy-count').textContent = (summary.by_status.healthy || 0).toLocaleString();
+            document.getElementById('degraded-count').textContent = (summary.by_status.degraded || 0).toLocaleString();
+            document.getElementById('down-count').textContent = (summary.by_status.down || 0).toLocaleString();
+            document.getElementById('unknown-count').textContent = (summary.by_status.unknown || 0).toLocaleString();
+            document.getElementById('ignored-count').textContent = (summary.by_status.ignored || 0).toLocaleString();
+            document.getElementById('total-count').textContent = (summary.total || 0).toLocaleString();
+        }
+    } catch (error) {
+        console.error('Error loading summary:', error);
+    }
+}
+
+async function loadChannels() {
+    if (isLoading) return;
+    isLoading = true;
+    
+    const tbody = document.getElementById('channels-table');
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="8" class="text-center py-4">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </td>
+        </tr>
+    `;
+    
+    try {
+        const params = new URLSearchParams();
+        params.append('page', currentPage);
+        params.append('per_page', perPage);
+        params.append('include_epg', 'true');
+        
+        if (filters.account_id) params.append('account_id', filters.account_id);
+        if (filters.category_id) params.append('category_id', filters.category_id);
+        if (filters.status) params.append('status', filters.status);
+        if (filters.visibility) params.append('visibility', filters.visibility);
+        if (filters.epg) params.append('epg', filters.epg);
+        if (filters.search) params.append('search', filters.search);
+        
+        const response = await fetch('/api/channel-health/channels?' + params.toString());
+        const data = await response.json();
+        
+        if (data.success) {
+            totalChannels = data.pagination.total;
+            totalPages = data.pagination.total_pages;
+            renderChannels(data.channels);
+            renderPagination();
+        }
+    } catch (error) {
+        console.error('Error loading channels:', error);
+        showToast('Error loading channel data', 'danger');
+    } finally {
+        isLoading = false;
+    }
+}
+
+function renderChannels(channels) {
+    const tbody = document.getElementById('channels-table');
+    const showingCount = document.getElementById('showing-count');
+    
+    const start = (currentPage - 1) * perPage + 1;
+    const end = Math.min(currentPage * perPage, totalChannels);
+    showingCount.textContent = totalChannels > 0 
+        ? `Showing ${start.toLocaleString()}-${end.toLocaleString()} of ${totalChannels.toLocaleString()} channels`
+        : 'No channels found';
+    
+    if (channels.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center py-4 text-muted">
+                    <i class="bi bi-inbox display-6"></i>
+                    <p class="mt-2">No channels match your filters</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = channels.map(channel => {
+        const statusBadge = getStatusBadge(channel.status);
+        const resultBadge = channel.last_result ? getResultBadge(channel.last_result) : '-';
+        const lastCheck = channel.last_check_at ? formatRelativeTime(channel.last_check_at) : 'Never';
+        const epgInfo = channel.epg_info 
+            ? `<span class="badge bg-success" title="${escapeHtml(channel.epg_info.display_name || '')}"><i class="bi bi-calendar-check"></i> ${channel.epg_info.program_count || 0}</span>`
+            : '<span class="badge bg-secondary"><i class="bi bi-calendar-x"></i> None</span>';
+        const categoryName = channel.category ? escapeHtml(channel.category.name) : '-';
+        const channelNameEscaped = escapeHtml(channel.name).replace(/'/g, "\\'");
+        
+        return `
+            <tr>
+                <td>
+                    <input type="checkbox" class="form-check-input channel-select" data-id="${channel.id}">
+                </td>
+                <td>
+                    <div>
+                        <strong>${escapeHtml(channel.cleaned_name || channel.name)}</strong>
+                        ${!channel.is_visible ? '<span class="badge bg-warning text-dark ms-1">Hidden</span>' : ''}
+                    </div>
+                    <small class="text-muted">${escapeHtml(channel.account_name || '')} • #${channel.stream_id}</small>
+                </td>
+                <td><small class="text-truncate d-inline-block" style="max-width: 120px;" title="${categoryName}">${categoryName}</small></td>
+                <td>${statusBadge}</td>
+                <td>${resultBadge}</td>
+                <td><small>${lastCheck}</small></td>
+                <td>${epgInfo}</td>
+                <td>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-primary btn-sm" onclick="testChannel(${channel.id})" title="Test Now">
+                            <i class="bi bi-play"></i>
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" onclick="showHistory(${channel.id}, '${channelNameEscaped}')" title="View History">
+                            <i class="bi bi-clock-history"></i>
+                        </button>
+                        ${channel.status === 'down' || !channel.is_visible ? `
+                            <button class="btn btn-outline-success btn-sm" onclick="reenableChannel(${channel.id})" title="Re-enable">
+                                <i class="bi bi-arrow-repeat"></i>
+                            </button>
+                        ` : ''}
+                        ${channel.status !== 'ignored' ? `
+                            <button class="btn btn-outline-secondary btn-sm" onclick="ignoreChannel(${channel.id})" title="Ignore">
+                                <i class="bi bi-eye-slash"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    
+    // Update checkbox listeners
+    document.querySelectorAll('.channel-select').forEach(cb => {
+        cb.addEventListener('change', updateBulkButtons);
+    });
+    
+    // Reset select all checkbox
+    document.getElementById('select-all').checked = false;
+}
+
+function renderPagination() {
+    const pagination = document.getElementById('pagination');
+    
+    if (totalPages <= 1) {
+        pagination.innerHTML = '';
+        return;
+    }
+    
+    let html = '';
+    
+    // Previous button
+    html += `
+        <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="goToPage(${currentPage - 1}); return false;">«</a>
+        </li>
+    `;
+    
+    // Page numbers
+    const maxPages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxPages / 2));
+    let endPage = Math.min(totalPages, startPage + maxPages - 1);
+    
+    if (endPage - startPage < maxPages - 1) {
+        startPage = Math.max(1, endPage - maxPages + 1);
+    }
+    
+    if (startPage > 1) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(1); return false;">1</a></li>`;
+        if (startPage > 2) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        html += `
+            <li class="page-item ${i === currentPage ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>
+            </li>
+        `;
+    }
+    
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(${totalPages}); return false;">${totalPages}</a></li>`;
+    }
+    
+    // Next button
+    html += `
+        <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="goToPage(${currentPage + 1}); return false;">»</a>
+        </li>
+    `;
+    
+    pagination.innerHTML = html;
+}
+
+function goToPage(page) {
+    if (page < 1 || page > totalPages || page === currentPage) return;
+    currentPage = page;
+    loadChannels();
+    // Scroll to top of table
+    document.getElementById('channels-container').scrollTop = 0;
+}
+
+function getStatusBadge(status) {
+    const badges = {
+        healthy: '<span class="badge bg-success"><i class="bi bi-check-circle"></i> Healthy</span>',
+        degraded: '<span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> Degraded</span>',
+        down: '<span class="badge bg-danger"><i class="bi bi-x-circle"></i> Down</span>',
+        unknown: '<span class="badge bg-secondary"><i class="bi bi-question-circle"></i> Unknown</span>',
+        ignored: '<span class="badge bg-dark"><i class="bi bi-eye-slash"></i> Ignored</span>',
+    };
+    return badges[status] || badges.unknown;
+}
+
+function getResultBadge(result) {
+    const badges = {
+        success: '<span class="badge bg-success">OK</span>',
+        connection_failed: '<span class="badge bg-danger">Conn Fail</span>',
+        timeout: '<span class="badge bg-warning text-dark">Timeout</span>',
+        http_error: '<span class="badge bg-danger">HTTP Err</span>',
+        no_video: '<span class="badge bg-warning text-dark">No Video</span>',
+        black_screen: '<span class="badge bg-warning text-dark">Black</span>',
+        audio_only: '<span class="badge bg-info">Audio</span>',
+        invalid_stream: '<span class="badge bg-danger">Invalid</span>',
+        skipped: '<span class="badge bg-secondary">Skipped</span>',
+    };
+    return badges[result] || `<span class="badge bg-secondary">${escapeHtml(result)}</span>`;
+}
+
+function formatRelativeTime(isoString) {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+}
+
+async function testChannel(channelId) {
+    const modal = new bootstrap.Modal(document.getElementById('testModal'));
+    const body = document.getElementById('test-modal-body');
+    
+    body.innerHTML = `
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Testing...</span>
+        </div>
+        <p class="mt-2">Analyzing stream (this may take up to 30 seconds)...</p>
+    `;
+    modal.show();
+    
+    try {
+        const response = await fetch(`/api/channel-health/test/${channelId}`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            const resultClass = data.result === 'success' ? 'success' : 'danger';
+            body.innerHTML = `
+                <div class="alert alert-${resultClass}">
+                    <h5><i class="bi bi-${data.result === 'success' ? 'check-circle' : 'x-circle'}"></i> 
+                        ${data.result.replace(/_/g, ' ').toUpperCase()}</h5>
+                    ${data.error_message ? `<p>${escapeHtml(data.error_message)}</p>` : ''}
+                    ${data.check_duration_ms ? `<small class="text-muted">Duration: ${data.check_duration_ms}ms</small>` : ''}
+                </div>
+            `;
+            loadChannels();
+        } else {
+            body.innerHTML = `
+                <div class="alert alert-danger">
+                    <h5><i class="bi bi-exclamation-circle"></i> Test Failed</h5>
+                    <p>${escapeHtml(data.error || 'Unknown error')}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        body.innerHTML = `
+            <div class="alert alert-danger">
+                <h5><i class="bi bi-exclamation-circle"></i> Error</h5>
+                <p>${escapeHtml(error.message)}</p>
+            </div>
+        `;
+    }
+}
+
+async function showHistory(channelId, channelName) {
+    const modal = new bootstrap.Modal(document.getElementById('historyModal'));
+    document.getElementById('history-channel-name').textContent = channelName;
+    const tbody = document.getElementById('history-table');
+    
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center"><div class="spinner-border spinner-border-sm"></div></td></tr>`;
+    modal.show();
+    
+    try {
+        const response = await fetch(`/api/channel-health/history/${channelId}?limit=50`);
+        const data = await response.json();
+        
+        if (data.success && data.history.length > 0) {
+            tbody.innerHTML = data.history.map(check => `
+                <tr>
+                    <td><small>${new Date(check.checked_at).toLocaleString()}</small></td>
+                    <td>${getResultBadge(check.result)}</td>
+                    <td><small>${escapeHtml(check.error_message || '-')}</small></td>
+                    <td><small>${check.check_duration_ms}ms</small></td>
+                </tr>
+            `).join('');
+        } else {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No history available</td></tr>';
+        }
+    } catch (error) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error loading history</td></tr>';
+    }
+}
+
+async function reenableChannel(channelId) {
+    if (!confirm('Re-enable this channel? It will be visible again and reset for scanning.')) return;
+    
+    try {
+        const response = await fetch(`/api/channel-health/reenable/${channelId}`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('Channel re-enabled', 'success');
+            loadChannels();
+        } else {
+            showToast('Error: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'danger');
+    }
+}
+
+async function ignoreChannel(channelId) {
+    const reason = prompt('Optional: Enter a reason for ignoring this channel');
+    
+    try {
+        const response = await fetch(`/api/channel-health/ignore/${channelId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('Channel ignored', 'success');
+            loadChannels();
+        } else {
+            showToast('Error: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'danger');
+    }
+}
+
+function toggleSelectAll() {
+    const checked = document.getElementById('select-all').checked;
+    document.querySelectorAll('.channel-select').forEach(cb => cb.checked = checked);
+    updateBulkButtons();
+}
+
+function updateBulkButtons() {
+    const selected = document.querySelectorAll('.channel-select:checked').length;
+    document.getElementById('bulk-reenable-btn').disabled = selected === 0;
+    document.getElementById('bulk-ignore-btn').disabled = selected === 0;
+}
+
+async function bulkReenable() {
+    const channelIds = Array.from(document.querySelectorAll('.channel-select:checked'))
+        .map(cb => parseInt(cb.dataset.id));
+    
+    if (!confirm(`Re-enable ${channelIds.length} channels?`)) return;
+    
+    try {
+        const response = await fetch('/api/channel-health/bulk/reenable', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channel_ids: channelIds })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast(`Re-enabled ${data.processed} channels`, 'success');
+            loadChannels();
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'danger');
+    }
+}
+
+async function bulkIgnore() {
+    const channelIds = Array.from(document.querySelectorAll('.channel-select:checked'))
+        .map(cb => parseInt(cb.dataset.id));
+    
+    const reason = prompt(`Ignore ${channelIds.length} channels. Optional reason:`);
+    
+    try {
+        const response = await fetch('/api/channel-health/bulk/ignore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channel_ids: channelIds, reason })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast(`Ignored ${data.processed} channels`, 'success');
+            loadChannels();
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'danger');
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+
+function showToast(message, type = 'info') {
+    const colors = {
+        success: 'bg-success',
+        danger: 'bg-danger',
+        warning: 'bg-warning',
+        info: 'bg-info'
+    };
+    
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'position-fixed bottom-0 end-0 p-3';
+        container.style.zIndex = '1100';
+        document.body.appendChild(container);
+    }
+    
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white ${colors[type]} border-0`;
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">${escapeHtml(message)}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    container.appendChild(toast);
+    
+    const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+    bsToast.show();
+    
+    toast.addEventListener('hidden.bs.toast', () => toast.remove());
+}
+</script>
+{% endblock %}
