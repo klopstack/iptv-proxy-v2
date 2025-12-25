@@ -61,7 +61,7 @@
                 </select>
             </div>
             <div class="col-md-6 text-end">
-                <button class="btn btn-sm btn-primary" id="process-all-tags-btn">
+                <button class="btn btn-sm btn-primary" id="process-tags-tab-btn">
                     <i class="bi bi-arrow-repeat"></i> Discover Tags
                 </button>
                 <button class="btn btn-sm btn-outline-primary" id="process-account-tags-btn" style="display:none;">
@@ -1560,6 +1560,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const processAllTagsBtn = document.getElementById('process-all-tags-btn');
     if (processAllTagsBtn) {
         processAllTagsBtn.addEventListener('click', () => processAllAccountTags());
+    }
+
+    const processTagsTabBtn = document.getElementById('process-tags-tab-btn');
+    if (processTagsTabBtn) {
+        processTagsTabBtn.addEventListener('click', () => processAllAccountTags());
     }
 
     const processAccountTagsBtn = document.getElementById('process-account-tags-btn');
