@@ -29,6 +29,7 @@ import logging
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime
+from datetime import timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import requests
@@ -364,9 +365,9 @@ class FccFacilityService:
     @staticmethod
     def get_facility_url() -> str:
         """Get URL for just the facility.zip file (smaller download)."""
-        # Try to get today's date-specific file first
-        today = datetime.now().strftime("%m-%d-%Y")
-        return f"{FCC_BASE_URL}/{today}/{FCC_FACILITY_FILE}"
+        # Try to get yesterday's data in case today's hasn't been uploaded yet
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%m-%d-%Y")
+        return f"{FCC_BASE_URL}/{yesterday}/{FCC_FACILITY_FILE}"
 
     @staticmethod
     def download_facility_data() -> Optional[bytes]:
