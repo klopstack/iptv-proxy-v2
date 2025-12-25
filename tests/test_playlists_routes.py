@@ -451,3 +451,77 @@ class TestEPGProxy:
         """Test generating EPG by slug for non-existent config"""
         response = client.get("/epg/config/nonexistent-config.xml")
         assert response.status_code == 404
+
+    def test_proxy_epg_account_not_synced(self, app, client, test_account):
+        """Test proxying EPG for account with no synced channels"""
+        response = client.get(f"/epg/{test_account}.xml")
+        assert response.status_code == 503  # ServiceUnavailableError
+
+    def test_proxy_epg_with_channels(self, app, client, test_account, test_channel_with_tag):
+        """Test proxying EPG with channels synced"""
+        response = client.get(f"/epg/{test_account}.xml")
+        assert response.status_code == 200
+        assert "application/xml" in response.content_type
+        # Should contain valid XMLTV structure
+        assert b"<?xml version=" in response.data
+        assert b"<tv" in response.data
+
+    def test_proxy_epg_no_channels(self, app, client, test_account):
+        """Test proxying EPG returns minimal XMLTV when no visible channels"""
+        with app.app_context():
+            category = Category(
+                account_id=test_account,
+                category_id="cat1",
+                category_name="Test",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            # Create channel but mark as not visible
+            channel = Channel(
+                account_id=test_account,
+                stream_id="ch1",
+                name="Test Channel",
+                category_id=category.id,
+                is_active=True,
+                is_visible=False,  # Not visible
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+        response = client.get(f"/epg/{test_account}.xml")
+        assert response.status_code == 200
+        assert "application/xml" in response.content_type
+        # Should contain minimal valid XMLTV
+        assert b"<?xml version=" in response.data
+        assert b'generator-info-name="iptv-proxy-v2"' in response.data
+
+    def test_proxy_epg_collapse_duplicates(self, app, client, test_account):
+        """Test proxying EPG with collapse_duplicates parameter"""
+        with app.app_context():
+            category = Category(
+                account_id=test_account,
+                category_id="cat1",
+                category_name="Test",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            # Create two channels with same base name but different tags
+            for i in range(2):
+                channel = Channel(
+                    account_id=test_account,
+                    stream_id=f"ch{i}",
+                    name=f"Test Channel {i}",
+                    cleaned_name="Test Channel",
+                    category_id=category.id,
+                    is_active=True,
+                    is_visible=True,
+                )
+                db.session.add(channel)
+            db.session.commit()
+
+        response = client.get(f"/epg/{test_account}.xml?collapse_duplicates=true")
+        assert response.status_code == 200
+        assert "application/xml" in response.content_type
+        assert b"<?xml version=" in response.data
