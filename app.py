@@ -69,6 +69,7 @@ from routes.filters import filters_bp
 from routes.images import images_bp
 from routes.playlists import playlists_bp
 from routes.rulesets import rulesets_bp
+from routes.settings import settings_bp
 from routes.stations import stations_bp
 from routes.streams import streams_bp
 from routes.web import web_bp
@@ -87,6 +88,7 @@ app.register_blueprint(images_bp)
 app.register_blueprint(channel_links_bp)
 app.register_blueprint(stations_bp)
 app.register_blueprint(channel_health_bp)
+app.register_blueprint(settings_bp)
 
 # Pass scheduler to API blueprint
 set_scheduler(sync_scheduler)

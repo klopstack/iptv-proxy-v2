@@ -8,7 +8,7 @@ import re
 from flask import Blueprint, Response, jsonify, request
 
 from error_handling import ServiceUnavailableError, handle_errors
-from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Tag, db
+from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Settings, Tag, db
 from schemas import PlaylistConfigCreateSchema, validate_request_data
 from services.cache_service import CacheService
 from services.image_cache_service import ImageCacheService
@@ -29,6 +29,18 @@ def slugify(text):
     text = re.sub(r"[\s_]+", "-", text)  # Replace spaces/underscores with hyphens
     text = re.sub(r"-+", "-", text)  # Collapse multiple hyphens
     return text.strip("-")
+
+
+def get_proxy_base_url():
+    """Get the proxy base URL, using custom proxy hostname if configured."""
+    proxy_hostname = Settings.get("proxy_hostname", "").strip()
+    if proxy_hostname:
+        # Use custom hostname (assumes https for external domains)
+        scheme = "https" if "." in proxy_hostname else request.scheme
+        return f"{scheme}://{proxy_hostname}"
+    else:
+        # Use request hostname
+        return f"{request.scheme}://{request.host}"
 
 
 # Initialize cache service
@@ -277,8 +289,8 @@ def generate_playlist(account_id):
     # Check if we should proxy icons through local cache
     proxy_icons = request.args.get("proxy_icons", "").lower() == "true"
 
-    # Get proxy base URL from request
-    proxy_base = f"{request.scheme}://{request.host}"
+    # Get proxy base URL (uses custom proxy hostname if configured)
+    proxy_base = get_proxy_base_url()
 
     # Initialize image cache if proxying icons
     image_cache = ImageCacheService.get_instance() if proxy_icons else None
@@ -428,8 +440,8 @@ def _generate_playlist_from_config(config):
     # Check if we should proxy icons through local cache
     proxy_icons = request.args.get("proxy_icons", "").lower() == "true"
 
-    # Get proxy base URL from request
-    proxy_base = f"{request.scheme}://{request.host}"
+    # Get proxy base URL (uses custom proxy hostname if configured)
+    proxy_base = get_proxy_base_url()
 
     # Initialize image cache if proxying icons
     image_cache = ImageCacheService.get_instance() if proxy_icons else None

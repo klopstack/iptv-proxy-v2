@@ -7,6 +7,37 @@
     <h1 class="h2">Settings & Scheduler</h1>
 </div>
 
+<!-- Proxy Configuration -->
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="bi bi-hdd-network"></i> Proxy Configuration</h5>
+            </div>
+            <div class="card-body">
+                <form id="proxy-settings-form">
+                    <div class="mb-3">
+                        <label for="proxy-hostname" class="form-label">
+                            <strong>Proxy Hostname</strong>
+                        </label>
+                        <input type="text" class="form-control" id="proxy-hostname" 
+                               placeholder="e.g., streams.example.com">
+                        <div class="form-text">
+                            Custom hostname for playlist, EPG, and stream URLs. Leave empty to use the request hostname.
+                            <br><strong>Usage:</strong> Configure your reverse proxy (Traefik, nginx) to route streaming paths (<code>/playlist</code>, <code>/epg</code>, <code>/stream</code>, <code>/image</code>) without authentication.
+                            <br><strong>Example:</strong> Set this to your public streaming domain like <code>streams.example.com</code>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Save Proxy Settings
+                    </button>
+                </form>
+                <div id="proxy-settings-status" class="mt-3" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Scheduler Settings -->
 <div class="row">
     <div class="col-md-8">
@@ -256,6 +287,62 @@
 {% block extra_js %}
 <script>
 let currentStatus = null;
+
+// ============================================================================
+// Proxy Settings
+// ============================================================================
+
+async function loadProxySettings() {
+    try {
+        const response = await fetch('/api/settings/proxy_hostname');
+        const data = await response.json();
+        document.getElementById('proxy-hostname').value = data.value || '';
+    } catch (error) {
+        console.error('Error loading proxy settings:', error);
+    }
+}
+
+document.getElementById('proxy-settings-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const hostname = document.getElementById('proxy-hostname').value.trim();
+    const statusEl = document.getElementById('proxy-settings-status');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Saving...';
+    statusEl.style.display = 'none';
+    
+    try {
+        const response = await fetch('/api/settings/proxy_hostname', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: hostname })
+        });
+        
+        if (!response.ok) throw new Error('Failed to save settings');
+        
+        statusEl.className = 'alert alert-success mt-3';
+        statusEl.innerHTML = '<i class="bi bi-check-circle"></i> Proxy settings saved successfully!';
+        statusEl.style.display = 'block';
+        
+        setTimeout(() => {
+            statusEl.style.display = 'none';
+        }, 3000);
+    } catch (error) {
+        statusEl.className = 'alert alert-danger mt-3';
+        statusEl.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Error: ${error.message}`;
+        statusEl.style.display = 'block';
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }
+});
+
+// ============================================================================
+// Scheduler Status
+// ============================================================================
 
 function formatRelativeTime(isoString) {
     if (!isoString) return 'Never';
@@ -679,6 +766,7 @@ document.getElementById('clear-all-images-btn').addEventListener('click', async 
 });
 
 // Load status on page load
+loadProxySettings();
 loadSchedulerStatus();
 loadImageCacheStats();
 loadImageCacheEntries();

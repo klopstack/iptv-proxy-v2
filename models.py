@@ -1636,3 +1636,73 @@ class ChannelHealthConfig(db.Model):  # type: ignore[name-defined]
 
     def __repr__(self):
         return f"<ChannelHealthConfig {self.key}={self.value}>"
+
+
+class Settings(db.Model):  # type: ignore[name-defined]
+    """
+    Global application settings.
+
+    Stores configuration that affects the entire application behavior,
+    such as proxy hostname for playlist/EPG links.
+    """
+
+    __tablename__ = "settings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(100), unique=True, nullable=False)
+    value = db.Column(db.Text, nullable=False)
+    description = db.Column(db.Text)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Default configuration values
+    DEFAULTS = {
+        # Hostname to use for proxy URLs (playlists, EPG, streams)
+        "proxy_hostname": (
+            "",
+            "Custom hostname for proxy URLs (e.g., streams.example.com). Leave empty to use request hostname.",
+        ),
+    }
+
+    @staticmethod
+    def get(key, default=None):
+        """Get a setting value by key, with fallback to defaults."""
+        record = Settings.query.filter_by(key=key).first()
+        if record:
+            return record.value
+        # Check if we have a built-in default
+        if key in Settings.DEFAULTS:
+            return Settings.DEFAULTS[key][0]
+        return default
+
+    @staticmethod
+    def set(key, value, description=None):
+        """Set a setting value."""
+        record = Settings.query.filter_by(key=key).first()
+        if record:
+            record.value = str(value)
+            record.updated_at = datetime.utcnow()
+            if description:
+                record.description = description
+        else:
+            desc = description
+            if not desc and key in Settings.DEFAULTS:
+                desc = Settings.DEFAULTS[key][1]
+            record = Settings(key=key, value=str(value), description=desc)
+            db.session.add(record)
+        db.session.commit()
+        return record
+
+    @staticmethod
+    def get_all():
+        """Get all settings as a dict, including defaults."""
+        result = {}
+        # Start with defaults
+        for key, (value, description) in Settings.DEFAULTS.items():
+            result[key] = {"value": value, "description": description}
+        # Override with saved values
+        for record in Settings.query.all():
+            result[record.key] = {"value": record.value, "description": record.description}
+        return result
+
+    def __repr__(self):
+        return f"<Settings {self.key}={self.value}>"
