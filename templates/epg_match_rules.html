@@ -397,7 +397,7 @@
 <script>
 let accounts = [];
 let matchTypes = [];
-let expandedRulesets = new Set();
+const expandedRulesets = new Set();
 
 // Utility function to escape HTML
 function escapeHtml(text) {
@@ -1017,7 +1017,7 @@ async function showAssignModal(rulesetId) {
     const ruleset = await assignmentsResponse.json();
     
     // Get all account EPG ruleset assignments
-    let assignedAccountIds = new Set();
+    const assignedAccountIds = new Set();
     for (const account of accounts) {
         try {
             const resp = await fetch(`/api/accounts/${account.id}/epg-match-rulesets`);

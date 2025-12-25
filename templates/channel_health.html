@@ -358,7 +358,7 @@ let isLoading = false;
 const perPage = 100;
 
 // Current filter state
-let filters = {
+const filters = {
     account_id: '',
     category_id: '',
     status: '',
@@ -839,7 +839,7 @@ function renderPagination() {
     // Page numbers
     const maxPages = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxPages / 2));
-    let endPage = Math.min(totalPages, startPage + maxPages - 1);
+    const endPage = Math.min(totalPages, startPage + maxPages - 1);
     
     if (endPage - startPage < maxPages - 1) {
         startPage = Math.max(1, endPage - maxPages + 1);

@@ -175,6 +175,15 @@ active_streams
 release_stream
 cleanup_streams
 test_stream
+multiplexer_stats
+shared_streams
+
+# stream_multiplexer.py
+get_multiplexer
+shutdown_multiplexer
+StreamSubscriber
+SharedStream
+StreamMultiplexer
 
 # web.py
 index

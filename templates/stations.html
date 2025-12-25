@@ -573,7 +573,7 @@ async function lookupAndShowChannels(callsign) {
         const data = await response.json();
         
         // Find where to show the results (check for either detail div)
-        let detailDiv = document.getElementById('city-channels-detail') || 
+        const detailDiv = document.getElementById('city-channels-detail') || 
                         document.getElementById('dma-channels-detail');
         
         if (!detailDiv) {

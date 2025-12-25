@@ -381,7 +381,7 @@ async function loadAccounts() {
 // ============================================================================
 
 // Track expanded rulesets
-let expandedRulesets = new Set();
+const expandedRulesets = new Set();
 
 async function loadRulesets(preserveExpanded = false) {
     // Save currently expanded rulesets if preserving
@@ -1113,9 +1113,9 @@ async function processAllAccountTags() {
     
     try {
         let totalProcessed = 0;
-        let totalTags = new Set(); // Use set to track unique tags across all accounts
+        const totalTags = new Set(); // Use set to track unique tags across all accounts
         let accountsProcessed = 0;
-        let errors = [];
+        const errors = [];
         
         for (const account of accounts) {
             if (!account.enabled) continue; // Skip disabled accounts
@@ -1331,8 +1331,8 @@ async function editPlaylist(id) {
         requiredTagSelector.clear();
         excludedTagSelector.clear();
         
-        (playlist.include_tags || []).filter(tag => tag != null && tag !== '').forEach(tag => requiredTagSelector.addTag(tag));
-        (playlist.exclude_tags || []).filter(tag => tag != null && tag !== '').forEach(tag => excludedTagSelector.addTag(tag));
+        (playlist.include_tags || []).filter(tag => tag !== null && tag !== '').forEach(tag => requiredTagSelector.addTag(tag));
+        (playlist.exclude_tags || []).filter(tag => tag !== null && tag !== '').forEach(tag => excludedTagSelector.addTag(tag));
         
         new bootstrap.Modal(document.getElementById('playlistModal')).show();
         

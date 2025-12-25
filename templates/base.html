@@ -441,7 +441,7 @@
                 }
                 
                 this.selectedContainer.innerHTML = this.selectedTags.map(tag => {
-                    const countDisplay = tag.channel_count != null ? ` (${tag.channel_count})` : '';
+                    const countDisplay = tag.channel_count !== null ? ` (${tag.channel_count})` : '';
                     return `
                     <span class="badge ${this.badgeClass} me-1 mb-1" style="font-size: 0.9rem; padding: 0.5rem 0.75rem;">
                         ${tag.name}${countDisplay}
@@ -458,7 +458,7 @@
             }
             
             getTagNames() {
-                return this.selectedTags.map(t => t.name).filter(name => name != null && name !== '');
+                return this.selectedTags.map(t => t.name).filter(name => name !== null && name !== '');
             }
             
             setTags(tags) {

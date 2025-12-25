@@ -701,9 +701,9 @@ document.getElementById('process-all-tags-btn').addEventListener('click', async 
         const accounts = await accountsResponse.json();
         
         let totalProcessed = 0;
-        let totalTags = new Set();
+        const totalTags = new Set();
         let accountsProcessed = 0;
-        let errors = [];
+        const errors = [];
         
         for (const account of accounts) {
             if (!account.enabled) continue;

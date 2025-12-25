@@ -6,6 +6,7 @@ This module provides endpoints that:
 2. Select an available credential for the connection
 3. Proxy the stream data from the IPTV provider
 4. Track connection lifecycle
+5. Share upstream connections across multiple clients (stream multiplexing)
 """
 
 import logging
@@ -13,9 +14,11 @@ from typing import Any, Dict, Generator, Tuple, Union
 
 import requests
 from flask import Blueprint, Response, abort, request, stream_with_context
+from werkzeug.exceptions import HTTPException
 
 from models import Account, db
 from services.connection_manager import ConnectionManager
+from services.stream_multiplexer import get_multiplexer
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +68,11 @@ def proxy_stream_m3u8(account_id: int, stream_id: str):
 
 def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
     """
-    Internal function to proxy stream with credential multiplexing.
+    Internal function to proxy stream with credential multiplexing and stream sharing.
+
+    When multiple clients request the same stream, they share a single upstream
+    connection via the StreamMultiplexer. This reduces load on the upstream server
+    and conserves credential connection slots.
 
     Args:
         account_id: The account ID
@@ -90,8 +97,74 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
 
     logger.debug(f"Account {account_id}: server={account.server}, user_agent={account.user_agent}")
 
-    # Get available credential
+    # Get multiplexer
+    multiplexer = get_multiplexer()
+
+    # Check if stream is already active (can join without needing a new credential)
+    existing_stream = multiplexer.get_active_stream(account_id, stream_id, format)
+
+    if existing_stream:
+        # Join existing stream - no need for new credential
+        logger.info(
+            f"Joining existing stream {stream_id} for account {account_id} "
+            f"(current subscribers: {len(existing_stream.subscribers)})"
+        )
+
+        # Create subscriber for existing stream
+        _, subscriber = multiplexer.subscribe(
+            account_id=account_id,
+            stream_id=stream_id,
+            format=format,
+            upstream_url=existing_stream.upstream_url,
+            credential_id=existing_stream.credential_id,
+            session_token=existing_stream.session_token,
+            client_ip=client_ip,
+            user_agent=account.user_agent or "okhttp/3.14.9",
+        )
+
+        def generate_shared() -> Generator[bytes, None, None]:
+            """Generator function for shared streaming response."""
+            try:
+                for chunk in multiplexer.stream_chunks(existing_stream, subscriber):
+                    yield chunk
+            finally:
+                multiplexer.unsubscribe(existing_stream, subscriber)
+                logger.info(
+                    f"Client {client_ip} disconnected from shared stream {stream_id} "
+                    f"({subscriber.bytes_sent} bytes sent)"
+                )
+
+        return Response(
+            stream_with_context(generate_shared()),
+            content_type=existing_stream.content_type,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "X-Stream-Shared": "true",
+                "X-Subscriber-Id": subscriber.subscriber_id[:8],
+            },
+        )
+
+    # No existing stream - need to acquire a credential and create new stream
     credential = ConnectionManager.get_available_credential(account_id)
+    if not credential:
+        # No credentials available - try to release idle streams to free up a credential
+        idle_count = multiplexer.get_idle_stream_count(account_id)
+        if idle_count > 0:
+            logger.info(
+                f"No credentials available for account {account_id}, "
+                f"attempting to release {idle_count} idle stream(s)"
+            )
+            released = multiplexer.release_idle_streams_for_account(account_id)
+            if released > 0:
+                # Give a moment for the connection to be released
+                import time
+
+                time.sleep(0.1)
+                # Try again to get a credential
+                credential = ConnectionManager.get_available_credential(account_id)
+
     if not credential:
         logger.warning(f"Stream request failed: no available credentials for account {account_id}")
         abort(503, description="No available connections. All streams are in use.")
@@ -106,119 +179,106 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
         logger.error(f"Stream request failed: could not acquire connection - {error}")
         abort(503, description=f"Could not acquire connection: {error}")
 
-    # Build upstream URL (mask password in logs)
+    # Build upstream URL
     upstream_url = f"http://{account.server}/live/{credential.username}/{credential.password}/{stream_id}.{format}"
     safe_url = f"http://{account.server}/live/{credential.username}/***/{stream_id}.{format}"
-    logger.info(f"Connecting to upstream: {safe_url}")
+    logger.info(f"Creating new shared stream: {safe_url}")
 
-    # Get user agent
     user_agent = account.user_agent or "okhttp/3.14.9"
 
-    logger.info(
-        f"Proxying stream {stream_id} for account {account_id} "
-        f"using credential {credential_id} (session: {session_token[:8]}...)"
-    )
+    # Track whether we've released the connection
+    connection_released = False
+
+    def release_connection_once():
+        nonlocal connection_released
+        if not connection_released:
+            ConnectionManager.release_connection(session_token)
+            connection_released = True
 
     try:
-        # Open upstream connection with separate connect and read timeouts
-        logger.debug(f"Opening upstream connection with timeout=({UPSTREAM_CONNECT_TIMEOUT}, {UPSTREAM_READ_TIMEOUT})")
-        upstream_response = requests.get(
-            upstream_url,
-            stream=True,
-            headers={"User-Agent": user_agent},
-            timeout=(UPSTREAM_CONNECT_TIMEOUT, UPSTREAM_READ_TIMEOUT),
+        # Subscribe to create a new shared stream
+        shared_stream, subscriber = multiplexer.subscribe(
+            account_id=account_id,
+            stream_id=stream_id,
+            format=format,
+            upstream_url=upstream_url,
+            credential_id=credential_id,
+            session_token=session_token,
+            client_ip=client_ip,
+            user_agent=user_agent,
         )
-        logger.debug(
-            f"Upstream response: status={upstream_response.status_code}, headers={dict(upstream_response.headers)}"
-        )
-        upstream_response.raise_for_status()
 
-        # Determine content type
-        content_type = upstream_response.headers.get(
-            "Content-Type", "video/mp2t" if format == "ts" else "application/x-mpegURL"
+        logger.info(
+            f"Created shared stream {stream_id} for account {account_id} "
+            f"using credential {credential_id} (session: {session_token[:8]}...)"
         )
-        logger.info(f"Stream {stream_id} connected successfully, content_type={content_type}")
 
-        def generate() -> Generator[bytes, None, None]:
-            """Generator function for streaming response."""
-            bytes_sent = 0
+        # Wait briefly for upstream to connect and get content type
+        import time
+
+        max_wait = 5  # seconds
+        waited = 0.0
+        while waited < max_wait and shared_stream.content_type == "video/mp2t" and shared_stream.is_active:
+            time.sleep(0.1)
+            waited += 0.1
+
+        def generate_new() -> Generator[bytes, None, None]:
+            """Generator function for new shared stream."""
             try:
-                for chunk in upstream_response.iter_content(chunk_size=CHUNK_SIZE):
-                    if chunk:
-                        bytes_sent += len(chunk)
-                        # Update activity timestamp periodically
-                        ConnectionManager.update_activity(session_token)
-                        yield chunk
-            except GeneratorExit:
-                # Client disconnected
-                logger.info(f"Client disconnected from stream {stream_id} after {bytes_sent} bytes")
+                for chunk in multiplexer.stream_chunks(shared_stream, subscriber):
+                    yield chunk
             except Exception as e:
-                logger.error(f"Error streaming {stream_id} after {bytes_sent} bytes: {e}")
+                logger.error(f"Error streaming {stream_id}: {e}")
             finally:
-                # Release connection when stream ends
-                ConnectionManager.release_connection(session_token)
-                upstream_response.close()
-                logger.info(f"Stream {stream_id} ended for session {session_token[:8]}... ({bytes_sent} bytes sent)")
+                multiplexer.unsubscribe(shared_stream, subscriber)
+
+                # Release connection only if this was the last subscriber
+                # and stream is no longer active
+                if not shared_stream.subscribers and not shared_stream.is_active:
+                    release_connection_once()
+
+                logger.info(
+                    f"Client {client_ip} disconnected from stream {stream_id} " f"({subscriber.bytes_sent} bytes sent)"
+                )
+
+        # Check if upstream failed to connect
+        if not shared_stream.is_active and shared_stream.error:
+            multiplexer.unsubscribe(shared_stream, subscriber)
+            release_connection_once()
+
+            error_msg = shared_stream.error
+            if "timeout" in error_msg.lower():
+                abort(504, description="Gateway Timeout - Upstream server did not respond in time")
+            elif "connection" in error_msg.lower():
+                abort(502, description="Bad Gateway - Could not connect to upstream server")
+            elif "404" in error_msg or "not found" in error_msg.lower():
+                abort(404, description="Stream not found on upstream server")
+            elif "401" in error_msg or "403" in error_msg or "auth" in error_msg.lower():
+                abort(403, description="Upstream authentication failed")
+            else:
+                abort(502, description=f"Upstream error: {error_msg}")
 
         return Response(
-            stream_with_context(generate()),
-            content_type=content_type,
+            stream_with_context(generate_new()),
+            content_type=shared_stream.content_type,
             headers={
                 "Cache-Control": "no-cache, no-store, must-revalidate",
                 "Pragma": "no-cache",
                 "Expires": "0",
-                "X-Session-Token": session_token,  # For debugging
+                "X-Session-Token": session_token,
+                "X-Stream-Shared": "false",
+                "X-Subscriber-Id": subscriber.subscriber_id[:8],
             },
         )
 
-    except requests.exceptions.Timeout as e:
-        ConnectionManager.release_connection(session_token)
-        logger.error(f"Timeout connecting to upstream for stream {stream_id}: {e}")
-        logger.error(f"  URL: {safe_url}")
-        logger.error(f"  Timeout: connect={UPSTREAM_CONNECT_TIMEOUT}s, read={UPSTREAM_READ_TIMEOUT}s")
-        abort(504, description="Gateway Timeout - Upstream server did not respond in time")
-    except requests.exceptions.ConnectionError as e:
-        ConnectionManager.release_connection(session_token)
-        logger.error(f"Connection error to upstream for stream {stream_id}: {e}")
-        logger.error(f"  URL: {safe_url}")
-        logger.error("  This may indicate the server is unreachable or the hostname cannot be resolved")
-        abort(502, description="Bad Gateway - Could not connect to upstream server")
-    except requests.exceptions.HTTPError as e:
-        ConnectionManager.release_connection(session_token)
-        status_code = e.response.status_code if e.response is not None else 502
-        logger.error(f"HTTP error from upstream for stream {stream_id}: {status_code} - {e}")
-        logger.error(f"  URL: {safe_url}")
-        if e.response is not None:
-            logger.error(f"  Response body: {e.response.text[:500] if e.response.text else 'empty'}")
-
-        # Map upstream status codes to valid Flask abort codes
-        # Flask/Werkzeug only supports certain status codes for abort()
-        # See: https://werkzeug.palletsprojects.com/en/2.3.x/exceptions/
-        error_message = f"Upstream error: HTTP {status_code}"
-        if status_code == 407:
-            # 407 Proxy Authentication Required - upstream has auth issues
-            error_message = "Upstream proxy authentication failed - check IPTV credentials"
-            abort(502, description=error_message)
-        elif status_code in (401, 403):
-            # Authentication/authorization errors
-            error_message = f"Upstream authentication failed (HTTP {status_code}) - check credentials"
-            abort(403, description=error_message)
-        elif status_code == 404:
-            error_message = "Stream not found on upstream server"
-            abort(404, description=error_message)
-        elif status_code >= 500:
-            # Upstream server errors -> 502 Bad Gateway
-            abort(502, description=error_message)
-        elif status_code >= 400:
-            # Other client errors -> 400 Bad Request
-            abort(400, description=error_message)
-        else:
-            # Fallback
-            abort(502, description=error_message)
+    except HTTPException:
+        # Re-raise HTTP exceptions (abort calls) as-is
+        release_connection_once()
+        raise
     except Exception as e:
-        ConnectionManager.release_connection(session_token)
-        logger.exception(f"Unexpected error proxying stream {stream_id}: {e}")
-        abort(500, description=f"Error proxying stream: {str(e)}")
+        release_connection_once()
+        logger.exception(f"Unexpected error setting up stream {stream_id}: {e}")
+        abort(500, description=f"Error setting up stream: {str(e)}")
 
 
 @streams_bp.route("/stream/<int:account_id>/status")
@@ -383,3 +443,32 @@ def test_stream(account_id: int, stream_id: str) -> Union[Dict[str, Any], Tuple[
         result["error"] = str(e)
 
     return result
+
+
+@streams_bp.route("/stream/multiplexer/stats")
+def multiplexer_stats():
+    """
+    Get stream multiplexer statistics.
+
+    Shows active shared streams and subscriber counts.
+    This is useful for monitoring how many upstream connections are being shared.
+    """
+    multiplexer = get_multiplexer()
+    stats = multiplexer.get_stats()
+    return stats
+
+
+@streams_bp.route("/stream/shared")
+def shared_streams():
+    """
+    Get list of currently shared streams.
+
+    Returns details about each stream including subscriber count.
+    """
+    multiplexer = get_multiplexer()
+    stats = multiplexer.get_stats()
+    return {
+        "shared_streams": stats["streams"],
+        "count": stats["active_streams"],
+        "total_subscribers": stats["total_subscribers"],
+    }

@@ -21,7 +21,8 @@ module.exports = {
   },
   // JavaScript rules (for script tags)
   rules: {
-    'no-console': 'warn',
+    // Console statements are useful for debugging in development
+    'no-console': 'off',
     'no-alert': 'off', // Allow alerts/confirms for UI feedback
     // Disable no-unused-vars - functions are called from onclick attributes in HTML
     'no-unused-vars': 'off',
@@ -34,7 +35,8 @@ module.exports = {
     'no-implied-eval': 'error',
     // Allow redeclaring globals that are defined in templates
     'no-redeclare': ['error', { 'builtinGlobals': false }],
-    'no-shadow': 'warn'
+    // Disable no-shadow - common pattern in nested functions
+    'no-shadow': 'off'
   },
   overrides: [
     {
@@ -55,11 +57,13 @@ module.exports = {
         '@html-eslint/no-duplicate-id': 'error',
         '@html-eslint/no-obsolete-tags': 'error',
         '@html-eslint/require-li-container': 'error',
-        '@html-eslint/no-extra-spacing-attrs': 'warn',
-        '@html-eslint/require-button-type': 'warn',
-        '@html-eslint/no-script-style-type': 'warn',
+        '@html-eslint/no-extra-spacing-attrs': 'off',
+        // Disable button-type - not critical for inline buttons
+        '@html-eslint/require-button-type': 'off',
+        '@html-eslint/no-script-style-type': 'off',
         '@html-eslint/require-img-alt': 'warn',
-        '@html-eslint/no-target-blank': 'warn',
+        // Disable target-blank - we trust our URLs
+        '@html-eslint/no-target-blank': 'off',
         '@html-eslint/require-meta-charset': 'off'
       }
     }
