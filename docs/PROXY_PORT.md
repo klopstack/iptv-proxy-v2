@@ -38,13 +38,13 @@ services:
       - "traefik.enable=true"
       
       # Admin router (requires auth for non-streaming paths)
-      - "traefik.http.routers.iptv-admin.rule=Host(`proxy.example.com`) && !PathPrefix(`/playlist`, `/epg`, `/stream`, `/image`)"
+      - "traefik.http.routers.iptv-admin.rule=Host(`proxy.example.com`) && !PathPrefix(`/playlist,/epg,/stream,/image`)"
       - "traefik.http.routers.iptv-admin.middlewares=auth@file"
       - "traefik.http.routers.iptv-admin.entrypoints=websecure"
       - "traefik.http.routers.iptv-admin.tls.certresolver=letsencrypt"
       
       # Streaming router (public, no auth)
-      - "traefik.http.routers.iptv-streams.rule=Host(`proxy.example.com`) && PathPrefix(`/playlist`, `/epg`, `/stream`, `/image`)"
+      - "traefik.http.routers.iptv-streams.rule=Host(`proxy.example.com`) && PathPrefix(`/playlist,/epg,/stream,/image`)"
       - "traefik.http.routers.iptv-streams.entrypoints=websecure"
       - "traefik.http.routers.iptv-streams.tls.certresolver=letsencrypt"
       

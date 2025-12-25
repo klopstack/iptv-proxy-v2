@@ -93,10 +93,17 @@ app.register_blueprint(settings_bp)
 # Pass scheduler to API blueprint
 set_scheduler(sync_scheduler)
 
-# Start scheduler by default (works with both direct run and gunicorn)
-# The scheduler handles duplicate start calls gracefully
-sync_scheduler.start()
-logger.info(f"Sync scheduler started (interval: {sync_interval} hours)")
+# Optionally start scheduler. Disable during tests to avoid DB locks.
+_disable_scheduler = (
+    os.getenv("DISABLE_SCHEDULER", "false").lower() == "true" or os.getenv("PYTEST_CURRENT_TEST") is not None
+)
+if not _disable_scheduler:
+    # Start scheduler by default (works with both direct run and gunicorn)
+    # The start() call is idempotent and safe to call multiple times
+    sync_scheduler.start()
+    logger.info(f"Sync scheduler started (interval: {sync_interval} hours)")
+else:
+    logger.info("Sync scheduler disabled (testing or DISABLE_SCHEDULER=true)")
 
 
 # ============================================================================

@@ -2746,10 +2746,24 @@ class EpgService:
         all_programme_elements: List[ET.Element] = []
 
         for account_id, account_channels in channels_by_account.items():
-            # Get EPG channel IDs for this account's channels
-            epg_ids = [ch.epg_channel_id for ch in account_channels if ch.epg_channel_id]
+            # Build mapping: provider_epg_id -> (channel, standardized_id)
+            # This allows us to fetch EPG using provider IDs but output our standardized IDs
+            epg_id_mapping: Dict[str, List[Tuple[Channel, str]]] = {}
 
-            if not epg_ids:
+            for ch in account_channels:
+                standardized_id = f"ch-{account_id}-{ch.stream_id}"
+                if ch.epg_channel_id:
+                    # Channel has matched EPG data - map provider ID to our ID
+                    provider_id_lower = ch.epg_channel_id.lower()
+                    if provider_id_lower not in epg_id_mapping:
+                        epg_id_mapping[provider_id_lower] = []
+                    epg_id_mapping[provider_id_lower].append((ch, standardized_id))
+
+            # Get unique provider EPG IDs that have actual EPG data
+            provider_epg_ids = list(epg_id_mapping.keys())
+
+            if not provider_epg_ids:
+                # No channels with EPG mappings, skip fetching XMLTV
                 continue
 
             # Get XMLTV content for this account
@@ -2786,22 +2800,61 @@ class EpgService:
             if not xml_content:
                 continue
 
-            # Generate filtered EPG for this account's channels with channel links and mapping offsets
+            # Generate filtered EPG using provider IDs, then remap to standardized IDs
             filtered_xml = EpgService.generate_filtered_epg(
-                epg_ids, xml_content, channel_link_map=channel_link_map, mapping_offset_map=mapping_offset_map
+                provider_epg_ids, xml_content, channel_link_map=channel_link_map, mapping_offset_map=mapping_offset_map
             )
 
-            # Parse and merge into combined result
+            # Parse and remap channel IDs to our standardized format
             try:
                 filtered_root = ET.fromstring(filtered_xml)
                 for elem in filtered_root:
                     if elem.tag == "channel":
-                        all_channel_elements.append(elem)
+                        provider_id = elem.get("id", "").lower()
+                        if provider_id in epg_id_mapping:
+                            # Remap to first standardized ID (if multiple channels share provider ID, they share EPG)
+                            _, standardized_id = epg_id_mapping[provider_id][0]
+                            elem.set("id", standardized_id)
+                            all_channel_elements.append(elem)
                     elif elem.tag == "programme":
-                        all_programme_elements.append(elem)
+                        provider_id = elem.get("channel", "").lower()
+                        if provider_id in epg_id_mapping:
+                            # Create programme entries for each channel that maps to this provider ID
+                            for _, standardized_id in epg_id_mapping[provider_id]:
+                                prog_copy = _copy_element(elem)
+                                prog_copy.set("channel", standardized_id)
+                                all_programme_elements.append(prog_copy)
             except ET.ParseError as e:
                 logger.warning(f"Failed to parse filtered EPG for account {account_id}: {e}")
                 continue
+
+        # Add synthetic channel elements for channels without epg_channel_id
+        # These use standardized IDs but have no program data
+        added_fallback_ids: Set[str] = set()
+
+        for account_id, account_channels in channels_by_account.items():
+            for ch in account_channels:
+                if not ch.epg_channel_id:
+                    # Create synthetic channel element with fallback ID
+                    fallback_id = f"ch-{account_id}-{ch.stream_id}"
+
+                    # Skip if we already added this ID
+                    if fallback_id in added_fallback_ids:
+                        continue
+
+                    added_fallback_ids.add(fallback_id)
+                    channel_elem = ET.Element("channel", id=fallback_id)
+
+                    # Add display name
+                    display_name_elem = ET.SubElement(channel_elem, "display-name")
+                    display_name_elem.text = ch.cleaned_name or ch.name
+
+                    # Add icon if available
+                    if ch.stream_icon:
+                        ET.SubElement(channel_elem, "icon", src=ch.stream_icon)
+
+                    all_channel_elements.append(channel_elem)
+                    logger.debug(f"Added synthetic EPG channel for {ch.name} with ID {fallback_id}")
 
         # Add all channel elements first, then programmes
         for elem in all_channel_elements:

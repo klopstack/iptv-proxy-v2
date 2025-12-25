@@ -47,6 +47,7 @@ omit = [
     "add_indexes.py",
     "run_migrations.py",
     "migrations/*",
+    "vulture_whitelist.py",
 ]
 
 [tool.coverage.report]
