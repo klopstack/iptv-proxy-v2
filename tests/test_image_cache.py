@@ -349,10 +349,13 @@ class TestPlaylistIconProxy:
     """Tests for playlist generation with icon proxying"""
 
     def test_playlist_with_proxy_icons(self, app, image_cache_client):
-        """Test that proxy_icons parameter rewrites icon URLs"""
-        from models import Account, Category, Channel, Credential, db
+        """Test that proxy_icons parameter controls icon URL rewriting (defaults to true)"""
+        from models import Account, Category, Channel, Credential, Settings, db
 
         with app.app_context():
+            # Ensure proxy_icons setting is at default (true)
+            Settings.set("proxy_icons", "true")
+
             # Create test account with channel
             account = Account(name="Test Account", server="test.example.com", enabled=True)
             db.session.add(account)
@@ -380,13 +383,21 @@ class TestPlaylistIconProxy:
 
             account_id = account.id
 
-        # Test without proxy_icons - should have original URL
+        # Test default (proxy_icons=true from settings) - should have proxied URL
         response = image_cache_client.get(f"/playlist/{account_id}.m3u")
         assert response.status_code == 200
         content = response.data.decode("utf-8")
-        assert "https://external.com/icon.png" in content
+        assert "/icon/" in content
+        assert "https://external.com/icon.png" not in content
 
-        # Test with proxy_icons - should have proxied URL
+        # Test explicit proxy_icons=false - should have original URL
+        response = image_cache_client.get(f"/playlist/{account_id}.m3u?proxy_icons=false")
+        assert response.status_code == 200
+        content = response.data.decode("utf-8")
+        assert "https://external.com/icon.png" in content
+        assert "/icon/" not in content
+
+        # Test explicit proxy_icons=true - should have proxied URL
         response = image_cache_client.get(f"/playlist/{account_id}.m3u?proxy_icons=true")
         assert response.status_code == 200
         content = response.data.decode("utf-8")

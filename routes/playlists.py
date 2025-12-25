@@ -288,8 +288,14 @@ def generate_playlist(account_id):
     # Check if we should collapse duplicates
     collapse_duplicates = request.args.get("collapse_duplicates", "").lower() == "true"
 
-    # Check if we should proxy icons through local cache (default: false)
-    proxy_icons = request.args.get("proxy_icons", "false").lower() == "true"
+    # Check if we should proxy icons through local cache (default from settings, defaults to true)
+    proxy_icons_setting = Settings.get("proxy_icons", "true").lower() == "true"
+    # Allow query param to override setting
+    proxy_icons_param = request.args.get("proxy_icons", "").lower()
+    if proxy_icons_param:
+        proxy_icons = proxy_icons_param == "true"
+    else:
+        proxy_icons = proxy_icons_setting
 
     # Get proxy base URL (uses custom proxy hostname if configured)
     proxy_base = get_proxy_base_url()
@@ -430,7 +436,7 @@ def _generate_playlist_from_config(config):
     Query Parameters:
     - proxy: "true" to use proxy URLs for streams
     - collapse_duplicates: "true" to collapse duplicate channels keeping highest quality
-    - proxy_icons: "true" to proxy icon URLs through local cache (default: false)
+    - proxy_icons: "true" or "false" to override global proxy_icons setting
     """
     if not config.enabled:
         raise PermissionError("Playlist configuration is disabled")
@@ -441,8 +447,14 @@ def _generate_playlist_from_config(config):
     # Check if we should collapse duplicates
     collapse_duplicates = request.args.get("collapse_duplicates", "").lower() == "true"
 
-    # Check if we should proxy icons through local cache (default: false)
-    proxy_icons = request.args.get("proxy_icons", "false").lower() == "true"
+    # Check if we should proxy icons through local cache (default from settings, defaults to true)
+    proxy_icons_setting = Settings.get("proxy_icons", "true").lower() == "true"
+    # Allow query param to override setting
+    proxy_icons_param = request.args.get("proxy_icons", "").lower()
+    if proxy_icons_param:
+        proxy_icons = proxy_icons_param == "true"
+    else:
+        proxy_icons = proxy_icons_setting
 
     # Get proxy base URL (uses custom proxy hostname if configured)
     proxy_base = get_proxy_base_url()

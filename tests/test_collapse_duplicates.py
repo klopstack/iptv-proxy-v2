@@ -282,7 +282,7 @@ class TestPlaylistCollapseDuplicates:
 
     def test_playlist_without_collapse(self, app, client, account_with_duplicate_channels):
         """Playlist without collapse includes all channels"""
-        response = client.get(f"/playlist/{account_with_duplicate_channels}.m3u")
+        response = client.get(f"/playlist/{account_with_duplicate_channels}.m3u?proxy_icons=false")
         assert response.status_code == 200
 
         m3u_content = response.data.decode("utf-8")
@@ -292,7 +292,7 @@ class TestPlaylistCollapseDuplicates:
 
     def test_playlist_with_collapse(self, app, client, account_with_duplicate_channels):
         """Playlist with collapse_duplicates=true only includes best quality"""
-        response = client.get(f"/playlist/{account_with_duplicate_channels}.m3u?collapse_duplicates=true")
+        response = client.get(f"/playlist/{account_with_duplicate_channels}.m3u?collapse_duplicates=true&proxy_icons=false")
         assert response.status_code == 200
 
         m3u_content = response.data.decode("utf-8")
@@ -305,7 +305,7 @@ class TestPlaylistCollapseDuplicates:
 
     def test_playlist_collapse_preserves_unique_channels(self, app, client, account_with_duplicate_channels):
         """Collapse should not remove unique channels like CNN"""
-        response = client.get(f"/playlist/{account_with_duplicate_channels}.m3u?collapse_duplicates=true")
+        response = client.get(f"/playlist/{account_with_duplicate_channels}.m3u?collapse_duplicates=true&proxy_icons=false")
         assert response.status_code == 200
 
         m3u_content = response.data.decode("utf-8")

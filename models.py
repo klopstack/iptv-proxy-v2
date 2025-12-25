@@ -1661,6 +1661,11 @@ class Settings(db.Model):  # type: ignore[name-defined]
             "",
             "Custom hostname for proxy URLs (e.g., streams.example.com). Leave empty to use request hostname.",
         ),
+        # Icon proxying through local cache
+        "proxy_icons": (
+            "true",
+            "Proxy tvg-logo URLs through local cache for improved reliability and privacy. Set to 'false' to use original URLs.",
+        ),
     }
 
     @staticmethod

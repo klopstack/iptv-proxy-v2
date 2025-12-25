@@ -111,7 +111,7 @@ def test_config_playlist_all_accounts(client, test_accounts_with_channels):
         db.session.commit()
         config_id = config.id
 
-    response = client.get(f"/playlist/config/{config_id}.m3u")
+    response = client.get(f"/playlist/config/{config_id}.m3u?proxy_icons=false")
 
     assert response.status_code == 200
     playlist = response.data.decode("utf-8")
@@ -142,7 +142,7 @@ def test_config_playlist_specific_accounts(client, test_accounts_with_channels):
         db.session.commit()
         config_id = config.id
 
-    response = client.get(f"/playlist/config/{config_id}.m3u")
+    response = client.get(f"/playlist/config/{config_id}.m3u?proxy_icons=false")
 
     assert response.status_code == 200
     playlist = response.data.decode("utf-8")
@@ -169,7 +169,7 @@ def test_config_playlist_exclude_accounts(client, test_accounts_with_channels):
         db.session.commit()
         config_id = config.id
 
-    response = client.get(f"/playlist/config/{config_id}.m3u")
+    response = client.get(f"/playlist/config/{config_id}.m3u?proxy_icons=false")
 
     assert response.status_code == 200
     playlist = response.data.decode("utf-8")
@@ -196,7 +196,7 @@ def test_config_playlist_include_tags(client, test_accounts_with_tags):
         db.session.commit()
         config_id = config.id
 
-    response = client.get(f"/playlist/config/{config_id}.m3u")
+    response = client.get(f"/playlist/config/{config_id}.m3u?proxy_icons=false")
 
     assert response.status_code == 200
     playlist = response.data.decode("utf-8")
@@ -223,7 +223,7 @@ def test_config_playlist_exclude_tags(client, test_accounts_with_tags):
         db.session.commit()
         config_id = config.id
 
-    response = client.get(f"/playlist/config/{config_id}.m3u")
+    response = client.get(f"/playlist/config/{config_id}.m3u?proxy_icons=false")
 
     assert response.status_code == 200
     playlist = response.data.decode("utf-8")
@@ -252,7 +252,7 @@ def test_config_playlist_tag_match_any(client, test_accounts_with_tags):
         db.session.commit()
         config_id = config.id
 
-    response = client.get(f"/playlist/config/{config_id}.m3u")
+    response = client.get(f"/playlist/config/{config_id}.m3u?proxy_icons=false")
 
     assert response.status_code == 200
     playlist = response.data.decode("utf-8")
@@ -280,7 +280,7 @@ def test_config_playlist_tag_match_all(client, test_accounts_with_tags):
         db.session.commit()
         config_id = config.id
 
-    response = client.get(f"/playlist/config/{config_id}.m3u")
+    response = client.get(f"/playlist/config/{config_id}.m3u?proxy_icons=false")
 
     assert response.status_code == 200
     playlist = response.data.decode("utf-8")
@@ -311,7 +311,7 @@ def test_config_playlist_unsynced_account_returns_503(app, client):
         db.session.commit()
         config_id = config.id
 
-    response = client.get(f"/playlist/config/{config_id}.m3u")
+    response = client.get(f"/playlist/config/{config_id}.m3u?proxy_icons=false")
 
     assert response.status_code == 503
     assert b"not synced" in response.data
@@ -332,7 +332,7 @@ def test_config_playlist_disabled_returns_403(app, client, test_accounts_with_ch
         db.session.commit()
         config_id = config.id
 
-    response = client.get(f"/playlist/config/{config_id}.m3u")
+    response = client.get(f"/playlist/config/{config_id}.m3u?proxy_icons=false")
 
     assert response.status_code == 403
 
@@ -372,7 +372,7 @@ def test_config_playlist_uses_cleaned_names(app, client):
         db.session.commit()
         config_id = config.id
 
-    response = client.get(f"/playlist/config/{config_id}.m3u")
+    response = client.get(f"/playlist/config/{config_id}.m3u?proxy_icons=false")
 
     assert response.status_code == 200
     playlist = response.data.decode("utf-8")
@@ -398,7 +398,7 @@ def test_config_playlist_multi_account_group_titles(client, test_accounts_with_c
         db.session.commit()
         config_id = config.id
 
-    response = client.get(f"/playlist/config/{config_id}.m3u")
+    response = client.get(f"/playlist/config/{config_id}.m3u?proxy_icons=false")
 
     assert response.status_code == 200
     playlist = response.data.decode("utf-8")
@@ -425,7 +425,7 @@ def test_config_playlist_single_account_no_account_in_group(client, test_account
         db.session.commit()
         config_id = config.id
 
-    response = client.get(f"/playlist/config/{config_id}.m3u")
+    response = client.get(f"/playlist/config/{config_id}.m3u?proxy_icons=false")
 
     assert response.status_code == 200
     playlist = response.data.decode("utf-8")

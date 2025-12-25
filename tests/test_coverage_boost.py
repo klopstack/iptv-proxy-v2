@@ -574,7 +574,7 @@ class TestPlaylistGeneration:
 
     def test_generate_playlist_account_not_found(self, app, client):
         """Test generating playlist for non-existent account"""
-        response = client.get("/playlist/99999.m3u")
+        response = client.get("/playlist/99999.m3u?proxy_icons=false")
         assert response.status_code == 404
 
     def test_generate_playlist_account_disabled(self, app, client):
@@ -591,17 +591,17 @@ class TestPlaylistGeneration:
             db.session.commit()
             account_id = account.id
 
-        response = client.get(f"/playlist/{account_id}.m3u")
+        response = client.get(f"/playlist/{account_id}.m3u?proxy_icons=false")
         assert response.status_code == 403
 
     def test_generate_playlist_not_synced(self, app, client, test_account):
         """Test generating playlist for unsynced account"""
-        response = client.get(f"/playlist/{test_account}.m3u")
+        response = client.get(f"/playlist/{test_account}.m3u?proxy_icons=false")
         assert response.status_code == 503
 
     def test_generate_playlist_success(self, app, client, synced_account):
         """Test successful playlist generation"""
-        response = client.get(f"/playlist/{synced_account}.m3u")
+        response = client.get(f"/playlist/{synced_account}.m3u?proxy_icons=false")
         assert response.status_code == 200
         assert response.content_type == "application/x-mpegurl"
         content = response.data.decode("utf-8")
@@ -610,7 +610,7 @@ class TestPlaylistGeneration:
 
     def test_generate_playlist_with_proxy(self, app, client, synced_account):
         """Test playlist generation with proxy URLs"""
-        response = client.get(f"/playlist/{synced_account}.m3u?proxy=true")
+        response = client.get(f"/playlist/{synced_account}.m3u?proxy=true&proxy_icons=false")
         assert response.status_code == 200
         content = response.data.decode("utf-8")
         assert "/stream/" in content
@@ -629,7 +629,7 @@ class TestPlaylistGeneration:
 
     def test_generate_playlist_collapse_duplicates(self, app, client, synced_account_with_tags):
         """Test playlist generation with duplicate collapsing"""
-        response = client.get(f"/playlist/{synced_account_with_tags}.m3u?collapse_duplicates=true")
+        response = client.get(f"/playlist/{synced_account_with_tags}.m3u?collapse_duplicates=true&proxy_icons=false")
         assert response.status_code == 200
         assert response.content_type == "application/x-mpegurl"
 
@@ -673,19 +673,19 @@ class TestPlaylistConfigGeneration:
 
     def test_generate_playlist_by_id(self, app, client, playlist_config):
         """Test generating playlist by config ID"""
-        response = client.get(f"/playlist/config/{playlist_config}.m3u")
+        response = client.get(f"/playlist/config/{playlist_config}.m3u?proxy_icons=false")
         assert response.status_code == 200
         assert response.content_type == "application/x-mpegurl"
 
     def test_generate_playlist_by_slug(self, app, client, playlist_config):
         """Test generating playlist by config slug"""
-        response = client.get("/playlist/config/test-config.m3u")
+        response = client.get("/playlist/config/test-config.m3u?proxy_icons=false")
         assert response.status_code == 200
         assert response.content_type == "application/x-mpegurl"
 
     def test_generate_playlist_by_slug_not_found(self, app, client):
         """Test generating playlist with invalid slug"""
-        response = client.get("/playlist/config/nonexistent.m3u")
+        response = client.get("/playlist/config/nonexistent.m3u?proxy_icons=false")
         assert response.status_code == 404
 
     def test_generate_playlist_config_disabled(self, app, client, synced_account):
@@ -704,12 +704,12 @@ class TestPlaylistConfigGeneration:
             db.session.commit()
             config_id = config.id
 
-        response = client.get(f"/playlist/config/{config_id}.m3u")
+        response = client.get(f"/playlist/config/{config_id}.m3u?proxy_icons=false")
         assert response.status_code == 403
 
     def test_generate_playlist_config_with_proxy(self, app, client, playlist_config):
         """Test playlist config generation with proxy"""
-        response = client.get(f"/playlist/config/{playlist_config}.m3u?proxy=true")
+        response = client.get(f"/playlist/config/{playlist_config}.m3u?proxy=true&proxy_icons=false")
         assert response.status_code == 200
 
 
@@ -2382,7 +2382,7 @@ class TestPlaylistRoutesAdditional:
             db.session.commit()
             config_id = config.id
 
-        response = client.get(f"/playlist/config/{config_id}.m3u")
+        response = client.get(f"/playlist/config/{config_id}.m3u?proxy_icons=false")
         assert response.status_code == 200
         assert b"Good Channel" in response.data
         assert b"Bad Channel" not in response.data
