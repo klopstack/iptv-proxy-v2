@@ -13,6 +13,9 @@ services:
       PORT: "8000"
       SECRET_KEY: "${SECRET_KEY:-change-me-in-production}"
       DEBUG: "False"
+    # Run as specific user (optional - defaults to root if not specified)
+    # Ensure ./data directory is owned by this user: sudo chown -R 1000:1000 ./data
+    user: "${PUID:-1000}:${PGID:-1000}"
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/', timeout=5)"]
       interval: 30s

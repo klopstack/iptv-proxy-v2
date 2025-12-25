@@ -20,13 +20,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application
 COPY . .
 
-# Create non-root user and set up directories
-RUN useradd -m -u 1000 iptv && \
-    mkdir -p /app/data && \
-    chown -R iptv:iptv /app && \
+# Create data directory and make entrypoint executable
+RUN mkdir -p /app/data && \
     chmod +x /app/entrypoint.sh
-
-USER iptv
 
 # Set working directory for data storage
 WORKDIR /app

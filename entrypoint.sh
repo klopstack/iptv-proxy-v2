@@ -1,11 +1,29 @@
 #!/bin/bash
 set -e
 
-# Ensure data directory exists and is writable
-if [ ! -w /app/data ]; then
-    echo "ERROR: /app/data directory is not writable"
-    echo "Please run: sudo chown -R 1000:1000 ./data"
-    exit 1
+# Ensure data directory exists
+mkdir -p /app/data
+
+# If running as root, fix ownership to match mounted volume or use default
+if [ "$(id -u)" = "0" ]; then
+    echo "Running as root, checking /app/data permissions..."
+    # If data directory is empty or owned by root, keep it as root
+    # Otherwise, the mounted volume should already have correct ownership
+    if [ ! -w /app/data ]; then
+        echo "Fixing /app/data permissions..."
+        chown -R root:root /app/data
+        chmod -R 755 /app/data
+    fi
+else
+    # Running as non-root user (via user: directive in docker-compose)
+    if [ ! -w /app/data ]; then
+        echo "ERROR: /app/data directory is not writable"
+        echo "Current user: $(id -u):$(id -g)"
+        echo "Directory ownership: $(stat -c '%u:%g' /app/data 2>/dev/null || echo 'unknown')"
+        echo "Please ensure the mounted volume has correct permissions:"
+        echo "  sudo chown -R $(id -u):$(id -g) ./data"
+        exit 1
+    fi
 fi
 
 # Initialize database if it doesn't exist
