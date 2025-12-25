@@ -613,23 +613,92 @@ def _generate_playlist_from_config(config):
 @playlists_bp.route("/epg/<int:account_id>.xml")
 @handle_errors(return_json=False, default_message="Error proxying EPG data")
 def proxy_epg(account_id):
-    """Proxy EPG/XMLTV for account"""
+    """Proxy EPG/XMLTV for account, filtered to only channels in the M3U playlist.
+
+    This endpoint returns EPG data only for channels that would appear in the
+    corresponding M3U playlist (/playlist/<account_id>.m3u), ensuring the EPG
+    matches the visible channels (with renaming applied and down channels excluded).
+
+    Query Parameters:
+    - collapse_duplicates: "true" to collapse duplicate channels keeping highest quality
+    - proxy_icons: "true" to proxy icon URLs through local cache
+    """
+    from services.epg_service import EpgService
+
     account = Account.query.get_or_404(account_id)
 
     if not account.enabled:
         raise PermissionError("Account is disabled")
 
-    # Get credentials for API call
-    cred = account.get_primary_credential()
-    if cred:
-        service = IPTVService(account.server, cred.username, cred.password, account.user_agent or "okhttp/3.14.9")
-    else:
-        # Fallback for legacy accounts
-        service = IPTVService(account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9")
+    # Check if channels are synced to database
+    channel_count = Channel.query.filter_by(account_id=account_id, is_active=True).count()
+    if channel_count == 0:
+        raise ServiceUnavailableError("Account not synced. Please sync channels first.")
 
-    epg_data = service.get_xmltv()
+    # Check if we should collapse duplicates (same logic as M3U generation)
+    collapse_duplicates = request.args.get("collapse_duplicates", "").lower() == "true"
 
-    return Response(epg_data, mimetype="application/xml")
+    # Build base query - same filtering as M3U generation (is_visible filters out down channels)
+    query = (
+        db.session.query(Channel)
+        .filter(Channel.account_id == account_id, Channel.is_active, Channel.is_visible)
+        .join(Category, Channel.category_id == Category.id, isouter=True)
+    )
+
+    # Get all matching channels
+    channels = query.order_by(Channel.name).all()
+
+    # If collapsing duplicates, load tags and collapse (same logic as M3U)
+    if collapse_duplicates:
+        from services.quality_service import QualityService
+
+        # Load tags for all channels
+        channel_ids = [ch.stream_id for ch in channels]
+        tags_map = {}
+        batch_size = 500
+        for i in range(0, len(channel_ids), batch_size):
+            batch = channel_ids[i : i + batch_size]
+            channel_tags_query = (
+                db.session.query(ChannelTag.stream_id, Tag.name)
+                .join(Tag)
+                .filter(ChannelTag.account_id == account_id, ChannelTag.stream_id.in_(batch))
+            )
+            for stream_id, tag_name in channel_tags_query:
+                if stream_id not in tags_map:
+                    tags_map[stream_id] = []
+                tags_map[stream_id].append(tag_name)
+
+        # Build channel dicts for collapsing
+        channel_dicts = [
+            {
+                "channel": ch,
+                "stream_id": ch.stream_id,
+                "cleaned_name": ch.cleaned_name or ch.name,
+                "tags": tags_map.get(ch.stream_id, []),
+            }
+            for ch in channels
+        ]
+
+        # Collapse duplicates
+        collapsed = QualityService.collapse_duplicates(channel_dicts)
+        channels = [d["channel"] for d in collapsed]
+        logger.info(f"Collapsed {len(channel_dicts)} channels to {len(channels)} unique channels for EPG")
+
+    if not channels:
+        # Return minimal valid XMLTV
+        return Response(
+            b'<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="iptv-proxy-v2"></tv>\n',
+            mimetype="application/xml",
+        )
+
+    # Generate filtered EPG for these channels
+    epg_xml = EpgService.generate_epg_for_channels(channels, use_channel_links=True)
+
+    logger.info(
+        f"Generated proxied EPG for account {account_id}: {len(channels)} channels (collapsed={collapse_duplicates})"
+    )
+
+    return Response(epg_xml, mimetype="application/xml")
 
 
 # ============================================================================
