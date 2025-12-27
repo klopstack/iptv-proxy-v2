@@ -262,7 +262,7 @@ def _matches_tag_filter(channel_tags, include_tags, exclude_tags, match_mode):
 def generate_playlist(account_id):
     """Generate M3U playlist for account with filters applied (using database)
 
-    Generates HLS-compatible playlist with .m3u8 stream URLs for broad player compatibility.
+    Generates HLS-compatible playlist with .ts stream URLs for broad player compatibility.
 
     Query Parameters:
     - proxy: "true" to use proxy URLs for streams
@@ -288,14 +288,8 @@ def generate_playlist(account_id):
     # Check if we should collapse duplicates
     collapse_duplicates = request.args.get("collapse_duplicates", "").lower() == "true"
 
-    # Check if we should proxy icons through local cache (default from settings, defaults to true)
-    proxy_icons_setting = Settings.get("proxy_icons", "true").lower() == "true"
-    # Allow query param to override setting
-    proxy_icons_param = request.args.get("proxy_icons", "").lower()
-    if proxy_icons_param:
-        proxy_icons = proxy_icons_param == "true"
-    else:
-        proxy_icons = proxy_icons_setting
+    # Check if we should proxy icons through local cache (default: true)
+    proxy_icons = request.args.get("proxy_icons", "true").lower() == "true"
 
     # Get proxy base URL (uses custom proxy hostname if configured)
     proxy_base = get_proxy_base_url()
@@ -373,16 +367,16 @@ def generate_playlist(account_id):
 
         if use_proxy:
             # Use proxy URL for multiplexed streaming
-            stream_url = f"{proxy_base}/stream/{account_id}/{channel.stream_id}.m3u8"
+            stream_url = f"{proxy_base}/stream/{account_id}/{channel.stream_id}.ts"
         else:
             # Direct URL to IPTV provider
             cred = primary_cred
             if cred:
-                stream_url = f"http://{account.server}/live/{cred.username}/{cred.password}/{channel.stream_id}.m3u8"
+                stream_url = f"http://{account.server}/live/{cred.username}/{cred.password}/{channel.stream_id}.ts"
             else:
                 # Fallback for legacy accounts without credentials
                 stream_url = (
-                    f"http://{account.server}/live/{account.username}/{account.password}/{channel.stream_id}.m3u8"
+                    f"http://{account.server}/live/{account.username}/{account.password}/{channel.stream_id}.ts"
                 )
 
         m3u_lines.append(extinf)
@@ -431,12 +425,12 @@ def _generate_playlist_from_config(config):
 
     Uses database-first approach with pre-computed cleaned_name and is_visible.
     Requires accounts to be synced before playlist generation.
-    Generates HLS-compatible playlist with .m3u8 stream URLs for broad player compatibility.
+    Generates HLS-compatible playlist with .ts stream URLs for broad player compatibility.
 
     Query Parameters:
     - proxy: "true" to use proxy URLs for streams
     - collapse_duplicates: "true" to collapse duplicate channels keeping highest quality
-    - proxy_icons: "true" or "false" to override global proxy_icons setting
+    - proxy_icons: "true" to proxy icon URLs through local cache (default: false)
     """
     if not config.enabled:
         raise PermissionError("Playlist configuration is disabled")
@@ -447,14 +441,8 @@ def _generate_playlist_from_config(config):
     # Check if we should collapse duplicates
     collapse_duplicates = request.args.get("collapse_duplicates", "").lower() == "true"
 
-    # Check if we should proxy icons through local cache (default from settings, defaults to true)
-    proxy_icons_setting = Settings.get("proxy_icons", "true").lower() == "true"
-    # Allow query param to override setting
-    proxy_icons_param = request.args.get("proxy_icons", "").lower()
-    if proxy_icons_param:
-        proxy_icons = proxy_icons_param == "true"
-    else:
-        proxy_icons = proxy_icons_setting
+    # Check if we should proxy icons through local cache (default: true)
+    proxy_icons = request.args.get("proxy_icons", "true").lower() == "true"
 
     # Get proxy base URL (uses custom proxy hostname if configured)
     proxy_base = get_proxy_base_url()
@@ -617,16 +605,16 @@ def _generate_playlist_from_config(config):
 
         if use_proxy:
             # Use proxy URL for multiplexed streaming
-            stream_url = f"{proxy_base}/stream/{account.id}/{channel.stream_id}.m3u8"
+            stream_url = f"{proxy_base}/stream/{account.id}/{channel.stream_id}.ts"
         else:
             # Direct URL to IPTV provider
             cred = account.get_primary_credential()
             if cred:
-                stream_url = f"http://{account.server}/live/{cred.username}/{cred.password}/{channel.stream_id}.m3u8"
+                stream_url = f"http://{account.server}/live/{cred.username}/{cred.password}/{channel.stream_id}.ts"
             else:
                 # Fallback for legacy accounts
                 stream_url = (
-                    f"http://{account.server}/live/{account.username}/{account.password}/{channel.stream_id}.m3u8"
+                    f"http://{account.server}/live/{account.username}/{account.password}/{channel.stream_id}.ts"
                 )
 
         m3u_lines.append(extinf)
