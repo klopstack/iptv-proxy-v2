@@ -1173,7 +1173,7 @@ def get_sd_lineups():
 
     # Get lineups from database
     lineups = SdLineup.query.filter_by(epg_source_id=source_id).all()
-    
+
     # Convert to dictionaries and detach from session before making external calls
     lineup_data = [
         {
@@ -1188,7 +1188,7 @@ def get_sd_lineups():
         }
         for lineup in lineups
     ]
-    
+
     # Store source credentials before closing session
     sd_username = source.sd_username
     sd_password = source.sd_password
