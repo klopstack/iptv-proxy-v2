@@ -396,7 +396,7 @@ async function loadMoreChannels() {
                     <td>${tagsHtml}</td>
                     <td class="text-nowrap">
                         <div class="btn-group btn-group-sm" role="group">
-                            <a class="btn btn-outline-success" href="/stream/${channel.account_id}/${channel.stream_id}.ts" target="_blank" title="Play stream">
+                            <a class="btn btn-outline-success" href="/player/${channel.account_id}/${channel.stream_id}" target="_blank" title="Play stream">
                                 <i class="bi bi-play-fill"></i>
                             </a>
                             <button class="btn btn-outline-primary" data-action="create-tag-rule" data-channel-name="${escapeHtml(channel.name)}" data-channel-id="${channel.id}" title="Create tag rule for this channel">
@@ -682,11 +682,14 @@ async function showChannelDetails(accountId, streamId) {
                 <div class="col-12">
                     <h6 class="border-bottom pb-2">Playback</h6>
                     <div class="btn-group" role="group">
-                        <a class="btn btn-success" href="/stream/${channel.account_id}/${channel.stream_id}.ts" target="_blank" title="Play TS stream">
-                            <i class="bi bi-play-fill"></i> Play TS
+                        <a class="btn btn-success" href="/player/${channel.account_id}/${channel.stream_id}" target="_blank" title="Play in browser">
+                            <i class="bi bi-play-fill"></i> Play in Browser
                         </a>
-                        <a class="btn btn-outline-success" href="/stream/${channel.account_id}/${channel.stream_id}.m3u8" target="_blank" title="Play HLS stream">
-                            <i class="bi bi-play-fill"></i> Play HLS
+                        <a class="btn btn-outline-success" href="/stream/${channel.account_id}/${channel.stream_id}.ts" target="_blank" title="Direct TS stream">
+                            <i class="bi bi-download"></i> Direct TS
+                        </a>
+                        <a class="btn btn-outline-success" href="/stream/${channel.account_id}/${channel.stream_id}.m3u8" target="_blank" title="Direct HLS stream">
+                            <i class="bi bi-download"></i> Direct HLS
                         </a>
                     </div>
                     <div class="mt-2">

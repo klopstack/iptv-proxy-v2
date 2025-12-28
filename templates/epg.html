@@ -1709,7 +1709,7 @@ function renderMappingRow(item, viewMode) {
     }
     
     // Build actions
-    let actions = `<a class="btn btn-outline-success btn-sm" href="/stream/${accountId}/${streamId}.ts" target="_blank" title="Play stream"><i class="bi bi-play-fill"></i></a>`;
+    let actions = `<a class="btn btn-outline-success btn-sm" href="/player/${accountId}/${streamId}" target="_blank" title="Play stream"><i class="bi bi-play-fill"></i></a>`;
     
     if (mapping) {
         actions += ` <button class="btn btn-outline-danger btn-sm" onclick="deleteMapping(${mapping.id}, ${channelId})" title="Delete mapping"><i class="bi bi-trash"></i></button>`;

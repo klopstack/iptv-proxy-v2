@@ -746,7 +746,7 @@ function renderEnrichmentRows(matches) {
     const rows = matches.map(s => `
         <tr>
             <td>
-                <a href="/stream/${s.account_id}/${s.stream_id}.ts" target="_blank" class="btn btn-sm btn-outline-success me-1" title="Play stream">
+                <a href="/player/${s.account_id}/${s.stream_id}" target="_blank" class="btn btn-sm btn-outline-success me-1" title="Play stream">
                     <i class="bi bi-play-fill"></i>
                 </a>
                 <small>${escapeHtml(s.channel_name)}</small>

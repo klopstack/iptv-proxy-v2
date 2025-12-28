@@ -46,6 +46,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
+from urllib.parse import quote
 
 import requests
 
@@ -878,7 +879,8 @@ class SchedulesDirectClient:
         """
         if lineup_id:
             # Direct lineup lookup
-            result = self._make_request("GET", f"lineups/{lineup_id}")
+            encoded_lineup_id = quote(lineup_id, safe="")
+            result = self._make_request("GET", f"lineups/{encoded_lineup_id}")
             return [result] if result else []
 
         # Search by location
@@ -913,7 +915,8 @@ class SchedulesDirectClient:
         Returns:
             Dict with add result
         """
-        return self._make_request("PUT", f"lineups/{lineup_id}")
+        encoded_lineup_id = quote(lineup_id, safe="")
+        return self._make_request("PUT", f"lineups/{encoded_lineup_id}")
 
     def remove_lineup(self, lineup_id: str) -> Dict:
         """
@@ -925,7 +928,8 @@ class SchedulesDirectClient:
         Returns:
             Dict with removal result
         """
-        return self._make_request("DELETE", f"lineups/{lineup_id}")
+        encoded_lineup_id = quote(lineup_id, safe="")
+        return self._make_request("DELETE", f"lineups/{encoded_lineup_id}")
 
     def get_lineups(self) -> List[Dict]:
         """
@@ -951,7 +955,9 @@ class SchedulesDirectClient:
             Dict with 'map' containing list of channel mappings
             and 'stations' containing station details
         """
-        return self._make_request("GET", f"lineups/{lineup_id}")
+        # URL encode the lineup_id to handle special characters
+        encoded_lineup_id = quote(lineup_id, safe="")
+        return self._make_request("GET", f"lineups/{encoded_lineup_id}")
 
     def get_lineup_channels(self, lineup_id: str) -> List[Dict]:
         """
@@ -973,7 +979,19 @@ class SchedulesDirectClient:
                 - broadcastLanguage: Languages
                 - logo: Logo URL info
         """
+        logger.info(f"Fetching lineup channels for lineup_id: {lineup_id}")
         lineup = self.get_lineup_map(lineup_id)
+
+        # Debug logging to see what we got from the API
+        logger.info(f"Lineup data type: {type(lineup)}")
+        logger.info(f"Lineup data keys: {lineup.keys() if isinstance(lineup, dict) else 'N/A'}")
+        logger.info(f"Number of stations: {len(lineup.get('stations', []))}")
+        logger.info(f"Number of mappings: {len(lineup.get('map', []))}")
+
+        if not lineup.get("map"):
+            logger.warning(f"No 'map' data in lineup response for {lineup_id}")
+        if not lineup.get("stations"):
+            logger.warning(f"No 'stations' data in lineup response for {lineup_id}")
 
         # Build station lookup
         stations_by_id = {}

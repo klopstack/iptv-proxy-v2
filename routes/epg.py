@@ -1397,7 +1397,9 @@ def sync_sd_lineup_impl(source: EpgSource, lineup: SdLineup) -> dict:
         logger.info(f"Lineup {lineup.lineup_id} already on SD account, skipping add")
 
     # Get channels from SD
+    logger.info(f"Fetching channels for lineup {lineup.lineup_id} from Schedules Direct")
     channels = client.get_lineup_channels(lineup.lineup_id)
+    logger.info(f"Received {len(channels)} channels from Schedules Direct")
 
     channels_synced = 0
     channels_updated = 0

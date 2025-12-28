@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+
+{% block title %}Stream Player - IPTV Proxy{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.js"></script>
+<style>
+    #videoContainer {
+        width: 100%;
+        max-width: 1920px;
+        margin: 0 auto;
+        background: #000;
+        position: relative;
+    }
+    
+    #videoPlayer {
+        width: 100%;
+        height: auto;
+        display: block;
+    }
+    
+    .player-info {
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 10px;
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        border-radius: 5px;
+        font-size: 12px;
+        z-index: 10;
+        max-width: 300px;
+    }
+    
+    .player-controls {
+        margin-top: 20px;
+    }
+    
+    .error-message {
+        background: #dc3545;
+        color: white;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 20px 0;
+    }
+    
+    .loading-spinner {
+        text-align: center;
+        padding: 50px;
+        font-size: 18px;
+    }
+    
+    .stats-table {
+        font-size: 12px;
+    }
+    
+    .stats-table td {
+        padding: 2px 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Stream Player</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.history.back()">
+            <i class="bi bi-arrow-left"></i> Back
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-9">
+        <div class="card">
+            <div class="card-body p-0">
+                <div id="videoContainer">
+                    <div id="loadingMessage" class="loading-spinner">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading stream...</p>
+                    </div>
+                    <video id="videoPlayer" controls autoplay style="display: none;"></video>
+                    <div id="playerInfo" class="player-info" style="display: none;">
+                        <div id="statsDisplay"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="errorContainer" style="display: none;">
+            <div class="error-message">
+                <h5><i class="bi bi-exclamation-triangle"></i> Playback Error</h5>
+                <p id="errorMessage"></p>
+                <button class="btn btn-light btn-sm" onclick="retryStream()">
+                    <i class="bi bi-arrow-clockwise"></i> Retry
+                </button>
+            </div>
+        </div>
+        
+        <div class="player-controls">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button class="btn btn-primary" onclick="retryStream()">
+                                <i class="bi bi-arrow-clockwise"></i> Reload Stream
+                            </button>
+                            <button class="btn btn-secondary" onclick="toggleStats()">
+                                <i class="bi bi-info-circle"></i> Toggle Stats
+                            </button>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <a href="/stream/{{ account_id }}/{{ stream_id }}.ts" class="btn btn-outline-primary" download>
+                                <i class="bi bi-download"></i> Direct Link
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Stream Info</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>Channel:</th>
+                        <td id="channelName">{{ channel_name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Account ID:</th>
+                        <td>{{ account_id }}</td>
+                    </tr>
+                    <tr>
+                        <th>Stream ID:</th>
+                        <td>{{ stream_id }}</td>
+                    </tr>
+                </table>
+                
+                <div id="detailedStats" class="mt-3" style="display: none;">
+                    <h6>Technical Details</h6>
+                    <div id="techDetails"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let player = null;
+let statsInterval = null;
+let showStats = false;
+
+const accountId = {{ account_id }};
+const streamId = "{{ stream_id }}";
+const streamUrl = "/stream/" + accountId + "/" + streamId + ".ts";
+
+function initPlayer() {
+    console.log("Initializing mpegts.js player for:", streamUrl);
+    
+    if (!mpegts.getFeatureList().mseLivePlayback) {
+        showError("Your browser doesn't support MSE (Media Source Extensions) for live playback. Please use a modern browser like Chrome, Firefox, or Edge.");
+        return;
+    }
+    
+    const videoElement = document.getElementById("videoPlayer");
+    
+    if (player) {
+        player.destroy();
+    }
+    
+    player = mpegts.createPlayer({
+        type: 'mpegts',
+        isLive: true,
+        url: streamUrl,
+        hasAudio: true,
+        hasVideo: true
+    }, {
+        enableWorker: true,
+        enableStashBuffer: true,
+        stashInitialSize: 128,
+        liveBufferLatencyChasing: true,
+        liveBufferLatencyMaxLatency: 3,
+        liveBufferLatencyMinRemain: 0.5,
+        autoCleanupSourceBuffer: true
+    });
+    
+    player.attachMediaElement(videoElement);
+    
+    player.on(mpegts.Events.ERROR, (errType, errDetail) => {
+        console.error("Player error:", errType, errDetail);
+        
+        let errorMsg = "An error occurred while playing the stream. ";
+        
+        if (errType === mpegts.ErrorTypes.NETWORK_ERROR) {
+            errorMsg += "Network error: " + errDetail;
+        } else if (errType === mpegts.ErrorTypes.MEDIA_ERROR) {
+            errorMsg += "Media error: " + errDetail;
+        } else if (errType === mpegts.ErrorTypes.OTHER_ERROR) {
+            errorMsg += "Other error: " + errDetail;
+        }
+        
+        showError(errorMsg);
+    });
+    
+    player.on(mpegts.Events.LOADING_COMPLETE, () => {
+        console.log("Loading complete");
+    });
+    
+    player.on(mpegts.Events.MEDIA_INFO, (mediaInfo) => {
+        console.log("Media info:", mediaInfo);
+        updateTechDetails(mediaInfo);
+    });
+    
+    videoElement.addEventListener('loadedmetadata', () => {
+        console.log("Video metadata loaded");
+        document.getElementById("loadingMessage").style.display = "none";
+        videoElement.style.display = "block";
+    });
+    
+    videoElement.addEventListener('error', (e) => {
+        console.error("Video element error:", e);
+        showError("Video playback error. The stream may be offline or incompatible.");
+    });
+    
+    try {
+        player.load();
+        player.play().catch(err => {
+            console.warn("Autoplay prevented:", err);
+            // Autoplay might be blocked, user will need to click play
+        });
+        
+        // Start stats update
+        if (statsInterval) {
+            clearInterval(statsInterval);
+        }
+        statsInterval = setInterval(updateStats, 1000);
+        
+    } catch (err) {
+        console.error("Failed to start player:", err);
+        showError("Failed to initialize player: " + err.message);
+    }
+}
+
+function showError(message) {
+    document.getElementById("loadingMessage").style.display = "none";
+    document.getElementById("errorContainer").style.display = "block";
+    document.getElementById("errorMessage").textContent = message;
+}
+
+function retryStream() {
+    document.getElementById("errorContainer").style.display = "none";
+    document.getElementById("loadingMessage").style.display = "block";
+    document.getElementById("videoPlayer").style.display = "none";
+    
+    if (statsInterval) {
+        clearInterval(statsInterval);
+    }
+    
+    setTimeout(initPlayer, 500);
+}
+
+function toggleStats() {
+    showStats = !showStats;
+    document.getElementById("playerInfo").style.display = showStats ? "block" : "none";
+    document.getElementById("detailedStats").style.display = showStats ? "block" : "none";
+}
+
+function updateStats() {
+    if (!player || !showStats) return;
+    
+    try {
+        const stats = player.statisticsInfo;
+        if (!stats) return;
+        
+        const statsHtml = `
+            <table class="stats-table">
+                <tr><td>Speed:</td><td>${stats.speed ? stats.speed.toFixed(2) + 'x' : 'N/A'}</td></tr>
+                <tr><td>Bitrate:</td><td>${formatBitrate(stats.currentKBps)}</td></tr>
+                <tr><td>Dropped:</td><td>${stats.droppedFrames || 0} frames</td></tr>
+            </table>
+        `;
+        
+        document.getElementById("statsDisplay").innerHTML = statsHtml;
+    } catch (err) {
+        console.warn("Error updating stats:", err);
+    }
+}
+
+function updateTechDetails(mediaInfo) {
+    if (!mediaInfo) return;
+    
+    let detailsHtml = '<table class="table table-sm stats-table">';
+    
+    if (mediaInfo.mimeType) {
+        detailsHtml += `<tr><td>MIME:</td><td>${mediaInfo.mimeType}</td></tr>`;
+    }
+    
+    if (mediaInfo.duration) {
+        detailsHtml += `<tr><td>Duration:</td><td>${formatDuration(mediaInfo.duration)}</td></tr>`;
+    }
+    
+    if (mediaInfo.videoCodec) {
+        detailsHtml += `<tr><td>Video:</td><td>${mediaInfo.videoCodec}</td></tr>`;
+    }
+    
+    if (mediaInfo.audioCodec) {
+        detailsHtml += `<tr><td>Audio:</td><td>${mediaInfo.audioCodec}</td></tr>`;
+    }
+    
+    if (mediaInfo.width && mediaInfo.height) {
+        detailsHtml += `<tr><td>Resolution:</td><td>${mediaInfo.width}x${mediaInfo.height}</td></tr>`;
+    }
+    
+    detailsHtml += '</table>';
+    
+    document.getElementById("techDetails").innerHTML = detailsHtml;
+}
+
+function formatBitrate(kbps) {
+    if (!kbps || kbps === 0) return 'N/A';
+    if (kbps > 1000) return (kbps / 1000).toFixed(2) + ' Mbps';
+    return kbps.toFixed(2) + ' Kbps';
+}
+
+function formatDuration(seconds) {
+    if (!seconds) return 'N/A';
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    if (player) {
+        player.destroy();
+    }
+    if (statsInterval) {
+        clearInterval(statsInterval);
+    }
+});
+
+// Initialize player when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    initPlayer();
+});
+</script>
+{% endblock %}

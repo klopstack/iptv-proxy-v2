@@ -13,7 +13,7 @@ import logging
 from typing import Any, Dict, Generator, Tuple, Union
 
 import requests
-from flask import Blueprint, Response, abort, request, stream_with_context
+from flask import Blueprint, Response, abort, render_template, request, stream_with_context
 from werkzeug.exceptions import HTTPException
 
 from models import Account, db
@@ -34,6 +34,35 @@ CHUNK_SIZE = 65536
 # Read timeout: time between data chunks (120s for slow streams)
 UPSTREAM_CONNECT_TIMEOUT = 60
 UPSTREAM_READ_TIMEOUT = 120
+
+
+@streams_bp.route("/player/<int:account_id>/<stream_id>")
+def stream_player(account_id: int, stream_id: str):
+    """
+    Render the in-browser stream player using mpegts.js.
+
+    This provides a web-based player that can play MPEG-TS streams
+    directly in the browser without requiring external media players.
+
+    Args:
+        account_id: The account ID
+        stream_id: The stream ID to play
+    """
+    # Get account to verify it exists
+    account = db.session.get(Account, account_id)
+    if not account:
+        abort(404, description="Account not found")
+
+    if not account.enabled:
+        abort(403, description="Account is disabled")
+
+    # Try to get channel name from the account's streams
+    channel_name = f"Stream {stream_id}"
+
+    # Note: We don't fetch the actual stream list here to keep this fast.
+    # The channel name will be updated by JavaScript if needed.
+
+    return render_template("player.html", account_id=account_id, stream_id=stream_id, channel_name=channel_name)
 
 
 @streams_bp.route("/stream/<int:account_id>/<stream_id>.ts")
