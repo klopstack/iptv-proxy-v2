@@ -33,7 +33,7 @@ test: install ## Run tests with coverage in venv
 test-fast: install ## Run tests without coverage in venv
 	$(PYTEST) tests/ -v
 
-lint: install ## Run Python linting checks in venv
+lint-py: install ## Run Python linting checks in venv
 	$(FLAKE8) . --count --select=E9,F63,F7,F82 --show-source --statistics
 	$(FLAKE8) . --count --exit-zero --statistics
 	$(BLACK) --check .
@@ -49,7 +49,7 @@ vulture-all: install ## Find dead code including lower confidence results
 lint-js: ## Run JavaScript/HTML linting
 	npm run lint
 
-lint-all: lint lint-js ## Run all linting checks (Python + JavaScript)
+lint: lint-py lint-js ## Run all linting checks (Python + JavaScript)
 
 format: venv ## Format code with black and isort in venv
 	$(BLACK) .

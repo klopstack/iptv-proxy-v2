@@ -152,14 +152,17 @@
     </div>
 </div>
 
+<div id="playerMetadata" data-account-id="{{ account_id }}" data-stream-id="{{ stream_id }}"></div>
+
 <script>
+/* global mpegts */
 let player = null;
 let statsInterval = null;
 let showStats = false;
-
-const accountId = {{ account_id }};
-const streamId = "{{ stream_id }}";
-const streamUrl = "/stream/" + accountId + "/" + streamId + ".ts";
+const metadataEl = document.getElementById("playerMetadata");
+const accountId = metadataEl.dataset.accountId;
+const streamId = metadataEl.dataset.streamId;
+const streamUrl = `/stream/${accountId}/${streamId}.ts`;
 
 function initPlayer() {
     console.log("Initializing mpegts.js player for:", streamUrl);
