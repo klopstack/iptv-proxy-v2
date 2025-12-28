@@ -30,7 +30,7 @@ jobs:
     
     # Exit-zero treats all errors as warnings
     - name: Install Python deps via Makefile
-      run: make install
+      run: make install-py
 
     - name: Run linters via Makefile
       run: make lint-py
@@ -47,10 +47,10 @@ jobs:
         cache: 'npm'
 
     - name: Install JS deps
-      run: npm install
+      run: make install-js
 
     - name: Run JS linters
-      run: npm run lint
+      run: make lint-js
 
   test:
     runs-on: ubuntu-latest

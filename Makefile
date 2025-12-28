@@ -20,7 +20,9 @@ venv: ## Create virtual environment
 	python3 -m venv $(VENV)
 	$(PIP) install --upgrade pip
 
-install: venv ## Install Python dependencies in venv
+install: install-py install-js ## Install all dependencies
+
+install-py: venv ## Install Python dependencies in venv
 	$(PIP) install -r requirements.txt
 	$(PIP) install -r requirements-dev.txt
 
