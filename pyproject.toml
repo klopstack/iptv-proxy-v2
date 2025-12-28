@@ -11,6 +11,7 @@ exclude = '''
   | \.pytest_cache
   | instance
   | data
+  | node_modules
 )/
 '''
 
