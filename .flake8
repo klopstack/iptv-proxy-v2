@@ -10,6 +10,7 @@ exclude =
     instance,
     data,
     migrations,
+    node_modules,
     vulture_whitelist.py
 
 # Global ignores for legitimate cases:
