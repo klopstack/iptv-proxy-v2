@@ -256,17 +256,13 @@ async function renderAccounts() {
                             <strong>Username:</strong> ${account.username}
                             ${syncInfo}
                         </p>
-                        <small>
-                            <a href="/playlist/${account.id}.m3u" target="_blank">
-                                <i class="bi bi-download"></i> Download M3U
-                            </a>
-                            |
-                            <a href="/playlist/${account.id}.m3u?proxy=true" target="_blank" title="Proxied M3U (for DVR/PIP support)">
-                                <i class="bi bi-shuffle"></i> Proxied M3U
+                        <small>                            |
+                            <a href="/playlist/${account.id}.m3u" target="_blank" title="Proxied M3U (for DVR/PIP support)">
+                                <i class="bi bi-shuffle"></i> M3U
                             </a>
                             |
                             <a href="/epg/${account.id}.xml" target="_blank" title="Proxied EPG filtered to M3U channels (includes all renaming and excludes down channels)">
-                                <i class="bi bi-file-earmark-text"></i> Proxied EPG
+                                <i class="bi bi-file-earmark-text"></i> EPG
                             </a>
                         </small>
                     </div>

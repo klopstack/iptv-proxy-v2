@@ -21,7 +21,11 @@ from typing import Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 # Directory to store grabber configurations
-GRABBER_CONFIG_DIR = Path("/app/data/xmltv_configs")
+# Use environment variable, or fallback to ./data/xmltv_configs for local dev
+GRABBER_CONFIG_DIR = Path(
+    os.getenv("XMLTV_CONFIG_DIR")
+    or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "xmltv_configs")
+)
 
 
 @dataclass

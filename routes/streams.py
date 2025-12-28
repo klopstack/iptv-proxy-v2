@@ -4,7 +4,7 @@ Stream proxy routes - handles proxied stream connections with credential multipl
 This module provides endpoints that:
 1. Accept stream requests from clients
 2. Select an available credential for the connection
-3. Proxy the stream data from the IPTV provider
+3. Proxy the stream data from the IPTV provider (using ffmpeg for proper remuxing)
 4. Track connection lifecycle
 5. Share upstream connections across multiple clients (stream multiplexing)
 """
@@ -18,7 +18,7 @@ from werkzeug.exceptions import HTTPException
 
 from models import Account, db
 from services.connection_manager import ConnectionManager
-from services.stream_multiplexer import get_multiplexer
+from services.ffmpeg_stream_service import get_ffmpeg_service as get_stream_service
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +97,11 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
 
     logger.debug(f"Account {account_id}: server={account.server}, user_agent={account.user_agent}")
 
-    # Get multiplexer
-    multiplexer = get_multiplexer()
+    # Get stream service (ffmpeg or multiplexer based on STREAM_BACKEND env var)
+    stream_service = get_stream_service()
 
     # Check if stream is already active (can join without needing a new credential)
-    existing_stream = multiplexer.get_active_stream(account_id, stream_id, format)
+    existing_stream = stream_service.get_active_stream(account_id, stream_id, format)
 
     if existing_stream:
         # Join existing stream - no need for new credential
@@ -111,7 +111,7 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
         )
 
         # Create subscriber for existing stream
-        _, subscriber = multiplexer.subscribe(
+        _, subscriber = stream_service.subscribe(
             account_id=account_id,
             stream_id=stream_id,
             format=format,
@@ -125,10 +125,10 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
         def generate_shared() -> Generator[bytes, None, None]:
             """Generator function for shared streaming response."""
             try:
-                for chunk in multiplexer.stream_chunks(existing_stream, subscriber):
+                for chunk in stream_service.stream_chunks(existing_stream, subscriber):
                     yield chunk
             finally:
-                multiplexer.unsubscribe(existing_stream, subscriber)
+                stream_service.unsubscribe(existing_stream, subscriber)
                 logger.info(
                     f"Client {client_ip} disconnected from shared stream {stream_id} "
                     f"({subscriber.bytes_sent} bytes sent)"
@@ -150,13 +150,13 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
     credential = ConnectionManager.get_available_credential(account_id)
     if not credential:
         # No credentials available - try to release idle streams to free up a credential
-        idle_count = multiplexer.get_idle_stream_count(account_id)
+        idle_count = stream_service.get_idle_stream_count(account_id)
         if idle_count > 0:
             logger.info(
                 f"No credentials available for account {account_id}, "
                 f"attempting to release {idle_count} idle stream(s)"
             )
-            released = multiplexer.release_idle_streams_for_account(account_id)
+            released = stream_service.release_idle_streams_for_account(account_id)
             if released > 0:
                 # Give a moment for the connection to be released
                 import time
@@ -197,7 +197,7 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
 
     try:
         # Subscribe to create a new shared stream
-        shared_stream, subscriber = multiplexer.subscribe(
+        shared_stream, subscriber = stream_service.subscribe(
             account_id=account_id,
             stream_id=stream_id,
             format=format,
@@ -213,24 +213,19 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
             f"using credential {credential_id} (session: {session_token[:8]}...)"
         )
 
-        # Wait briefly for upstream to connect and get content type
-        import time
-
-        max_wait = 5  # seconds
-        waited = 0.0
-        while waited < max_wait and shared_stream.content_type == "video/mp2t" and shared_stream.is_active:
-            time.sleep(0.1)
-            waited += 0.1
+        # Note: With FFmpeg-based streaming, we don't need to wait for content type
+        # detection since ffmpeg always outputs MPEG-TS format.
 
         def generate_new() -> Generator[bytes, None, None]:
             """Generator function for new shared stream."""
+            logger.info(f"Stream {stream_id}: Generator starting for subscriber {subscriber.subscriber_id[:8]}...")
             try:
-                for chunk in multiplexer.stream_chunks(shared_stream, subscriber):
+                for chunk in stream_service.stream_chunks(shared_stream, subscriber):
                     yield chunk
             except Exception as e:
                 logger.error(f"Error streaming {stream_id}: {e}")
             finally:
-                multiplexer.unsubscribe(shared_stream, subscriber)
+                stream_service.unsubscribe(shared_stream, subscriber)
 
                 # Release connection only if this was the last subscriber
                 # and stream is no longer active
@@ -243,7 +238,7 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
 
         # Check if upstream failed to connect
         if not shared_stream.is_active and shared_stream.error:
-            multiplexer.unsubscribe(shared_stream, subscriber)
+            stream_service.unsubscribe(shared_stream, subscriber)
             release_connection_once()
 
             error_msg = shared_stream.error
@@ -453,8 +448,8 @@ def multiplexer_stats():
     Shows active shared streams and subscriber counts.
     This is useful for monitoring how many upstream connections are being shared.
     """
-    multiplexer = get_multiplexer()
-    stats = multiplexer.get_stats()
+    stream_service = get_stream_service()
+    stats = stream_service.get_stats()
     return stats
 
 
@@ -465,8 +460,8 @@ def shared_streams():
 
     Returns details about each stream including subscriber count.
     """
-    multiplexer = get_multiplexer()
-    stats = multiplexer.get_stats()
+    stream_service = get_stream_service()
+    stats = stream_service.get_stats()
     return {
         "shared_streams": stats["streams"],
         "count": stats["active_streams"],

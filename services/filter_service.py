@@ -11,6 +11,56 @@ from models import Account, Channel, ChannelTag, Filter, Tag, db
 logger = logging.getLogger(__name__)
 
 
+# PPV placeholder patterns - channels matching these are inactive PPV events
+# Imported from epg_service patterns but kept here for filter use
+PPV_PLACEHOLDER_PATTERNS = [
+    # Explicit "NO EVENT" markers (very common)
+    r"NO\s+EVENT\s+STREAMING",
+    r"NO\s+EVENT\s+SCHEDULED",
+    r"NO\s+SCHEDULED\s+EVENT",
+    # Basic numbered PPV channels without event info: "PPV 1", "PPV 2", "PPV-01"
+    r"^(?:[A-Z]{2}[:\s])?(?:[A-Z0-9\+\s]+)?PPV[\s\-]*\d+\s*(?:ᴿᴬᵂ|ᴴᴰ|⁴ᴷ|4K|HD|SD)?$",
+    # Event channels with just numbers: "EVENT 1", "VIDIO EVENT 1"
+    r"EVENT\s+\d+\s*$",
+    # Empty event slots: "PPV 1 -", "UFC 09:", ":MAX NL 05"
+    r"(?:PPV|UFC|NBA|NHL|MLB|MLS|WNBA)\s*\d+\s*[:\-]?\s*$",
+    # Placeholder colon format: ":Viaplay NL  14", ":MAX US 03"
+    r"^:?\s*(?:[A-Z]+\s+)?(?:Viaplay|MAX|ESPN)\s+[A-Z]{2}\s+\d+\s*$",
+    # Coming Soon/TBA placeholders
+    r"^(?:COMING\s+SOON|TBA|TBD|OFFLINE).*$",
+    # Florugby/generic sport numbered: "Florugby 00", "Florugby 01"
+    r"^[A-Za-z]+\s+\d{2}\s*$",
+    # Empty fixture slots: "GaaGo Fixtures 10:", "LOI 06 |"
+    r"Fixtures?\s+\d+\s*[:\|]?\s*$",
+    # NIFL/GAA empty: "NIFL 5 |", "ULSTER GAA 06 |"
+    r"(?:NIFL|GAA|ULSTER)\s*\d+\s*\|?\s*$",
+    # Heading/separator channels: ### ... ###, #### ... ####
+    r"^#{2,}.*#{2,}$",
+]
+
+# Compile PPV patterns once for efficiency
+_PPV_COMPILED_PATTERNS = [re.compile(p, re.IGNORECASE) for p in PPV_PLACEHOLDER_PATTERNS]
+
+
+def is_ppv_placeholder_name(channel_name: str) -> bool:
+    """
+    Check if a channel name indicates an inactive/placeholder PPV event.
+
+    Args:
+        channel_name: The channel name to check
+
+    Returns:
+        True if the channel name matches a PPV placeholder pattern
+    """
+    if not channel_name:
+        return False
+
+    for pattern in _PPV_COMPILED_PATTERNS:
+        if pattern.search(channel_name):
+            return True
+    return False
+
+
 class FilterService:
     """Service for applying filters and caching results"""
 
@@ -119,6 +169,7 @@ class FilterService:
         Check if a channel passes all enabled filters
 
         Filter Logic:
+        - PPV placeholder channels are automatically hidden
         - Multiple WHITELIST filters of the same type use OR logic
           (e.g., category whitelist "US" OR "RELAX" - match either)
         - Multiple BLACKLIST filters use AND logic
@@ -134,6 +185,10 @@ class FilterService:
         Returns:
             True if channel passes all filters, False otherwise
         """
+        # First, check if this is a PPV placeholder channel (always hidden)
+        if is_ppv_placeholder_name(channel.name):
+            return False
+
         # Group filters by type and action
         whitelists: Dict[str, List[Filter]] = {}
         blacklists: List[Filter] = []

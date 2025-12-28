@@ -48,6 +48,7 @@ class StreamSubscriber:
     last_read: datetime = field(default_factory=datetime.utcnow)
     bytes_sent: int = 0
     active: bool = True
+    ready: bool = False  # Set to True when stream_chunks() starts - prevents queue overflow before Flask is ready
 
 
 @dataclass
@@ -62,6 +63,7 @@ class SharedStream:
     credential_id: Optional[int]
     session_token: str
     content_type: str = "video/mp2t"
+    _last_no_sub_log: Optional[datetime] = None
 
     # State
     started_at: datetime = field(default_factory=datetime.utcnow)
@@ -218,6 +220,8 @@ class StreamMultiplexer:
                     on_stream_started(shared_stream)
 
             # Create subscriber
+            # Note: subscriber starts with ready=False, which prevents the upstream reader
+            # from sending data until stream_chunks() is called and Flask is ready to consume
             subscriber = StreamSubscriber(
                 subscriber_id=secrets.token_hex(16),
                 client_ip=client_ip,
@@ -266,6 +270,12 @@ class StreamMultiplexer:
             bytes: Chunks of stream data
         """
         try:
+            # Mark subscriber as ready BEFORE we start consuming
+            # This signals to the upstream reader that we're ready to receive data
+            # Critical: This prevents queue overflow when Flask hasn't started yet
+            subscriber.ready = True
+            logger.info(f"Subscriber {subscriber.subscriber_id[:8]}... marked ready, starting to consume")
+
             while subscriber.active and stream.is_active:
                 try:
                     chunk = subscriber.queue.get(timeout=SUBSCRIBER_TIMEOUT)
@@ -290,6 +300,7 @@ class StreamMultiplexer:
             logger.debug(f"Subscriber {subscriber.subscriber_id[:8]}... generator closed")
         finally:
             subscriber.active = False
+            subscriber.ready = False
 
     def _upstream_reader(self, stream: SharedStream, user_agent: str) -> None:
         """
@@ -331,31 +342,44 @@ class StreamMultiplexer:
                 stream.last_activity = datetime.utcnow()
 
                 # Distribute chunk to all subscribers
+                # Get subscriber list while holding lock, then release before blocking puts
+                # Only send to subscribers who are "ready" (stream_chunks() has started)
                 with stream.lock:
-                    dead_subscribers = []
+                    subscribers_snapshot = [
+                        (sub_id, subscriber)
+                        for sub_id, subscriber in stream.subscribers.items()
+                        if subscriber.active and subscriber.ready
+                    ]
 
-                    for sub_id, subscriber in stream.subscribers.items():
-                        if not subscriber.active:
-                            dead_subscribers.append(sub_id)
-                            continue
+                dead_subscribers = []
+                for sub_id, subscriber in subscribers_snapshot:
+                    if not subscriber.active:
+                        dead_subscribers.append(sub_id)
+                        continue
 
-                        try:
-                            # Non-blocking put - if queue is full, subscriber is too slow
-                            subscriber.queue.put_nowait(chunk)
-                        except Exception:
-                            # Queue full - subscriber too slow, mark for removal
-                            logger.warning(f"Subscriber {sub_id[:8]}... queue full, dropping")
-                            subscriber.active = False
-                            dead_subscribers.append(sub_id)
+                    try:
+                        # Use blocking put with timeout to allow slow starters to catch up
+                        # This gives Flask time to start the response generator
+                        subscriber.queue.put(chunk, block=True, timeout=2.0)
+                    except Exception:
+                        # Queue still full after timeout - subscriber is genuinely too slow
+                        logger.warning(f"Subscriber {sub_id[:8]}... queue full after timeout, dropping")
+                        subscriber.active = False
+                        dead_subscribers.append(sub_id)
 
-                    # Clean up dead subscribers
-                    for sub_id in dead_subscribers:
-                        if sub_id in stream.subscribers:
-                            del stream.subscribers[sub_id]
+                # Clean up dead subscribers
+                if dead_subscribers:
+                    with stream.lock:
+                        for sub_id in dead_subscribers:
+                            if sub_id in stream.subscribers:
+                                del stream.subscribers[sub_id]
 
-                # Check if we still have subscribers
+                # Check if we still have subscribers (rate-limit logging to avoid spam)
                 if not stream.subscribers:
-                    logger.info(f"Stream {stream.stream_key} has no subscribers, will close soon")
+                    now = datetime.utcnow()
+                    if stream._last_no_sub_log is None or (now - stream._last_no_sub_log).total_seconds() >= 10:
+                        logger.info(f"Stream {stream.stream_key} has no subscribers, will close soon")
+                        stream._last_no_sub_log = now
                     # Don't immediately stop - give a grace period for reconnects
                     # The cleanup loop will handle this
 

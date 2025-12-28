@@ -27,7 +27,10 @@ logger = logging.getLogger(__name__)
 
 # Default configuration
 DEFAULT_CACHE_TTL_DAYS = 7
-DEFAULT_CACHE_DIR = "/app/data/image_cache"
+# Use environment variable, or fallback to ./data/image_cache for local dev
+DEFAULT_CACHE_DIR = os.getenv("IMAGE_CACHE_DIR") or os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "image_cache"
+)
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB max
 FETCH_TIMEOUT = 10  # seconds
 USER_AGENT = "IPTV-Proxy/2.0 (Image Cache)"
@@ -55,10 +58,10 @@ class ImageCacheService:
         """Initialize image cache service.
 
         Args:
-            cache_dir: Directory for cached images (default: /app/data/image_cache)
+            cache_dir: Directory for cached images (default: ./data/image_cache)
             ttl_days: Days before cache entries expire (default: 7)
         """
-        cache_path = cache_dir or os.getenv("IMAGE_CACHE_DIR") or DEFAULT_CACHE_DIR
+        cache_path = cache_dir or DEFAULT_CACHE_DIR
         self.cache_dir = Path(cache_path)
         self.ttl_days = ttl_days
         self._ensure_cache_dir()
@@ -343,6 +346,7 @@ class ImageCacheService:
         """Get proxy URL for an image.
 
         If caching is enabled and URL is valid, returns a proxy URL.
+        Also registers the URL in the database so it can be fetched on-demand.
         Otherwise returns the original URL.
 
         Args:
@@ -356,7 +360,46 @@ class ImageCacheService:
             return original_url or ""
 
         url_hash = self.hash_url(original_url)
+
+        # Register URL in database so serve route can fetch it on-demand
+        self._register_url(url_hash, original_url)
+
         return f"{base_url.rstrip('/')}/icon/{url_hash}"
+
+    def _register_url(self, url_hash: str, original_url: str) -> None:
+        """Register a URL in the database for on-demand fetching.
+
+        This creates a 'pending' entry if one doesn't exist, allowing
+        the serve route to fetch the image when first requested.
+        """
+        try:
+            from flask import has_app_context
+
+            if not has_app_context():
+                # Can't register without app context - image will 404 if not pre-cached
+                return
+        except ImportError:
+            return
+
+        from models import CachedImage, db
+
+        try:
+            existing = CachedImage.query.filter_by(url_hash=url_hash).first()
+            if not existing:
+                cached = CachedImage(
+                    url_hash=url_hash,
+                    original_url=original_url,
+                    status="pending",
+                )
+                db.session.add(cached)
+                db.session.commit()
+        except Exception as e:
+            # Don't fail if we can't register - just log it
+            logger.debug(f"Could not register URL {url_hash[:8]}...: {e}")
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
 
     def cleanup_expired(self, delete_files: bool = True) -> int:
         """Clean up expired cache entries.
@@ -470,14 +513,22 @@ class ImageCacheService:
 
             total_hits = db.session.query(db.func.sum(CachedImage.hit_count)).scalar() or 0
 
+            # Get total fetch count for hit rate calculation
+            total_fetches = db.session.query(db.func.sum(CachedImage.fetch_count)).scalar() or 0
+            pending = CachedImage.query.filter_by(status="pending").count()
+
             return {
                 "total_entries": total,
                 "cached": cached,
+                "cached_images": cached,  # Alias for templates
                 "errors": errors,
+                "failed_images": errors,  # Alias for templates
                 "expired": expired,
+                "pending": pending,
                 "total_size_bytes": total_size,
                 "total_size_mb": round(total_size / (1024 * 1024), 2),
                 "total_hits": total_hits,
+                "total_fetches": total_fetches + total_hits,  # For hit rate calculation
                 "cache_dir": str(self.cache_dir),
                 "ttl_days": self.ttl_days,
             }

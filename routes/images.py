@@ -38,23 +38,24 @@ def serve_cached_icon(url_hash):
     cached = CachedImage.query.filter_by(url_hash=url_hash).first()
 
     if cached:
-        # Try to get from cache
-        result = cache.get_cached_image(cached.original_url)
-        if result:
-            image_data, content_type = result
-            return Response(
-                image_data,
-                mimetype=content_type,
-                headers={
-                    "Cache-Control": "public, max-age=604800",  # 7 days
-                    "X-Cache": "HIT",
-                },
-            )
+        # If already cached, try to serve from cache
+        if cached.status == "cached":
+            result = cache.get_cached_image(cached.original_url)
+            if result:
+                image_data, content_type = result
+                return Response(
+                    image_data,
+                    mimetype=content_type,
+                    headers={
+                        "Cache-Control": "public, max-age=604800",  # 7 days
+                        "X-Cache": "HIT",
+                    },
+                )
 
-        # Not in cache (expired or missing), try to re-fetch
+        # Not in cache (pending, expired or missing), try to fetch
         if cached.original_url:
-            url_hash = cache.cache_image(cached.original_url)
-            if url_hash:
+            fetched_hash = cache.cache_image(cached.original_url)
+            if fetched_hash:
                 result = cache.get_cached_image(cached.original_url)
                 if result:
                     image_data, content_type = result

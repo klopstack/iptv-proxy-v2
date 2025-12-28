@@ -31,6 +31,32 @@ def slugify(text):
     return text.strip("-")
 
 
+def sanitize_m3u_value(text: str) -> str:
+    """
+    Sanitize a string for use in M3U playlist fields.
+
+    M3U format requires single-line values. This function:
+    - Replaces newlines and carriage returns with spaces
+    - Removes other control characters
+    - Strips excess whitespace
+
+    Args:
+        text: The string to sanitize
+
+    Returns:
+        A single-line sanitized string safe for M3U use
+    """
+    if not text:
+        return text
+    # Replace newlines/carriage returns with spaces
+    text = re.sub(r"[\r\n]+", " ", text)
+    # Remove other control characters (ASCII 0-31 except space)
+    text = re.sub(r"[\x00-\x1f]", "", text)
+    # Collapse multiple spaces
+    text = re.sub(r"  +", " ", text)
+    return text.strip()
+
+
 def get_proxy_base_url():
     """Get the proxy base URL, using custom proxy hostname if configured."""
     proxy_hostname = Settings.get("proxy_hostname", "").strip()
@@ -280,8 +306,9 @@ def generate_playlist(account_id):
         raise ServiceUnavailableError("Account not synced. Please sync channels first.")
 
     # Determine if we should use proxied URLs
-    # Proxy is used when: explicit ?proxy=true OR account has multiple credentials
-    use_proxy = request.args.get("proxy", "").lower() == "true"
+    # Proxy is used when account has multiple credentials, and by default.
+    # To disable proxying, user must explicitly set proxy=false.
+    use_proxy = request.args.get("proxy", "true").lower() == "true"
     if not use_proxy and hasattr(account, "credentials") and len(account.credentials) > 1:
         use_proxy = True
 
@@ -350,8 +377,8 @@ def generate_playlist(account_id):
     m3u_lines = ["#EXTM3U"]
     for channel in channels:
         # Use cleaned name (pre-computed during sync)
-        display_name = channel.cleaned_name or channel.name
-        category_name = channel.category.category_name if channel.category else "Unknown"
+        display_name = sanitize_m3u_value(channel.cleaned_name or channel.name)
+        category_name = sanitize_m3u_value(channel.category.category_name if channel.category else "Unknown")
 
         # Always use standardized EPG ID format to prevent collisions across providers
         tvg_id = f"ch-{account_id}-{channel.stream_id}"
@@ -582,8 +609,8 @@ def _generate_playlist_from_config(config):
         account = data["account"]
 
         # Use cleaned name (pre-computed during sync/tag processing)
-        display_name = channel.cleaned_name or channel.name
-        category_name = channel.category.category_name if channel.category else "Unknown"
+        display_name = sanitize_m3u_value(channel.cleaned_name or channel.name)
+        category_name = sanitize_m3u_value(channel.category.category_name if channel.category else "Unknown")
 
         # Always use standardized EPG ID format to prevent collisions across providers
         tvg_id = f"ch-{account.id}-{channel.stream_id}"
@@ -597,7 +624,7 @@ def _generate_playlist_from_config(config):
 
         # Add account name to group title for multi-account playlists
         if len(accounts) > 1:
-            group_title = f"{category_name} ({account.name})"
+            group_title = sanitize_m3u_value(f"{category_name} ({account.name})")
         else:
             group_title = category_name
 
