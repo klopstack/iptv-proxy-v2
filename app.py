@@ -19,7 +19,7 @@ from flask import Flask
 from flask_cors import CORS
 
 from error_handling import register_error_handlers
-from models import db
+from models import SyncMetadata, db  # noqa: F401 - imported for db.create_all()
 from services.scheduler import SyncScheduler
 
 # Initialize Flask app
