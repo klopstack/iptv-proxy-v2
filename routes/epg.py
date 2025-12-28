@@ -1349,10 +1349,11 @@ def sync_sd_lineup(lineup_id):
 
     try:
         result = sync_sd_lineup_impl(source, lineup)
+        total_synced = result["channels_synced"] + result["channels_updated"]
         return jsonify(
             {
                 "success": True,
-                "message": f"Synced {result['channels_synced']} channels",
+                "message": f"Synced {total_synced} channels ({result['channels_synced']} new, {result['channels_updated']} updated)",
                 **result,
             }
         )

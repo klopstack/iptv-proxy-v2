@@ -142,7 +142,7 @@ def migrate(db_path):
 pip install -r requirements-dev.txt
 pytest tests/ -v  # Run all tests
 pytest tests/test_tag_service.py -v  # Run specific test file
-make test  # Run with coverage (requires 70% minimum)
+make test  # Run with coverage (requires 80% minimum)
 make test-fast  # Run without coverage checks
 ```
 
@@ -162,7 +162,7 @@ mypy app.py models.py services/  # Type checking
 - `test_tags.py` - Standalone tag extraction validation (uses mock objects)
 
 **Coverage Requirements:**
-- Minimum 70% code coverage enforced in CI
+- Minimum 80% code coverage enforced in CI
 - Run `make test` to generate HTML coverage report in `htmlcov/`
 
 **Running Locally:**
@@ -222,7 +222,7 @@ Things to Know
 
 ```bash
 make lint    # Check code quality and formatting (black, flake8, isort, mypy)
-make test    # Run full test suite with 70% coverage requirement
+make test    # Run full test suite with 80% coverage requirement
 ```
 
 Both commands must pass before considering your changes complete. These checks are enforced in CI and will prevent merges if they fail.

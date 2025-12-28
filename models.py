@@ -57,6 +57,7 @@ class Account(db.Model):  # type: ignore[name-defined]
     enabled = db.Column(db.Boolean, default=True)
     last_sync = db.Column(db.DateTime)  # Last time this account was synced
     last_sync_status = db.Column(db.String(50))  # 'success', 'error'
+    sync_in_progress = db.Column(db.Boolean, default=False)  # Prevents concurrent syncs
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

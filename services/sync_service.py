@@ -3,6 +3,7 @@ Channel sync service for synchronizing channels from IPTV providers to local dat
 """
 
 import logging
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
@@ -15,6 +16,49 @@ logger = logging.getLogger(__name__)
 # Tag names that indicate east/west variants (used for auto-detection)
 EAST_TAGS = {"EAST", "E", "ET", "EST", "EASTERN"}
 WEST_TAGS = {"WEST", "W", "PT", "PST", "PACIFIC", "WESTERN"}
+
+
+@contextmanager
+def sync_lock(account_id: int):
+    """
+    Context manager for acquiring/releasing sync lock on an account.
+    Prevents concurrent syncs of the same account across multiple workers.
+
+    Args:
+        account_id: Account ID to lock
+
+    Raises:
+        ValueError: If sync is already in progress for this account
+
+    Yields:
+        Account: The locked account instance
+    """
+    account = db.session.get(Account, account_id)
+    if not account:
+        raise ValueError(f"Account {account_id} not found")
+
+    # Check if sync is already in progress
+    if account.sync_in_progress:
+        raise ValueError(f"Sync already in progress for account {account.name}")
+
+    # Acquire lock
+    account.sync_in_progress = True
+    db.session.commit()
+    logger.info(f"Acquired sync lock for account {account.name} (ID: {account_id})")
+
+    try:
+        yield account
+    finally:
+        # Always release lock, even if sync fails
+        try:
+            account = db.session.get(Account, account_id)  # Re-fetch in case of rollback
+            if account:
+                account.sync_in_progress = False
+                db.session.commit()
+                logger.info(f"Released sync lock for account {account.name} (ID: {account_id})")
+        except Exception as e:
+            logger.error(f"Error releasing sync lock for account {account_id}: {e}")
+            db.session.rollback()
 
 
 def get_iptv_service_for_account(account):
@@ -41,12 +85,32 @@ class ChannelSyncService:
         Returns:
             Dict with sync statistics
         """
+        # Check account exists and is enabled before acquiring lock
         account = db.session.get(Account, account_id)
         if not account:
             return {"success": False, "error": "Account not found"}
 
         if not account.enabled:
             return {"success": False, "error": "Account is disabled"}
+
+        # Acquire sync lock to prevent concurrent syncs
+        try:
+            with sync_lock(account_id):
+                return ChannelSyncService._do_sync(account_id)
+        except ValueError as e:
+            # Lock acquisition failed - sync already in progress
+            logger.warning(f"Failed to acquire sync lock for account {account_id}: {e}")
+            return {"success": False, "error": str(e)}
+
+    @staticmethod
+    def _do_sync(account_id: int) -> Dict:
+        """
+        Internal method that performs the actual sync work.
+        Should only be called from sync_account() which manages the lock.
+        """
+        account = db.session.get(Account, account_id)
+        if not account:
+            return {"success": False, "error": "Account not found"}
 
         logger.info(f"Starting sync for account {account.name} (ID: {account_id})")
 
@@ -252,27 +316,38 @@ class ChannelSyncService:
                 chan.last_seen = now
                 chan.is_active = True
             else:
-                # Create new
-                chan = Channel(
-                    account_id=account_id,
-                    stream_id=stream_id,
-                    name=name,
-                    cleaned_name=cleaned_name,
-                    category_id=category_id,
-                    is_ppv=is_ppv,
-                    stream_type=chan_data.get("stream_type"),
-                    stream_icon=chan_data.get("stream_icon"),
-                    epg_channel_id=chan_data.get("epg_channel_id"),
-                    added=chan_data.get("added"),
-                    custom_sid=chan_data.get("custom_sid"),
-                    tv_archive=chan_data.get("tv_archive"),
-                    direct_source=chan_data.get("direct_source"),
-                    tv_archive_duration=chan_data.get("tv_archive_duration"),
-                    last_seen=now,
-                    is_active=True,
-                )
-                db.session.add(chan)
-                stats["channels_added"] += 1
+                # Create new - check once more to avoid race condition
+                chan = Channel.query.filter_by(account_id=account_id, stream_id=stream_id).first()
+                if chan:
+                    # Channel was just created by another process, update it instead
+                    chan.name = name
+                    chan.cleaned_name = cleaned_name
+                    chan.category_id = category_id
+                    chan.is_ppv = is_ppv
+                    chan.last_seen = now
+                    chan.is_active = True
+                    stats["channels_updated"] += 1
+                else:
+                    chan = Channel(
+                        account_id=account_id,
+                        stream_id=stream_id,
+                        name=name,
+                        cleaned_name=cleaned_name,
+                        category_id=category_id,
+                        is_ppv=is_ppv,
+                        stream_type=chan_data.get("stream_type"),
+                        stream_icon=chan_data.get("stream_icon"),
+                        epg_channel_id=chan_data.get("epg_channel_id"),
+                        added=chan_data.get("added"),
+                        custom_sid=chan_data.get("custom_sid"),
+                        tv_archive=chan_data.get("tv_archive"),
+                        direct_source=chan_data.get("direct_source"),
+                        tv_archive_duration=chan_data.get("tv_archive_duration"),
+                        last_seen=now,
+                        is_active=True,
+                    )
+                    db.session.add(chan)
+                    stats["channels_added"] += 1
 
         db.session.commit()
         return stats

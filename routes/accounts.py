@@ -490,6 +490,11 @@ def sync_account_channels(account_id):
     Account.query.get_or_404(account_id)  # Validate account exists
 
     stats = ChannelSyncService.sync_account(account_id)
+
+    # If sync is already in progress, return 409 Conflict
+    if not stats.get("success") and "already in progress" in stats.get("error", "").lower():
+        return jsonify(stats), 409
+
     return jsonify(stats)
 
 
