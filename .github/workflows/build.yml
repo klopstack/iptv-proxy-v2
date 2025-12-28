@@ -67,7 +67,7 @@ jobs:
         run: make install
 
       - name: Run tests with coverage via Makefile
-        run: make test-coverage
+        run: make test
 
   build:
     name: Build and Push Docker Image
