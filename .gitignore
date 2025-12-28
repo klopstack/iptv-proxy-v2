@@ -11,7 +11,6 @@ build/
 htmlcov/
 *.db
 data/
-tests/fixtures/
 .env
 .venv
 venv/

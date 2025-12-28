@@ -1345,18 +1345,34 @@ def sync_sd_lineup_impl(source: EpgSource, lineup: SdLineup) -> dict:
     client = SchedulesDirectClient(source.sd_username, source.sd_password)
     client.authenticate()
 
-    # First, try to add the lineup to the SD account (if not already added)
-    # This is required before we can fetch channel data
-    try:
-        client.add_lineup(lineup.lineup_id)
-        logger.info(f"Added lineup {lineup.lineup_id} to SD account")
-    except SchedulesDirectError as e:
-        # Code 2100 = DUPLICATE_LINEUP means it's already added, which is fine
-        if e.code != 2100:
-            logger.warning(f"Could not add lineup to SD account: {e}")
-            # Re-raise if it's a more serious error
-            if e.code not in (2100, 2102):  # 2102 = UNKNOWN_LINEUP (might work anyway)
-                raise
+    # Check if lineup is already on the SD account
+    status = client.get_status()
+    account_lineups = status.get("lineups", [])
+    account_lineup_ids = [lineup_item.get("lineup") for lineup_item in account_lineups]
+
+    # Only try to add if not already on account
+    if lineup.lineup_id not in account_lineup_ids:
+        # Check if we're at the limit before trying to add
+        max_lineups = status.get("account", {}).get("maxLineups", 4)
+        if len(account_lineups) >= max_lineups:
+            raise SchedulesDirectError(
+                f"Cannot add lineup: SD account limit reached ({len(account_lineups)}/{max_lineups}). "
+                "Please remove a lineup from your account first.",
+                code=2100,  # Use DUPLICATE_LINEUP code as a generic limit error
+            )
+
+        try:
+            client.add_lineup(lineup.lineup_id)
+            logger.info(f"Added lineup {lineup.lineup_id} to SD account")
+        except SchedulesDirectError as e:
+            # Code 2100 = DUPLICATE_LINEUP means it's already added, which is fine
+            if e.code != 2100:
+                logger.warning(f"Could not add lineup to SD account: {e}")
+                # Re-raise if it's a more serious error
+                if e.code not in (2100, 2102):  # 2102 = UNKNOWN_LINEUP (might work anyway)
+                    raise
+    else:
+        logger.info(f"Lineup {lineup.lineup_id} already on SD account, skipping add")
 
     # Get channels from SD
     channels = client.get_lineup_channels(lineup.lineup_id)
@@ -1413,6 +1429,22 @@ def sync_sd_lineup_impl(source: EpgSource, lineup: SdLineup) -> dict:
 def remove_sd_lineup(lineup_id):
     """Remove a Schedules Direct lineup"""
     lineup = SdLineup.query.get_or_404(lineup_id)
+    source = lineup.source
+
+    # Remove from SD account first to free up the lineup slot
+    if source.sd_username and source.sd_password:
+        try:
+            client = SchedulesDirectClient(source.sd_username, source.sd_password)
+            client.authenticate()
+            client.remove_lineup(lineup.lineup_id)
+            logger.info(f"Removed lineup {lineup.lineup_id} from SD account")
+        except SchedulesDirectError as e:
+            # Log warning but continue with database deletion
+            # Error code 2101 = LINEUP_NOT_FOUND means it was already removed
+            if e.code != 2101:
+                logger.warning(f"Could not remove lineup from SD account: {e}")
+        except Exception as e:
+            logger.warning(f"Error removing lineup from SD account: {e}")
 
     # Delete associated stations first (cascade should handle this, but being explicit)
     SdStation.query.filter_by(lineup_id=lineup_id).delete()

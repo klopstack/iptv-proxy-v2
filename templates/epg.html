@@ -811,6 +811,7 @@ function renderSources() {
                 <td>
                     ${source.name}
                     ${!source.enabled ? '<span class="badge bg-secondary ms-2">Disabled</span>' : ''}
+                    ${source.source_type === 'schedules_direct' ? '<button class="btn btn-sm btn-link p-0 ms-2" onclick="toggleSdLineups(' + source.id + ')" title="Show/Hide Lineups" id="sd-toggle-' + source.id + '"><i class="bi bi-chevron-down"></i></button>' : ''}
                 </td>
                 <td><span class="badge bg-info">${source.source_type}</span></td>
                 <td>${sourceInfo}</td>
@@ -820,9 +821,9 @@ function renderSources() {
                 <td>${statusBadge}</td>
                 <td>
                     <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-primary" onclick="syncSource(${source.id})" title="Sync">
-                            <i class="bi bi-arrow-repeat"></i>
-                        </button>
+                        ${source.source_type === 'schedules_direct' 
+                            ? '<button class="btn btn-outline-info" onclick="showSdLineups(' + source.id + ')" title="Manage Lineups"><i class="bi bi-list-ul"></i></button>'
+                            : '<button class="btn btn-outline-primary" onclick="syncSource(' + source.id + ')" title="Sync"><i class="bi bi-arrow-repeat"></i></button>'}
                         <button class="btn btn-outline-secondary" onclick="editSource(${source.id})" title="Edit">
                             <i class="bi bi-pencil"></i>
                         </button>
@@ -833,6 +834,21 @@ function renderSources() {
                 </td>
             </tr>
         `;
+        
+        // Add expandable lineup rows for SD sources
+        if (source.source_type === 'schedules_direct') {
+            html += `
+                <tr id="sd-lineups-${source.id}" class="sd-lineup-rows" style="display: none;">
+                    <td colspan="8" class="bg-light">
+                        <div class="p-2" id="sd-lineups-content-${source.id}">
+                            <div class="text-center text-muted">
+                                <div class="spinner-border spinner-border-sm" role="status"></div> Loading lineups...
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
     }
     
     html += '</tbody></table></div>';
@@ -972,6 +988,16 @@ async function syncSource(id) {
     btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
     
     try {
+        // Check if this is a Schedules Direct source
+        const source = sources.find(s => s.id === id);
+        if (source && source.source_type === 'schedules_direct') {
+            // SD sources need special handling - show message to use SD tab
+            alert('⚠️ Schedules Direct Sync\n\nSchedules Direct sources are synced per-lineup.\n\nPlease go to the "Schedules Direct" tab and sync individual lineups.');
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+            return;
+        }
+        
         const response = await fetch(`/api/epg/sources/${id}/sync`, { method: 'POST' });
         const result = await response.json();
         
@@ -984,6 +1010,109 @@ async function syncSource(id) {
     } catch (error) {
         alert('Error syncing: ' + error.message);
     } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    }
+}
+
+// ============================================================================
+// SD Lineups in EPG Sources Page
+// ============================================================================
+
+async function toggleSdLineups(sourceId) {
+    const row = document.getElementById(`sd-lineups-${sourceId}`);
+    const toggle = document.getElementById(`sd-toggle-${sourceId}`);
+    
+    if (row.style.display === 'none') {
+        row.style.display = 'table-row';
+        toggle.innerHTML = '<i class="bi bi-chevron-up"></i>';
+        // Load lineups if not already loaded
+        await loadSdLineupsInline(sourceId);
+    } else {
+        row.style.display = 'none';
+        toggle.innerHTML = '<i class="bi bi-chevron-down"></i>';
+    }
+}
+
+function showSdLineups(sourceId) {
+    // Switch to SD tab and select the source
+    document.getElementById('sd-tab').click();
+    document.getElementById('sdSourceSelect').value = sourceId;
+    loadSdLineups();
+}
+
+async function loadSdLineupsInline(sourceId) {
+    const container = document.getElementById(`sd-lineups-content-${sourceId}`);
+    container.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div></div>';
+    
+    try {
+        const response = await fetch(`/api/epg/sd/lineups?source_id=${sourceId}`);
+        const result = await response.json();
+        
+        if (result.error || result.success === false) {
+            container.innerHTML = `<div class="alert alert-sm alert-danger mb-0">${result.error || 'Failed to load lineups'}</div>`;
+            return;
+        }
+        
+        const lineups = result.lineups || [];
+        
+        if (lineups.length === 0) {
+            container.innerHTML = `
+                <div class="text-muted text-center py-2">
+                    <small>No lineups configured. <a href="#" onclick="showSdLineups(${sourceId}); return false;">Go to SD tab</a> to add lineups.</small>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '<div class="list-group list-group-flush">';
+        for (const lineup of lineups) {
+            html += `
+                <div class="list-group-item px-3 py-2 d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${lineup.name || lineup.lineup_id}</strong>
+                        ${lineup.location ? '<br><small class="text-muted">' + lineup.location + '</small>' : ''}
+                        <br><small class="text-muted">${lineup.channel_count || 0} channels</small>
+                        ${lineup.last_sync ? '<small class="text-muted"> | Last sync: ' + new Date(lineup.last_sync).toLocaleString() + '</small>' : ''}
+                    </div>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-sm btn-outline-primary" onclick="syncSdLineupInline(${lineup.id}, ${sourceId})" title="Sync lineup">
+                            <i class="bi bi-arrow-repeat"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (error) {
+        container.innerHTML = `<div class="alert alert-sm alert-danger mb-0">Error: ${error.message}</div>`;
+    }
+}
+
+async function syncSdLineupInline(lineupId, sourceId) {
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    
+    try {
+        const response = await fetch(`/api/epg/sd/lineups/${lineupId}/sync`, { method: 'POST' });
+        const result = await response.json();
+        
+        if (response.ok) {
+            // Reload lineups to show updated sync time
+            await loadSdLineupsInline(sourceId);
+            // Reload sources to update channel count
+            await loadSources();
+            alert(`✓ Synced ${result.channels_synced || 0} channels!`);
+        } else {
+            alert('Error: ' + (result.error || 'Sync failed'));
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
         btn.disabled = false;
         btn.innerHTML = originalHtml;
     }
