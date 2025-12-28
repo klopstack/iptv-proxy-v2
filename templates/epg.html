@@ -1421,6 +1421,7 @@ const mappingsState = {
     hasMore: false,
     accountId: null,
     categoryId: null,
+    epgSourceId: null,
     viewMode: 'all',  // 'all', 'unmapped', 'mapped'
     showFiltered: false
 };
@@ -1501,6 +1502,7 @@ async function loadCategoriesForAccount(accountId) {
 async function loadMappings(reset = true) {
     const accountId = document.getElementById('mappingAccountSelect').value;
     const categoryId = document.getElementById('mappingCategorySelect').value;
+    const epgSourceId = document.getElementById('mappingEpgSourceSelect').value;
     const viewMode = document.getElementById('mappingViewSelect').value;
     const showFiltered = document.getElementById('showFilteredChannels').checked;
     const container = document.getElementById('mappings-list');
@@ -1517,11 +1519,13 @@ async function loadMappings(reset = true) {
     // Reset state if filters changed or explicit reset
     if (reset || accountId !== mappingsState.accountId || 
         categoryId !== mappingsState.categoryId ||
+        epgSourceId !== mappingsState.epgSourceId ||
         viewMode !== mappingsState.viewMode ||
         showFiltered !== mappingsState.showFiltered) {
         mappingsState.offset = 0;
         mappingsState.accountId = accountId;
         mappingsState.categoryId = categoryId;
+        mappingsState.epgSourceId = epgSourceId;
         mappingsState.viewMode = viewMode;
         mappingsState.showFiltered = showFiltered;
         container.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
@@ -1534,6 +1538,9 @@ async function loadMappings(reset = true) {
         let url = `/api/epg/mappings?account_id=${accountId}&view_mode=${viewMode}&show_filtered=${showFiltered}&limit=${mappingsState.limit}&offset=${mappingsState.offset}`;
         if (categoryId) {
             url += `&category_id=${categoryId}`;
+        }
+        if (epgSourceId) {
+            url += `&epg_source_id=${epgSourceId}`;
         }
         const response = await fetch(url);
         const data = await response.json();

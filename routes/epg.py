@@ -721,6 +721,7 @@ def get_epg_mappings():
     Query parameters:
     - account_id: Filter by account
     - category_id: Filter by category (internal DB id)
+    - epg_source_id: Filter by EPG source (only affects 'mapped' view_mode)
     - view_mode: 'all', 'mapped', or 'unmapped' (default: 'all')
     - unmapped_only: (deprecated) Show only unmapped channels if true
     - show_filtered: Include channels that are filtered out (default: false)
@@ -731,6 +732,7 @@ def get_epg_mappings():
 
     account_id = request.args.get("account_id", type=int)
     category_id = request.args.get("category_id", type=int)
+    epg_source_id = request.args.get("epg_source_id", type=int)
     view_mode = request.args.get("view_mode", "all")
     # Support legacy unmapped_only parameter
     if request.args.get("unmapped_only", "false").lower() == "true":
@@ -784,6 +786,14 @@ def get_epg_mappings():
     elif view_mode == "mapped":
         # Get mappings (existing behavior)
         query = db.session.query(ChannelEpgMapping).join(Channel, ChannelEpgMapping.channel_id == Channel.id)
+
+        # Filter by EPG source if specified
+        if epg_source_id:
+            from models import EpgChannel
+
+            query = query.join(EpgChannel, ChannelEpgMapping.epg_channel_id == EpgChannel.id).filter(
+                EpgChannel.source_id == epg_source_id
+            )
 
         if account_id:
             query = query.filter(Channel.account_id == account_id)
