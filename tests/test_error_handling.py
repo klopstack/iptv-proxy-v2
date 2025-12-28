@@ -2,6 +2,8 @@
 Tests for error_handling module
 """
 from flask import Flask, abort
+from sqlalchemy.exc import IntegrityError, OperationalError
+from werkzeug.exceptions import ServiceUnavailable
 
 from error_handling import (
     AuthorizationError,
@@ -14,8 +16,6 @@ from error_handling import (
     register_error_handlers,
     text_error_response,
 )
-from sqlalchemy.exc import IntegrityError, OperationalError
-from werkzeug.exceptions import ServiceUnavailable
 
 
 def test_error_response_basic():
