@@ -1,7 +1,7 @@
 """
 Tests for error_handling module
 """
-from flask import Flask
+from flask import Flask, abort
 
 from error_handling import (
     AuthorizationError,
@@ -9,9 +9,13 @@ from error_handling import (
     ServiceUnavailableError,
     ValidationError,
     error_response,
+    handle_db_error,
     handle_errors,
+    register_error_handlers,
     text_error_response,
 )
+from sqlalchemy.exc import IntegrityError, OperationalError
+from werkzeug.exceptions import ServiceUnavailable
 
 
 def test_error_response_basic():
@@ -265,3 +269,63 @@ def test_handle_errors_resource_not_found_text_response():
 
         assert response.status_code == 404
         assert b"Channel not found" in response.data
+
+
+def test_handle_db_error_paths():
+    """Database helper returns appropriate messages and status codes."""
+    message, status = handle_db_error(IntegrityError("stmt", {}, Exception("dup")))
+    assert status == 400
+    assert "constraint" in message.lower()
+
+    message, status = handle_db_error(OperationalError("stmt", {}, Exception("down")))
+    assert status == 503
+    assert "temporarily unavailable" in message.lower()
+
+    message, status = handle_db_error(Exception("other"))
+    assert status == 500
+    assert "error" in message.lower()
+
+
+def test_register_error_handlers_returns_json():
+    """Registered handlers respond with consistent JSON bodies."""
+    test_app = Flask(__name__)
+    test_app.config["DEBUG"] = False
+    register_error_handlers(test_app)
+
+    @test_app.route("/boom")
+    def boom_route():
+        raise Exception("boom")
+
+    @test_app.route("/bad")
+    def bad_route():
+        abort(400)
+
+    @test_app.route("/forbidden")
+    def forbidden_route():
+        abort(403)
+
+    @test_app.route("/maintenance")
+    def maintenance_route():
+        raise ServiceUnavailable("maint")
+
+    client = test_app.test_client()
+
+    response = client.get("/missing")
+    assert response.status_code == 404
+    assert response.get_json()["error"] == "Resource not found"
+
+    response = client.get("/bad")
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Bad request"
+
+    response = client.get("/forbidden")
+    assert response.status_code == 403
+    assert response.get_json()["error"] == "Permission denied"
+
+    response = client.get("/boom")
+    assert response.status_code == 500
+    assert response.get_json()["error"] == "An internal error occurred"
+
+    response = client.get("/maintenance")
+    assert response.status_code == 503
+    assert response.get_json()["error"] == "Service temporarily unavailable"

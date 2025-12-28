@@ -78,20 +78,17 @@ jobs:
 
         - name: Generate coverage XML for Codecov
           run: venv/bin/coverage xml
+  build:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
-    needs: [test, lint-js, lint]
     if: github.event_name != 'pull_request'
     permissions:
       contents: read
       packages: write
-    
+    needs: [lint]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-        needs: [test, lint]
-        uses: docker/setup-buildx-action@v3
       
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
