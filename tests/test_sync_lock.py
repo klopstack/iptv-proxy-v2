@@ -1,5 +1,6 @@
 """Tests for sync lock functionality"""
 import pytest
+
 from models import Account, db
 from services.sync_service import sync_lock
 

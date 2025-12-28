@@ -653,17 +653,11 @@ class TestChannelsCallsignLookup:
     """Tests for the channels-by-callsign endpoint"""
 
     @pytest.fixture
-    def client_with_channels(self):
+    def client_with_channels(self, app):
         """Create test client with channels containing callsigns"""
-        from app import app
         from models import Account, Channel
 
-        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-        app.config["TESTING"] = True
-
         with app.app_context():
-            db.create_all()
-
             # Create account
             account = Account(
                 name="Test Account",
@@ -708,9 +702,6 @@ class TestChannelsCallsignLookup:
             with app.test_client() as client:
                 yield client
 
-            db.session.remove()
-            db.drop_all()
-
     def test_find_channels_by_callsign(self, client_with_channels):
         """Test finding channels that match a callsign"""
         response = client_with_channels.get("/api/fcc/channels/by-callsign/KABC")
@@ -741,22 +732,15 @@ class TestChannelEnrichment:
     """Tests for channel enrichment functionality"""
 
     @pytest.fixture
-    def app_with_channels(self):
+    def app_with_channels(self, app):
         """Create test app with FCC data and channels"""
-        from app import app
-
-        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-        app.config["TESTING"] = True
-
         with app.app_context():
             from models import Account, Channel, ChannelTag, Tag
-
-            db.create_all()
 
             # Add FCC facilities
             facilities = [
                 FccFacility(
-                    facility_id=1,
+                    facility_id=1001,
                     callsign="KABC-TV",
                     service_code="DTV",
                     network_affiliation="ABC",
@@ -766,7 +750,7 @@ class TestChannelEnrichment:
                     active=True,
                 ),
                 FccFacility(
-                    facility_id=2,
+                    facility_id=1002,
                     callsign="WNBC",
                     service_code="DTV",
                     network_affiliation="NBC",
@@ -789,10 +773,12 @@ class TestChannelEnrichment:
             db.session.add(account)
             db.session.flush()
 
-            # Create US tag (required for FCC enrichment)
-            us_tag = Tag(name="US")
-            db.session.add(us_tag)
-            db.session.flush()
+            # Create US tag (required for FCC enrichment) - check if exists first
+            us_tag = Tag.query.filter_by(name="US").first()
+            if not us_tag:
+                us_tag = Tag(name="US")
+                db.session.add(us_tag)
+                db.session.flush()
 
             # Add channels that will match FCC data
             channels = [
@@ -827,9 +813,6 @@ class TestChannelEnrichment:
             db.session.commit()
 
             yield app, account.id
-
-            db.session.remove()
-            db.drop_all()
 
     def test_preview_enrichment(self, app_with_channels):
         """Test previewing channel enrichment"""
@@ -933,21 +916,14 @@ class TestChannelEnrichment:
             assert result["channels_matched"] == 0
             assert result["message"] == "No channels matched FCC data"
 
-    def test_independent_station_network_override(self):
+    def test_independent_station_network_override(self, app):
         """Test that Independent stations get network from channel name"""
-        from app import app
-
-        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-        app.config["TESTING"] = True
-
         with app.app_context():
             from models import Account, Channel, ChannelTag, Tag
 
-            db.create_all()
-
             # Add FCC facility marked as "Independent" for a CW affiliate
             facility = FccFacility(
-                facility_id=999,
+                facility_id=2001,
                 callsign="KSTW",
                 service_code="DTV",
                 network_affiliation="Independent",  # FCC says Independent
@@ -968,10 +944,12 @@ class TestChannelEnrichment:
             db.session.add(account)
             db.session.flush()
 
-            # Create US tag
-            us_tag = Tag(name="US")
-            db.session.add(us_tag)
-            db.session.flush()
+            # Create US tag - check if exists first
+            us_tag = Tag.query.filter_by(name="US").first()
+            if not us_tag:
+                us_tag = Tag(name="US")
+                db.session.add(us_tag)
+                db.session.flush()
 
             # Add CW channel with callsign
             channel = Channel(
@@ -1010,24 +988,14 @@ class TestChannelEnrichment:
             ind_tag = Tag.query.filter_by(name="NETWORK:INDEPENDENT").first()
             assert ind_tag is None, "NETWORK:INDEPENDENT should not be created for CW affiliate"
 
-            db.session.remove()
-            db.drop_all()
-
-    def test_network_detection_when_fcc_has_no_network(self):
+    def test_network_detection_when_fcc_has_no_network(self, app):
         """Test that network is detected from channel name when FCC has no network data"""
-        from app import app
-
-        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-        app.config["TESTING"] = True
-
         with app.app_context():
             from models import Account, Channel, ChannelTag, Tag
 
-            db.create_all()
-
             # Add FCC facility with NO network affiliation
             facility = FccFacility(
-                facility_id=998,
+                facility_id=2002,
                 callsign="WSVW-LD",
                 service_code="DTV",
                 network_affiliation=None,  # FCC has no network data
@@ -1048,10 +1016,12 @@ class TestChannelEnrichment:
             db.session.add(account)
             db.session.flush()
 
-            # Create US tag
-            us_tag = Tag(name="US")
-            db.session.add(us_tag)
-            db.session.flush()
+            # Create US tag - check if exists first
+            us_tag = Tag.query.filter_by(name="US").first()
+            if not us_tag:
+                us_tag = Tag(name="US")
+                db.session.add(us_tag)
+                db.session.flush()
 
             # Add NBC channel with callsign - name indicates NBC
             channel = Channel(
@@ -1086,30 +1056,20 @@ class TestChannelEnrichment:
             nbc_tag = Tag.query.filter_by(name="NETWORK:NBC").first()
             assert nbc_tag is not None, "Expected NETWORK:NBC tag detected from channel name"
 
-            db.session.remove()
-            db.drop_all()
-
 
 class TestEnrichmentRoutes:
     """Tests for enrichment API routes"""
 
     @pytest.fixture
-    def client_with_channels(self):
+    def client_with_channels(self, app):
         """Create test client with channels and FCC data"""
-        from app import app
-
-        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-        app.config["TESTING"] = True
-
         with app.app_context():
             from models import Account, Channel, ChannelTag, Tag
-
-            db.create_all()
 
             # Add FCC facilities
             facilities = [
                 FccFacility(
-                    facility_id=1,
+                    facility_id=3001,
                     callsign="KABC-TV",
                     service_code="DTV",
                     network_affiliation="ABC",
@@ -1132,10 +1092,12 @@ class TestEnrichmentRoutes:
             db.session.add(account)
             db.session.flush()
 
-            # Create US tag (required for FCC enrichment)
-            us_tag = Tag(name="US")
-            db.session.add(us_tag)
-            db.session.flush()
+            # Create US tag (required for FCC enrichment) - check if exists first
+            us_tag = Tag.query.filter_by(name="US").first()
+            if not us_tag:
+                us_tag = Tag(name="US")
+                db.session.add(us_tag)
+                db.session.flush()
 
             channel = Channel(
                 account_id=account.id,
@@ -1156,9 +1118,6 @@ class TestEnrichmentRoutes:
 
             with app.test_client() as client:
                 yield client, account.id
-
-            db.session.remove()
-            db.drop_all()
 
     def test_preview_enrichment_endpoint(self, client_with_channels):
         """Test enrichment preview API endpoint"""

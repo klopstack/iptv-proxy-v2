@@ -351,8 +351,17 @@ window.addEventListener('beforeunload', () => {
 });
 
 // Initialize player when page loads
+function waitForMpegts() {
+    if (typeof mpegts !== 'undefined') {
+        initPlayer();
+    } else {
+        console.log("Waiting for mpegts.js to load...");
+        setTimeout(waitForMpegts, 100);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    initPlayer();
+    waitForMpegts();
 });
 </script>
 {% endblock %}
