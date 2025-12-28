@@ -1173,13 +1173,32 @@ def get_sd_lineups():
 
     # Get lineups from database
     lineups = SdLineup.query.filter_by(epg_source_id=source_id).all()
+    
+    # Convert to dictionaries and detach from session before making external calls
+    lineup_data = [
+        {
+            "id": lineup.id,
+            "lineup_id": lineup.lineup_id,
+            "name": lineup.name,
+            "location": lineup.location,
+            "lineup_type": lineup.lineup_type,
+            "transport": lineup.transport,
+            "channel_count": lineup.channel_count,
+            "last_sync": lineup.last_sync.isoformat() if lineup.last_sync else None,
+        }
+        for lineup in lineups
+    ]
+    
+    # Store source credentials before closing session
+    sd_username = source.sd_username
+    sd_password = source.sd_password
 
     # Get account status to determine lineup limits
     account_lineups = 0
     max_lineups = 4  # SD default limit
     try:
-        if source.sd_username and source.sd_password:
-            client = SchedulesDirectClient(source.sd_username, source.sd_password)
+        if sd_username and sd_password:
+            client = SchedulesDirectClient(sd_username, sd_password)
             client.authenticate()
             status = client.get_status()
             account_lineups = len(status.get("lineups", []))
@@ -1190,19 +1209,7 @@ def get_sd_lineups():
 
     return jsonify(
         {
-            "lineups": [
-                {
-                    "id": lineup.id,
-                    "lineup_id": lineup.lineup_id,
-                    "name": lineup.name,
-                    "location": lineup.location,
-                    "lineup_type": lineup.lineup_type,
-                    "transport": lineup.transport,
-                    "channel_count": lineup.channel_count,
-                    "last_sync": lineup.last_sync.isoformat() if lineup.last_sync else None,
-                }
-                for lineup in lineups
-            ],
+            "lineups": lineup_data,
             "account_lineups": account_lineups,
             "max_lineups": max_lineups,
         }
@@ -1237,10 +1244,15 @@ def add_sd_lineup():
     if existing:
         return jsonify({"error": "Lineup already added to this source"}), 409
 
+    # Store credentials before making external calls
+    sd_username = source.sd_username
+    sd_password = source.sd_password
+    source_id = source.id
+
     # Check SD account lineup limit before adding
     try:
-        if source.sd_username and source.sd_password:
-            client = SchedulesDirectClient(source.sd_username, source.sd_password)
+        if sd_username and sd_password:
+            client = SchedulesDirectClient(sd_username, sd_password)
             client.authenticate()
             status = client.get_status()
             account_lineups = status.get("lineups", [])
@@ -1270,7 +1282,7 @@ def add_sd_lineup():
 
     # Create lineup record
     lineup = SdLineup(
-        epg_source_id=source.id,
+        epg_source_id=source_id,
         lineup_id=data["lineup_id"],
         name=data.get("name"),
         location=data.get("location"),
