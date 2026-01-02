@@ -13,6 +13,7 @@ from schemas import PlaylistConfigCreateSchema, validate_request_data
 from services.cache_service import CacheService
 from services.image_cache_service import ImageCacheService
 from services.iptv_service import IPTVService
+from services.ppv_visibility_service import PPVVisibilityService
 from services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
@@ -334,6 +335,10 @@ def generate_playlist(account_id):
     # Get all matching channels
     channels = query.order_by(Channel.name).all()
 
+    # Apply PPV visibility filtering based on account settings
+    ppv_service = PPVVisibilityService(account)
+    channels = [ch for ch in channels if ppv_service.should_show_channel(ch)]
+
     # If collapsing duplicates, load tags and collapse
     if collapse_duplicates:
         from services.quality_service import QualityService
@@ -558,6 +563,10 @@ def _generate_playlist_from_config(config):
 
         # Get all matching channels
         channels = query.order_by(Channel.name).all()
+
+        # Apply PPV visibility filtering based on account settings
+        ppv_service = PPVVisibilityService(account)
+        channels = [ch for ch in channels if ppv_service.should_show_channel(ch)]
 
         # Load tags for these channels if collapsing is enabled
         tags_map = {}

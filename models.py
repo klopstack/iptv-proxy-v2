@@ -58,6 +58,10 @@ class Account(db.Model):  # type: ignore[name-defined]
     last_sync = db.Column(db.DateTime)  # Last time this account was synced
     last_sync_status = db.Column(db.String(50))  # 'success', 'error'
     sync_in_progress = db.Column(db.Boolean, default=False)  # Prevents concurrent syncs
+    
+    # PPV visibility settings: 'hide_all' | 'hide_inactive' (default) | 'show_all'
+    ppv_visibility = db.Column(db.String(20), default='hide_inactive', nullable=False)
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

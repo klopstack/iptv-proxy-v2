@@ -71,6 +71,7 @@ def get_accounts():
             "name": a.name,
             "server": a.server,
             "enabled": a.enabled,
+            "ppv_visibility": a.ppv_visibility,
             "credentials": [credential_to_dict(c) for c in a.credentials],
             "total_max_connections": a.get_total_max_connections(),
             "channel_count": channel_count_map.get(a.id, 0),
@@ -163,6 +164,39 @@ def update_account(account_id):
             "enabled": account.enabled,
         }
     )
+
+
+@accounts_bp.route("/api/accounts/<int:account_id>/ppv-visibility", methods=["PUT"])
+def update_ppv_visibility(account_id):
+    """Update PPV visibility preference for an account
+    
+    Request body:
+    {
+        "ppv_visibility": "hide_all" | "hide_inactive" | "show_all"
+    }
+    """
+    account = Account.query.get_or_404(account_id)
+    data = request.get_json()
+    
+    ppv_visibility = data.get("ppv_visibility", "hide_inactive")
+    
+    # Validate the value
+    from services.ppv_visibility_service import PPVVisibilityService
+    if ppv_visibility not in PPVVisibilityService.VALID_MODES:
+        return jsonify({"error": f"Invalid ppv_visibility mode. Must be one of: {PPVVisibilityService.VALID_MODES}"}), 400
+    
+    account.ppv_visibility = ppv_visibility
+    db.session.commit()
+    
+    return jsonify({"id": account.id, "ppv_visibility": account.ppv_visibility})
+
+
+@accounts_bp.route("/api/ppv-visibility-options", methods=["GET"])
+def get_ppv_visibility_options():
+    """Get available PPV visibility options"""
+    from services.ppv_visibility_service import PPVVisibilityService
+    options = PPVVisibilityService.get_visibility_options()
+    return jsonify(options)
 
 
 @accounts_bp.route("/api/accounts/<int:account_id>", methods=["DELETE"])

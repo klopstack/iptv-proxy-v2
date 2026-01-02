@@ -62,6 +62,19 @@
                         <input type="checkbox" class="form-check-input" id="accountEnabled" checked>
                         <label class="form-check-label" for="accountEnabled">Enabled</label>
                     </div>
+                    <div class="mb-3">
+                        <label for="accountPpvVisibility" class="form-label">PPV Channel Visibility</label>
+                        <select class="form-select" id="accountPpvVisibility">
+                            <option value="hide_all">Hide All PPV</option>
+                            <option value="hide_inactive" selected>Hide Inactive PPV (default)</option>
+                            <option value="show_all">Show All PPV</option>
+                        </select>
+                        <div class="form-text">
+                            <strong>Hide All PPV:</strong> Don't show any pay-per-view channels<br>
+                            <strong>Hide Inactive PPV:</strong> Show only upcoming/active PPV events, hide past events<br>
+                            <strong>Show All PPV:</strong> Show all pay-per-view channels including inactive ones
+                        </div>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -377,6 +390,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 
                 if (response.ok) {
+                    const accountId = id || (await response.json()).id;
+                    
+                    // Also update PPV visibility
+                    const ppvVisibility = document.getElementById('accountPpvVisibility').value;
+                    await fetch(`/api/accounts/${accountId}/ppv-visibility`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ppv_visibility: ppvVisibility })
+                    });
+                    
                     modal.hide();
                     await loadAccounts();
                 } else {
@@ -414,6 +437,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.getElementById('passwordHint').style.display = 'block';
                     document.getElementById('accountUserAgent').value = account.user_agent || '';
                     document.getElementById('accountEnabled').checked = account.enabled;
+                    document.getElementById('accountPpvVisibility').value = account.ppv_visibility || 'hide_inactive';
                     modal.show();
                     break;
 
