@@ -389,6 +389,7 @@ class Event(db.Model):  # type: ignore[name-defined]
         secondary="event_channel_links",
         backref=db.backref("events", lazy="dynamic"),
         foreign_keys="[EventChannelLink.event_id, EventChannelLink.channel_id]",
+        overlaps="channel_links,event_links",
     )
 
     __table_args__ = (
@@ -428,8 +429,16 @@ class EventChannelLink(db.Model):  # type: ignore[name-defined]
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    event = db.relationship("Event", backref=db.backref("channel_links", cascade="all, delete-orphan"))
-    channel = db.relationship("Channel", backref=db.backref("event_links", cascade="all, delete-orphan"))
+    event = db.relationship(
+        "Event",
+        backref=db.backref("channel_links", cascade="all, delete-orphan"),
+        overlaps="channels,events",
+    )
+    channel = db.relationship(
+        "Channel",
+        backref=db.backref("event_links", cascade="all, delete-orphan"),
+        overlaps="channels,events",
+    )
 
     # Unique constraint to prevent duplicate links
     __table_args__ = (
