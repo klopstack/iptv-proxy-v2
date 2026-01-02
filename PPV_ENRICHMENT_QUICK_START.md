@@ -79,18 +79,19 @@ API Usage:
 
 ### Rate Limiting
 
-**Why?** TheSportsDB free tier has limits (~500 API calls/day)
+**Why?** TheSportsDB API has a rate limit (30 requests/minute)
 
 **How?**
 - Process 10 channels per batch
-- Each batch = ~10 API calls
-- Hourly schedule = ~20 calls/hour
-- Daily total = ~480 calls (under 500 limit)
+- Each batch = ~10-15 API calls (tiered strategies)
+- Per-minute limit: 30 requests
+- Conservative limit: 25 requests/minute (under limit)
+- Can process multiple batches per hour
 
 **If limit reached:** 
 - Enrichment pauses automatically
-- Resumes next day at UTC midnight
-- No data loss, no errors
+- Resumes when per-minute window resets (every 60 seconds)
+- Transparent to user, no errors
 
 ### Enrichment Statuses
 

@@ -139,16 +139,27 @@ class TheSportsDBService:
         try:
             result = leagues.leagueInfo(league_id)
 
-            if not result or not isinstance(result, dict):
-                logger.warning(f"Invalid response from leagueInfo: {type(result)}")
+            # API returns None for invalid league IDs
+            if result is None:
+                logger.debug(f"League {league_id} not found (API returned None)")
                 return None
 
+            if not isinstance(result, dict):
+                logger.warning(f"Invalid response type from leagueInfo: {type(result)}")
+                return None
+
+            # Try different response formats
+            # Format 1: results array (expected)
             results = result.get("results", [])
-            if not results:
-                logger.debug(f"League {league_id} not found")
-                return None
+            if results and isinstance(results, list) and len(results) > 0:
+                return results[0]
 
-            return results[0]
+            # Format 2: direct league object
+            if result.get("strLeague"):
+                return result
+
+            logger.debug(f"League {league_id} not found in response")
+            return None
 
         except Exception as e:
             logger.error(f"Error fetching league info for {league_id}: {e}")
@@ -174,10 +185,16 @@ class TheSportsDBService:
             result = teams.leagueTeams(league_id)
 
             if not result or not isinstance(result, dict):
-                logger.warning(f"Invalid response from listTeams: {type(result)}")
+                logger.warning(f"Invalid response from leagueTeams: {type(result)}")
                 return []
 
-            teams_list = result.get("results", [])
+            # API uses 'teams' key for this endpoint
+            teams_list = result.get("teams", [])
+            
+            # Fallback to 'results' for backward compatibility
+            if not teams_list:
+                teams_list = result.get("results", [])
+            
             if not teams_list:
                 logger.debug(f"No teams found for league {league_id}")
                 return []

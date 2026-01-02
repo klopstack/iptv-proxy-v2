@@ -54,27 +54,28 @@ GET  /api/ppv-enrichment/settings           - Enrichment configuration
 ### TheSportsDB Free Tier Limits
 
 ```
-Daily Limit:        500 requests/day
-Conservative Limit: 20 requests/hour (500 ÷ 24 ÷ margin)
-Window:             24 hours (resets daily at UTC midnight)
+Rate Limit:         30 requests/minute
+Window:             60 seconds (per-minute rolling window)
+Conservative Limit: 25 requests/minute (safety margin)
 ```
 
 ### Implementation Details
 
 **Request Throttling:**
-- 1 request every 180 seconds (3 hours ÷ 20 requests)
-- Configurable via `requests_per_hour` parameter
-- Automatically adjusted based on batch size
+- Maximum 30 requests per minute (official API limit)
+- Conservative limit: 25 requests/minute (with safety margin)
+- Automatic pause if limit would be exceeded
+- Automatic resume when per-minute window resets
 
-**Daily Tracking:**
-- Persistent API request counter (SyncMetadata)
-- Daily reset at UTC midnight
+**Per-Minute Tracking:**
+- Persistent request counter per minute (SyncMetadata)
+- Automatic reset every 60 seconds
 - Prevents exceeding quota even across restarts
 
 **Smart Processing:**
-- Stops processing if daily limit would be exceeded
-- Resumes next day automatically
-- Each request is conservative (~1 API call per channel)
+- Stops processing if per-minute limit would be exceeded
+- Resumes automatically when window resets
+- Each request is conservative (~1 API call per channel using tiered strategies)
 
 ## Processing Flow
 
@@ -129,16 +130,16 @@ Window:             24 hours (resets daily at UTC midnight)
 BATCH_SIZE = 10  # Channels per batch
 
 # Rate limiting
-REQUESTS_PER_HOUR = 20  # TheSportsDB free tier
-REQUEST_INTERVAL_SECONDS = 180  # 3600 / 20
+REQUESTS_PER_MINUTE = 25  # TheSportsDB official limit is 30/minute
+REQUEST_INTERVAL_SECONDS = 2.4  # 60 / 25
 
 # Retry logic
 MAX_RETRY_ATTEMPTS = 3  # Max attempts before marking no_match
 DEFAULT_RETRY_DELAY_MINUTES = 60  # Wait 1 hour before next batch
 
 # API limits
-THESPORTSDB_FREE_LIMIT_PER_DAY = 500
-THESPORTSDB_REQUEST_WINDOW_HOURS = 24
+THESPORTSDB_REQUESTS_PER_MINUTE = 30  # Official API limit
+THESPORTSDB_REQUEST_WINDOW_SECONDS = 60  # 1-minute rolling window
 ```
 
 ### Customization
@@ -150,7 +151,7 @@ To adjust settings, modify `PPVEnrichmentQueue` initialization:
 queue = PPVEnrichmentQueue(
     app,
     batch_size=15,  # Process more channels per batch
-    requests_per_hour=25,  # More aggressive rate limit
+    requests_per_minute=28,  # Get closer to limit (max 30)
 )
 ```
 
@@ -181,11 +182,11 @@ curl http://localhost:8000/api/ppv-enrichment/status
     "total_failures": 8
   },
   "api_usage": {
-    "requests_today": 92,
-    "daily_limit": 500,
-    "requests_remaining": 408,
-    "reset_at": "2026-01-03T00:00:00+00:00",
-    "requests_per_hour_limit": 20
+    "requests_this_minute": 8,
+    "minute_limit": 30,
+    "requests_remaining": 22,
+    "minute_window_reset_at": "2026-01-02T20:16:30+00:00",
+    "requests_per_minute_limit": 25
   },
   "timing": {
     "last_run": "2026-01-02T20:15:00+00:00",
