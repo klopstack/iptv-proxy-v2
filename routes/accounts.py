@@ -523,7 +523,7 @@ def get_sync_status(account_id):
 @handle_errors()
 def recompute_visibility(account_id):
     """Manually trigger visibility recomputation for an account
-    
+
     Recalculates which channels are visible based on the account's enabled filters.
     Useful after changing filters to immediately see the effect without a full sync.
     """
