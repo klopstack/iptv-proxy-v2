@@ -271,6 +271,26 @@ class Channel(db.Model):  # type: ignore[name-defined]
     # Third-party provider IDs
     thesportsdb_id = db.Column(db.String(50), nullable=True, index=True)  # TheSportsDB event ID for PPV
 
+    # PPV enrichment tracking
+    ppv_enrichment_status = db.Column(
+        db.String(20),
+        default=None,
+        nullable=True,
+        index=True,
+    )  # queued, processing, matched, no_match, retry_pending, error
+    ppv_enrichment_queue_id = db.Column(
+        db.String(100), nullable=True, index=True
+    )  # Unique ID for this enrichment attempt
+    ppv_enrichment_attempts = db.Column(
+        db.Integer, default=0
+    )  # Number of enrichment attempts
+    ppv_enrichment_error = db.Column(
+        db.Text, nullable=True
+    )  # Error message from last attempt
+    ppv_enrichment_last_attempt = db.Column(
+        db.DateTime, nullable=True
+    )  # Timestamp of last enrichment attempt
+
     # Relationships
     category = db.relationship("Category", backref="channels")
 

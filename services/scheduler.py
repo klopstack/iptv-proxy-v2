@@ -33,6 +33,10 @@ SYNC_KEY_ACCOUNT_INTERVAL = "account_sync_interval_hours"
 SYNC_KEY_EPG_INTERVAL = "epg_sync_interval_hours"
 SYNC_KEY_FCC_INTERVAL = "fcc_sync_interval_hours"
 
+# PPV enrichment settings
+SYNC_KEY_LAST_PPV_ENRICHMENT = "last_ppv_enrichment"
+DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS = 1  # Run hourly to respect rate limits
+
 
 class SyncScheduler:
     """Scheduler for periodic channel sync with persistent timing and separate intervals"""
@@ -248,6 +252,14 @@ class SyncScheduler:
                 logger.info(f"FCC sync due (interval: {self._fcc_interval_hours} hours)")
                 self._sync_fcc_data()
                 self._set_last_sync_time(SYNC_KEY_LAST_FCC_SYNC)
+
+            # Check if PPV enrichment is needed (hourly, respects API rate limits)
+            if self._needs_sync(
+                SYNC_KEY_LAST_PPV_ENRICHMENT, DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS
+            ):
+                logger.info("PPV enrichment due (hourly schedule)")
+                self._enrich_ppv_events()
+                self._set_last_sync_time(SYNC_KEY_LAST_PPV_ENRICHMENT)
 
             # Run channel health scanning (runs continuously when idle)
             self._scan_channel_health()
@@ -479,3 +491,37 @@ class SyncScheduler:
         else:
             logger.warning(f"Unknown EPG source type: {source.source_type}")
             return None
+
+    def _enrich_ppv_events(self):
+        """
+        Enrich PPV events with TheSportsDB data.
+        
+        Runs hourly to respect free tier API rate limits (~500/day).
+        Processes queued PPV channels and links them to sports events.
+        """
+        try:
+            from services.ppv_enrichment_service import get_enrichment_queue
+
+            queue = get_enrichment_queue(self.app)
+
+            logger.info("Starting PPV event enrichment processing")
+
+            # Process queued channels (respects rate limits internally)
+            stats = queue.process_queue()
+
+            logger.info(
+                f"PPV enrichment batch: "
+                f"{stats['processed']} processed, "
+                f"{stats['matched']} matched, "
+                f"{stats['failed']} failed, "
+                f"{stats['api_requests_made']} API requests"
+            )
+
+            if stats.get("rate_limited"):
+                logger.info(
+                    "TheSportsDB API daily limit reached, "
+                    "resuming enrichment tomorrow"
+                )
+
+        except Exception as e:
+            logger.error(f"Error enriching PPV events: {e}", exc_info=True)

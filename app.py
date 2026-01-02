@@ -68,6 +68,7 @@ from routes.fcc_match_patterns import fcc_match_patterns_bp
 from routes.filters import filters_bp
 from routes.images import images_bp
 from routes.playlists import playlists_bp
+from routes.ppv_enrichment import ppv_enrichment_bp
 from routes.rulesets import rulesets_bp
 from routes.settings import settings_bp
 from routes.stations import stations_bp
@@ -88,6 +89,7 @@ app.register_blueprint(images_bp)
 app.register_blueprint(channel_links_bp)
 app.register_blueprint(stations_bp)
 app.register_blueprint(channel_health_bp)
+app.register_blueprint(ppv_enrichment_bp)
 app.register_blueprint(settings_bp)
 
 # Pass scheduler to API blueprint
