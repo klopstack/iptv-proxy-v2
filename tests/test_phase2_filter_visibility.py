@@ -247,6 +247,39 @@ def test_whitelist_with_blacklist(app, test_account, test_channels):
         assert fox.is_visible is False
 
 
+def test_channel_name_blacklist_trims_whitespace(app, test_account, test_channels):
+    """Channel name blacklists should ignore surrounding whitespace."""
+    with app.app_context():
+        heading_channel = Channel(
+            account_id=test_account.id,
+            stream_id="3001",
+            name="###HEADER###",
+            cleaned_name="Header",
+            category_id=test_channels[0].category_id,
+            is_active=True,
+            is_visible=True,
+        )
+        db.session.add(heading_channel)
+        db.session.commit()
+
+        filter_obj = Filter(
+            account_id=test_account.id,
+            name="Hide headings",
+            filter_type="channel_name",
+            filter_action="blacklist",
+            filter_value="## ",  # Trailing space should be trimmed for matching
+            enabled=True,
+        )
+        db.session.add(filter_obj)
+        db.session.commit()
+
+        stats = FilterService.compute_visibility_for_account(test_account.id)
+
+        refreshed = Channel.query.filter_by(stream_id="3001").first()
+        assert refreshed.is_visible is False
+        assert stats["channels_hidden"] == 1
+
+
 def test_channel_name_filter(app, test_account, test_channels):
     """Test channel name substring filtering"""
     with app.app_context():

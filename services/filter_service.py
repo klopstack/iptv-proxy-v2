@@ -229,26 +229,42 @@ class FilterService:
         Returns:
             True if the filter matches the channel
         """
+        # Normalize the filter value for consistent matching
+        filter_value = (f.filter_value or "").strip()
+
+        if not filter_value:
+            return False
+
         if f.filter_type == "category":
             # Use prefix/contains matching for categories (case-insensitive)
             # e.g., filter "US|" matches "US| SLING ᴿᴬᵂ ⁶⁰ᶠᵖˢ"
-            return f.filter_value.lower() in category_name.lower()
+            return filter_value.lower() in (category_name or "").lower()
 
         elif f.filter_type == "channel_name":
-            return f.filter_value.lower() in channel.name.lower()
+            # Match against both original and cleaned channel names
+            target_names = [channel.name or ""]
+            if channel.cleaned_name:
+                target_names.append(channel.cleaned_name)
+
+            value_lower = filter_value.lower()
+            return any(value_lower in name.lower() for name in target_names)
 
         elif f.filter_type == "regex":
             try:
-                pattern = re.compile(f.filter_value, re.IGNORECASE)
-                return bool(pattern.search(channel.name))
+                pattern = re.compile(filter_value, re.IGNORECASE)
+                targets = [channel.name or ""]
+                if channel.cleaned_name:
+                    targets.append(channel.cleaned_name)
+                return any(pattern.search(name) for name in targets)
             except re.error:
                 logger.warning(f"Invalid regex pattern in filter {f.id}: {f.filter_value}")
                 return False
 
         elif f.filter_type == "tag":
             # Tag filters: channel must have the matching tag
+            value_upper = filter_value.upper()
             for tag in tags:
-                if tag.upper() == f.filter_value.upper():
+                if tag.upper() == value_upper:
                     return True
             return False
 

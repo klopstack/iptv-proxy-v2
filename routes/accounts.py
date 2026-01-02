@@ -4,6 +4,7 @@ Account management routes
 import logging
 
 from flask import Blueprint, jsonify, request
+from sqlalchemy import or_
 
 from error_handling import handle_errors
 from models import Account, Category, Channel, ChannelTag, Credential, Filter, Tag, db
@@ -518,6 +519,43 @@ def get_sync_status(account_id):
     )
 
 
+@accounts_bp.route("/api/accounts/<int:account_id>/recompute-visibility", methods=["POST"])
+@handle_errors()
+def recompute_visibility(account_id):
+    """Manually trigger visibility recomputation for an account
+    
+    Recalculates which channels are visible based on the account's enabled filters.
+    Useful after changing filters to immediately see the effect without a full sync.
+    """
+    account = Account.query.get_or_404(account_id)
+
+    if not account.enabled:
+        return jsonify({"success": False, "error": "Account is disabled"}), 403
+
+    # Recompute visibility
+    from services.filter_service import FilterService
+
+    result = FilterService.compute_visibility_for_account(account_id)
+
+    if not result.get("success"):
+        return jsonify({"success": False, "error": result.get("error", "Unknown error")}), 500
+
+    logger.info(
+        f"Manual visibility recompute for account {account.name} ({account_id}): "
+        f"{result['channels_visible']} visible, {result['channels_hidden']} hidden"
+    )
+
+    return jsonify(
+        {
+            "success": True,
+            "account_id": account_id,
+            "account_name": account.name,
+            "channels_visible": result.get("channels_visible", 0),
+            "channels_hidden": result.get("channels_hidden", 0),
+        }
+    )
+
+
 # ============================================================================
 # API Routes - Account Tags
 # ============================================================================
@@ -971,8 +1009,10 @@ def preview_filter_matches(account_id):
         # Match category name
         match_query = match_query.join(Category).filter(Category.category_name.ilike(f"%{filter_value}%"))
     elif filter_type == "channel_name":
-        # Match channel name
-        match_query = match_query.filter(Channel.name.ilike(f"%{filter_value}%"))
+        # Match channel name (original or cleaned)
+        match_query = match_query.filter(
+            or_(Channel.name.ilike(f"%{filter_value}%"), Channel.cleaned_name.ilike(f"%{filter_value}%"))
+        )
     elif filter_type == "regex":
         # Regex match (SQLite REGEXP)
         import re
@@ -984,7 +1024,11 @@ def preview_filter_matches(account_id):
             # We'll need to fetch all and filter in Python for regex
             all_channels = total_query.all()
             pattern = re.compile(filter_value, re.IGNORECASE)
-            match_count = sum(1 for ch in all_channels if pattern.search(ch.name))
+            match_count = sum(
+                1
+                for ch in all_channels
+                if pattern.search(ch.name or "") or (ch.cleaned_name and pattern.search(ch.cleaned_name))
+            )
             return jsonify({"success": True, "match_count": match_count, "total_count": total_count})
         except re.error as e:
             return jsonify({"success": False, "error": f"Invalid regex: {str(e)}"}), 400

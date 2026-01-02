@@ -17,6 +17,11 @@
             <option value="">All Accounts</option>
         </select>
     </div>
+    <div class="col-md-4">
+        <button class="btn btn-info w-100" id="recompute-visibility-btn" style="margin-top: 31px;" disabled>
+            <i class="bi bi-arrow-clockwise"></i> Update Visibility
+        </button>
+    </div>
 </div>
 
 <div id="filters-list">
@@ -256,7 +261,50 @@ document.addEventListener('DOMContentLoaded', () => {
     // Account selector change
     const accountSelect = document.getElementById('accountSelect');
     if (accountSelect) {
-        accountSelect.addEventListener('change', () => loadFilters());
+        accountSelect.addEventListener('change', () => {
+            loadFilters();
+            // Enable/disable recompute button based on account selection
+            const recomputeBtn = document.getElementById('recompute-visibility-btn');
+            if (recomputeBtn) {
+                recomputeBtn.disabled = !accountSelect.value;
+            }
+        });
+    }
+
+    // Recompute visibility button
+    const recomputeBtn = document.getElementById('recompute-visibility-btn');
+    if (recomputeBtn) {
+        recomputeBtn.addEventListener('click', async () => {
+            const accountId = document.getElementById('accountSelect').value;
+            if (!accountId) {
+                alert('Please select an account');
+                return;
+            }
+
+            recomputeBtn.disabled = true;
+            const originalHTML = recomputeBtn.innerHTML;
+            recomputeBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Computing...';
+
+            try {
+                const response = await fetch(`/api/accounts/${accountId}/recompute-visibility`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    alert(`✓ Visibility updated: ${data.channels_visible} visible, ${data.channels_hidden} hidden`);
+                } else {
+                    const error = await response.json();
+                    alert('Error: ' + (error.error || 'Failed to recompute visibility'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                recomputeBtn.innerHTML = originalHTML;
+                recomputeBtn.disabled = !accountId;
+            }
+        });
     }
 
     // Filter type change
