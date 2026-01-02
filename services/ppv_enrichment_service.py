@@ -36,13 +36,13 @@ from services.thesportsdb_service import TheSportsDBService
 
 logger = logging.getLogger(__name__)
 
-# API rate limiting - TheSportsDB free tier
-THESPORTSDB_FREE_LIMIT_PER_DAY = 500  # Conservative estimate
-THESPORTSDB_REQUEST_WINDOW_HOURS = 24
+# API rate limiting - TheSportsDB API limit
+THESPORTSDB_REQUESTS_PER_MINUTE = 30  # Official rate limit
+THESPORTSDB_REQUEST_WINDOW_SECONDS = 60  # 1 minute window
 
 # Processing configuration
 DEFAULT_BATCH_SIZE = 10  # Channels to process per batch
-DEFAULT_REQUESTS_PER_HOUR = 20  # Conservative for free tier (500/day ÷ 24h ÷ margin)
+DEFAULT_REQUESTS_PER_MINUTE = 25  # Conservative limit (under 30/min)
 DEFAULT_RETRY_DELAY_MINUTES = 60  # Wait 1 hour before retry
 MAX_RETRY_ATTEMPTS = 3
 
@@ -52,8 +52,8 @@ METADATA_KEY_ENRICHMENT_PROCESSED = "ppv_enrichment_processed_count"
 METADATA_KEY_ENRICHMENT_FAILURES = "ppv_enrichment_failures"
 METADATA_KEY_ENRICHMENT_LAST_RUN = "ppv_enrichment_last_run"
 METADATA_KEY_ENRICHMENT_NEXT_RUN = "ppv_enrichment_next_run"
-METADATA_KEY_API_REQUESTS_TODAY = "thesportsdb_requests_today"
-METADATA_KEY_API_REQUESTS_RESET = "thesportsdb_requests_reset_at"
+METADATA_KEY_API_REQUESTS_MINUTE = "thesportsdb_requests_minute"
+METADATA_KEY_API_REQUESTS_MINUTE_RESET = "thesportsdb_requests_minute_reset_at"
 
 
 class PPVEnrichmentQueue:
@@ -71,7 +71,7 @@ class PPVEnrichmentQueue:
         self,
         app: Flask,
         batch_size: int = DEFAULT_BATCH_SIZE,
-        requests_per_hour: int = DEFAULT_REQUESTS_PER_HOUR,
+        requests_per_minute: int = DEFAULT_REQUESTS_PER_MINUTE,
     ):
         """
         Initialize enrichment queue.
@@ -79,12 +79,12 @@ class PPVEnrichmentQueue:
         Args:
             app: Flask app instance
             batch_size: Number of channels to process per batch
-            requests_per_hour: Rate limit for TheSportsDB API calls
+            requests_per_minute: Rate limit for TheSportsDB API calls (max 30/min)
         """
         self.app = app
         self.batch_size = batch_size
-        self.requests_per_hour = requests_per_hour
-        self.request_interval_seconds = 3600 / requests_per_hour
+        self.requests_per_minute = min(requests_per_minute, THESPORTSDB_REQUESTS_PER_MINUTE)
+        self.request_interval_seconds = 60 / self.requests_per_minute
         
         # Services
         self.thesportsdb = TheSportsDBService()
@@ -142,23 +142,23 @@ class PPVEnrichmentQueue:
         """
         Process queued channels for enrichment.
         
-        Respects rate limiting and stops if limit reached.
+        Respects rate limiting (30 requests/minute) and stops if limit would be exceeded.
         
         Args:
             max_requests: Maximum API requests to make in this run
-                         (None = use hourly limit)
+                         (None = use per-minute limit)
         
         Returns:
             Dict with processing statistics
         """
         if max_requests is None:
-            max_requests = self.requests_per_hour
+            max_requests = self.requests_per_minute
         
         with self.app.app_context():
             # Check rate limit
             if not self._check_api_rate_limit(max_requests):
                 logger.info(
-                    "TheSportsDB API rate limit reached for today, "
+                    "TheSportsDB API rate limit reached (30 requests/minute), "
                     "skipping enrichment run"
                 )
                 return {
@@ -283,11 +283,11 @@ class PPVEnrichmentQueue:
             last_run = SyncMetadata.get(METADATA_KEY_ENRICHMENT_LAST_RUN)
             next_run = SyncMetadata.get(METADATA_KEY_ENRICHMENT_NEXT_RUN)
             
-            api_requests_today = SyncMetadata.get(
-                METADATA_KEY_API_REQUESTS_TODAY, "0"
+            api_requests_minute = SyncMetadata.get(
+                METADATA_KEY_API_REQUESTS_MINUTE, "0"
             )
             api_reset_at = SyncMetadata.get(
-                METADATA_KEY_API_REQUESTS_RESET
+                METADATA_KEY_API_REQUESTS_MINUTE_RESET
             )
             
             return {
@@ -305,14 +305,13 @@ class PPVEnrichmentQueue:
                     "total_failures": int(total_failures),
                 },
                 "api_usage": {
-                    "requests_today": int(api_requests_today),
-                    "daily_limit": THESPORTSDB_FREE_LIMIT_PER_DAY,
+                    "requests_this_minute": int(api_requests_minute),
+                    "minute_limit": THESPORTSDB_REQUESTS_PER_MINUTE,
                     "requests_remaining": (
-                        THESPORTSDB_FREE_LIMIT_PER_DAY
-                        - int(api_requests_today)
+                        THESPORTSDB_REQUESTS_PER_MINUTE - int(api_requests_minute)
                     ),
-                    "reset_at": api_reset_at,
-                    "requests_per_hour_limit": self.requests_per_hour,
+                    "minute_window_reset_at": api_reset_at,
+                    "requests_per_minute_limit": self.requests_per_minute,
                 },
                 "timing": {
                     "last_run": last_run,
@@ -453,11 +452,11 @@ class PPVEnrichmentQueue:
         return event
 
     def _check_api_rate_limit(self, max_requests: int) -> bool:
-        """Check if API rate limit allows more requests."""
-        requests_today = int(
-            SyncMetadata.get(METADATA_KEY_API_REQUESTS_TODAY, "0")
+        """Check if API rate limit allows more requests (30 requests/minute)."""
+        requests_this_minute = int(
+            SyncMetadata.get(METADATA_KEY_API_REQUESTS_MINUTE, "0")
         )
-        reset_at_str = SyncMetadata.get(METADATA_KEY_API_REQUESTS_RESET)
+        reset_at_str = SyncMetadata.get(METADATA_KEY_API_REQUESTS_MINUTE_RESET)
         
         now = datetime.now(timezone.utc)
         
@@ -466,26 +465,26 @@ class PPVEnrichmentQueue:
             try:
                 reset_at = datetime.fromisoformat(reset_at_str)
                 if now >= reset_at:
-                    # Reset daily counter
-                    requests_today = 0
-                    reset_at = now + timedelta(days=1)
+                    # Reset per-minute counter
+                    requests_this_minute = 0
+                    reset_at = now + timedelta(seconds=THESPORTSDB_REQUEST_WINDOW_SECONDS)
                     SyncMetadata.set(
-                        METADATA_KEY_API_REQUESTS_RESET,
+                        METADATA_KEY_API_REQUESTS_MINUTE_RESET,
                         reset_at.isoformat(),
                     )
             except (ValueError, TypeError):
                 pass
         else:
-            # Initialize reset time
-            reset_at = now + timedelta(days=1)
+            # Initialize reset time (1 minute from now)
+            reset_at = now + timedelta(seconds=THESPORTSDB_REQUEST_WINDOW_SECONDS)
             SyncMetadata.set(
-                METADATA_KEY_API_REQUESTS_RESET, reset_at.isoformat()
+                METADATA_KEY_API_REQUESTS_MINUTE_RESET, reset_at.isoformat()
             )
         
-        # Check if we can make more requests
+        # Check if we can make more requests within per-minute limit
         if (
-            requests_today + max_requests
-            > THESPORTSDB_FREE_LIMIT_PER_DAY
+            requests_this_minute + max_requests
+            > THESPORTSDB_REQUESTS_PER_MINUTE
         ):
             return False
         
@@ -514,13 +513,13 @@ class PPVEnrichmentQueue:
         failures += stats["failed"]
         SyncMetadata.set(METADATA_KEY_ENRICHMENT_FAILURES, str(failures))
         
-        # Track API usage
-        requests_today = int(
-            SyncMetadata.get(METADATA_KEY_API_REQUESTS_TODAY, "0")
+        # Track API usage per-minute
+        requests_this_minute = int(
+            SyncMetadata.get(METADATA_KEY_API_REQUESTS_MINUTE, "0")
         )
-        requests_today += stats["api_requests_made"]
+        requests_this_minute += stats["api_requests_made"]
         SyncMetadata.set(
-            METADATA_KEY_API_REQUESTS_TODAY, str(requests_today)
+            METADATA_KEY_API_REQUESTS_MINUTE, str(requests_this_minute)
         )
         
         # Record last run time

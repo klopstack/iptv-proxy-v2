@@ -70,7 +70,7 @@ def process_enrichment_queue():
     
     Optional JSON body:
     {
-        "max_requests": 20  # Max API requests to make (respects limits)
+        "max_requests": 25  # Max API requests to make (max 30/minute)
     }
     
     Returns processing statistics.
@@ -218,11 +218,11 @@ def get_enrichment_settings():
         return jsonify(
             {
                 "batch_size": queue.batch_size,
-                "requests_per_hour": queue.requests_per_hour,
+                "requests_per_minute": queue.requests_per_minute,
                 "request_interval_seconds": queue.request_interval_seconds,
                 "max_retry_attempts": 3,
-                "thesportsdb_daily_limit": 500,
-                "thesportsdb_free_limit": True,
+                "thesportsdb_rate_limit": 30,
+                "thesportsdb_rate_limit_window": "1 minute",
             }
         ), 200
 
