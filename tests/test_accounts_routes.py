@@ -630,3 +630,65 @@ class TestChannelDetails:
         assert data["stream_id"] == "ch0"
         assert "name" in data
         assert "tags" in data
+
+
+# ============================================================================
+# Visibility Recomputation Tests
+# ============================================================================
+
+
+class TestRecomputeVisibility:
+    """Tests for manual visibility recomputation endpoint"""
+
+    def test_recompute_visibility_account_not_found(self, app, client):
+        """Test recomputation for non-existent account"""
+        response = client.post("/api/accounts/999/recompute-visibility")
+        assert response.status_code == 404
+
+    def test_recompute_visibility_success_no_channels(self, app, client, test_account):
+        """Test recomputation with account that has no channels"""
+        response = client.post(f"/api/accounts/{test_account}/recompute-visibility")
+        assert response.status_code == 200
+        data = response.json
+        assert data["success"] is True
+        assert data["account_id"] == test_account
+        assert "account_name" in data
+        assert "channels_visible" in data
+        assert "channels_hidden" in data
+        assert data["channels_visible"] == 0
+        assert data["channels_hidden"] == 0
+
+    def test_recompute_visibility_success_with_channels(self, app, client, test_account_with_channels):
+        """Test recomputation with channels"""
+        response = client.post(f"/api/accounts/{test_account_with_channels}/recompute-visibility")
+        assert response.status_code == 200
+        data = response.json
+        assert data["success"] is True
+        assert data["account_id"] == test_account_with_channels
+        assert data["account_name"] == "Test Account"
+        assert data["channels_visible"] + data["channels_hidden"] == 5
+
+    def test_recompute_visibility_with_filters(self, app, client, test_account_with_channels):
+        """Test recomputation respects existing filters"""
+        from models import Filter
+
+        with app.app_context():
+            # Create a filter that hides all channels with "1" in the name
+            filter_obj = Filter(
+                account_id=test_account_with_channels,
+                name="Hide channels with 1",
+                filter_type="channel_name",
+                filter_value="1",
+                filter_action="blacklist",
+                enabled=True,
+            )
+            db.session.add(filter_obj)
+            db.session.commit()
+
+        response = client.post(f"/api/accounts/{test_account_with_channels}/recompute-visibility")
+        assert response.status_code == 200
+        data = response.json
+        assert data["success"] is True
+        # Should have 4 visible (0,2,3,4) and 1 hidden (1)
+        assert data["channels_visible"] == 4
+        assert data["channels_hidden"] == 1
