@@ -2020,6 +2020,287 @@ class EpgService:
         return epg_by_callsign, epg_by_dma
 
     @staticmethod
+    def _prepare_channels_and_epg(
+        account_id: int, source_id: Optional[int] = None, category_id: Optional[int] = None
+    ) -> Tuple[List[Channel], List[EpgChannel], str]:
+        """
+        Load channels and EPG data for matching.
+
+        Args:
+            account_id: Account ID to load channels for
+            source_id: Optional EPG source filter
+            category_id: Optional category filter
+
+        Returns:
+            Tuple of (channels, epg_channels, filter_desc)
+        """
+        # Get channels for this account, optionally filtered by category
+        query = Channel.query.filter_by(account_id=account_id, is_active=True)
+        if category_id:
+            query = query.filter_by(category_id=category_id)
+        channels = query.all()
+
+        filter_desc = ""
+        if category_id:
+            filter_desc = f" in category {category_id}"
+        logger.info(
+            f"EPG matching (FCC-enhanced): Found {len(channels)} active channels{filter_desc} "
+            f"for account {account_id}"
+        )
+
+        # Get all EPG channels
+        epg_query = EpgChannel.query
+        if source_id:
+            epg_query = epg_query.filter_by(source_id=source_id)
+        epg_channels = epg_query.all()
+        logger.info(
+            f"EPG matching: Found {len(epg_channels)} EPG channels" f"{f' for source {source_id}' if source_id else ''}"
+        )
+
+        return channels, epg_channels, filter_desc
+
+    @staticmethod
+    def _build_epg_lookup_indices(epg_channels: List[EpgChannel]) -> Tuple[Dict, Dict, Dict, Dict]:
+        """
+        Build lookup indices for EPG channels.
+
+        Args:
+            epg_channels: List of EPG channels to index
+
+        Returns:
+            Tuple of (epg_by_id, epg_by_name, epg_by_callsign, epg_by_dma)
+        """
+        # Build basic lookup indices
+        epg_by_id = {ec.channel_id.lower(): ec for ec in epg_channels}
+        epg_by_name: Dict[str, EpgChannel] = {}
+        for ec in epg_channels:
+            # Index by all display names
+            names = [ec.display_name.lower()] if ec.display_name else []
+            if ec.display_names_json:
+                try:
+                    names.extend([n.lower() for n in json.loads(ec.display_names_json)])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            for name in names:
+                normalized = EpgService._normalize_name(name)
+                if normalized:
+                    epg_by_name[normalized] = ec
+
+        # Build FCC-specific indices
+        epg_by_callsign, epg_by_dma = EpgService._build_fcc_epg_indices(epg_channels)
+        logger.debug(f"EPG matching: Built FCC callsign index with {len(epg_by_callsign)} entries")
+
+        return epg_by_id, epg_by_name, epg_by_callsign, epg_by_dma
+
+    @staticmethod
+    def _load_existing_mappings(channels: List[Channel]) -> Dict[int, ChannelEpgMapping]:
+        """
+        Load existing channel-to-EPG mappings to avoid duplicates.
+
+        Args:
+            channels: List of channels to load mappings for
+
+        Returns:
+            Dict mapping channel_id to ChannelEpgMapping
+        """
+        BATCH_SIZE = 500
+        existing_mappings: Dict[int, ChannelEpgMapping] = {}
+        channel_ids = [c.id for c in channels]
+        for i in range(0, len(channel_ids), BATCH_SIZE):
+            batch = channel_ids[i : i + BATCH_SIZE]
+            for m in ChannelEpgMapping.query.filter(ChannelEpgMapping.channel_id.in_(batch)).all():
+                existing_mappings[m.channel_id] = m
+
+        return existing_mappings
+
+    @staticmethod
+    def _load_country_tags_for_channels(account_id: int, channels: List[Channel]) -> Dict[str, Set[str]]:
+        """
+        Pre-load country tags for all channels.
+
+        Args:
+            account_id: Account ID
+            channels: List of channels
+
+        Returns:
+            Dict mapping stream_id to set of country tags (e.g., {'US'})
+        """
+        BATCH_SIZE = 500
+        country_tags_by_stream: Dict[str, Set[str]] = {}
+        stream_ids = [c.stream_id for c in channels]
+
+        # Get country suffix mappings for country tag detection
+        country_suffix_map = EpgMatchRulesService.get_country_suffix_mappings()
+
+        for i in range(0, len(stream_ids), BATCH_SIZE):
+            batch = stream_ids[i : i + BATCH_SIZE]
+            tag_rows = (
+                db.session.query(ChannelTag.stream_id, Tag.name)
+                .join(Tag, Tag.id == ChannelTag.tag_id)
+                .filter(ChannelTag.account_id == account_id, ChannelTag.stream_id.in_(batch))
+                .all()
+            )
+            for stream_id, tag_name in tag_rows:
+                tag_upper = tag_name.upper()
+                if tag_upper in country_suffix_map:
+                    if stream_id not in country_tags_by_stream:
+                        country_tags_by_stream[stream_id] = set()
+                    country_tags_by_stream[stream_id].add(tag_upper)
+
+        return country_tags_by_stream
+
+    @staticmethod
+    def _load_fcc_facilities(
+        channels: List[Channel], country_tags_by_stream: Dict[str, Set[str]]
+    ) -> Dict[int, Optional[FccFacility]]:
+        """
+        Pre-load FCC facilities for US channels.
+
+        Args:
+            channels: List of channels
+            country_tags_by_stream: Dict mapping stream_id to country tags
+
+        Returns:
+            Dict mapping channel_id to FccFacility (or None if not US)
+        """
+        fcc_facilities_by_channel: Dict[int, Optional[FccFacility]] = {}
+        us_channel_ids = {c.id for c in channels if country_tags_by_stream.get(c.stream_id, set()) & {"US"}}
+
+        for channel in channels:
+            if channel.id in us_channel_ids:
+                fcc_facilities_by_channel[channel.id] = EpgService._get_fcc_facility_for_channel(channel)
+            else:
+                fcc_facilities_by_channel[channel.id] = None
+
+        logger.debug(
+            f"EPG matching: Pre-loaded FCC data for {sum(1 for v in fcc_facilities_by_channel.values() if v)} channels"
+        )
+
+        return fcc_facilities_by_channel
+
+    @staticmethod
+    def _match_channel_strategies(
+        channel: Channel,
+        existing_mappings: Dict[int, ChannelEpgMapping],
+        epg_by_id: Dict,
+        epg_by_name: Dict,
+        epg_by_callsign: Dict,
+        epg_channels: List[EpgChannel],
+        country_tags_by_stream: Dict[str, Set[str]],
+        fcc_facilities_by_channel: Dict[int, Optional[FccFacility]],
+        use_network_fallback: bool = True,
+    ) -> Tuple[Optional[EpgChannel], Optional[str], float]:
+        """
+        Try all matching strategies for a single channel.
+
+        Returns:
+            Tuple of (matched_epg, match_type, confidence) or (None, None, 0.0)
+        """
+        matched_epg = None
+        match_type = None
+        confidence = 0.0
+
+        channel_country_tags = country_tags_by_stream.get(channel.stream_id, set())
+        facility = fcc_facilities_by_channel.get(channel.id)
+
+        # Strategy 1: Exact match on epg_channel_id from provider
+        if channel.epg_channel_id and len(channel.epg_channel_id) > 3:
+            epg_id_lower = channel.epg_channel_id.lower()
+            if epg_id_lower in epg_by_id:
+                matched_epg = epg_by_id[epg_id_lower]
+                match_type = "provider"
+                confidence = 1.0
+                return matched_epg, match_type, confidence
+
+        # Strategy 2: FCC callsign match (for US channels only)
+        if not matched_epg and "US" in channel_country_tags and facility:
+            fcc_match = EpgService._match_by_fcc_callsign(channel, epg_by_callsign, facility)
+            if fcc_match:
+                matched_epg, confidence, match_type = fcc_match
+                logger.debug(
+                    f"FCC callsign match: '{channel.name}' -> '{matched_epg.display_name}' "
+                    f"via callsign {facility.callsign}"
+                )
+                return matched_epg, match_type, confidence
+
+        # Strategy 3: Exact match on cleaned name
+        if not matched_epg and channel.cleaned_name:
+            normalized = EpgService._normalize_name(channel.cleaned_name)
+            if normalized and normalized in epg_by_name:
+                matched_epg = epg_by_name[normalized]
+                match_type = "auto_exact"
+                confidence = 0.95
+                return matched_epg, match_type, confidence
+
+        # Strategy 4: Fuzzy match
+        if not matched_epg:
+            best_match, best_score = EpgService._fuzzy_match(
+                channel.cleaned_name or channel.name,
+                epg_channels,
+                country_tags=channel_country_tags if channel_country_tags else None,
+            )
+            if best_match and best_score >= 0.75:
+                matched_epg = best_match
+                match_type = "auto_fuzzy"
+                confidence = best_score
+                return matched_epg, match_type, confidence
+
+        # Strategy 5: FCC network fallback (optional, lower priority)
+        if not matched_epg and use_network_fallback and "US" in channel_country_tags and facility:
+            network_match = EpgService._match_by_fcc_network(channel, epg_by_name, facility)
+            if network_match:
+                matched_epg, confidence, match_type = network_match
+                logger.debug(
+                    f"FCC network fallback: '{channel.name}' -> '{matched_epg.display_name}' "
+                    f"via network {facility.network_affiliation}"
+                )
+                return matched_epg, match_type, confidence
+
+        return None, None, 0.0
+
+    @staticmethod
+    def _save_channel_mapping(
+        channel: Channel,
+        matched_epg: Optional[EpgChannel],
+        match_type: Optional[str],
+        confidence: float,
+        existing_mappings: Dict[int, ChannelEpgMapping],
+    ) -> bool:
+        """
+        Save channel-to-EPG mapping to database.
+
+        Args:
+            channel: Channel to map
+            matched_epg: Matched EPG channel (or None if no match)
+            match_type: Type of match (or None)
+            confidence: Match confidence score
+            existing_mappings: Dict of existing mappings
+
+        Returns:
+            True if mapping was saved, False otherwise
+        """
+        if not matched_epg or not match_type:
+            return False
+
+        if channel.id in existing_mappings:
+            mapping = existing_mappings[channel.id]
+            if not mapping.is_override:
+                mapping.epg_channel_id = matched_epg.id
+                mapping.mapping_type = match_type
+                mapping.confidence = confidence
+                mapping.updated_at = datetime.utcnow()
+        else:
+            mapping = ChannelEpgMapping(
+                channel_id=channel.id,
+                epg_channel_id=matched_epg.id,
+                mapping_type=match_type,
+                confidence=confidence,
+            )
+            db.session.add(mapping)
+
+        return True
+
+    @staticmethod
     def match_channels_to_epg_fcc_enhanced(
         account_id: int,
         source_id: Optional[int] = None,
@@ -2065,93 +2346,17 @@ class EpgService:
             "unmatched": 0,
         }
 
-        # Get channels for this account, optionally filtered by category
-        query = Channel.query.filter_by(account_id=account_id, is_active=True)
-        if category_id:
-            query = query.filter_by(category_id=category_id)
-        channels = query.all()
-
+        # Load data
+        channels, epg_channels, filter_desc = EpgService._prepare_channels_and_epg(account_id, source_id, category_id)
         stats["total_channels"] = len(channels)
-        filter_desc = ""
-        if category_id:
-            filter_desc = f" in category {category_id}"
-        logger.info(
-            f"EPG matching (FCC-enhanced): Found {len(channels)} active channels{filter_desc} "
-            f"for account {account_id}"
-        )
 
-        # Get all EPG channels
-        epg_query = EpgChannel.query
-        if source_id:
-            epg_query = epg_query.filter_by(source_id=source_id)
-        epg_channels = epg_query.all()
-        logger.info(
-            f"EPG matching: Found {len(epg_channels)} EPG channels" f"{f' for source {source_id}' if source_id else ''}"
-        )
+        # Build indices
+        epg_by_id, epg_by_name, epg_by_callsign, epg_by_dma = EpgService._build_epg_lookup_indices(epg_channels)
 
-        # Build lookup indices
-        epg_by_id = {ec.channel_id.lower(): ec for ec in epg_channels}
-        epg_by_name: Dict[str, EpgChannel] = {}
-        for ec in epg_channels:
-            # Index by all display names
-            names = [ec.display_name.lower()] if ec.display_name else []
-            if ec.display_names_json:
-                try:
-                    names.extend([n.lower() for n in json.loads(ec.display_names_json)])
-                except (json.JSONDecodeError, TypeError):
-                    pass
-            for name in names:
-                normalized = EpgService._normalize_name(name)
-                if normalized:
-                    epg_by_name[normalized] = ec
-
-        # Build FCC-specific indices
-        epg_by_callsign, epg_by_dma = EpgService._build_fcc_epg_indices(epg_channels)
-        logger.debug(f"EPG matching: Built FCC callsign index with {len(epg_by_callsign)} entries")
-
-        # Get existing mappings to avoid duplicates
-        BATCH_SIZE = 500
-        existing_mappings: Dict[int, ChannelEpgMapping] = {}
-        channel_ids = [c.id for c in channels]
-        for i in range(0, len(channel_ids), BATCH_SIZE):
-            batch = channel_ids[i : i + BATCH_SIZE]
-            for m in ChannelEpgMapping.query.filter(ChannelEpgMapping.channel_id.in_(batch)).all():
-                existing_mappings[m.channel_id] = m
-
-        # Pre-load country tags for all channels in batches
-        stream_ids = [c.stream_id for c in channels]
-        country_tags_by_stream: Dict[str, Set[str]] = {}
-
-        # Get country suffix mappings for country tag detection
-        country_suffix_map = EpgMatchRulesService.get_country_suffix_mappings()
-
-        for i in range(0, len(stream_ids), BATCH_SIZE):
-            batch = stream_ids[i : i + BATCH_SIZE]
-            tag_rows = (
-                db.session.query(ChannelTag.stream_id, Tag.name)
-                .join(Tag, Tag.id == ChannelTag.tag_id)
-                .filter(ChannelTag.account_id == account_id, ChannelTag.stream_id.in_(batch))
-                .all()
-            )
-            for stream_id, tag_name in tag_rows:
-                tag_upper = tag_name.upper()
-                if tag_upper in country_suffix_map:
-                    if stream_id not in country_tags_by_stream:
-                        country_tags_by_stream[stream_id] = set()
-                    country_tags_by_stream[stream_id].add(tag_upper)
-
-        # Pre-load FCC facilities for US channels (batch lookup for efficiency)
-        fcc_facilities_by_channel: Dict[int, Optional[FccFacility]] = {}
-        us_channel_ids = [c.id for c in channels if country_tags_by_stream.get(c.stream_id, set()) & {"US"}]
-        for channel in channels:
-            if channel.id in us_channel_ids:
-                fcc_facilities_by_channel[channel.id] = EpgService._get_fcc_facility_for_channel(channel)
-            else:
-                fcc_facilities_by_channel[channel.id] = None
-
-        logger.debug(
-            f"EPG matching: Pre-loaded FCC data for {sum(1 for v in fcc_facilities_by_channel.values() if v)} channels"
-        )
+        # Load pre-requisite data
+        existing_mappings = EpgService._load_existing_mappings(channels)
+        country_tags_by_stream = EpgService._load_country_tags_for_channels(account_id, channels)
+        fcc_facilities_by_channel = EpgService._load_fcc_facilities(channels, country_tags_by_stream)
 
         channels_processed = 0
 
@@ -2166,82 +2371,33 @@ class EpgService:
                     stats["skipped_existing"] += 1
                     continue
 
-            matched_epg = None
-            match_type = None
-            confidence = 0.0
+            # Try all matching strategies
+            matched_epg, match_type, confidence = EpgService._match_channel_strategies(
+                channel,
+                existing_mappings,
+                epg_by_id,
+                epg_by_name,
+                epg_by_callsign,
+                epg_channels,
+                country_tags_by_stream,
+                fcc_facilities_by_channel,
+                use_network_fallback,
+            )
 
-            channel_country_tags = country_tags_by_stream.get(channel.stream_id, set())
-            facility = fcc_facilities_by_channel.get(channel.id)
-
-            # Strategy 1: Exact match on epg_channel_id from provider
-            if channel.epg_channel_id and len(channel.epg_channel_id) > 3:
-                epg_id_lower = channel.epg_channel_id.lower()
-                if epg_id_lower in epg_by_id:
-                    matched_epg = epg_by_id[epg_id_lower]
-                    match_type = "provider"
-                    confidence = 1.0
-                    stats["matched_exact_id"] += 1
-
-            # Strategy 2: FCC callsign match (for US channels only)
-            if not matched_epg and "US" in channel_country_tags and facility:
-                fcc_match = EpgService._match_by_fcc_callsign(channel, epg_by_callsign, facility)
-                if fcc_match:
-                    matched_epg, confidence, match_type = fcc_match
-                    stats["matched_fcc_callsign"] += 1
-                    logger.debug(
-                        f"FCC callsign match: '{channel.name}' -> '{matched_epg.display_name}' "
-                        f"via callsign {facility.callsign}"
-                    )
-
-            # Strategy 3: Exact match on cleaned name
-            if not matched_epg and channel.cleaned_name:
-                normalized = EpgService._normalize_name(channel.cleaned_name)
-                if normalized and normalized in epg_by_name:
-                    matched_epg = epg_by_name[normalized]
-                    match_type = "auto_exact"
-                    confidence = 0.95
-                    stats["matched_exact_name"] += 1
-
-            # Strategy 4: Fuzzy match
-            if not matched_epg:
-                best_match, best_score = EpgService._fuzzy_match(
-                    channel.cleaned_name or channel.name,
-                    epg_channels,
-                    country_tags=channel_country_tags if channel_country_tags else None,
-                )
-                if best_match and best_score >= 0.75:
-                    matched_epg = best_match
-                    match_type = "auto_fuzzy"
-                    confidence = best_score
-                    stats["matched_fuzzy"] += 1
-
-            # Strategy 5: FCC network fallback (optional, lower priority)
-            if not matched_epg and use_network_fallback and "US" in channel_country_tags and facility:
-                network_match = EpgService._match_by_fcc_network(channel, epg_by_name, facility)
-                if network_match:
-                    matched_epg, confidence, match_type = network_match
-                    stats["matched_network_fallback"] += 1
-                    logger.debug(
-                        f"FCC network fallback: '{channel.name}' -> '{matched_epg.display_name}' "
-                        f"via network {facility.network_affiliation}"
-                    )
-
+            # Save mapping
             if matched_epg and match_type:
-                if channel.id in existing_mappings:
-                    mapping = existing_mappings[channel.id]
-                    if not mapping.is_override:
-                        mapping.epg_channel_id = matched_epg.id
-                        mapping.mapping_type = match_type
-                        mapping.confidence = confidence
-                        mapping.updated_at = datetime.utcnow()
-                else:
-                    mapping = ChannelEpgMapping(
-                        channel_id=channel.id,
-                        epg_channel_id=matched_epg.id,
-                        mapping_type=match_type,
-                        confidence=confidence,
-                    )
-                    db.session.add(mapping)
+                EpgService._save_channel_mapping(channel, matched_epg, match_type, confidence, existing_mappings)
+                # Update stats based on match type
+                if match_type == "provider":
+                    stats["matched_exact_id"] += 1
+                elif match_type == "fcc_callsign":
+                    stats["matched_fcc_callsign"] += 1
+                elif match_type == "auto_exact":
+                    stats["matched_exact_name"] += 1
+                elif match_type == "auto_fuzzy":
+                    stats["matched_fuzzy"] += 1
+                elif match_type == "fcc_network":
+                    stats["matched_network_fallback"] += 1
             else:
                 stats["unmatched"] += 1
 

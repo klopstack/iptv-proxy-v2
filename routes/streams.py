@@ -12,7 +12,6 @@ This module provides endpoints that:
 import logging
 from typing import Any, Dict, Generator, Tuple, Union
 
-import requests
 from flask import Blueprint, Response, abort, render_template, request, stream_with_context
 from werkzeug.exceptions import HTTPException
 
@@ -111,6 +110,8 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
     Returns:
         Flask Response object with streamed content
     """
+    from services.stream_proxy_service import StreamProxyService
+
     client_ip = request.remote_addr
     logger.info(f"Stream request: account={account_id}, stream={stream_id}, format={format}, client={client_ip}")
 
@@ -163,36 +164,23 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
                     f"({subscriber.bytes_sent} bytes sent)"
                 )
 
+        response_headers = StreamProxyService.build_stream_response_headers(
+            session_token=existing_stream.session_token,
+            subscriber_id=subscriber.subscriber_id,
+            is_shared=True,
+        )
+
         return Response(
             stream_with_context(generate_shared()),
             content_type=existing_stream.content_type,
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0",
-                "X-Stream-Shared": "true",
-                "X-Subscriber-Id": subscriber.subscriber_id[:8],
-            },
+            headers=response_headers,
         )
 
     # No existing stream - need to acquire a credential and create new stream
     credential = ConnectionManager.get_available_credential(account_id)
     if not credential:
-        # No credentials available - try to release idle streams to free up a credential
-        idle_count = stream_service.get_idle_stream_count(account_id)
-        if idle_count > 0:
-            logger.info(
-                f"No credentials available for account {account_id}, "
-                f"attempting to release {idle_count} idle stream(s)"
-            )
-            released = stream_service.release_idle_streams_for_account(account_id)
-            if released > 0:
-                # Give a moment for the connection to be released
-                import time
-
-                time.sleep(0.1)
-                # Try again to get a credential
-                credential = ConnectionManager.get_available_credential(account_id)
+        # Use service to handle credential shortage
+        credential = StreamProxyService.handle_credential_shortage(account_id, stream_service)
 
     if not credential:
         logger.warning(f"Stream request failed: no available credentials for account {account_id}")
@@ -282,17 +270,16 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
             else:
                 abort(502, description=f"Upstream error: {error_msg}")
 
+        response_headers = StreamProxyService.build_stream_response_headers(
+            session_token=session_token,
+            subscriber_id=subscriber.subscriber_id,
+            is_shared=False,
+        )
+
         return Response(
             stream_with_context(generate_new()),
             content_type=shared_stream.content_type,
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0",
-                "X-Session-Token": session_token,
-                "X-Stream-Shared": "false",
-                "X-Subscriber-Id": subscriber.subscriber_id[:8],
-            },
+            headers=response_headers,
         )
 
     except HTTPException:
@@ -374,97 +361,77 @@ def test_stream(account_id: int, stream_id: str) -> Union[Dict[str, Any], Tuple[
 
     Useful for diagnosing stream issues.
     """
+    from services.stream_proxy_service import StreamConnectivityTester
+
     checks: Dict[str, Any] = {}
-    result: Dict[str, Any] = {
-        "account_id": account_id,
-        "stream_id": stream_id,
-        "success": False,
-        "checks": checks,
-        "error": None,
-    }
+    result: Dict[str, Any] = StreamConnectivityTester.build_test_result(account_id, stream_id)
+    result["checks"] = checks
 
-    # Check 1: Account exists
+    # Check 1: Account exists and is enabled
     account = db.session.get(Account, account_id)
-    if not account:
-        checks["account_exists"] = False
-        result["error"] = f"Account {account_id} not found"
-        return result, 404
+    is_valid, error, status = StreamConnectivityTester.check_account_prerequisites(account)
+    if not is_valid:
+        result["error"] = error
+        checks["account_exists"] = account is not None
+        checks["account_enabled"] = account.enabled if account else False
+        return result, status
 
+    assert account is not None  # Type guard after validation
     checks["account_exists"] = True
     checks["account_enabled"] = account.enabled
-
-    if not account.enabled:
-        result["error"] = "Account is disabled"
-        return result, 403
-
     checks["server"] = account.server
 
     # Check 2: Credentials available
     credential = ConnectionManager.get_available_credential(account_id)
-    if not credential:
+    is_valid, error, status = StreamConnectivityTester.check_credential_prerequisites(credential)
+    if not is_valid:
+        result["error"] = error
         checks["credential_available"] = False
-        result["error"] = "No available credentials"
-        return result, 503
+        return result, status
 
+    assert credential is not None  # Type guard after validation
     checks["credential_available"] = True
     credential_id = getattr(credential, "id", None)
     checks["credential_id"] = credential_id
 
     # Check 3: Test upstream connectivity
-    upstream_url = f"http://{account.server}/live/{credential.username}/{credential.password}/{stream_id}.ts"
+    upstream_url = f"http://{account.server}/live/{credential.username}/" f"{credential.password}/{stream_id}.ts"
     safe_url = f"http://{account.server}/live/{credential.username}/***/{stream_id}.ts"
     checks["upstream_url"] = safe_url
 
     user_agent = account.user_agent or "okhttp/3.14.9"
 
-    try:
-        # Do a HEAD request first to check connectivity without streaming
-        logger.info(f"Testing stream connectivity: {safe_url}")
-        head_response = requests.head(
-            upstream_url,
-            headers={"User-Agent": user_agent},
-            timeout=(10, 10),
-            allow_redirects=True,
+    logger.info(f"Testing stream connectivity: {safe_url}")
+
+    # Test with HEAD request first
+    head_status, head_headers, head_error = StreamConnectivityTester.test_upstream_head(upstream_url, user_agent)
+
+    checks["head_status"] = head_status
+    if head_headers:
+        checks["head_headers"] = head_headers
+
+    # If HEAD failed, try GET
+    get_status = None
+    get_error = None
+    if head_status == 405:
+        logger.info("HEAD not supported, trying GET...")
+        get_status, get_headers, data_size, get_error = StreamConnectivityTester.test_upstream_get(
+            upstream_url, user_agent
         )
-        checks["head_status"] = head_response.status_code
-        checks["head_headers"] = dict(head_response.headers)
+        checks["get_status"] = get_status
+        if get_headers:
+            checks["get_headers"] = get_headers
+        checks["received_data"] = data_size > 0
+        checks["data_size"] = data_size
 
-        if head_response.status_code == 405:
-            # HEAD not allowed, try GET with stream=True and close immediately
-            logger.info("HEAD not supported, trying GET...")
-            get_response = requests.get(
-                upstream_url,
-                headers={"User-Agent": user_agent},
-                timeout=(10, 10),
-                stream=True,
-            )
-            checks["get_status"] = get_response.status_code
-            checks["get_headers"] = dict(get_response.headers)
+    # Determine success
+    success, error = StreamConnectivityTester.determine_test_success_and_error(
+        head_status, head_error, get_status, get_error
+    )
 
-            # Read just a small chunk to verify streaming works
-            chunk = next(get_response.iter_content(chunk_size=1024), None)
-            checks["received_data"] = chunk is not None
-            checks["data_size"] = len(chunk) if chunk else 0
-            get_response.close()
-
-            if get_response.status_code == 200:
-                result["success"] = True
-            else:
-                result["error"] = f"Upstream returned HTTP {get_response.status_code}"
-        elif head_response.status_code == 200:
-            result["success"] = True
-        else:
-            result["error"] = f"Upstream returned HTTP {head_response.status_code}"
-
-    except requests.exceptions.Timeout as e:
-        checks["timeout"] = True
-        result["error"] = f"Connection timed out: {e}"
-    except requests.exceptions.ConnectionError as e:
-        checks["connection_error"] = True
-        result["error"] = f"Connection failed: {e}"
-    except Exception as e:
-        checks["exception"] = str(type(e).__name__)
-        result["error"] = str(e)
+    result["success"] = success
+    if error:
+        result["error"] = error
 
     return result
 

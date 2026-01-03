@@ -11,7 +11,7 @@ from flask import Blueprint, jsonify, request
 from error_handling import handle_errors
 from models import Account, ChannelEpgMapping, EpgChannel, EpgSource, SdLineup, SdStation, db
 from services.epg_match_rules_service import EpgMatchRulesService
-from services.epg_service import EpgService, make_sd_xmltv_id, normalize_xmltv_url
+from services.epg_service import EpgService, make_sd_xmltv_id
 from services.iptv_service import IPTVService
 from services.schedules_direct import SchedulesDirectClient, SchedulesDirectError, validate_credentials
 
@@ -348,162 +348,49 @@ def get_source_mappings(source_id):
 @epg_bp.route("/api/epg/sources/<int:source_id>/sync", methods=["POST"])
 @handle_errors(return_json=True, default_message="Error syncing EPG source")
 def sync_epg_source(source_id):
-    """Sync EPG data from a source"""
+    """Sync EPG data from a source using EpgSyncService"""
     from services.epg_service import update_ppv_channel_visibility
+    from services.epg_sync_service import EpgSyncService
 
     source = EpgSource.query.get_or_404(source_id)
 
-    if source.source_type == "provider":
-        if not source.account:
-            return jsonify({"error": "Provider source has no associated account"}), 400
+    # Use the decomposed service to handle all source types
+    success, message, stats = EpgSyncService.sync_source(source)
 
-        # Get XMLTV from provider
-        account = source.account
-        cred = account.get_primary_credential()
-        if cred:
-            service = IPTVService(account.server, cred.username, cred.password, account.user_agent or "okhttp/3.14.9")
-        else:
-            service = IPTVService(
-                account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9"
-            )
+    # Update source sync status
+    EpgSyncService.update_source_sync_status(source_id, success, message, stats)
 
-        xml_content = service.get_xmltv()
-        stats = EpgService.sync_epg_source(source, xml_content)
-
-        # Update PPV channel visibility for this account
+    # Update PPV visibility for provider accounts
+    if success and source.source_type == "provider":
         try:
-            ppv_stats = update_ppv_channel_visibility(account.id)
-            logger.info(f"PPV visibility update after EPG sync: {ppv_stats}")
+            account = source.account
+            if account:
+                ppv_stats = update_ppv_channel_visibility(account.id)
+                logger.info(f"PPV visibility update after EPG sync: {ppv_stats}")
         except Exception as e:
             logger.warning(f"Failed to update PPV visibility after EPG sync: {e}")
 
-        return jsonify(
-            {
-                "success": True,
-                "message": f"Synced {stats['channels_added'] + stats['channels_updated']} channels",
-                "stats": stats,
-            }
-        )
-
-    elif source.source_type == "xmltv_url":
-        if not source.url:
-            return jsonify({"error": "No URL configured for this source"}), 400
-
-        import requests
-
-        # Normalize URL (e.g., convert GitHub blob URLs to raw URLs)
-        url = normalize_xmltv_url(source.url)
-        if url != source.url:
-            logger.info(f"Normalized XMLTV URL: {source.url} -> {url}")
-
-        # Use 10 minute timeout for large XMLTV files from rate-limited servers
-        response = requests.get(url, timeout=600)
-        response.raise_for_status()
-
-        stats = EpgService.sync_epg_source(source, response.content)
-
-        return jsonify(
-            {
-                "success": True,
-                "message": f"Synced {stats['channels_added'] + stats['channels_updated']} channels",
-                "stats": stats,
-            }
-        )
-
-    elif source.source_type == "schedules_direct":
-        # Validate SD credentials are configured
-        if not source.sd_username or not source.sd_password:
-            return jsonify({"error": "Schedules Direct credentials not configured"}), 400
-
-        if not source.sd_lineup:
-            return jsonify({"error": "No Schedules Direct lineup selected"}), 400
-
-        try:
-            # Initialize SD client and authenticate
-            sd_client = SchedulesDirectClient(source.sd_username, source.sd_password)
-            sd_client.authenticate()
-
-            # Get channels from the configured lineup
-            channels = sd_client.get_lineup_channels(source.sd_lineup)
-
-            if not channels:
-                source.last_sync = db.func.now()
-                source.last_sync_status = "error"
-                source.last_sync_message = "No channels found in lineup"
-                db.session.commit()
-                return jsonify({"error": "No channels found in lineup"}), 400
-
-            # Sync channels to EpgChannel records
-            stats = _sync_sd_channels_to_epg(source, channels)
-
-            source.last_sync = db.func.now()
-            source.last_sync_status = "success"
-            source.last_sync_message = (
-                f"Synced {stats['channels_added'] + stats['channels_updated']} channels from Schedules Direct"
-            )
-            source.channel_count = stats["channels_added"] + stats["channels_updated"]
-            db.session.commit()
-
-            return jsonify(
+    if success:
+        return (
+            jsonify(
                 {
                     "success": True,
-                    "message": source.last_sync_message,
+                    "message": message,
                     "stats": stats,
                 }
-            )
-
-        except SchedulesDirectError as e:
-            logger.error(f"Schedules Direct error for source {source_id}: {e}")
-            source.last_sync = db.func.now()
-            source.last_sync_status = "error"
-            source.last_sync_message = str(e)
-            db.session.commit()
-            return jsonify({"error": f"Schedules Direct error: {e}"}), 500
-
-    elif source.source_type == "xmltv_grabber":
-        # XMLTV Grabber - run tv_grab_* tools
-        from services.xmltv_grabber_service import XmltvGrabberService
-
-        if not source.xmltv_grabber:
-            return jsonify({"error": "No XMLTV grabber configured for this source"}), 400
-
-        # Parse extra args if provided
-        extra_args = None
-        if source.xmltv_extra_args:
-            import json
-
-            try:
-                extra_args = json.loads(source.xmltv_extra_args)
-            except json.JSONDecodeError:
-                logger.warning(f"Invalid xmltv_extra_args for source {source_id}")
-
-        success, xml_content, error = XmltvGrabberService.run_grabber(
-            grabber_name=source.xmltv_grabber,
-            config_name=source.xmltv_config_name,
-            days=source.xmltv_days or 7,
-            offset=source.xmltv_offset or 0,
-            extra_args=extra_args,
+            ),
+            200,
         )
-
-        if not success:
-            source.last_sync = db.func.now()
-            source.last_sync_status = "error"
-            source.last_sync_message = error
-            db.session.commit()
-            return jsonify({"error": f"XMLTV grabber failed: {error}"}), 500
-
-        stats = EpgService.sync_epg_source(source, xml_content)
-
-        return jsonify(
-            {
-                "success": True,
-                "message": f"Synced {stats['channels_added'] + stats['channels_updated']} channels",
-                "stats": stats,
-            }
-        )
-
     else:
-        return jsonify({"error": f"Unknown source type: {source.source_type}"}), 400
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": message,
+                }
+            ),
+            400,
+        )
 
 
 # ============================================================================

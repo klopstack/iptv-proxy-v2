@@ -430,7 +430,7 @@ class EventChannelLink(db.Model):  # type: ignore[name-defined]
     )
     channel = db.relationship(
         "Channel",
-        backref=db.backref("event_links", cascade="all, delete-orphan"),
+        backref=db.backref("event_links", cascade="all, delete-orphan", overlaps="events"),
         overlaps="channels,events",
     )
 

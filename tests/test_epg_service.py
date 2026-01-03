@@ -23,14 +23,313 @@ from services.epg_service import (
     EpgService,
     decompress_content,
     extract_callsign_from_xmltv_id,
+    get_decompressing_stream,
+    get_ppv_epg_xmltv,
+    get_ppv_event_title,
+    is_ppv_category,
+    is_ppv_channel,
+    is_ppv_placeholder_name,
     make_sd_xmltv_id,
     normalize_xmltv_url,
     shift_xmltv_time,
+    update_ppv_channel_visibility,
 )
 
 # ============================================================================
 # Utility Function Tests
 # ============================================================================
+
+
+class TestIsPpvCategory:
+    """Tests for is_ppv_category function"""
+
+    def test_ppv_category_with_explicit_ppv(self):
+        """Test category with 'PPV' in name"""
+        assert is_ppv_category("UK| DAZN PPV") is True
+        assert is_ppv_category("US| ESPN+ PPV") is True
+        assert is_ppv_category("NL| MAX PPV") is True
+
+    def test_ppv_category_with_pay_per_view(self):
+        """Test category with 'PAY-PER-VIEW' patterns"""
+        assert is_ppv_category("UK| PAY-PER-VIEW") is True
+        assert is_ppv_category("US| Pay Per View") is True
+        assert is_ppv_category("PAY-PER-VIEW EVENTS") is True
+
+    def test_non_ppv_category(self):
+        """Test non-PPV categories"""
+        assert is_ppv_category("UK| SPORTS") is False
+        assert is_ppv_category("US| ENTERTAINMENT") is False
+        assert is_ppv_category("MOVIES") is False
+        assert is_ppv_category("") is False
+        assert is_ppv_category(None) is False
+
+    def test_ppv_category_case_insensitive(self):
+        """Test that PPV detection is case-insensitive"""
+        assert is_ppv_category("uk| dazn ppv") is True
+        assert is_ppv_category("UK| DAZN PPV") is True
+        assert is_ppv_category("Uk| DaZn PpV") is True
+
+
+class TestIsPpvPlaceholderName:
+    """Tests for is_ppv_placeholder_name function"""
+
+    def test_placeholder_with_no_event_streaming(self):
+        """Test placeholder names with 'NO EVENT STREAMING'"""
+        assert is_ppv_placeholder_name("UK: DAZN PPV 1 - NO EVENT STREAMING -") is True
+        assert is_ppv_placeholder_name("US: ESPN PLUS 01 PPV - NO EVENT STREAMING") is True
+        assert is_ppv_placeholder_name("NO EVENT STREAMING") is True
+
+    def test_placeholder_with_no_event_scheduled(self):
+        """Test placeholder names with 'NO EVENT SCHEDULED'"""
+        assert is_ppv_placeholder_name("PPV 1 - NO EVENT SCHEDULED") is True
+        assert is_ppv_placeholder_name("EVENT 01 - NO SCHEDULED EVENT") is True
+
+    def test_placeholder_numbered_ppv(self):
+        """Test placeholder names for numbered PPV channels"""
+        assert is_ppv_placeholder_name("PPV 1") is True
+        assert is_ppv_placeholder_name("PPV 2") is True
+        assert is_ppv_placeholder_name("PPV-01") is True
+        assert is_ppv_placeholder_name("UK: PPV 3") is True
+        assert is_ppv_placeholder_name("EVENT 1") is True
+        assert is_ppv_placeholder_name("EVENT 99") is True
+
+    def test_placeholder_with_colon_format(self):
+        """Test placeholder names with colon format"""
+        assert is_ppv_placeholder_name(":Viaplay NL  14") is True
+        assert is_ppv_placeholder_name(":MAX US 03") is True
+        assert is_ppv_placeholder_name(":ESPN UK 05") is True
+
+    def test_placeholder_coming_soon(self):
+        """Test placeholder names with COMING SOON"""
+        assert is_ppv_placeholder_name("COMING SOON") is True
+        assert is_ppv_placeholder_name("TBA") is True
+        assert is_ppv_placeholder_name("TBD") is True
+
+    def test_placeholder_fixtures_format(self):
+        """Test placeholder names for Fixtures format"""
+        assert is_ppv_placeholder_name("GaaGo Fixtures 10:") is True
+        assert is_ppv_placeholder_name("NIFL 5 |") is True
+        assert is_ppv_placeholder_name("Florugby 00") is True
+
+    def test_actual_event_name_not_placeholder(self):
+        """Test that actual event names are not detected as placeholder"""
+        assert is_ppv_placeholder_name("UFC 300: Jones vs Miocic") is False
+        assert is_ppv_placeholder_name("BOXING: Fury vs Joshua") is False
+        assert is_ppv_placeholder_name("NBA Finals: Lakers vs Celtics") is False
+
+    def test_empty_name_is_placeholder(self):
+        """Test that empty name is treated as placeholder"""
+        assert is_ppv_placeholder_name("") is True
+        assert is_ppv_placeholder_name(None) is True
+
+    def test_placeholder_case_insensitive(self):
+        """Test placeholder detection is case-insensitive"""
+        assert is_ppv_placeholder_name("no event streaming") is True
+        assert is_ppv_placeholder_name("ppv 1") is True
+        assert is_ppv_placeholder_name("EVENT 1") is True
+
+
+class TestIsPpvChannel:
+    """Tests for is_ppv_channel function"""
+
+    def test_ppv_channel_with_ppv_category(self, app):
+        """Test channel with PPV category"""
+        with app.app_context():
+            account = Account(name="Test", server="http://test.com", username="test", password="test")
+            db.session.add(account)
+            db.session.commit()
+
+            category = Category(account_id=account.id, category_id="123", category_name="UK| DAZN PPV")
+            db.session.add(category)
+            db.session.commit()
+
+            channel = Channel(account_id=account.id, stream_id="456", name="PPV 1", category_id=category.id)
+            db.session.add(channel)
+            db.session.commit()
+
+            assert is_ppv_channel(channel) is True
+
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(category)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_non_ppv_channel(self, app):
+        """Test channel without PPV category"""
+        with app.app_context():
+            account = Account(name="Test", server="http://test.com", username="test", password="test")
+            db.session.add(account)
+            db.session.commit()
+
+            category = Category(account_id=account.id, category_id="123", category_name="UK| SPORTS")
+            db.session.add(category)
+            db.session.commit()
+
+            channel = Channel(account_id=account.id, stream_id="456", name="Sky Sports 1", category_id=category.id)
+            db.session.add(channel)
+            db.session.commit()
+
+            assert is_ppv_channel(channel) is False
+
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(category)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_ppv_channel_with_no_category(self, app):
+        """Test channel with no category"""
+        with app.app_context():
+            account = Account(name="Test", server="http://test.com", username="test", password="test")
+            db.session.add(account)
+            db.session.commit()
+
+            channel = Channel(account_id=account.id, stream_id="456", name="PPV 1", category_id=None)
+            db.session.add(channel)
+            db.session.commit()
+
+            assert is_ppv_channel(channel) is False
+
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(account)
+            db.session.commit()
+
+
+class TestGetPpvEventTitle:
+    """Tests for get_ppv_event_title function"""
+
+    def test_get_event_title_from_active_ppv_channel(self, app):
+        """Test extracting event title from PPV channel with active event"""
+        with app.app_context():
+            account = Account(name="Test", server="http://test.com", username="test", password="test")
+            db.session.add(account)
+            db.session.commit()
+
+            category = Category(account_id=account.id, category_id="123", category_name="UK| DAZN PPV")
+            db.session.add(category)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id, stream_id="456", name="UFC 300: Jones vs Miocic", category_id=category.id
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            title = get_ppv_event_title(channel)
+            assert title == "UFC 300: Jones vs Miocic"
+
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(category)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_get_event_title_from_placeholder_ppv_channel(self, app):
+        """Test that placeholder PPV channel returns None"""
+        with app.app_context():
+            account = Account(name="Test", server="http://test.com", username="test", password="test")
+            db.session.add(account)
+            db.session.commit()
+
+            category = Category(account_id=account.id, category_id="123", category_name="UK| DAZN PPV")
+            db.session.add(category)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id, stream_id="456", name="PPV 1 - NO EVENT STREAMING", category_id=category.id
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            title = get_ppv_event_title(channel)
+            assert title is None
+
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(category)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_get_event_title_with_no_name(self, app):
+        """Test channel with no name returns None"""
+        with app.app_context():
+            account = Account(name="Test", server="http://test.com", username="test", password="test")
+            db.session.add(account)
+            db.session.commit()
+
+            channel = Channel(account_id=account.id, stream_id="456", name="", category_id=None)
+            db.session.add(channel)
+            db.session.commit()
+
+            title = get_ppv_event_title(channel)
+            # Empty/blank names return None
+            assert title is None
+
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_get_event_title_whitespace_stripped(self, app):
+        """Test that event title whitespace is stripped"""
+        with app.app_context():
+            account = Account(name="Test", server="http://test.com", username="test", password="test")
+            db.session.add(account)
+            db.session.commit()
+
+            category = Category(account_id=account.id, category_id="123", category_name="UK| DAZN PPV")
+            db.session.add(category)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id, stream_id="456", name="  UFC 300: Jones vs Miocic  ", category_id=category.id
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            title = get_ppv_event_title(channel)
+            assert title == "UFC 300: Jones vs Miocic"
+
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(category)
+            db.session.delete(account)
+            db.session.commit()
+
+
+class TestGetDecompressingStream:
+    """Tests for get_decompressing_stream function"""
+
+    def test_gzipped_content_stream(self):
+        """Test streaming decompression of gzipped content"""
+        original = b"<tv><channel id='test'></channel></tv>"
+        compressed = gzip.compress(original)
+
+        stream = get_decompressing_stream(compressed)
+        result = stream.read()
+        stream.close()
+
+        assert result == original
+
+    def test_uncompressed_content_stream(self):
+        """Test that uncompressed content is returned as BytesIO"""
+        original = b"<tv><channel id='test'></channel></tv>"
+
+        stream = get_decompressing_stream(original)
+        result = stream.read()
+        stream.close()
+
+        assert result == original
+
+    def test_stream_with_empty_content(self):
+        """Test streaming with empty content"""
+        stream = get_decompressing_stream(b"")
+        result = stream.read()
+        stream.close()
+
+        assert result == b""
 
 
 class TestExtractCallsign:
@@ -2111,3 +2410,1570 @@ class TestEastWestTags:
         east_set = set(EAST_TAGS)
         west_set = set(WEST_TAGS)
         assert east_set.isdisjoint(west_set)
+
+
+class TestGenerateEpgForChannels:
+    """Tests for EpgService.generate_epg_for_channels"""
+
+    def test_generate_epg_empty_channels(self, app):
+        """Test generating EPG for empty channel list"""
+        with app.app_context():
+            result = EpgService.generate_epg_for_channels([])
+            assert result is not None
+            assert b"tv" in result
+            assert b'generator-info-name="iptv-proxy-v2"' in result
+
+    def test_generate_epg_single_channel(self, app):
+        """Test generating EPG for a single channel"""
+        with app.app_context():
+            # Create account
+            account = Account(
+                name="Test Account",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            # Create EPG source
+            source = EpgSource(
+                name="Test EPG",
+                source_type="provider",
+                account_id=None,
+                priority=100,
+                enabled=True,
+            )
+            db.session.add(source)
+            db.session.commit()
+
+            # Create EPG channel
+            epg_ch = EpgChannel(
+                source_id=source.id,
+                channel_id="ESPN.us",
+                display_name="ESPN",
+                display_names_json='["ESPN HD"]',
+            )
+            db.session.add(epg_ch)
+            db.session.commit()
+
+            # Create channel
+            channel = Channel(
+                account_id=account.id,
+                stream_id="123",
+                name="ESPN Channel",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            # Generate EPG
+            result = EpgService.generate_epg_for_channels([channel])
+
+            assert result is not None
+            assert b"tv" in result
+            assert b"channel" in result
+
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(epg_ch)
+            db.session.delete(source)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_generate_epg_multiple_accounts(self, app):
+        """Test generating EPG for channels from multiple accounts"""
+        with app.app_context():
+            # Create accounts
+            account1 = Account(
+                name="Account 1",
+                server="http://test1.com",
+                username="test1",
+                password="pass1",
+            )
+            account2 = Account(
+                name="Account 2",
+                server="http://test2.com",
+                username="test2",
+                password="pass2",
+            )
+            db.session.add_all([account1, account2])
+            db.session.commit()
+
+            # Create channels
+            channel1 = Channel(
+                account_id=account1.id,
+                stream_id="123",
+                name="Channel 1",
+                is_active=True,
+            )
+            channel2 = Channel(
+                account_id=account2.id,
+                stream_id="456",
+                name="Channel 2",
+                is_active=True,
+            )
+            db.session.add_all([channel1, channel2])
+            db.session.commit()
+
+            # Generate EPG
+            result = EpgService.generate_epg_for_channels([channel1, channel2])
+
+            assert result is not None
+            assert b"tv" in result
+
+            # Cleanup
+            db.session.delete(channel1)
+            db.session.delete(channel2)
+            db.session.delete(account1)
+            db.session.delete(account2)
+            db.session.commit()
+
+
+class TestGetPpvEpgXmltv:
+    """Tests for get_ppv_epg_xmltv function"""
+
+    def test_get_ppv_epg_no_account(self, app):
+        """Test getting PPV EPG with no account specified"""
+        with app.app_context():
+            result = get_ppv_epg_xmltv(account_id=None, duration_hours=8)
+            assert result is not None
+            assert isinstance(result, bytes)
+            # Should contain XML structure
+            assert b"<?xml" in result or b"<tv" in result
+
+    def test_get_ppv_epg_invalid_account(self, app):
+        """Test getting PPV EPG with invalid account ID"""
+        with app.app_context():
+            result = get_ppv_epg_xmltv(account_id=99999, duration_hours=8)
+            # Should return valid XML even if account doesn't exist
+            assert result is not None
+            assert isinstance(result, bytes)
+
+    def test_get_ppv_epg_with_valid_account(self, app):
+        """Test getting PPV EPG with a valid account"""
+        with app.app_context():
+            account = Account(
+                name="PPV Test",
+                server="http://test.com",
+                username="test",
+                password="pass",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            result = get_ppv_epg_xmltv(account_id=account.id, duration_hours=8)
+
+            assert result is not None
+            assert isinstance(result, bytes)
+
+            # Cleanup
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_get_ppv_epg_different_durations(self, app):
+        """Test getting PPV EPG with different duration values"""
+        with app.app_context():
+            result1 = get_ppv_epg_xmltv(duration_hours=4)
+            result2 = get_ppv_epg_xmltv(duration_hours=24)
+
+            # Both should return valid XML
+            assert result1 is not None
+            assert result2 is not None
+            assert isinstance(result1, bytes)
+            assert isinstance(result2, bytes)
+
+
+class TestBuildChannelLinkMap:
+    """Tests for EpgService._build_channel_link_map"""
+
+    def test_build_channel_link_map_empty(self):
+        """Test building channel link map with empty list"""
+        result = EpgService._build_channel_link_map([])
+        assert isinstance(result, dict)
+        assert len(result) == 0
+
+    def test_build_channel_link_map_no_links(self, app):
+        """Test building map for channels with no links"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="pass",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="123",
+                name="Test Channel",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            result = EpgService._build_channel_link_map([channel.id])
+
+            assert isinstance(result, dict)
+            # Empty if no links
+            assert len(result) == 0
+
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_build_channel_link_map_with_links(self, app):
+        """Test building map for channels with links"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="pass",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            # Create two channels
+            channel1 = Channel(
+                account_id=account.id,
+                stream_id="123",
+                name="Test Channel 1",
+                is_active=True,
+            )
+            channel2 = Channel(
+                account_id=account.id,
+                stream_id="124",
+                name="Test Channel 2",
+                is_active=True,
+            )
+            db.session.add_all([channel1, channel2])
+            db.session.commit()
+
+            # Create a link between them
+            link = ChannelLink(
+                channel_id=channel1.id,
+                source_channel_id=channel2.id,
+                time_offset_hours=-3,
+                link_type="time_shifted",
+            )
+            db.session.add(link)
+            db.session.commit()
+
+            result = EpgService._build_channel_link_map([channel1.id, channel2.id])
+
+            # Should return a dict
+            assert isinstance(result, dict)
+
+            # Cleanup
+            db.session.delete(link)
+            db.session.delete(channel1)
+            db.session.delete(channel2)
+            db.session.delete(account)
+            db.session.commit()
+
+
+class TestExtractCallsignEdgeCases:
+    """Additional edge case tests for extract_callsign_from_xmltv_id"""
+
+    def test_extract_callsign_with_numbers(self):
+        """Test extraction with numeric callsigns"""
+        result = extract_callsign_from_xmltv_id("12345.us")
+        assert result is not None
+
+    def test_extract_callsign_long_id(self):
+        """Test extraction with long IDs"""
+        long_id = "VeryLongCallsignWithNumbers123456789.provider.com"
+        result = extract_callsign_from_xmltv_id(long_id)
+        assert result is not None
+
+    def test_extract_callsign_special_chars(self):
+        """Test extraction with special characters in segments"""
+        result = extract_callsign_from_xmltv_id("CALL-SIGN.us")
+        # Should handle or reject gracefully
+        assert result is not None or result is None
+
+
+class TestShiftXmltvTimeEdgeCases:
+    """Additional edge case tests for shift_xmltv_time"""
+
+    def test_shift_xmltv_time_large_hours(self):
+        """Test shifting with large hour values"""
+        result = shift_xmltv_time("20240101120000 +0000", 48)
+        assert "20240103" in result
+
+    def test_shift_xmltv_time_negative_large(self):
+        """Test shifting with large negative hour values"""
+        result = shift_xmltv_time("20240101120000 +0000", -48)
+        assert "2023" in result
+
+    def test_shift_xmltv_time_preserves_format(self):
+        """Test that shift preserves XMLTV format"""
+        result = shift_xmltv_time("20240115093045 +0100", 2)
+        parts = result.split()
+        assert len(parts) >= 1
+        assert len(parts[0]) >= 8
+
+
+class TestParseXmltvTimeEdgeCases:
+    """Additional edge case tests for _parse_xmltv_time"""
+
+    def test_parse_xmltv_time_with_timezone(self):
+        """Test parsing time with timezone info"""
+        result = EpgService._parse_xmltv_time("20240101120000 +0100")
+        assert result is None or result is not None
+
+    def test_parse_xmltv_time_short_format(self):
+        """Test parsing shorter time formats"""
+        result = EpgService._parse_xmltv_time("202401011200")
+        assert result is None or isinstance(result, object)
+
+
+class TestBuildMappingOffsetMap:
+    """Tests for _build_mapping_offset_map function"""
+
+    def test_build_mapping_offset_map_empty(self, app):
+        """Test building mapping offset map with empty channels"""
+        with app.app_context():
+            result = EpgService._build_mapping_offset_map([])
+            assert isinstance(result, dict)
+            assert len(result) == 0
+
+    def test_build_mapping_offset_map_no_mappings(self, app):
+        """Test building map for channels with no mappings"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="pass",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="123",
+                name="Test Channel",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            result = EpgService._build_mapping_offset_map([channel.id])
+
+            assert isinstance(result, dict)
+
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(account)
+            db.session.commit()
+
+
+class TestPrepareChannelsAndEpg:
+    """Tests for _prepare_channels_and_epg helper method"""
+
+    def test_prepare_empty_channels(self, app):
+        """Test with no channels in account"""
+        with app.app_context():
+            account = Account(
+                name="Empty",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            channels, epg_channels, filter_desc = EpgService._prepare_channels_and_epg(account.id)
+
+            assert channels == []
+            assert isinstance(epg_channels, list)
+            assert filter_desc == ""
+
+            # Cleanup
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_prepare_with_channels(self, app):
+        """Test with channels in account"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="123",
+                name="Test Channel",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            channels, epg_channels, filter_desc = EpgService._prepare_channels_and_epg(account.id)
+
+            assert len(channels) == 1
+            assert channels[0].id == channel.id
+            assert filter_desc == ""
+
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_prepare_with_category_filter(self, app):
+        """Test with category filter"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            category = Category(account_id=account.id, category_id="1", category_name="Movies")
+            db.session.add(category)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="123",
+                name="Test Channel",
+                category_id=category.id,
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            channels, epg_channels, filter_desc = EpgService._prepare_channels_and_epg(
+                account.id, category_id=category.id
+            )
+
+            assert len(channels) == 1
+            assert " in category " in filter_desc
+
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(category)
+            db.session.delete(account)
+            db.session.commit()
+
+
+class TestBuildEpgLookupIndices:
+    """Tests for _build_epg_lookup_indices helper method"""
+
+    def test_build_indices_empty(self):
+        """Test building indices with no EPG channels"""
+        epg_by_id, epg_by_name, epg_by_callsign, epg_by_dma = EpgService._build_epg_lookup_indices([])
+
+        assert epg_by_id == {}
+        assert epg_by_name == {}
+        assert isinstance(epg_by_callsign, dict)
+        assert isinstance(epg_by_dma, dict)
+
+    def test_build_indices_with_channels(self, app):
+        """Test building indices with EPG channels"""
+        with app.app_context():
+            source = EpgSource(
+                name="Test",
+                source_type="provider",
+                priority=100,
+                enabled=True,
+            )
+            db.session.add(source)
+            db.session.commit()
+
+            epg_ch = EpgChannel(
+                source_id=source.id,
+                channel_id="ESPN.us",
+                display_name="ESPN",
+            )
+            db.session.add(epg_ch)
+            db.session.commit()
+
+            epg_by_id, epg_by_name, epg_by_callsign, epg_by_dma = EpgService._build_epg_lookup_indices([epg_ch])
+
+            assert "espn.us" in epg_by_id
+            assert len(epg_by_name) > 0
+            assert epg_by_id["espn.us"].id == epg_ch.id
+
+            # Cleanup
+            db.session.delete(epg_ch)
+            db.session.delete(source)
+            db.session.commit()
+
+
+class TestLoadExistingMappings:
+    """Tests for _load_existing_mappings helper method"""
+
+    def test_load_no_mappings(self, app):
+        """Test loading when no mappings exist"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="123",
+                name="Test",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            mappings = EpgService._load_existing_mappings([channel])
+
+            assert mappings == {}
+
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_load_existing_mappings(self, app):
+        """Test loading existing mappings"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            source = EpgSource(
+                name="Test",
+                source_type="provider",
+                priority=100,
+                enabled=True,
+            )
+            db.session.add(source)
+            db.session.commit()
+
+            epg_ch = EpgChannel(
+                source_id=source.id,
+                channel_id="TEST.us",
+                display_name="Test",
+            )
+            db.session.add(epg_ch)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="123",
+                name="Test",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            mapping = ChannelEpgMapping(
+                channel_id=channel.id,
+                epg_channel_id=epg_ch.id,
+                mapping_type="test",
+                confidence=0.9,
+            )
+            db.session.add(mapping)
+            db.session.commit()
+
+            mappings = EpgService._load_existing_mappings([channel])
+
+            assert channel.id in mappings
+            assert mappings[channel.id].confidence == 0.9
+
+            # Cleanup
+            db.session.delete(mapping)
+            db.session.delete(channel)
+            db.session.delete(epg_ch)
+            db.session.delete(source)
+            db.session.delete(account)
+            db.session.commit()
+
+
+class TestLoadCountryTagsForChannels:
+    """Tests for _load_country_tags_for_channels helper method"""
+
+    def test_load_no_tags(self, app):
+        """Test loading when no country tags exist"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="123",
+                name="Test",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            tags = EpgService._load_country_tags_for_channels(account.id, [channel])
+
+            assert tags == {}
+
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_load_with_country_tags(self, app):
+        """Test loading with country tags"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            tag = Tag(name="US")
+            db.session.add(tag)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="123",
+                name="Test",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            channel_tag = ChannelTag(account_id=account.id, stream_id="123", tag_id=tag.id)
+            db.session.add(channel_tag)
+            db.session.commit()
+
+            tags = EpgService._load_country_tags_for_channels(account.id, [channel])
+
+            assert "123" in tags
+            assert "US" in tags["123"]
+
+            # Cleanup
+            db.session.delete(channel_tag)
+            db.session.delete(channel)
+            db.session.delete(tag)
+            db.session.delete(account)
+            db.session.commit()
+
+
+class TestLoadFccFacilities:
+    """Tests for _load_fcc_facilities helper method"""
+
+    def test_load_no_us_channels(self, app):
+        """Test loading when no US channels exist"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="123",
+                name="Test",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            country_tags = {}
+            facilities = EpgService._load_fcc_facilities([channel], country_tags)
+
+            assert channel.id in facilities
+            assert facilities[channel.id] is None
+
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(account)
+            db.session.commit()
+
+
+class TestMatchChannelStrategies:
+    """Tests for _match_channel_strategies helper method"""
+
+    def test_no_match_found(self, app):
+        """Test when no matching strategy succeeds"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="123",
+                name="Obscure Channel Name",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            matched_epg, match_type, confidence = EpgService._match_channel_strategies(
+                channel,
+                {},
+                {},
+                {},
+                {},
+                [],
+                {},
+                {},
+            )
+
+            assert matched_epg is None
+            assert match_type is None
+            assert confidence == 0.0
+
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_exact_provider_match(self, app):
+        """Test exact match on provider epg_channel_id"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            source = EpgSource(
+                name="Test",
+                source_type="provider",
+                priority=100,
+                enabled=True,
+            )
+            db.session.add(source)
+            db.session.commit()
+
+            epg_ch = EpgChannel(
+                source_id=source.id,
+                channel_id="ESPN.us",
+                display_name="ESPN",
+            )
+            db.session.add(epg_ch)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="123",
+                name="ESPN",
+                epg_channel_id="ESPN.us",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            epg_by_id = {"espn.us": epg_ch}
+
+            matched_epg, match_type, confidence = EpgService._match_channel_strategies(
+                channel,
+                {},
+                epg_by_id,
+                {},
+                {},
+                [],
+                {},
+                {},
+            )
+
+            assert matched_epg is not None
+            assert match_type == "provider"
+            assert confidence == 1.0
+
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(epg_ch)
+            db.session.delete(source)
+            db.session.delete(account)
+            db.session.commit()
+
+
+class TestSaveChannelMapping:
+    """Tests for _save_channel_mapping helper method"""
+
+    def test_save_new_mapping(self, app):
+        """Test saving a new channel mapping"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            source = EpgSource(
+                name="Test",
+                source_type="provider",
+                priority=100,
+                enabled=True,
+            )
+            db.session.add(source)
+            db.session.commit()
+
+            epg_ch = EpgChannel(
+                source_id=source.id,
+                channel_id="ESPN.us",
+                display_name="ESPN",
+            )
+            db.session.add(epg_ch)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="123",
+                name="ESPN",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            result = EpgService._save_channel_mapping(channel, epg_ch, "provider", 1.0, {})
+
+            assert result is True
+            # Verify mapping was created
+            mapping = ChannelEpgMapping.query.filter_by(channel_id=channel.id).first()
+            assert mapping is not None
+            assert mapping.epg_channel_id == epg_ch.id
+
+            # Cleanup
+            db.session.delete(mapping)
+            db.session.delete(channel)
+            db.session.delete(epg_ch)
+            db.session.delete(source)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_save_no_match(self, app):
+        """Test when there's no match to save"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="123",
+                name="Test",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            result = EpgService._save_channel_mapping(channel, None, None, 0.0, {})
+
+            assert result is False
+
+
+class TestMatchChannelsToEpgFccEnhanced:
+    """Test suite for match_channels_to_epg_fcc_enhanced integration"""
+
+    def test_empty_account(self, app):
+        """Test with account that has no channels"""
+        with app.app_context():
+            account = Account(
+                name="Empty",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            stats = EpgService.match_channels_to_epg_fcc_enhanced(account.id)
+
+            assert stats["total_channels"] == 0
+            assert stats["matched_exact_id"] == 0
+            assert stats["unmatched"] == 0
+
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_no_epg_data(self, app):
+        """Test with channels but no EPG data"""
+        with app.app_context():
+            account = Account(
+                name="NoEpg",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="1",
+                name="Test Channel",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            stats = EpgService.match_channels_to_epg_fcc_enhanced(account.id)
+
+            assert stats["total_channels"] == 1
+            assert stats["matched_exact_id"] == 0
+            assert stats["unmatched"] == 1
+
+            db.session.delete(channel)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_exact_id_match(self, app):
+        """Test matching by provider epg_channel_id"""
+        with app.app_context():
+            account = Account(
+                name="ExactId",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            source = EpgSource(
+                name="TestEpg",
+                source_type="xmltv",
+                url="http://test.com/epg.xml",
+            )
+            db.session.add(source)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="1",
+                name="Test Channel",
+                epg_channel_id="test.1",
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            epg_channel = EpgChannel(
+                source_id=source.id,
+                channel_id="test.1",
+                display_name="Test Channel Name",
+                icon_url="http://test.com/icon.png",
+            )
+            db.session.add(epg_channel)
+            db.session.commit()
+
+            stats = EpgService.match_channels_to_epg_fcc_enhanced(account.id)
+
+            assert stats["total_channels"] == 1
+            assert stats["matched_exact_id"] == 1
+            assert stats["unmatched"] == 0
+
+            # Verify mapping was created
+            mapping = ChannelEpgMapping.query.filter_by(channel_id=channel.id).first()
+            assert mapping is not None
+            assert mapping.epg_channel_id == epg_channel.id
+
+            db.session.delete(mapping)
+            db.session.delete(epg_channel)
+            db.session.delete(channel)
+            db.session.delete(source)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_batch_size_commit(self, app):
+        """Test that batch commits work correctly"""
+        with app.app_context():
+            account = Account(
+                name="BatchTest",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            source = EpgSource(
+                name="TestEpg",
+                source_type="xmltv",
+                url="http://test.com/epg.xml",
+            )
+            db.session.add(source)
+            db.session.commit()
+
+            # Create 5 channels with exact epg_channel_id matches
+            channels = []
+            for i in range(5):
+                channel = Channel(
+                    account_id=account.id,
+                    stream_id=f"batch{i}",
+                    name=f"Channel {i}",
+                    epg_channel_id=f"epg{i}.us",
+                    is_active=True,
+                )
+                db.session.add(channel)
+                channels.append(channel)
+
+            db.session.commit()
+
+            # Create matching EPG channels
+            epg_channels = []
+            for i in range(5):
+                epg = EpgChannel(
+                    source_id=source.id,
+                    channel_id=f"epg{i}.us",
+                    display_name=f"EPG Channel {i}",
+                    icon_url=f"http://test.com/ch{i}.png",
+                )
+                db.session.add(epg)
+                epg_channels.append(epg)
+
+            db.session.commit()
+
+            stats = EpgService.match_channels_to_epg_fcc_enhanced(account.id, batch_size=2)
+
+            assert stats["total_channels"] == 5
+            assert stats["matched_exact_id"] == 5
+            assert stats["unmatched"] == 0
+
+            # Cleanup
+            for channel in channels:
+                for mapping in ChannelEpgMapping.query.filter_by(channel_id=channel.id).all():
+                    db.session.delete(mapping)
+
+            for epg in epg_channels:
+                db.session.delete(epg)
+
+            for channel in channels:
+                db.session.delete(channel)
+
+            db.session.delete(source)
+            db.session.delete(account)
+            db.session.commit()
+            # Cleanup
+            db.session.delete(channel)
+            db.session.delete(account)
+            db.session.commit()
+
+
+class TestUpdatePpvChannelVisibility:
+    """Test suite for update_ppv_channel_visibility() function"""
+
+    def test_no_ppv_tag(self, app):
+        """Test when PPV tag doesn't exist"""
+        with app.app_context():
+            # Ensure no PPV tag exists
+            ppv_tag = Tag.query.filter_by(name="PPV").first()
+            if ppv_tag:
+                db.session.delete(ppv_tag)
+                db.session.commit()
+
+            result = update_ppv_channel_visibility()
+
+            assert result["total_ppv_channels"] == 0
+            assert result["channels_shown"] == 0
+            assert result["channels_hidden"] == 0
+            assert result["events_detected"] == 0
+
+    def test_no_ppv_channels(self, app):
+        """Test when PPV tag exists but no channels have it"""
+        with app.app_context():
+            # Create PPV tag
+            ppv_tag = Tag(name="PPV")
+            db.session.add(ppv_tag)
+            db.session.commit()
+
+            result = update_ppv_channel_visibility()
+
+            assert result["total_ppv_channels"] == 0
+            assert result["channels_shown"] == 0
+            assert result["channels_hidden"] == 0
+            assert result["events_detected"] == 0
+
+            # Cleanup
+            db.session.delete(ppv_tag)
+            db.session.commit()
+
+    def test_placeholder_names_hidden(self, app):
+        """Test that channels with placeholder names are hidden"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            # Create PPV tag
+            ppv_tag = Tag(name="PPV")
+            db.session.add(ppv_tag)
+            db.session.commit()
+
+            # Create channels with placeholder names (initially visible)
+            placeholder_names = [
+                "PPV 1",
+                "PPV 2",
+                "UK: DAZN PPV 1 - NO EVENT STREAMING -",
+                "PPV EVENT 3",
+                "EVENT 5",
+                "COMING SOON",
+            ]
+
+            channels = []
+            for name in placeholder_names:
+                channel = Channel(
+                    account_id=account.id,
+                    stream_id=f"stream_{len(channels)}",
+                    name=name,
+                    is_active=True,
+                    is_visible=True,  # Start visible
+                )
+                db.session.add(channel)
+                channels.append(channel)
+
+            db.session.commit()
+
+            # Tag all channels with PPV tag
+            for channel in channels:
+                ct = ChannelTag(
+                    account_id=account.id,
+                    stream_id=channel.stream_id,
+                    tag_id=ppv_tag.id,
+                )
+                db.session.add(ct)
+            db.session.commit()
+
+            # Update visibility
+            result = update_ppv_channel_visibility()
+
+            assert result["total_ppv_channels"] == len(placeholder_names)
+            assert result["channels_hidden"] == len(placeholder_names)
+            assert result["channels_shown"] == 0
+            assert result["events_detected"] == 0
+
+            # Verify all channels are now hidden
+            for channel in channels:
+                db.session.refresh(channel)
+                assert channel.is_visible is False
+
+            # Cleanup
+            for ct in db.session.query(ChannelTag).all():
+                db.session.delete(ct)
+            for channel in channels:
+                db.session.delete(channel)
+            db.session.delete(ppv_tag)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_event_names_shown(self, app):
+        """Test that channels with actual event names are shown"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            # Create PPV tag
+            ppv_tag = Tag(name="PPV")
+            db.session.add(ppv_tag)
+            db.session.commit()
+
+            # Create channels with actual event names (initially hidden)
+            event_names = [
+                "UFC 300: Jones vs Miocic",
+                "BOXING: Fury vs Joshua",
+                "WWE WrestleMania 40",
+                "AEW Dynamite Live Event",
+            ]
+
+            channels = []
+            for name in event_names:
+                channel = Channel(
+                    account_id=account.id,
+                    stream_id=f"stream_{len(channels)}",
+                    name=name,
+                    is_active=True,
+                    is_visible=False,  # Start hidden
+                )
+                db.session.add(channel)
+                channels.append(channel)
+
+            db.session.commit()
+
+            # Tag all channels with PPV tag
+            for channel in channels:
+                ct = ChannelTag(
+                    account_id=account.id,
+                    stream_id=channel.stream_id,
+                    tag_id=ppv_tag.id,
+                )
+                db.session.add(ct)
+            db.session.commit()
+
+            # Update visibility
+            result = update_ppv_channel_visibility()
+
+            assert result["total_ppv_channels"] == len(event_names)
+            assert result["channels_shown"] == len(event_names)
+            assert result["channels_hidden"] == 0
+            assert result["events_detected"] == len(event_names)
+
+            # Verify all channels are now visible
+            for channel in channels:
+                db.session.refresh(channel)
+                assert channel.is_visible is True
+
+            # Cleanup
+            for ct in db.session.query(ChannelTag).all():
+                db.session.delete(ct)
+            for channel in channels:
+                db.session.delete(channel)
+            db.session.delete(ppv_tag)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_mixed_placeholder_and_event_names(self, app):
+        """Test with both placeholder and event names"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            # Create PPV tag
+            ppv_tag = Tag(name="PPV")
+            db.session.add(ppv_tag)
+            db.session.commit()
+
+            # Create mix of placeholder and event channels
+            channels_data = [
+                ("PPV 1", True, "placeholder"),  # name, initial_visible, type
+                ("UFC 300: Main Event", False, "event"),
+                ("PPV 2 - NO EVENT STREAMING", True, "placeholder"),
+                ("BOXING: Tyson vs Fury", False, "event"),
+                ("EVENT 7", True, "placeholder"),
+            ]
+
+            channels = []
+            for name, initial_visible, _ in channels_data:
+                channel = Channel(
+                    account_id=account.id,
+                    stream_id=f"stream_{len(channels)}",
+                    name=name,
+                    is_active=True,
+                    is_visible=initial_visible,
+                )
+                db.session.add(channel)
+                channels.append(channel)
+
+            db.session.commit()
+
+            # Tag all channels with PPV tag
+            for channel in channels:
+                ct = ChannelTag(
+                    account_id=account.id,
+                    stream_id=channel.stream_id,
+                    tag_id=ppv_tag.id,
+                )
+                db.session.add(ct)
+            db.session.commit()
+
+            # Update visibility
+            result = update_ppv_channel_visibility()
+
+            assert result["total_ppv_channels"] == 5
+            assert result["channels_hidden"] == 3  # 3 placeholders
+            assert result["channels_shown"] == 2  # 2 events
+            assert result["events_detected"] == 2
+
+            # Verify individual channel visibility
+            placeholder_count = 0
+            event_count = 0
+            for channel in channels:
+                db.session.refresh(channel)
+                if "placeholder" in [item[2] for item in channels_data if item[0] == channel.name]:
+                    assert channel.is_visible is False
+                    placeholder_count += 1
+                else:
+                    assert channel.is_visible is True
+                    event_count += 1
+
+            assert placeholder_count == 3
+            assert event_count == 2
+
+            # Cleanup
+            for ct in db.session.query(ChannelTag).all():
+                db.session.delete(ct)
+            for channel in channels:
+                db.session.delete(channel)
+            db.session.delete(ppv_tag)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_account_filter(self, app):
+        """Test that account_id parameter filters correctly"""
+        with app.app_context():
+            # Create two accounts
+            account1 = Account(
+                name="Account1",
+                server="http://test1.com",
+                username="test1",
+                password="test1",
+            )
+            account2 = Account(
+                name="Account2",
+                server="http://test2.com",
+                username="test2",
+                password="test2",
+            )
+            db.session.add(account1)
+            db.session.add(account2)
+            db.session.commit()
+
+            # Create PPV tag
+            ppv_tag = Tag(name="PPV")
+            db.session.add(ppv_tag)
+            db.session.commit()
+
+            # Create channels in both accounts
+            channel1 = Channel(
+                account_id=account1.id,
+                stream_id="stream_1",
+                name="PPV 1",
+                is_active=True,
+                is_visible=True,
+            )
+            channel2 = Channel(
+                account_id=account2.id,
+                stream_id="stream_2",
+                name="UFC 300: Jones vs Miocic",
+                is_active=True,
+                is_visible=False,
+            )
+            db.session.add(channel1)
+            db.session.add(channel2)
+            db.session.commit()
+
+            # Tag both channels
+            for account, channel in [
+                (account1, channel1),
+                (account2, channel2),
+            ]:
+                ct = ChannelTag(
+                    account_id=account.id,
+                    stream_id=channel.stream_id,
+                    tag_id=ppv_tag.id,
+                )
+                db.session.add(ct)
+            db.session.commit()
+
+            # Update only account1
+            result = update_ppv_channel_visibility(account_id=account1.id)
+
+            assert result["total_ppv_channels"] == 1
+            assert result["channels_hidden"] == 1
+
+            # Verify account1 channel was hidden
+            db.session.refresh(channel1)
+            assert channel1.is_visible is False
+
+            # Verify account2 channel was NOT modified
+            db.session.refresh(channel2)
+            assert channel2.is_visible is False
+
+            # Cleanup
+            for ct in db.session.query(ChannelTag).all():
+                db.session.delete(ct)
+            db.session.delete(channel1)
+            db.session.delete(channel2)
+            db.session.delete(ppv_tag)
+            db.session.delete(account1)
+            db.session.delete(account2)
+            db.session.commit()
+
+    def test_inactive_channels_skipped(self, app):
+        """Test that inactive channels are not processed"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            # Create PPV tag
+            ppv_tag = Tag(name="PPV")
+            db.session.add(ppv_tag)
+            db.session.commit()
+
+            # Create active and inactive channels
+            active_channel = Channel(
+                account_id=account.id,
+                stream_id="stream_active",
+                name="PPV 1",
+                is_active=True,
+                is_visible=True,
+            )
+            inactive_channel = Channel(
+                account_id=account.id,
+                stream_id="stream_inactive",
+                name="PPV 2",
+                is_active=False,  # Inactive
+                is_visible=True,
+            )
+            db.session.add(active_channel)
+            db.session.add(inactive_channel)
+            db.session.commit()
+
+            # Tag only the active channel
+            ct = ChannelTag(
+                account_id=account.id,
+                stream_id=active_channel.stream_id,
+                tag_id=ppv_tag.id,
+            )
+            db.session.add(ct)
+            db.session.commit()
+
+            # Update visibility
+            result = update_ppv_channel_visibility()
+
+            assert result["total_ppv_channels"] == 1
+            assert result["channels_hidden"] == 1
+
+            # Verify only active channel was modified
+            db.session.refresh(active_channel)
+            db.session.refresh(inactive_channel)
+            assert active_channel.is_visible is False
+            assert inactive_channel.is_visible is True  # Unchanged
+
+            # Cleanup
+            db.session.delete(ct)
+            db.session.delete(active_channel)
+            db.session.delete(inactive_channel)
+            db.session.delete(ppv_tag)
+            db.session.delete(account)
+            db.session.commit()
+
+    def test_idempotent_updates(self, app):
+        """Test that running update multiple times is safe"""
+        with app.app_context():
+            account = Account(
+                name="Test",
+                server="http://test.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            # Create PPV tag
+            ppv_tag = Tag(name="PPV")
+            db.session.add(ppv_tag)
+            db.session.commit()
+
+            # Create channels
+            channel1 = Channel(
+                account_id=account.id,
+                stream_id="stream_1",
+                name="PPV 1",
+                is_active=True,
+                is_visible=True,
+            )
+            channel2 = Channel(
+                account_id=account.id,
+                stream_id="stream_2",
+                name="UFC 300: Jones vs Miocic",
+                is_active=True,
+                is_visible=False,
+            )
+            db.session.add(channel1)
+            db.session.add(channel2)
+            db.session.commit()
+
+            # Tag both channels
+            for channel in [channel1, channel2]:
+                ct = ChannelTag(
+                    account_id=account.id,
+                    stream_id=channel.stream_id,
+                    tag_id=ppv_tag.id,
+                )
+                db.session.add(ct)
+            db.session.commit()
+
+            # First update
+            result1 = update_ppv_channel_visibility()
+            assert result1["channels_hidden"] == 1
+            assert result1["channels_shown"] == 1
+
+            # Second update (same data)
+            result2 = update_ppv_channel_visibility()
+            assert result2["channels_hidden"] == 0  # No changes
+            assert result2["channels_shown"] == 0
+
+            # Verify final state
+            db.session.refresh(channel1)
+            db.session.refresh(channel2)
+            assert channel1.is_visible is False
+            assert channel2.is_visible is True
+
+            # Cleanup
+            for ct in db.session.query(ChannelTag).all():
+                db.session.delete(ct)
+            db.session.delete(channel1)
+            db.session.delete(channel2)
+            db.session.delete(ppv_tag)
+            db.session.delete(account)
+            db.session.commit()

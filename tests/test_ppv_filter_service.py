@@ -3,11 +3,19 @@ Tests for PPV Filter Service - Phase 1 & 2 Implementation
 
 Phase 1: Category-specific handling (boxing, wrestling, etc.) show events without explicit times
 Phase 2: 24-hour time format support (HH:MM and HH.MM formats)
+
+Test Coverage:
+- All filter types (ALWAYS_SHOW, ALWAYS_HIDE, TEXT_BASED, ISO_DATETIME, RELATIVE_TIME, DATETIME_24HR)
+- Datetime parsing (ISO, month-day-time, 24-hour, combined)
+- Event name extraction
+- Duration estimation
+- Non-event detection patterns
+- Edge cases and error handling
 """
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
-from services.ppv_filter_service import PPVFilterService
+from services.ppv_filter_service import DEFAULT_FILTER_RULES, PPVFilterService
 
 
 class TestPhase224HourTimeFormatParsing:
@@ -528,3 +536,953 @@ class TestEdgeCasesAndErrorHandling:
         result = service.parse_24hour_time("Start: 20:30 or 20.45")
         # Should get first match (20:30)
         assert result == time(20, 30, 0)
+
+
+# ============================================================================
+# Non-Event Detection Tests
+# ============================================================================
+
+
+class TestNonEventChannelDetection:
+    """Test universal non-event channel detection"""
+
+    def test_no_event_text_marker(self):
+        """Test detection of 'NO EVENT' marker"""
+        service = PPVFilterService()
+
+        test_cases = [
+            "NO EVENT",
+            "no event",
+            "No Event",
+            "Channel | NO EVENT",
+            "ESPN | NO EVENT - OFFLINE",
+        ]
+
+        for channel_name in test_cases:
+            assert service._is_non_event_channel(channel_name) is True
+
+    def test_no_event_streaming_marker(self):
+        """Test detection of 'NO EVENT STREAMING' marker"""
+        service = PPVFilterService()
+
+        test_cases = [
+            "NO EVENT STREAMING",
+            "no event streaming",
+            "Channel NO EVENT STREAMING",
+        ]
+
+        for channel_name in test_cases:
+            assert service._is_non_event_channel(channel_name) is True
+
+    def test_offline_marker(self):
+        """Test detection of 'OFFLINE' marker"""
+        service = PPVFilterService()
+
+        test_cases = [
+            "Offline",
+            "OFFLINE",
+            "Channel - Offline",
+            "offline stream",
+        ]
+
+        for channel_name in test_cases:
+            assert service._is_non_event_channel(channel_name) is True
+
+    def test_tbd_marker(self):
+        """Test detection of 'TBD' marker"""
+        service = PPVFilterService()
+
+        test_cases = [
+            "TBD",
+            "tbd",
+            "Event - TBD",
+            "Match TBD",
+        ]
+
+        for channel_name in test_cases:
+            assert service._is_non_event_channel(channel_name) is True
+
+    def test_empty_slot_markers(self):
+        """Test detection of empty slot patterns"""
+        service = PPVFilterService()
+
+        test_cases = [
+            "-",
+            " - ",
+            "| -",
+            "|- ",
+            " | - ",
+            "| - |",
+            " | ",
+            "|",
+        ]
+
+        for channel_name in test_cases:
+            assert service._is_non_event_channel(channel_name) is True
+
+    def test_header_markers(self):
+        """Test detection of header/comment markers"""
+        service = PPVFilterService()
+
+        test_cases = [
+            "#### HEADER",
+            "### SECTION",
+            "## Commentary",
+            "###### Title",
+        ]
+
+        for channel_name in test_cases:
+            assert service._is_non_event_channel(channel_name) is True
+
+    def test_slot_number_only(self):
+        """Test detection of slot number without event"""
+        service = PPVFilterService()
+
+        test_cases = [
+            "Channel 01:",
+            "Event 10: ",
+            "Slot 05:",
+        ]
+
+        for channel_name in test_cases:
+            assert service._is_non_event_channel(channel_name) is True
+
+    def test_provider_with_dash_marker(self):
+        """Test detection of provider with empty content"""
+        service = PPVFilterService()
+
+        test_cases = [
+            "Rugby 16:|",
+            "NFL | 01 -",
+            "Provider | 01 -",
+        ]
+
+        for channel_name in test_cases:
+            assert service._is_non_event_channel(channel_name) is True
+
+    def test_valid_event_channels(self):
+        """Test that valid event channels are not marked as non-event"""
+        service = PPVFilterService()
+
+        test_cases = [
+            "ESPN+ PPV: Live Event",
+            "Boxing Match 8PM ET",
+            "UFC 300: Jones vs Smith",
+            "Wrestling Event 20:30",
+            "Sports Event - 2025-01-15 20:30",
+        ]
+
+        for channel_name in test_cases:
+            assert service._is_non_event_channel(channel_name) is False
+
+
+# ============================================================================
+# Filter Type Handler Tests (ALWAYS_SHOW, ALWAYS_HIDE, TEXT_BASED, etc.)
+# ============================================================================
+
+
+class TestAlwaysShowHandler:
+    """Test ALWAYS_SHOW filter handler"""
+
+    def test_always_show_returns_true(self):
+        """Test that ALWAYS_SHOW handler always returns True"""
+        service = PPVFilterService()
+        rule = {"filter_type": "ALWAYS_SHOW", "provider_name": "Bally Sports"}
+
+        test_channels = [
+            "BALLY SPORTS ARIZONA",
+            "BALLY SPORTS DETROIT",
+            "BALLY SPORTS MIDWEST",
+            "Regional Sports Network",
+        ]
+
+        for channel_name in test_channels:
+            should_show, metadata = service.should_show_channel(channel_name, "US| BALLY SPORTS PPV", rule)
+            assert should_show is True
+            assert metadata is None
+
+    def test_always_show_with_all_channel_names(self):
+        """Test ALWAYS_SHOW works with non-empty channel names"""
+        service = PPVFilterService()
+        rule = {"filter_type": "ALWAYS_SHOW", "provider_name": "Test"}
+
+        # Valid channel names should be shown
+        should_show, _ = service.should_show_channel("Test Event Channel", "US| TEST", rule)
+        assert should_show is True
+
+
+class TestAlwaysHideHandler:
+    """Test ALWAYS_HIDE filter handler"""
+
+    def test_always_hide_returns_false(self):
+        """Test that ALWAYS_HIDE handler always returns False"""
+        service = PPVFilterService()
+        rule = {"filter_type": "ALWAYS_HIDE", "provider_name": "Header"}
+
+        test_channels = [
+            "HEADER CHANNEL",
+            "Placeholder",
+            "Empty Slot",
+            "",
+        ]
+
+        for channel_name in test_channels:
+            should_show, metadata = service.should_show_channel(channel_name, "US| HEADER", rule)
+            assert should_show is False
+            assert metadata is None
+
+
+class TestTextBasedHandler:
+    """Test TEXT_BASED filter handler"""
+
+    def test_placeholder_text_single_string(self):
+        """Test placeholder_text as single string"""
+        service = PPVFilterService()
+        rule = {
+            "filter_type": "TEXT_BASED",
+            "placeholder_text": "NO EVENT STREAMING",
+            "provider_name": "DAZN",
+        }
+
+        should_show, metadata = service.should_show_channel(
+            "DAZN PPV 1 - NO EVENT STREAMING",
+            "AT| DAZN PPV",
+            rule,
+        )
+        assert should_show is False
+
+    def test_placeholder_text_list(self):
+        """Test placeholder_text as list of strings"""
+        service = PPVFilterService()
+        rule = {
+            "filter_type": "TEXT_BASED",
+            "placeholder_text": ["NO EVENT", "OFFLINE", "TBD"],
+            "provider_name": "Test",
+        }
+
+        test_cases = [
+            ("Event NO EVENT", False),
+            ("Event OFFLINE", False),
+            ("Event TBD", False),
+            ("Normal Event", False),  # No positive indicator
+        ]
+
+        for channel_name, expected in test_cases:
+            should_show, _ = service.should_show_channel(channel_name, "US| TEST", rule)
+            assert should_show is expected
+
+    def test_always_show_pattern_single_string(self):
+        """Test always_show_pattern as single string"""
+        service = PPVFilterService()
+        rule = {
+            "filter_type": "TEXT_BASED",
+            "always_show_pattern": "24/7",
+            "provider_name": "Entertainment",
+        }
+
+        should_show, _ = service.should_show_channel(
+            "Comedy Channel - 24/7",
+            "US| ENTERTAINMENT",
+            rule,
+        )
+        assert should_show is True
+
+    def test_always_show_pattern_list(self):
+        """Test always_show_pattern as list of strings"""
+        service = PPVFilterService()
+        rule = {
+            "filter_type": "TEXT_BASED",
+            "always_show_pattern": ["24/7", "CONTINUOUS"],
+            "provider_name": "Entertainment",
+        }
+
+        test_cases = [
+            ("Channel 24/7", True),
+            ("Channel CONTINUOUS", True),
+            ("Normal Event", False),
+        ]
+
+        for channel_name, expected in test_cases:
+            should_show, _ = service.should_show_channel(channel_name, "US| TEST", rule)
+            assert should_show is expected
+
+    def test_placeholder_takes_priority_over_always_show(self):
+        """Test that placeholder_text has priority over always_show_pattern"""
+        service = PPVFilterService()
+        rule = {
+            "filter_type": "TEXT_BASED",
+            "placeholder_text": "NO EVENT",
+            "always_show_pattern": "24/7",
+            "provider_name": "Test",
+        }
+
+        # Even with 24/7 marker, NO EVENT takes priority
+        should_show, _ = service.should_show_channel(
+            "24/7 Event NO EVENT",
+            "US| TEST",
+            rule,
+        )
+        assert should_show is False
+
+
+class TestISODatetimeHandler:
+    """Test ISO_DATETIME filter handler"""
+
+    def test_iso_datetime_future_event_shown(self):
+        """Test that future ISO datetime events are shown"""
+        current_time = datetime(2025, 12, 27, 0, 0, 0)
+        service = PPVFilterService(current_time=current_time)
+
+        rule = {
+            "filter_type": "ISO_DATETIME",
+            "date_field_pattern": r"\((\d{4}-\d{2}-\d{2}\s[\d:]+)\)",
+            "placeholder_date": "2098-12-31",
+            "provider_name": "ESPN+",
+        }
+
+        should_show, metadata = service.should_show_channel(
+            "Event (2025-12-28 14:00:00)",
+            "US| ESPN+ PPV",
+            rule,
+        )
+
+        assert should_show is True
+        assert metadata is not None
+        assert metadata["start_datetime"] == datetime(2025, 12, 28, 14, 0, 0)
+
+    def test_iso_datetime_placeholder_date_hidden(self):
+        """Test that placeholder dates are hidden"""
+        current_time = datetime(2025, 12, 27, 0, 0, 0)
+        service = PPVFilterService(current_time=current_time)
+
+        rule = {
+            "filter_type": "ISO_DATETIME",
+            "date_field_pattern": r"\((\d{4}-\d{2}-\d{2}\s[\d:]+)\)",
+            "placeholder_date": "2098-12-31",
+            "provider_name": "ESPN+",
+        }
+
+        should_show, metadata = service.should_show_channel(
+            "Event (2098-12-31 08:00:00)",
+            "US| ESPN+ PPV",
+            rule,
+        )
+
+        assert should_show is False
+        assert metadata is None
+
+    def test_iso_datetime_past_event_hidden(self):
+        """Test that past events are hidden"""
+        current_time = datetime(2025, 12, 27, 14, 0, 0)
+        service = PPVFilterService(current_time=current_time)
+
+        rule = {
+            "filter_type": "ISO_DATETIME",
+            "date_field_pattern": r"\((\d{4}-\d{2}-\d{2}\s[\d:]+)\)",
+            "placeholder_date": None,
+            "provider_name": "Test",
+        }
+
+        should_show, _ = service.should_show_channel(
+            "Past Event (2025-12-27 10:00:00)",
+            "US| TEST",
+            rule,
+        )
+
+        assert should_show is False
+
+    def test_iso_datetime_cannot_extract_pattern(self):
+        """Test handling when datetime cannot be extracted"""
+        service = PPVFilterService()
+
+        rule = {
+            "filter_type": "ISO_DATETIME",
+            "date_field_pattern": r"\((\d{4}-\d{2}-\d{2}\s[\d:]+)\)",
+            "placeholder_date": None,
+            "provider_name": "Test",
+        }
+
+        should_show, _ = service.should_show_channel(
+            "Event with no datetime",
+            "US| TEST",
+            rule,
+        )
+
+        assert should_show is False
+
+    def test_iso_datetime_invalid_datetime_format(self):
+        """Test handling when datetime format is invalid"""
+        service = PPVFilterService()
+
+        rule = {
+            "filter_type": "ISO_DATETIME",
+            "date_field_pattern": r"\(([^)]+)\)",
+            "placeholder_date": None,
+            "provider_name": "Test",
+        }
+
+        should_show, _ = service.should_show_channel(
+            "Event (INVALID DATETIME)",
+            "US| TEST",
+            rule,
+        )
+
+        assert should_show is False
+
+
+class TestRelativeTimeHandler:
+    """Test RELATIVE_TIME filter handler"""
+
+    def test_relative_time_today_future(self):
+        """Test relative time for today in the future"""
+        current_time = datetime(2025, 1, 17, 10, 0, 0)
+        service = PPVFilterService(current_time=current_time)
+
+        rule = {
+            "filter_type": "RELATIVE_TIME",
+            "time_pattern": r"(\d{1,2}:\d{2}(?:am|pm|AM|PM))(?:\s(Mon|Tue|Wed|Thu|Fri|Sat|Sun))?",
+            "provider_name": "Rugby",
+        }
+
+        should_show, metadata = service.should_show_channel(
+            "Rugby Event 1:30pm",
+            "US| RUGBY PPV",
+            rule,
+        )
+
+        assert should_show is True
+        assert metadata["start_datetime"].hour == 13
+        assert metadata["start_datetime"].minute == 30
+
+    def test_relative_time_today_past(self):
+        """Test relative time for today in the past"""
+        current_time = datetime(2025, 1, 17, 14, 0, 0)
+        service = PPVFilterService(current_time=current_time)
+
+        rule = {
+            "filter_type": "RELATIVE_TIME",
+            "time_pattern": r"(\d{1,2}:\d{2}(?:am|pm|AM|PM))(?:\s(Mon|Tue|Wed|Thu|Fri|Sat|Sun))?",
+            "provider_name": "Rugby",
+        }
+
+        should_show, _ = service.should_show_channel(
+            "Rugby Event 1:30pm",
+            "US| RUGBY PPV",
+            rule,
+        )
+
+        assert should_show is False
+
+    def test_relative_time_with_day_name(self):
+        """Test relative time with day name"""
+        # Friday Jan 17, 2025
+        current_time = datetime(2025, 1, 17, 10, 0, 0)
+        service = PPVFilterService(current_time=current_time)
+
+        rule = {
+            "filter_type": "RELATIVE_TIME",
+            "time_pattern": r"(\d{1,2}:\d{2}(?:am|pm|AM|PM))(?:\s(Mon|Tue|Wed|Thu|Fri|Sat|Sun))?",
+            "provider_name": "Rugby",
+        }
+
+        # Sunday (6 days away from Friday)
+        should_show, metadata = service.should_show_channel(
+            "Rugby Event 5:35am Sun",
+            "US| RUGBY PPV",
+            rule,
+        )
+
+        assert should_show is True
+        assert metadata["start_datetime"].weekday() == 6  # Sunday
+
+    def test_relative_time_same_weekday_future(self):
+        """Test relative time when same weekday but time is in future"""
+        # Friday Jan 17, 2025 at 10:00 AM
+        current_time = datetime(2025, 1, 17, 10, 0, 0)
+        service = PPVFilterService(current_time=current_time)
+
+        rule = {
+            "filter_type": "RELATIVE_TIME",
+            "time_pattern": r"(\d{1,2}:\d{2}(?:am|pm|AM|PM))(?:\s(Mon|Tue|Wed|Thu|Fri|Sat|Sun))?",
+            "provider_name": "Rugby",
+        }
+
+        # Friday afternoon (same day, future time)
+        should_show, metadata = service.should_show_channel(
+            "Rugby Event 3:00pm Fri",
+            "US| RUGBY PPV",
+            rule,
+        )
+
+        assert should_show is True
+
+    def test_relative_time_invalid_time_format(self):
+        """Test handling of invalid time format"""
+        current_time = datetime(2025, 1, 17, 10, 0, 0)
+        service = PPVFilterService(current_time=current_time)
+
+        rule = {
+            "filter_type": "RELATIVE_TIME",
+            "time_pattern": r"(\d{1,2}:\d{2}(?:am|pm|AM|PM))(?:\s(Mon|Tue|Wed|Thu|Fri|Sat|Sun))?",
+            "provider_name": "Rugby",
+        }
+
+        should_show, _ = service.should_show_channel(
+            "Rugby Event 25:99pm",
+            "US| RUGBY PPV",
+            rule,
+        )
+
+        assert should_show is False
+
+    def test_relative_time_no_pattern_in_rule(self):
+        """Test handling when time_pattern is missing"""
+        service = PPVFilterService()
+
+        rule = {
+            "filter_type": "RELATIVE_TIME",
+            "provider_name": "Rugby",
+            # Missing time_pattern
+        }
+
+        should_show, _ = service.should_show_channel(
+            "Rugby Event 1:30pm",
+            "US| RUGBY PPV",
+            rule,
+        )
+
+        assert should_show is False
+
+
+# ============================================================================
+# Event Metadata and Extraction Tests
+# ============================================================================
+
+
+class TestEventNameExtraction:
+    """Test event name extraction from channel names"""
+
+    def test_extract_event_name_with_pipe_separator(self):
+        """Test extraction with pipe separator"""
+        service = PPVFilterService()
+
+        channel_name = "ESPN+ PPV | Adelaide United vs Western Sydney (2025-12-27 03:35)"
+        result = service.extract_event_name(channel_name)
+
+        assert result == "Adelaide United vs Western Sydney"
+
+    def test_extract_event_name_with_parenthesis(self):
+        """Test extraction of text before parenthesis"""
+        service = PPVFilterService()
+
+        channel_name = "Boxing Match (2025-01-15 20:30)"
+        result = service.extract_event_name(channel_name)
+
+        assert result == "Boxing Match"
+
+    def test_extract_event_name_removes_provider_prefix(self):
+        """Test that provider prefix is removed"""
+        service = PPVFilterService()
+
+        channel_name = "US: Provider | Event Name (2025-01-15 20:30)"
+        result = service.extract_event_name(channel_name)
+
+        assert result == "Event Name"
+
+    def test_extract_event_name_empty_channel(self):
+        """Test handling of empty channel name"""
+        service = PPVFilterService()
+
+        result = service.extract_event_name("")
+        assert result is None
+
+    def test_extract_event_name_fallback(self):
+        """Test fallback when standard patterns don't match"""
+        service = PPVFilterService()
+
+        channel_name = "Event Name No Pattern"
+        result = service.extract_event_name(channel_name)
+
+        # Should return None if no standard pattern matches
+        assert result is None
+
+
+class TestEventMetadataConstruction:
+    """Test event metadata building"""
+
+    def test_build_event_metadata_basic(self):
+        """Test building basic event metadata"""
+        current_time = datetime(2025, 1, 15, 10, 0, 0)
+        service = PPVFilterService(current_time=current_time)
+
+        channel_name = "Boxing Match (2025-01-15 20:30)"
+        event_datetime = datetime(2025, 1, 15, 20, 30, 0)
+        rule = {"provider_name": "Boxing"}
+
+        metadata = service._build_event_metadata(channel_name, event_datetime, rule)
+
+        assert "event_name" in metadata
+        assert "start_datetime" in metadata
+        assert "suggested_duration" in metadata
+        assert "confidence" in metadata
+        assert metadata["start_datetime"] == event_datetime
+        assert metadata["confidence"] == 0.9
+
+    def test_build_event_metadata_with_duration(self):
+        """Test that duration is calculated"""
+        service = PPVFilterService()
+
+        channel_name = "Event (2025-01-15 20:30)"
+        event_datetime = datetime(2025, 1, 15, 20, 30, 0)
+        rule = {}
+
+        metadata = service._build_event_metadata(channel_name, event_datetime, rule)
+
+        assert isinstance(metadata["suggested_duration"], timedelta)
+
+
+class TestDurationEstimation:
+    """Test event duration estimation"""
+
+    def test_basketball_duration(self):
+        """Test basketball duration estimate"""
+        service = PPVFilterService()
+
+        # Duration estimation looks for sport keyword in channel name
+        duration = service._estimate_event_duration("Basketball Game: Lakers vs Celtics", {})
+        assert duration == timedelta(hours=2.5)
+
+    def test_soccer_duration(self):
+        """Test soccer duration estimate"""
+        service = PPVFilterService()
+
+        duration = service._estimate_event_duration("Football: Man United vs Liverpool", {})
+        assert duration == timedelta(hours=2.5)
+
+    def test_wrestling_duration(self):
+        """Test wrestling duration estimate"""
+        service = PPVFilterService()
+
+        duration = service._estimate_event_duration("WrestleMania 41", {})
+        assert duration == timedelta(hours=4)
+
+    def test_baseball_duration(self):
+        """Test baseball duration estimate"""
+        service = PPVFilterService()
+
+        duration = service._estimate_event_duration("Baseball: Yankees vs Red Sox", {})
+        assert duration == timedelta(hours=3)
+
+    def test_default_duration(self):
+        """Test default duration for unknown sports"""
+        service = PPVFilterService()
+
+        duration = service._estimate_event_duration("Unknown Event Type", {})
+        assert duration == timedelta(hours=4)
+
+
+# ============================================================================
+# Datetime String Extraction Tests
+# ============================================================================
+
+
+class TestDatetimeStringExtraction:
+    """Test datetime string extraction with regex patterns"""
+
+    def test_extract_datetime_string_basic(self):
+        """Test basic datetime extraction"""
+        service = PPVFilterService()
+
+        pattern = r"\((\d{4}-\d{2}-\d{2}\s[\d:]+)\)"
+        channel_name = "Event (2025-12-27 03:35:06)"
+
+        result = service.extract_datetime_string(channel_name, pattern)
+        assert result == "2025-12-27 03:35:06"
+
+    def test_extract_datetime_string_with_spaces(self):
+        """Test extraction handles whitespace in captured group"""
+        service = PPVFilterService()
+
+        pattern = r"\(\s*(\d{4}-\d{2}-\d{2}\s[\d:]+)\s*\)"
+        channel_name = "Event (  2025-12-27 03:35:06  )"
+
+        result = service.extract_datetime_string(channel_name, pattern)
+        assert result == "2025-12-27 03:35:06"
+
+    def test_extract_datetime_string_no_match(self):
+        """Test when pattern doesn't match"""
+        service = PPVFilterService()
+
+        pattern = r"\((\d{4}-\d{2}-\d{2}\s[\d:]+)\)"
+        channel_name = "Event with no datetime"
+
+        result = service.extract_datetime_string(channel_name, pattern)
+        assert result is None
+
+    def test_extract_datetime_string_invalid_regex(self):
+        """Test handling of invalid regex pattern"""
+        service = PPVFilterService()
+
+        pattern = r"(\d{4}[INVALID"  # Invalid regex
+        channel_name = "Event (2025-12-27)"
+
+        result = service.extract_datetime_string(channel_name, pattern)
+        assert result is None
+
+    def test_extract_datetime_string_caching(self):
+        """Test that compiled regex patterns are cached"""
+        service = PPVFilterService()
+
+        pattern = r"\((\d{4}-\d{2}-\d{2}\s[\d:]+)\)"
+        channel_name = "Event (2025-12-27 03:35:06)"
+
+        # First call
+        service.extract_datetime_string(channel_name, pattern)
+        assert pattern in service.compiled_regexes
+
+        # Second call should use cache
+        result = service.extract_datetime_string(channel_name, pattern)
+        assert result == "2025-12-27 03:35:06"
+
+
+class TestISODatetimeParsing:
+    """Test ISO datetime format parsing"""
+
+    def test_parse_iso_datetime_iso_with_space(self):
+        """Test ISO format with space separator"""
+        service = PPVFilterService()
+
+        result = service.parse_iso_datetime("2025-12-27 03:35:06")
+        assert result == datetime(2025, 12, 27, 3, 35, 6)
+
+    def test_parse_iso_datetime_iso_with_t(self):
+        """Test ISO format with T separator"""
+        service = PPVFilterService()
+
+        result = service.parse_iso_datetime("2025-12-27T03:35:06")
+        assert result == datetime(2025, 12, 27, 3, 35, 6)
+
+    def test_parse_iso_datetime_iso_with_z(self):
+        """Test ISO format with Z timezone"""
+        service = PPVFilterService()
+
+        result = service.parse_iso_datetime("2025-12-27T03:35:06Z")
+        assert result == datetime(2025, 12, 27, 3, 35, 6)
+
+    def test_parse_iso_datetime_iso_with_microseconds(self):
+        """Test ISO format with microseconds"""
+        service = PPVFilterService()
+
+        result = service.parse_iso_datetime("2025-12-27T03:35:06.123456")
+        assert result == datetime(2025, 12, 27, 3, 35, 6, 123456)
+
+    def test_parse_iso_datetime_without_seconds(self):
+        """Test ISO format without seconds"""
+        service = PPVFilterService()
+
+        result = service.parse_iso_datetime("2025-12-27 03:35")
+        assert result == datetime(2025, 12, 27, 3, 35, 0)
+
+    def test_parse_iso_datetime_ddmm_format(self):
+        """Test DD/MM format without year"""
+        current_time = datetime(2025, 1, 15, 10, 0, 0)
+        service = PPVFilterService(current_time=current_time)
+
+        result = service.parse_iso_datetime("22/10 19:00")
+        assert result.month == 10
+        assert result.day == 22
+        assert result.hour == 19
+
+    def test_parse_iso_datetime_mmdd_format(self):
+        """Test MM/DD format without year"""
+        current_time = datetime(2025, 1, 15, 10, 0, 0)
+        service = PPVFilterService(current_time=current_time)
+
+        result = service.parse_iso_datetime("10/22 19:00")
+        assert result.month == 10
+        assert result.day == 22
+        assert result.hour == 19
+
+    def test_parse_iso_datetime_past_date_in_year(self):
+        """Test that past dates in year are moved to next year"""
+        current_time = datetime(2025, 6, 15, 10, 0, 0)
+        service = PPVFilterService(current_time=current_time)
+
+        # January is in the past from June
+        result = service.parse_iso_datetime("01/15 19:00")
+        assert result.year == 2026  # Should be next year
+
+    def test_parse_iso_datetime_invalid(self):
+        """Test handling of invalid datetime strings"""
+        service = PPVFilterService()
+
+        test_cases = [
+            "2025-13-45 25:99:99",  # Invalid month/day/time
+            "not a datetime",
+            "",
+            "2025/13/45",
+        ]
+
+        for test_str in test_cases:
+            result = service.parse_iso_datetime(test_str)
+            assert result is None
+
+
+# ============================================================================
+# Error Handling and Robustness Tests
+# ============================================================================
+
+
+class TestErrorHandlingAndRobustness:
+    """Test error handling throughout the service"""
+
+    def test_should_show_channel_with_invalid_filter_type(self):
+        """Test handling of unknown filter type"""
+        service = PPVFilterService()
+
+        rule = {
+            "filter_type": "UNKNOWN_TYPE",
+            "provider_name": "Test",
+        }
+
+        should_show, metadata = service.should_show_channel("Some Event", "US| TEST", rule)
+        assert should_show is False
+        assert metadata is None
+
+    def test_should_show_channel_exception_during_filtering(self):
+        """Test that exceptions during filtering are caught"""
+        service = PPVFilterService()
+
+        rule = {
+            "filter_type": "RELATIVE_TIME",
+            "time_pattern": r"(\d{1,2}:\d{2}(?:am|pm|AM|PM))",
+            "provider_name": "Test",
+        }
+
+        # Valid pattern but data that could cause issues
+        should_show, metadata = service.should_show_channel("", "US| TEST", rule)
+        assert should_show is False
+        assert metadata is None
+
+    def test_should_show_channel_with_non_event_defaults_to_hide(self):
+        """Test that unknown providers default to HIDE"""
+        service = PPVFilterService()
+
+        # Unknown category with no rule
+        should_show, _ = service.should_show_channel("Event Name", "US| UNKNOWN PROVIDER", None)
+        assert should_show is False
+
+    def test_get_next_weekday_unknown_day(self):
+        """Test handling of unknown day name"""
+        current_time = datetime(2025, 1, 17, 10, 0, 0)
+        service = PPVFilterService(current_time=current_time)
+
+        result = service._get_next_weekday("XYZ")
+        # Should return current date when unknown
+        assert result == current_time.date()
+
+    def test_get_next_weekday_all_days(self):
+        """Test all day names work correctly"""
+        current_time = datetime(2025, 1, 17, 10, 0, 0)  # Friday
+        service = PPVFilterService(current_time=current_time)
+
+        day_names = [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+        ]
+
+        for day_name in day_names:
+            result = service._get_next_weekday(day_name)
+            assert isinstance(result, date)
+
+
+class TestIntegrationWithDefaultRules:
+    """Test integration with DEFAULT_FILTER_RULES"""
+
+    def test_all_default_rules_have_required_fields(self):
+        """Test that all default rules have required fields"""
+        required_fields = ["filter_type", "provider_name"]
+
+        for category, rule in DEFAULT_FILTER_RULES.items():
+            for field in required_fields:
+                assert field in rule, f"Rule for {category} missing {field}"
+
+    def test_all_default_filter_types_are_valid(self):
+        """Test that all filter types are known/valid"""
+        valid_types = {
+            "ALWAYS_SHOW",
+            "ALWAYS_HIDE",
+            "TEXT_BASED",
+            "ISO_DATETIME",
+            "RELATIVE_TIME",
+            "DATETIME_24HR",
+        }
+
+        for category, rule in DEFAULT_FILTER_RULES.items():
+            filter_type = rule.get("filter_type")
+            assert filter_type in valid_types, f"Unknown filter type '{filter_type}' for {category}"
+
+    def test_can_process_all_default_rules(self):
+        """Test that service can process all default rules without errors"""
+        current_time = datetime(2025, 12, 27, 10, 0, 0)
+        service = PPVFilterService(current_time=current_time)
+
+        for category, rule in DEFAULT_FILTER_RULES.items():
+            # Should not raise exception
+            should_show, _ = service.should_show_channel("Test Event", category, rule)
+            # Result depends on rule and channel name, just verify no crash
+            assert isinstance(should_show, bool)
+
+
+class TestCombinedScenarios:
+    """Test realistic combined scenarios"""
+
+    def test_espn_plus_ppv_with_real_channel_name(self):
+        """Test ESPN+ PPV with realistic channel name"""
+        current_time = datetime(2025, 12, 27, 0, 0, 0)
+        service = PPVFilterService(current_time=current_time)
+
+        channel_name = (
+            "US (ESPN+ 001) | Adelaide United vs. Western Sydney Wanderers FC Dec 27 3:35AM ET (2025-12-27 03:35:06)"
+        )
+        rule = DEFAULT_FILTER_RULES["US| ESPN+ PPV"]
+
+        should_show, metadata = service.should_show_channel(channel_name, "US| ESPN+ PPV", rule)
+        assert should_show is True
+        assert metadata is not None
+        assert "Adelaide United" in metadata["event_name"] or metadata["event_name"] == "Event"
+
+    def test_boxing_ppv_without_explicit_date(self):
+        """Test boxing PPV showing even without explicit date"""
+        current_time = datetime(2025, 1, 15, 10, 0, 0)
+        sync_date = date(2025, 1, 15)
+        service = PPVFilterService(current_time=current_time, sync_date=sync_date)
+
+        channel_name = "Danny Garcia vs Daniel Gonzalez / Oct 18 : 11PM UK / 6PM ET"
+        rule = {
+            "filter_type": "DATETIME_24HR",
+            "allow_no_date": True,
+            "provider_name": "Boxing",
+        }
+
+        should_show, metadata = service.should_show_channel(channel_name, "UK| BOXING PPV", rule)
+        assert should_show is True
+
+    def test_offline_channel_always_hidden(self):
+        """Test that offline channels are always hidden regardless of rule"""
+        current_time = datetime(2025, 12, 27, 0, 0, 0)
+        service = PPVFilterService(current_time=current_time)
+
+        # Even with ALWAYS_SHOW rule, universal markers should hide it
+        channel_name = "Some Channel - OFFLINE"
+        rule = {"filter_type": "ALWAYS_SHOW"}
+
+        should_show, _ = service.should_show_channel(channel_name, "US| TEST", rule)
+        # Universal markers are checked first, before filter rules
+        # This tests that _is_non_event_channel is called first
+        assert should_show is False
