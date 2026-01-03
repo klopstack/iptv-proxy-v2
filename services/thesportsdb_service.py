@@ -190,11 +190,11 @@ class TheSportsDBService:
 
             # API uses 'teams' key for this endpoint
             teams_list = result.get("teams", [])
-            
+
             # Fallback to 'results' for backward compatibility
             if not teams_list:
                 teams_list = result.get("results", [])
-            
+
             if not teams_list:
                 logger.debug(f"No teams found for league {league_id}")
                 return []

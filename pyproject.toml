@@ -49,6 +49,9 @@ omit = [
     "run_migrations.py",
     "migrations/*",
     "vulture_whitelist.py",
+    "check_epg_status.py",
+    "measure_ppv_extraction.py",
+    "regenerate_ppv_lists.py",
 ]
 
 [tool.coverage.report]

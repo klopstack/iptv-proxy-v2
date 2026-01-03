@@ -58,10 +58,10 @@ class Account(db.Model):  # type: ignore[name-defined]
     last_sync = db.Column(db.DateTime)  # Last time this account was synced
     last_sync_status = db.Column(db.String(50))  # 'success', 'error'
     sync_in_progress = db.Column(db.Boolean, default=False)  # Prevents concurrent syncs
-    
+
     # PPV visibility settings: 'hide_all' | 'hide_inactive' (default) | 'show_all'
-    ppv_visibility = db.Column(db.String(20), default='hide_inactive', nullable=False)
-    
+    ppv_visibility = db.Column(db.String(20), default="hide_inactive", nullable=False)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -281,15 +281,9 @@ class Channel(db.Model):  # type: ignore[name-defined]
     ppv_enrichment_queue_id = db.Column(
         db.String(100), nullable=True, index=True
     )  # Unique ID for this enrichment attempt
-    ppv_enrichment_attempts = db.Column(
-        db.Integer, default=0
-    )  # Number of enrichment attempts
-    ppv_enrichment_error = db.Column(
-        db.Text, nullable=True
-    )  # Error message from last attempt
-    ppv_enrichment_last_attempt = db.Column(
-        db.DateTime, nullable=True
-    )  # Timestamp of last enrichment attempt
+    ppv_enrichment_attempts = db.Column(db.Integer, default=0)  # Number of enrichment attempts
+    ppv_enrichment_error = db.Column(db.Text, nullable=True)  # Error message from last attempt
+    ppv_enrichment_last_attempt = db.Column(db.DateTime, nullable=True)  # Timestamp of last enrichment attempt
 
     # Relationships
     category = db.relationship("Category", backref="channels")

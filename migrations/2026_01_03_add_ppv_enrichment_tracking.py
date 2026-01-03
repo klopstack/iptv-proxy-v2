@@ -20,9 +20,7 @@ def migrate(db_path):
         migrations_needed = []
 
         if "ppv_enrichment_status" not in columns:
-            migrations_needed.append(
-                "ALTER TABLE channels ADD COLUMN ppv_enrichment_status VARCHAR(20) DEFAULT NULL"
-            )
+            migrations_needed.append("ALTER TABLE channels ADD COLUMN ppv_enrichment_status VARCHAR(20) DEFAULT NULL")
 
         if "ppv_enrichment_queue_id" not in columns:
             migrations_needed.append(
@@ -30,14 +28,10 @@ def migrate(db_path):
             )
 
         if "ppv_enrichment_attempts" not in columns:
-            migrations_needed.append(
-                "ALTER TABLE channels ADD COLUMN ppv_enrichment_attempts INTEGER DEFAULT 0"
-            )
+            migrations_needed.append("ALTER TABLE channels ADD COLUMN ppv_enrichment_attempts INTEGER DEFAULT 0")
 
         if "ppv_enrichment_error" not in columns:
-            migrations_needed.append(
-                "ALTER TABLE channels ADD COLUMN ppv_enrichment_error TEXT DEFAULT NULL"
-            )
+            migrations_needed.append("ALTER TABLE channels ADD COLUMN ppv_enrichment_error TEXT DEFAULT NULL")
 
         if "ppv_enrichment_last_attempt" not in columns:
             migrations_needed.append(
@@ -54,9 +48,7 @@ def migrate(db_path):
 
         # Create indexes for enrichment tracking
         try:
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_ppv_enrichment_status ON channels(ppv_enrichment_status)"
-            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_ppv_enrichment_status ON channels(ppv_enrichment_status)")
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_ppv_enrichment_queue_id ON channels(ppv_enrichment_queue_id)"
             )

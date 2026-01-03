@@ -3,6 +3,7 @@ API endpoints for PPV event enrichment management
 """
 
 import logging
+
 from flask import Blueprint, jsonify, request
 from flask_cors import cross_origin
 
@@ -18,9 +19,9 @@ ppv_enrichment_bp = Blueprint("ppv_enrichment", __name__, url_prefix="/api/ppv-e
 def get_enrichment_status():
     """
     Get PPV enrichment queue status and statistics.
-    
+
     Returns enrichment progress, API usage, and next scheduled run.
-    
+
     Response:
     {
         "queue_status": {
@@ -67,26 +68,23 @@ def get_enrichment_status():
 def process_enrichment_queue():
     """
     Manually trigger PPV enrichment processing.
-    
+
     Optional JSON body:
     {
         "max_requests": 25  # Max API requests to make (max 30/minute)
     }
-    
+
     Returns processing statistics.
     """
     try:
         from flask import current_app
 
         queue = get_enrichment_queue(current_app)
-        
+
         data = request.get_json() or {}
         max_requests = data.get("max_requests")
 
-        logger.info(
-            f"Manual enrichment trigger"
-            f"{f' with max_requests={max_requests}' if max_requests else ''}"
-        )
+        logger.info(f"Manual enrichment trigger" f"{f' with max_requests={max_requests}' if max_requests else ''}")
 
         stats = queue.process_queue(max_requests=max_requests)
 
@@ -102,21 +100,22 @@ def process_enrichment_queue():
 def queue_channels_for_enrichment():
     """
     Queue specific PPV channels for enrichment.
-    
+
     JSON body:
     {
         "channel_ids": [1, 2, 3],  # IDs of channels to queue
         "account_id": 1  # Optional: only queue channels from this account
     }
-    
+
     Returns queuing statistics.
     """
     try:
         from flask import current_app
+
         from models import Channel
 
         queue = get_enrichment_queue(current_app)
-        
+
         data = request.get_json() or {}
         channel_ids = data.get("channel_ids", [])
         account_id = data.get("account_id")
@@ -138,8 +137,7 @@ def queue_channels_for_enrichment():
             )
 
         logger.info(
-            f"Queuing {len(channels)} channels for enrichment"
-            f"{f' from account {account_id}' if account_id else ''}"
+            f"Queuing {len(channels)} channels for enrichment" f"{f' from account {account_id}' if account_id else ''}"
         )
 
         # Queue channels
@@ -157,20 +155,21 @@ def queue_channels_for_enrichment():
 def queue_all_ppv_channels():
     """
     Queue all unmatched PPV channels for enrichment.
-    
+
     Optional JSON body:
     {
         "account_id": 1  # Optional: only queue channels from this account
     }
-    
+
     Returns queuing statistics.
     """
     try:
         from flask import current_app
+
         from models import Channel
 
         queue = get_enrichment_queue(current_app)
-        
+
         data = request.get_json() or {}
         account_id = data.get("account_id")
 
@@ -207,7 +206,7 @@ def queue_all_ppv_channels():
 def get_enrichment_settings():
     """
     Get current PPV enrichment settings.
-    
+
     Returns configuration details including rate limits and batch size.
     """
     try:
@@ -215,16 +214,19 @@ def get_enrichment_settings():
 
         queue = get_enrichment_queue(current_app)
 
-        return jsonify(
-            {
-                "batch_size": queue.batch_size,
-                "requests_per_minute": queue.requests_per_minute,
-                "request_interval_seconds": queue.request_interval_seconds,
-                "max_retry_attempts": 3,
-                "thesportsdb_rate_limit": 30,
-                "thesportsdb_rate_limit_window": "1 minute",
-            }
-        ), 200
+        return (
+            jsonify(
+                {
+                    "batch_size": queue.batch_size,
+                    "requests_per_minute": queue.requests_per_minute,
+                    "request_interval_seconds": queue.request_interval_seconds,
+                    "max_retry_attempts": 3,
+                    "thesportsdb_rate_limit": 30,
+                    "thesportsdb_rate_limit_window": "1 minute",
+                }
+            ),
+            200,
+        )
 
     except Exception as e:
         logger.error(f"Error getting enrichment settings: {e}", exc_info=True)

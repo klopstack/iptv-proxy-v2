@@ -254,9 +254,7 @@ class SyncScheduler:
                 self._set_last_sync_time(SYNC_KEY_LAST_FCC_SYNC)
 
             # Check if PPV enrichment is needed (hourly, respects API rate limits)
-            if self._needs_sync(
-                SYNC_KEY_LAST_PPV_ENRICHMENT, DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS
-            ):
+            if self._needs_sync(SYNC_KEY_LAST_PPV_ENRICHMENT, DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS):
                 logger.info("PPV enrichment due (hourly schedule)")
                 self._enrich_ppv_events()
                 self._set_last_sync_time(SYNC_KEY_LAST_PPV_ENRICHMENT)
@@ -495,7 +493,7 @@ class SyncScheduler:
     def _enrich_ppv_events(self):
         """
         Enrich PPV events with TheSportsDB data.
-        
+
         Runs hourly to respect free tier API rate limits (~500/day).
         Processes queued PPV channels and links them to sports events.
         """
@@ -518,10 +516,7 @@ class SyncScheduler:
             )
 
             if stats.get("rate_limited"):
-                logger.info(
-                    "TheSportsDB API daily limit reached, "
-                    "resuming enrichment tomorrow"
-                )
+                logger.info("TheSportsDB API daily limit reached, " "resuming enrichment tomorrow")
 
         except Exception as e:
             logger.error(f"Error enriching PPV events: {e}", exc_info=True)

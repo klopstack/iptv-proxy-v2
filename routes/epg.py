@@ -13,7 +13,6 @@ from models import Account, ChannelEpgMapping, EpgChannel, EpgSource, SdLineup, 
 from services.epg_match_rules_service import EpgMatchRulesService
 from services.epg_service import EpgService, make_sd_xmltv_id, normalize_xmltv_url
 from services.iptv_service import IPTVService
-from services.ppv_visibility_service import PPVVisibilityService
 from services.schedules_direct import SchedulesDirectClient, SchedulesDirectError, validate_credentials
 
 logger = logging.getLogger(__name__)

@@ -598,7 +598,7 @@ class PPVFilterService:
         """
         # Pattern: Month (abbr or full) Day : Time(am/pm)
         # Example: "Oct 18 : 11PM UK / 6PM ET" → extract "Oct 18 : 11PM"
-        month_pattern = r'(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})\s*[:/-]\s*(\d{1,2})\s*([APap][Mm])'
+        month_pattern = r"(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})\s*[:/-]\s*(\d{1,2})\s*([APap][Mm])"
 
         match = re.search(month_pattern, text)
         if not match:
@@ -611,18 +611,29 @@ class PPVFilterService:
 
         # Map month name to number
         months = {
-            'jan': 1, 'january': 1,
-            'feb': 2, 'february': 2,
-            'mar': 3, 'march': 3,
-            'apr': 4, 'april': 4,
-            'may': 5,
-            'jun': 6, 'june': 6,
-            'jul': 7, 'july': 7,
-            'aug': 8, 'august': 8,
-            'sep': 9, 'september': 9,
-            'oct': 10, 'october': 10,
-            'nov': 11, 'november': 11,
-            'dec': 12, 'december': 12,
+            "jan": 1,
+            "january": 1,
+            "feb": 2,
+            "february": 2,
+            "mar": 3,
+            "march": 3,
+            "apr": 4,
+            "april": 4,
+            "may": 5,
+            "jun": 6,
+            "june": 6,
+            "jul": 7,
+            "july": 7,
+            "aug": 8,
+            "august": 8,
+            "sep": 9,
+            "september": 9,
+            "oct": 10,
+            "october": 10,
+            "nov": 11,
+            "november": 11,
+            "dec": 12,
+            "december": 12,
         }
 
         month_num = months.get(month_str.lower())
@@ -642,9 +653,9 @@ class PPVFilterService:
                 return None
 
             # Convert to 24-hour format
-            if period == 'pm' and hour != 12:
+            if period == "pm" and hour != 12:
                 hour += 12
-            elif period == 'am' and hour == 12:
+            elif period == "am" and hour == 12:
                 hour = 0
 
             # Determine year

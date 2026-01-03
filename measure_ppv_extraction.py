@@ -120,13 +120,13 @@ def load_and_measure_ppv():
 
     print(f"\n📊 Total Channels: {results['total_channels']:,}")
     print(
-        f"🗑️  Placeholders (NO EVENT): {results['placeholders_filtered']:,} ({results['placeholders_filtered']/results['total_channels']*100:.1f}%)"
+        f"🗑️  Placeholders (NO EVENT): {results['placeholders_filtered']:,} ({results['placeholders_filtered'] / results['total_channels'] * 100:.1f}%)"
     )
     print(
-        f"🔌 Inactive channels: {results['inactive_channels']:,} ({results['inactive_channels']/results['total_channels']*100:.1f}%)"
+        f"🔌 Inactive channels: {results['inactive_channels']:,} ({results['inactive_channels'] / results['total_channels'] * 100:.1f}%)"
     )
     print(
-        f"📅 Far future dates (>1 year): {results['far_future_dates']:,} ({results['far_future_dates']/results['total_channels']*100:.1f}%)"
+        f"📅 Far future dates (>1 year): {results['far_future_dates']:,} ({results['far_future_dates'] / results['total_channels'] * 100:.1f}%)"
     )
 
     # Calculate active channels (not placeholders, not inactive)
@@ -136,7 +136,7 @@ def load_and_measure_ppv():
         - results["inactive_channels"]
         - results["far_future_dates"]
     )
-    print(f"✅ Actively broadcasting: {active:,} ({active/results['total_channels']*100:.1f}%)")
+    print(f"✅ Actively broadcasting: {active:,} ({active / results['total_channels'] * 100:.1f}%)")
 
     matchable = active
     with_comp = len(results["with_competitors"])
@@ -153,17 +153,19 @@ def load_and_measure_ppv():
     )
 
     print(f"\n📋 Matchable Channels (non-placeholder): {matchable:,}")
-    print(f"\n✅ Extraction Results:")
-    print(f"   With competitors: {with_comp:,} ({with_comp/matchable*100:.1f}%)")
-    print(f"   With date info:   {total_with_date_info:,} ({total_with_date_info/matchable*100:.1f}%)")
+    print("\n✅ Extraction Results:")
+    print(f"   With competitors: {with_comp:,} ({with_comp / matchable * 100:.1f}%)")
+    print(f"   With date info:   {total_with_date_info:,} ({total_with_date_info / matchable * 100:.1f}%)")
     print(f"     - Full dates:   {with_date:,}")
     print(f"     - Weekday:      {with_weekday:,}")
     print(f"     - Time-only:    {with_time:,}")
-    print(f"❌ No extraction:    {len(results['no_extraction']):,} ({len(results['no_extraction'])/matchable*100:.1f}%)")
+    print(
+        f"❌ No extraction:    {len(results['no_extraction']):,} ({len(results['no_extraction']) / matchable * 100:.1f}%)"
+    )
 
-    print(f"\n📅 Date Inference Methods:")
+    print("\n📅 Date Inference Methods:")
     for method, count in sorted(results["inference_methods"].items(), key=lambda x: x[1], reverse=True):
-        print(f"   {method:30} {count:5,} channels ({count/with_date*100:5.1f}%)")
+        print(f"   {method:30} {count:5,} channels ({count / with_date * 100:5.1f}%)")
 
     print(f"\n📅 Unique Dates Found: {len(results['unique_dates'])}")
     if results["unique_dates"]:
@@ -172,22 +174,22 @@ def load_and_measure_ppv():
         print(f"   Last:  {sorted_dates[-1]}")
 
     # Show top extracted competitors
-    print(f"\n🏆 Top 15 Extracted Competitor Pairs:")
+    print("\n🏆 Top 15 Extracted Competitor Pairs:")
     for (comp1, comp2), count in sorted(results["competitor_pairs"].items(), key=lambda x: x[1], reverse=True)[:15]:
         print(f"   {comp1:30} vs {comp2:30} [{count:4} channels]")
 
     # Show examples of successful extractions
-    print(f"\n📌 Examples of Extracted Events (first 10):")
+    print("\n📌 Examples of Extracted Events (first 10):")
     for item in results["with_date"][:10]:
         date = item["date"].strftime("%Y-%m-%d %H:%M")
         how = item["how"]
         print(f"   {date} ({how:20}): {item['channel'][:55]}")
 
-    print(f"\n📌 Examples of Weekday-only Extractions (first 5):")
+    print("\n📌 Examples of Weekday-only Extractions (first 5):")
     for item in results["with_weekday"][:5]:
         print(f"   {item['weekday']:3}: {item['channel'][:65]}")
 
-    print(f"\n📌 Examples of Time-only Extractions (first 5):")
+    print("\n📌 Examples of Time-only Extractions (first 5):")
     for item in results["with_time_only"][:5]:
         h, m, ap = item["time"]
         time_str = f"{h}:{m:02d} {ap if ap else ''}"
@@ -195,7 +197,7 @@ def load_and_measure_ppv():
 
     # Show examples of failed extractions
     if results["no_extraction"]:
-        print(f"\n⚠️  Examples of Failed Extractions (first 10):")
+        print("\n⚠️  Examples of Failed Extractions (first 10):")
         for channel in results["no_extraction"][:10]:
             print(f"   {channel[:75]}")
 
@@ -212,17 +214,17 @@ def load_and_measure_ppv():
     )
 
     print(f"   Channels with BOTH competitors AND date info: {channels_with_competitors_and_date:,}")
-    print(f"   → These can be matched directly to TheSportsDB")
-    print(f"   → Confidence: 0.90+ (high)")
+    print("   → These can be matched directly to TheSportsDB")
+    print("   → Confidence: 0.90+ (high)")
 
     potential_tier1 = with_comp
-    print(f"\n📊 TIER 1 (Direct Search) Potential:")
+    print("\n📊 TIER 1 (Direct Search) Potential:")
     print(f"   Candidates: {potential_tier1:,} channels with team names")
     print(f"   API Calls: ~{potential_tier1:,} (1 per candidate)")
     print(f"   Verdict: {'✅ FEASIBLE' if potential_tier1 < 10000 else '⚠️  MODERATE'}")
 
     potential_tier2 = total_with_date_info
-    print(f"\n📊 TIER 2 (Calendar Browse) Potential:")
+    print("\n📊 TIER 2 (Calendar Browse) Potential:")
     print(f"   Candidates with date info: {potential_tier2:,} channels")
     print(f"   Unique dates: {len(results['unique_dates']):,}")
     if results["unique_dates"]:
@@ -230,10 +232,12 @@ def load_and_measure_ppv():
         print(f"   Verdict: {'✅ HIGHLY EFFICIENT' if len(results['unique_dates']) < 100 else '⚠️  CHECK DATES'}")
 
     overall_coverage = with_comp + potential_tier2
-    print(f"\n💡 OVERALL COVERAGE:")
-    print(f"   Extractable channels: {overall_coverage:,} ({overall_coverage/matchable*100:.1f}%)")
+    print("\n💡 OVERALL COVERAGE:")
+    print(f"   Extractable channels: {overall_coverage:,} ({overall_coverage / matchable * 100:.1f}%)")
     print(f"   Expected API calls: ~{potential_tier1 + len(results['unique_dates']):,}")
-    print(f"   Cost per matchable channel: {(potential_tier1 + len(results['unique_dates']))/matchable:.2f} API calls")
+    print(
+        f"   Cost per matchable channel: {(potential_tier1 + len(results['unique_dates'])) / matchable:.2f} API calls"
+    )
 
     print("\n" + "=" * 70)
 

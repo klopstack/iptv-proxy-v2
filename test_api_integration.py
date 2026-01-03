@@ -7,10 +7,9 @@ Tests both direct API calls and the extraction/matching logic.
 import logging
 import sys
 from datetime import datetime
-from typing import List, Dict, Any
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(levelname)s: %(message)s')
+logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 # Test data from NO_DATA.list - sample PPV entries
@@ -18,25 +17,20 @@ TEST_CHANNELS = [
     # AR TOD PPV channels - numbered placeholders
     "AR: TOD PPV 1 - NO EVENT STREAMING - | 8K EXCLUSIVE",
     "AR: TOD PPV 10 - NO EVENT STREAMING - | 8K EXCLUSIVE",
-    
     # Soccer matches (hypothetical formats)
     "AR| Real Madrid vs Barcelona (2025-01-20 14:00:00)",
     "AR| Liverpool at Manchester United (2025-01-20 15:30:00)",
     "AR| Paris Saint-Germain - Lyon | Jan 25 19:45",
-    
     # USA/General matches
     "US| Warriors @ Lakers | Jan 20 19:00",
     "US| Yankees vs Red Sox (2025-02-01 13:00)",
     "US| Cowboys - Giants | Sat 20:00 PM",
-    
     # European clubs with symbols
     "ES| FC Barcelona ⚽ vs Real Sociedad | 20 Jan 21:00",
     "IT| Juventus vs AC Milan (2025-01-26)",
-    
     # Boxing/PPV specific
     "BOXING: Canelo Alvarez vs John Ryder | 2025-02-01 22:00",
     "UFC 311: Makhachev vs Nurmagomedov (2025-01-18 23:00)",
-    
     # Just provider names (inactive)
     "(Fanatiz 001)",
     "DAZN PPV",
@@ -45,14 +39,15 @@ TEST_CHANNELS = [
 
 def test_thesportsdb_service():
     """Test direct TheSportsDB service API calls."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TESTING THESPORTSDB SERVICE")
-    print("="*80)
-    
+    print("=" * 80)
+
     try:
         from services.thesportsdb_service import TheSportsDBService
+
         service = TheSportsDBService()
-        
+
         # Test 1: Get next league events for Premier League
         print("\n[Test 1] Fetching Premier League events...")
         events = service.get_next_league_events("133602", max_events=5)
@@ -62,7 +57,7 @@ def test_thesportsdb_service():
                 print(f"  - {event.get('strEvent')} ({event.get('dateEvent')})")
         else:
             print("✗ No events returned")
-            
+
         # Test 2: Get league info
         print("\n[Test 2] Fetching Premier League info...")
         league_info = service.get_league_info("133602")
@@ -70,7 +65,7 @@ def test_thesportsdb_service():
             print(f"✓ League: {league_info.get('strLeague')}")
         else:
             print("✗ League info not found")
-            
+
         # Test 3: Get teams
         print("\n[Test 3] Fetching Premier League teams...")
         teams = service.get_league_teams("133602", max_teams=3)
@@ -80,7 +75,7 @@ def test_thesportsdb_service():
                 print(f"  - {team.get('strTeam')}")
         else:
             print("✗ No teams returned")
-            
+
         return True
     except Exception as e:
         print(f"✗ TheSportsDB Service Error: {e}")
@@ -90,39 +85,39 @@ def test_thesportsdb_service():
 
 def test_ppv_event_extractor():
     """Test PPV event extraction logic."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TESTING PPV EVENT EXTRACTOR")
-    print("="*80)
-    
+    print("=" * 80)
+
     try:
         from services.ppv_event_extractor import PPVEventExtractor
-        
+
         extractor = PPVEventExtractor(current_date=datetime(2025, 1, 20, 12, 0))
-        
+
         print("\n[Test 1] Placeholder Detection")
         test_cases = [
             ("AR: TOD PPV 1 - NO EVENT STREAMING - | 8K EXCLUSIVE", True),
             ("AR| Real Madrid vs Barcelona", False),
             ("DAZN PPV", False),
         ]
-        
+
         for channel, expected_placeholder in test_cases:
             result = extractor.is_placeholder(channel)
             status = "✓" if result == expected_placeholder else "✗"
             print(f"  {status} {channel[:50]}: placeholder={result}")
-            
+
         print("\n[Test 2] Inactive Channel Detection")
         test_cases = [
             ("(Fanatiz 001)", True),
             ("AR| Real Madrid vs Barcelona", False),
             ("DAZN PPV", False),
         ]
-        
+
         for channel, expected_inactive in test_cases:
             result = extractor.is_inactive_channel(channel)
             status = "✓" if result == expected_inactive else "✗"
             print(f"  {status} {channel}: inactive={result}")
-            
+
         print("\n[Test 3] Extract Competitors")
         test_cases = [
             "AR| Real Madrid vs Barcelona",
@@ -131,12 +126,12 @@ def test_ppv_event_extractor():
             "BOXING: Canelo Alvarez vs John Ryder",
             "UFC 311: Makhachev vs Nurmagomedov",
         ]
-        
+
         for channel in test_cases:
             competitors = extractor.extract_competitors(channel)
             status = "✓" if competitors else "✗"
             print(f"  {status} {channel[:40]}: {competitors}")
-            
+
         print("\n[Test 4] Extract Event Date")
         test_cases = [
             ("AR| Real Madrid vs Barcelona (2025-01-20 14:00:00)", "2025-01-20"),
@@ -144,7 +139,7 @@ def test_ppv_event_extractor():
             ("US| Cowboys - Giants | Sat 20:00 PM", None),  # Will infer date
             ("AR: TOD PPV 1 - NO EVENT STREAMING", None),
         ]
-        
+
         for channel, expected_substring in test_cases:
             date_info = extractor.extract_date(channel)
             if date_info:
@@ -154,7 +149,7 @@ def test_ppv_event_extractor():
                 result = "None"
                 status = "?"
             print(f"  {status} {channel[:40]}: {result}")
-            
+
         return True
     except Exception as e:
         print(f"✗ PPV Event Extractor Error: {e}")
@@ -164,31 +159,30 @@ def test_ppv_event_extractor():
 
 def test_ppv_enrichment_queue():
     """Test PPV enrichment queue integration."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TESTING PPV ENRICHMENT QUEUE")
-    print("="*80)
-    
+    print("=" * 80)
+
     try:
         from services.ppv_enrichment_service import (
-            PPVEnrichmentQueue,
-            THESPORTSDB_REQUESTS_PER_MINUTE,
-            THESPORTSDB_REQUEST_WINDOW_SECONDS,
             DEFAULT_REQUESTS_PER_MINUTE,
+            THESPORTSDB_REQUEST_WINDOW_SECONDS,
+            THESPORTSDB_REQUESTS_PER_MINUTE,
         )
-        
+
         print("\n[Test 1] Queue Configuration")
         # Test the constants directly
         print(f"  ✓ TheSportsDB requests per minute: {THESPORTSDB_REQUESTS_PER_MINUTE}")
         print(f"  ✓ Request window: {THESPORTSDB_REQUEST_WINDOW_SECONDS} seconds")
         print(f"  ✓ Conservative default: {DEFAULT_REQUESTS_PER_MINUTE}")
-        
+
         # Check if service can be instantiated with proper parameters
         if THESPORTSDB_REQUESTS_PER_MINUTE == 30 and THESPORTSDB_REQUEST_WINDOW_SECONDS == 60:
-            print(f"  ✓ Rate limiting constants are correct")
+            print("  ✓ Rate limiting constants are correct")
         else:
-            print(f"  ✗ Rate limiting constants incorrect")
+            print("  ✗ Rate limiting constants incorrect")
             return False
-            
+
         return True
     except Exception as e:
         print(f"✗ PPV Enrichment Queue Error: {e}")
@@ -198,22 +192,22 @@ def test_ppv_enrichment_queue():
 
 def test_real_world_matching():
     """Test real-world PPV channel matching scenarios."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TESTING REAL-WORLD MATCHING SCENARIOS")
-    print("="*80)
-    
+    print("=" * 80)
+
     try:
         from services.ppv_event_extractor import PPVEventExtractor
-        
+
         extractor = PPVEventExtractor(current_date=datetime(2026, 1, 2, 12, 0))
-        
+
         print("\n[Test 1] Extract All Information from Channel")
         test_channels = [
             "AR| Real Madrid vs Barcelona (2025-01-20 14:00:00)",
             "US| Warriors @ Lakers | Jan 20 19:00",
             "UFC 311: Makhachev vs Nurmagomedov (2025-01-18 23:00)",
         ]
-        
+
         for channel in test_channels:
             info = extractor.extract_all(channel)
             has_competitors = bool(info.get("competitors"))
@@ -223,31 +217,31 @@ def test_real_world_matching():
             print(f"     → Competitors: {info.get('competitors')}")
             print(f"     → Date: {info.get('date')}")
             print(f"     → Inferred: {info.get('inferred_how')}")
-            
+
         print("\n[Test 2] Skip NO_DATA Placeholders")
         placeholders = [
             "AR: TOD PPV 1 - NO EVENT STREAMING - | 8K EXCLUSIVE",
             "AR: TOD PPV 10 - NO EVENT STREAMING - | 8K EXCLUSIVE",
         ]
-        
+
         for channel in placeholders:
             info = extractor.extract_all(channel)
             is_placeholder = info.get("is_placeholder")
             status = "✓" if is_placeholder else "✗"
             print(f"  {status} {channel[:50]} → placeholder={is_placeholder}")
-            
+
         print("\n[Test 3] Filter Inactive Channels")
         inactive = [
             "(Fanatiz 001)",
             "DAZN PPV",
             "    ",
         ]
-        
+
         for channel in inactive:
             is_inactive = extractor.is_inactive_channel(channel)
             status = "✓" if is_inactive else "✗"
             print(f"  {status} '{channel}' → inactive={is_inactive}")
-            
+
         return True
     except Exception as e:
         print(f"✗ Real-World Matching Error: {e}")
@@ -257,15 +251,15 @@ def test_real_world_matching():
 
 def test_html_search_patterns():
     """Test HTML parsing and search patterns."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TESTING HTML SEARCH AND PARSING")
-    print("="*80)
-    
+    print("=" * 80)
+
     try:
         from services.ppv_event_extractor import PPVEventExtractor
-        
+
         extractor = PPVEventExtractor()
-        
+
         # Test regex patterns directly
         print("\n[Test 1] Competitor Pattern Matching")
         test_cases = [
@@ -274,7 +268,7 @@ def test_html_search_patterns():
             ("Federer, Roger vs Nadal, Rafael @ time", ["Federer, Roger", "Nadal, Rafael"]),
             ("Paris Saint-Germain - Lyon", ["Paris Saint-Germain", "Lyon"]),
         ]
-        
+
         for channel, expected_teams in test_cases:
             competitors = extractor.extract_competitors(channel)
             if competitors and len(competitors) == 2:
@@ -282,7 +276,7 @@ def test_html_search_patterns():
             else:
                 status = "✗"
             print(f"  {status} {channel}: {competitors}")
-            
+
         print("\n[Test 2] Date Pattern Matching")
         test_cases = [
             "Jan 25 19:45",
@@ -290,12 +284,12 @@ def test_html_search_patterns():
             "2025-01-20 14:00:00",
             "Sat 20:00 PM",
         ]
-        
+
         for date_str in test_cases:
             date_info = extractor.extract_date(f"Channel | {date_str}")
             status = "✓" if date_info else "?"
             print(f"  {status} {date_str}: {date_info}")
-            
+
         return True
     except Exception as e:
         print(f"✗ HTML Search Patterns Error: {e}")
@@ -305,34 +299,34 @@ def test_html_search_patterns():
 
 def test_rate_limiting():
     """Test rate limiting configuration."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TESTING RATE LIMITING")
-    print("="*80)
-    
+    print("=" * 80)
+
     try:
         from services.ppv_enrichment_service import (
-            THESPORTSDB_REQUESTS_PER_MINUTE,
-            THESPORTSDB_REQUEST_WINDOW_SECONDS,
             DEFAULT_REQUESTS_PER_MINUTE,
+            THESPORTSDB_REQUEST_WINDOW_SECONDS,
+            THESPORTSDB_REQUESTS_PER_MINUTE,
         )
-        
-        print(f"\n[Test 1] Rate Limit Constants")
+
+        print("\n[Test 1] Rate Limit Constants")
         print(f"  ✓ TheSportsDB API limit: {THESPORTSDB_REQUESTS_PER_MINUTE} requests/minute")
         print(f"  ✓ Request window: {THESPORTSDB_REQUEST_WINDOW_SECONDS} seconds")
         print(f"  ✓ Conservative default: {DEFAULT_REQUESTS_PER_MINUTE} requests/minute")
-        
+
         if THESPORTSDB_REQUESTS_PER_MINUTE == 30:
             print("  ✓ Rate limit correctly set to 30/minute")
         else:
             print(f"  ✗ Rate limit should be 30/minute, got {THESPORTSDB_REQUESTS_PER_MINUTE}")
             return False
-            
+
         if THESPORTSDB_REQUEST_WINDOW_SECONDS == 60:
             print("  ✓ Window correctly set to 60 seconds")
         else:
             print(f"  ✗ Window should be 60 seconds, got {THESPORTSDB_REQUEST_WINDOW_SECONDS}")
             return False
-            
+
         return True
     except Exception as e:
         print(f"✗ Rate Limiting Error: {e}")
@@ -342,11 +336,11 @@ def test_rate_limiting():
 
 def test_all():
     """Run all tests."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("IPTV PROXY v2 - API & HTML SEARCH INTEGRATION TESTS")
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*80)
-    
+    print("=" * 80)
+
     results = {
         "TheSportsDB Service": test_thesportsdb_service(),
         "PPV Event Extractor": test_ppv_event_extractor(),
@@ -355,22 +349,22 @@ def test_all():
         "HTML Search Patterns": test_html_search_patterns(),
         "Rate Limiting": test_rate_limiting(),
     }
-    
+
     # Summary
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST SUMMARY")
-    print("="*80)
-    
+    print("=" * 80)
+
     passed = sum(1 for v in results.values() if v)
     total = len(results)
-    
+
     for test_name, result in results.items():
         status = "✓ PASS" if result else "✗ FAIL"
         print(f"{status}: {test_name}")
-    
+
     print(f"\nTotal: {passed}/{total} tests passed")
-    print("="*80)
-    
+    print("=" * 80)
+
     return all(results.values())
 
 

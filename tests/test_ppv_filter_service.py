@@ -179,7 +179,7 @@ class TestPhase224HourTimeFormatParsing:
         result2 = service.parse_month_day_time("Oct 18 - 11PM")
         # With slash
         result3 = service.parse_month_day_time("Oct 18 / 11PM")
-        
+
         assert result1 is not None and result1.hour == 23
         assert result2 is not None and result2.hour == 23
         assert result3 is not None and result3.hour == 23
@@ -191,7 +191,7 @@ class TestPhase224HourTimeFormatParsing:
         midnight = service.parse_month_day_time("Event Jan 20 : 12AM")
         assert midnight is not None
         assert midnight.hour == 0
-        
+
         noon = service.parse_month_day_time("Event Jan 20 : 12PM")
         assert noon is not None
         assert noon.hour == 12
@@ -221,10 +221,10 @@ class TestPhase224HourTimeFormatParsing:
         current_time = datetime(2025, 1, 17, 13, 0, 0)
         sync_date = current_time.date()
         service = PPVFilterService(current_time=current_time, sync_date=sync_date)
-        
+
         # Actual channel name from line 8570 of NO_DATA.list
         channel_name = "LIVE EVENT 26 -Danny Garcia vs Daniel Gonzalez / Oct 18 : 11PM UK / 6PM ET"
-        
+
         # Parse the event
         result = service.parse_iso_datetime_with_24hr(channel_name)
         assert result is not None
@@ -232,7 +232,7 @@ class TestPhase224HourTimeFormatParsing:
         assert result.day == 18
         assert result.hour == 23
         assert result.year == 2025
-        
+
         # Verify it would not be hidden (future date)
         assert result > current_time
 
