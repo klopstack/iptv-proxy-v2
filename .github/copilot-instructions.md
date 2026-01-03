@@ -4,29 +4,39 @@
 
 ## Architecture Overview
 
-Flask-based IPTV proxy that sits between Xtream Codes API services and clients, adding tag extraction and advanced filtering capabilities.
+Flask-based IPTV proxy that sits between Xtream Codes API services and clients, adding tag extraction, advanced filtering, EPG management, and channel health monitoring.
 
 **Current Structure:**
-- `app.py`: ~1300 line monolithic Flask app containing routes and business logic
-- `models.py`: SQLAlchemy models (Account, Filter, TagRule, RuleSet, Tag, ChannelTag, PlaylistConfig)
-- `services/`: Separate concerns for IPTV API calls, caching, and tag extraction
+- `app.py`: Clean entry point (~150 lines) with blueprint registration and scheduler setup
+- `routes/`: Flask blueprints organized by feature (20+ blueprints)
+- `routes/epg/`: Decomposed EPG routes (sources, channels, match_rules, schedules_direct, xmltv)
+- `models.py`: SQLAlchemy models (~2000 lines, 40+ models)
+- `services/`: Business logic services (~28 files covering IPTV, caching, EPG, PPV, etc.)
 - `templates/`: Web UI built with Jinja2 templates
 
-**Data Flow (as currently implemented):**
-1. Users add IPTV accounts and configure filters via web UI
-2. App fetches channels from Xtream Codes API endpoints
-3. Tag extraction rules parse channel/category names (e.g., "US|", "ᴿᴬᵂ", "⁶⁰ᶠᵖˢ") 
-4. Filtered playlists are generated at `/playlist/<id>.m3u` and `/epg/<id>.xml`
- (Current State)
+⚠️ **Note**: `routes/epg.py` is DEAD CODE - not registered. Use `routes/epg/*.py` instead.
 
-**Key Relationships:**
-- `Account` → many `Filter` (cascade delete)
-- `RuleSet` ↔ many `Account` through `AccountRuleSet` (priority-ordered)
+**Data Flow:**
+1. Users add IPTV accounts and configure filters via web UI
+2. Background scheduler syncs channels from Xtream Codes API
+3. Tag extraction rules parse channel/category names (e.g., "US|", "ᴿᴬᵂ", "⁶⁰ᶠᵖˢ")
+4. EPG match rules map channels to EPG data (provider, Schedules Direct, XMLTV)
+5. Filtered playlists served at `/playlist/<id>.m3u` and EPG at `/epg/<id>.xml`
+
+**Key Model Relationships:**
+- `Account` → many `Filter`, `Credential`, `EpgSource` (cascade delete)
+- `Account` ↔ many `RuleSet` through `AccountRuleSet` (priority-ordered)
+- `Account` ↔ many `EpgMatchRuleSet` through `AccountEpgMatchRuleSet`
 - `RuleSet` → many `TagRule` (cascade delete, sorted by priority)
+- `EpgMatchRuleSet` → many `EpgMatchRule` (cascade delete, sorted by priority)
+- `Channel` → `Category`, many `ChannelTag`, `ChannelEpgMapping`, `ChannelHealthStatus`
+- `EpgSource` → many `EpgChannel`, `SdLineup` → many `SdStation`
 - `Tag` ↔ many channels via `ChannelTag` (composite key: account_id + stream_id + tag_id)
 
-**JSON Storage:** `PlaylistConfig` uses text fields for arrays (serialized with `json.dumps()`/`json.loads()`). Watch for this pattern elsewhere - it may evolve to proper JSON columns or separate tables
-**JSON storage pattern:** `PlaylistConfig` stores arrays as JSON text fields (`include_accounts`, `exclude_accounts`, `include_tags`, `exclude_tags`). Always use `json.loads()` when reading and `json.dumps()` when writing.
+**JSON Storage Pattern:** Several models store arrays as JSON text fields. Always use `json.loads()` when reading and `json.dumps()` when writing:
+- `PlaylistConfig`: include_accounts, exclude_accounts, include_tags, exclude_tags
+- `EpgMatchRule`: required_tags, excluded_tags, country_codes, epg_source_ids
+- `EpgChannel`: display_names_json, matched_channels_json
 
 ## Tag Extraction System (Core Feature)
 
@@ -182,17 +192,19 @@ docker exec -it iptv-proxy-v2 pytest tests/  # Run tests in container
 ```
 
 ## Project Conventions
-Observed Patterns (may evolve)
 
-**Error Handling:** Currently uses `Account.query.get_or_404(id)` pattern. Errors logged with `logger.error()`, API returns JSON with status codes.
+**Error Handling:** Uses `db.session.get(Model, id)` or `Model.query.get_or_404(id)` patterns. Errors logged with `logger.error()`, API returns JSON with status codes. The `@handle_errors` decorator provides consistent error responses.
 
-**Route Organization:** In `app.py`, routes grouped by comment blocks (`# Web UI Routes`, `# API Routes - Accounts`, etc.). This monolithic structure may be split into blueprints as the app grows.
+**Route Organization:** Routes organized into blueprints in `routes/` directory:
+- `routes/web.py` - HTML page rendering
+- `routes/accounts.py` - Account CRUD and credentials
+- `routes/epg/` - EPG management (decomposed into sources, channels, match_rules, etc.)
+- See `docs/ARCHITECTURE_OVERVIEW.md` for full blueprint listing
 
-**Database:** Models use `updated_at` with `onupdate=datetime.utcnow`. Changes committed immediately with `db.session.commit()`. May need transaction management for complex operations.
+**Database:** Models use `updated_at` with `onupdate=datetime.now(timezone.utc).replace(tzinfo=None)`. Changes committed with `db.session.commit()`. SQLite configured with 30s timeout for background scheduler compatibility.
 
-**Testing:** pytest with in-memory SQLite (`sqlite:///:memory:`). Fixtures in `tests/test_app.py`. Standalone tag tests in `test_tags.py` using mock objects
+**Testing:** pytest with in-memory SQLite (`sqlite:///:memory:`). Fixtures defined in `tests/conftest.py` and individual test files. Run `make test` for coverage-enforced tests (80% minimum).
 ## Integration Points
-External Integration
 
 **Xtream Codes API:** Core dependency. `IPTVService` wraps HTTP calls to `player_api.php`:
 - `authenticate()` - validate credentials
@@ -200,9 +212,19 @@ External Integration
 - `get_live_categories()` - fetch categories
 - `get_xmltv()` - fetch EPG XML
 
-**Dependencies:** Minimal by design. `requests` for HTTP, `Flask-SQLAlchemy` for ORM, `Flask-CORS` for API access. No message queues, job processors, or complex middleware ye
+**Schedules Direct:** Premium EPG source. `SchedulesDirectClient` provides:
+- `authenticate()` - get session token
+- `get_lineups()` - list subscribed lineups
+- `get_lineup_channels()` - channels in lineup
+- `get_schedules()` / `get_programs()` - program data
+
+**TheSportsDB:** PPV event enrichment (free tier has rate limits). Used by `PPVEnrichmentService`.
+
+**FCC Database:** `FccFacilityService` lookups for callsign → city/market mapping.
+
+**Dependencies:** Minimal by design. `requests` for HTTP, `Flask-SQLAlchemy` for ORM, `Flask-CORS` for API access. No message queues, job processors, or complex middleware.
+
 ## Common Pitfalls
-Things to Know
 
 **JSON field handling:** `PlaylistConfig` stores arrays as JSON text. Must use `json.dumps()`/`json.loads()` when reading/writing. This pattern exists elsewhere - watch for it.
 

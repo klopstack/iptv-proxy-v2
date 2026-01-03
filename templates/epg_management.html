@@ -242,12 +242,179 @@
     </div>
 </div>
 
-<!-- Include the original EPG JavaScript from epg.html and epg_match_rules.html -->
-<script src="{{ url_for('static', filename='js/epg.js') }}"></script>
-<script src="{{ url_for('static', filename='js/epg_match_rules.js') }}"></script>
+<!-- EPG Management Scripts -->
+<script src="{{ url_for('static', filename='js/epg_common.js') }}"></script>
+<script src="{{ url_for('static', filename='js/epg_sources.js') }}"></script>
+<script src="{{ url_for('static', filename='js/epg_channels.js') }}"></script>
+<script src="{{ url_for('static', filename='js/epg_mappings.js') }}"></script>
+<script src="{{ url_for('static', filename='js/epg_schedules_direct.js') }}"></script>
+<script src="{{ url_for('static', filename='js/epg_manual_mapping.js') }}"></script>
+<script src="{{ url_for('static', filename='js/epg_xmltv.js') }}"></script>
+
+<!-- Match Rules Scripts -->
+<script src="{{ url_for('static', filename='js/match_rules_common.js') }}"></script>
+<script src="{{ url_for('static', filename='js/match_rules_rulesets.js') }}"></script>
+<script src="{{ url_for('static', filename='js/match_rules_rules.js') }}"></script>
+<script src="{{ url_for('static', filename='js/match_rules_exclusions.js') }}"></script>
+<script src="{{ url_for('static', filename='js/match_rules_reference.js') }}"></script>
 
 <script>
-// Initialize on page load
+// ============================================================================
+// EPG Management Page Initialization
+// ============================================================================
+
+document.addEventListener('DOMContentLoaded', async () => {
+    // Load common data
+    await Promise.all([
+        loadAccounts(),
+        loadSources(),
+        loadMatchTypes()
+    ]);
+    
+    // Set up EPG tabs event listeners
+    document.getElementById('sourceType').addEventListener('change', onSourceTypeChange);
+    document.getElementById('save-source-btn').addEventListener('click', saveSource);
+    document.getElementById('testSdCredentialsBtn').addEventListener('click', testSdCredentials);
+    document.getElementById('testGrabberBtn').addEventListener('click', testGrabber);
+    document.getElementById('refresh-coverage-btn').addEventListener('click', loadCoverage);
+    document.getElementById('add-source-btn').addEventListener('click', () => {
+        document.getElementById('sourceId').value = '';
+        document.getElementById('sourceForm').reset();
+        document.getElementById('sourceModalLabel').textContent = 'Add EPG Source';
+        onSourceTypeChange();
+    });
+    
+    // Channels tab
+    document.getElementById('channelSourceSelect').addEventListener('change', loadEpgChannels);
+    document.getElementById('channelSearch').addEventListener('input', debounce(loadEpgChannels, 300));
+    
+    // Mappings tab
+    document.getElementById('mappingAccountSelect').addEventListener('change', async (e) => {
+        await loadCategoriesForAccount(e.target.value);
+        document.getElementById('mappingCategorySelect').value = '';
+        updateAutoMatchButton();
+        loadMappings();
+    });
+    document.getElementById('mappingCategorySelect').addEventListener('change', loadMappings);
+    document.getElementById('mappingViewSelect').addEventListener('change', loadMappings);
+    document.getElementById('showFilteredChannels').addEventListener('change', loadMappings);
+    document.getElementById('auto-match-btn').addEventListener('click', () => runAutoMatch());
+    document.getElementById('clear-category-mappings-btn').addEventListener('click', (e) => {
+        e.preventDefault();
+        clearCategoryMappings();
+    });
+    
+    // Infinite scroll for mappings
+    const mappingsList = document.getElementById('mappings-list');
+    mappingsList.addEventListener('scroll', () => {
+        if (mappingsState.hasMore && !mappingsState.loading) {
+            const scrollHeight = mappingsList.scrollHeight;
+            const scrollTop = mappingsList.scrollTop;
+            const clientHeight = mappingsList.clientHeight;
+            
+            if (scrollTop + clientHeight >= scrollHeight - 100) {
+                loadMoreMappings();
+            }
+        }
+    });
+    
+    // SD tab
+    document.getElementById('sdSourceSelect').addEventListener('change', loadSdLineups);
+    document.getElementById('searchLineupsBtn').addEventListener('click', searchLineups);
+    
+    // Manual mapping
+    document.getElementById('manualMappingEpgSearch').addEventListener('input', debounce(() => searchEpgChannels(true), 300));
+    document.getElementById('manualMappingEpgSource').addEventListener('change', () => searchEpgChannels(true));
+    document.getElementById('saveManualMappingBtn').addEventListener('click', saveManualMapping);
+    setupEpgChannelScroll();
+    
+    // SD stations search
+    document.getElementById('stationSearch').addEventListener('input', debounce(filterStations, 200));
+    
+    // Tab change handlers
+    document.getElementById('channels-tab').addEventListener('shown.bs.tab', loadEpgChannels);
+    document.getElementById('mappings-tab').addEventListener('shown.bs.tab', loadMappings);
+    document.getElementById('sd-tab').addEventListener('shown.bs.tab', () => {
+        loadSdStatus();
+        populateSdSourceSelect();
+    });
+    document.getElementById('xmltv-tab').addEventListener('shown.bs.tab', () => {
+        loadXmltvGrabbers();
+        loadXmltvConfigs();
+    });
+    
+    // Load match rules
+    await Promise.all([
+        loadRulesets(),
+        loadExclusions()
+    ]);
+    
+    // Set up match rules tabs
+    document.getElementById('exclusions-tab').addEventListener('shown.bs.tab', loadExclusions);
+    document.getElementById('reference-tab').addEventListener('shown.bs.tab', loadReference);
+    
+    // Set up button listeners
+    document.getElementById('create-ruleset-btn').addEventListener('click', showCreateRulesetModal);
+    document.getElementById('create-default-ruleset-btn').addEventListener('click', createDefaultRuleset);
+    document.getElementById('create-default-exclusions-btn').addEventListener('click', createDefaultExclusions);
+    document.getElementById('create-exclusion-btn').addEventListener('click', showCreateExclusionModal);
+    document.getElementById('save-ruleset-btn').addEventListener('click', saveRuleset);
+    document.getElementById('save-rule-btn').addEventListener('click', saveRule);
+    document.getElementById('save-exclusion-btn').addEventListener('click', saveExclusion);
+    document.getElementById('preview-exclusion-btn').addEventListener('click', previewExclusionPattern);
+    document.getElementById('preview-rule-btn').addEventListener('click', previewRulePattern);
+    
+    // Set up event delegation for dynamic buttons
+    document.addEventListener('click', async (e) => {
+        const target = e.target.closest('[data-action]');
+        if (!target) return;
+        
+        const action = target.dataset.action;
+        
+        switch (action) {
+            case 'show-rules':
+                await showRulesetRules(parseInt(target.dataset.rulesetId));
+                break;
+            case 'show-assign':
+                await showAssignModal(parseInt(target.dataset.rulesetId));
+                break;
+            case 'edit':
+                await editRuleset(parseInt(target.dataset.rulesetId));
+                break;
+            case 'delete':
+                await deleteRuleset(parseInt(target.dataset.rulesetId));
+                break;
+            case 'duplicate':
+                await duplicateRuleset(parseInt(target.dataset.rulesetId));
+                break;
+            case 'create-rule':
+                showCreateRuleModal(parseInt(target.dataset.rulesetId));
+                break;
+            case 'edit-rule':
+                await editRule(parseInt(target.dataset.ruleId));
+                break;
+            case 'delete-rule':
+                await deleteRule(parseInt(target.dataset.ruleId), parseInt(target.dataset.rulesetId));
+                break;
+            case 'edit-exclusion':
+                await editExclusion(parseInt(target.dataset.exclusionId));
+                break;
+            case 'delete-exclusion':
+                await deleteExclusion(parseInt(target.dataset.exclusionId));
+                break;
+            case 'toggle-assign':
+                await toggleAssignment(parseInt(target.dataset.accountId), target.dataset.assigned === 'true');
+                break;
+        }
+    });
+    
+    // Rule form event listeners
+    const ruleMatchType = document.getElementById('rule-match-type');
+    const ruleAction = document.getElementById('rule-action');
+    if (ruleMatchType) ruleMatchType.addEventListener('change', updateRuleFormVisibility);
+    if (ruleAction) ruleAction.addEventListener('change', updateRuleFormVisibility);
+});
+
 document.addEventListener('DOMContentLoaded', function() {
     // Load sources on page load
     if (window.loadEPGSources) {
