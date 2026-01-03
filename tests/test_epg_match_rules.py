@@ -171,7 +171,7 @@ class TestEpgMatchRuleSetCRUD:
 
         # Verify deletion
         with app.app_context():
-            deleted = EpgMatchRuleSet.query.get(ruleset_id)
+            deleted = db.session.get(EpgMatchRuleSet, ruleset_id)
             assert deleted is None
 
     def test_create_ruleset_duplicate_name(self, client, app, sample_ruleset):
@@ -283,7 +283,7 @@ class TestEpgMatchRuleCRUD:
 
         # Verify deletion
         with app.app_context():
-            deleted = EpgMatchRule.query.get(rule_id)
+            deleted = db.session.get(EpgMatchRule, rule_id)
             assert deleted is None
 
 
@@ -384,7 +384,7 @@ class TestEpgExclusionPatternCRUD:
 
         # Verify deletion
         with app.app_context():
-            deleted = EpgExclusionPattern.query.get(pattern_id)
+            deleted = db.session.get(EpgExclusionPattern, pattern_id)
             assert deleted is None
 
 

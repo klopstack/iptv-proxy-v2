@@ -5,7 +5,7 @@ Comprehensive test suite for TheSportsDB API integration,
 including event retrieval, league info, team data, and PPV channel matching.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
@@ -470,7 +470,7 @@ class TestIsEventLive:
         service = TheSportsDBService()
         event = {
             "strStatus": "In Progress",
-            "strTimestamp": datetime.utcnow().isoformat(),
+            "strTimestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
 
         assert service.is_event_live(event) is True
@@ -480,7 +480,7 @@ class TestIsEventLive:
         service = TheSportsDBService()
         event = {
             "strStatus": "Not Started",
-            "strTimestamp": (datetime.utcnow() + timedelta(hours=1)).isoformat(),
+            "strTimestamp": (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1)).isoformat(),
         }
 
         assert service.is_event_live(event) is False
@@ -492,7 +492,7 @@ class TestIsEventLive:
         # Event started 1 hour ago (should be live)
         event = {
             "strStatus": "Not Started",
-            "strTimestamp": (datetime.utcnow() - timedelta(hours=1)).isoformat(),
+            "strTimestamp": (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)).isoformat(),
         }
 
         assert service.is_event_live(event) is True
@@ -504,7 +504,7 @@ class TestIsEventLive:
         # Event started 5 hours ago (should not be live)
         event = {
             "strStatus": "Not Started",
-            "strTimestamp": (datetime.utcnow() - timedelta(hours=5)).isoformat(),
+            "strTimestamp": (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=5)).isoformat(),
         }
 
         assert service.is_event_live(event) is False
@@ -518,7 +518,7 @@ class TestIsEventUpcoming:
         service = TheSportsDBService()
 
         # Event in 6 hours (within 24 hour default range)
-        event = {"strTimestamp": (datetime.utcnow() + timedelta(hours=6)).isoformat()}
+        event = {"strTimestamp": (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=6)).isoformat()}
 
         assert service.is_event_upcoming(event) is True
 
@@ -527,7 +527,7 @@ class TestIsEventUpcoming:
         service = TheSportsDBService()
 
         # Event in 30 hours (outside 24 hour default range)
-        event = {"strTimestamp": (datetime.utcnow() + timedelta(hours=30)).isoformat()}
+        event = {"strTimestamp": (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=30)).isoformat()}
 
         assert service.is_event_upcoming(event) is False
 
@@ -536,7 +536,7 @@ class TestIsEventUpcoming:
         service = TheSportsDBService()
 
         # Event in 48 hours (within 72 hour custom range)
-        event = {"strTimestamp": (datetime.utcnow() + timedelta(hours=48)).isoformat()}
+        event = {"strTimestamp": (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=48)).isoformat()}
 
         assert service.is_event_upcoming(event, hours_ahead=72) is True
 
@@ -545,7 +545,7 @@ class TestIsEventUpcoming:
         service = TheSportsDBService()
 
         # Event 1 hour ago
-        event = {"strTimestamp": (datetime.utcnow() - timedelta(hours=1)).isoformat()}
+        event = {"strTimestamp": (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)).isoformat()}
 
         assert service.is_event_upcoming(event) is False
 

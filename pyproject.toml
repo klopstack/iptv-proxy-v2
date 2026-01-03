@@ -28,6 +28,13 @@ indent = 4
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+filterwarnings = [
+    # Suppress Flask-SQLAlchemy's internal legacy API warning
+    # This comes from Flask-SQLAlchemy 3.1.1 maintaining backward compatibility
+    # with the old Model.query interface. It won't cause test failures and is
+    # outside our control (Flask-SQLAlchemy internal code).
+    "ignore::sqlalchemy.exc.LegacyAPIWarning:flask_sqlalchemy.query",
+]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "--verbose --cov=. --cov-report=html --cov-report=term-missing --cov-fail-under=80"

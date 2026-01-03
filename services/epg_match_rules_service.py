@@ -19,7 +19,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -1717,7 +1717,7 @@ class EpgMatchRulesService:
                         mapping.epg_channel_id = matched_epg.id
                         mapping.mapping_type = match_type
                         mapping.confidence = confidence
-                        mapping.updated_at = datetime.utcnow()
+                        mapping.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 else:
                     mapping = ChannelEpgMapping(
                         channel_id=channel.id,

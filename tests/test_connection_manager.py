@@ -1,7 +1,7 @@
 """
 Tests for connection manager service
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -277,7 +277,7 @@ class TestUpdateActivity:
         account_id, cred1_id, _ = test_account_with_credentials
         with app.app_context():
             # Create active stream with old activity time
-            old_time = datetime.utcnow() - timedelta(minutes=5)
+            old_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=5)
             stream = ActiveStream(
                 credential_id=cred1_id,
                 stream_id="stream1",
@@ -309,7 +309,7 @@ class TestCleanupStaleConnections:
         account_id, cred1_id, _ = test_account_with_credentials
         with app.app_context():
             # Create stale stream (old activity)
-            old_time = datetime.utcnow() - timedelta(minutes=5)
+            old_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=5)
             stale_stream = ActiveStream(
                 credential_id=cred1_id,
                 stream_id="stale_stream",
@@ -325,7 +325,7 @@ class TestCleanupStaleConnections:
                 stream_id="active_stream",
                 client_ip="127.0.0.1",
                 session_token="active_token",
-                last_activity=datetime.utcnow(),
+                last_activity=datetime.now(timezone.utc).replace(tzinfo=None),
             )
             db.session.add(active_stream)
             db.session.commit()
@@ -348,7 +348,7 @@ class TestCleanupStaleConnections:
                 client_ip="127.0.0.1",
                 session_token="token1",
                 # Recent activity, not stale
-                last_activity=datetime.utcnow(),
+                last_activity=datetime.now(timezone.utc).replace(tzinfo=None),
             )
             db.session.add(stream)
             db.session.commit()

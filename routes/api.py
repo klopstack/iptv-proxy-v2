@@ -113,7 +113,7 @@ def get_all_categories():
     )
 
     if account_id:
-        Account.query.get_or_404(account_id)  # Validate account exists
+        db.get_or_404(Account, account_id)  # Validate account exists
         query = query.filter(Category.account_id == account_id)
 
     if not include_empty:
@@ -244,7 +244,7 @@ def clear_all_cache():
 @api_bp.route("/api/cache/clear/<int:account_id>", methods=["POST"])
 def clear_account_cache(account_id):
     """Clear cache for a specific account"""
-    Account.query.get_or_404(account_id)  # Validate account exists
+    db.get_or_404(Account, account_id)  # Validate account exists
     cache_service.clear_account_cache(account_id)
     return jsonify({"success": True, "message": f"Cache cleared for account {account_id}"})
 
@@ -286,7 +286,7 @@ def preview_channels():
 
     # Apply account filter if specified
     if account_id:
-        Account.query.get_or_404(account_id)  # Validate account exists
+        db.get_or_404(Account, account_id)  # Validate account exists
         query = query.filter(Channel.account_id == account_id)
 
     # Apply category filter if specified

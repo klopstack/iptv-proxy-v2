@@ -262,7 +262,7 @@ class TestEpgMappingsBasic:
     def test_create_epg_mapping_duplicate(self, app, client, test_epg_mapping):
         """Test creating duplicate mapping"""
         with app.app_context():
-            mapping = ChannelEpgMapping.query.get(test_epg_mapping)
+            mapping = db.session.get(ChannelEpgMapping, test_epg_mapping)
             channel_id = mapping.channel_id
             epg_channel_id = mapping.epg_channel_id
 
@@ -302,7 +302,7 @@ class TestSyncSdChannelsHelper:
     def test_sync_empty_channels(self, app, test_epg_source):
         """Test syncing empty channel list"""
         with app.app_context():
-            source = EpgSource.query.get(test_epg_source)
+            source = db.session.get(EpgSource, test_epg_source)
             stats = _sync_sd_channels_to_epg(source, [])
 
             assert stats["channels_added"] == 0
@@ -312,7 +312,7 @@ class TestSyncSdChannelsHelper:
     def test_sync_new_channels(self, app, test_epg_source):
         """Test syncing new channels"""
         with app.app_context():
-            source = EpgSource.query.get(test_epg_source)
+            source = db.session.get(EpgSource, test_epg_source)
 
             channels = [
                 {
@@ -341,7 +341,7 @@ class TestSyncSdChannelsHelper:
     def test_sync_update_existing(self, app, test_epg_source):
         """Test updating existing channels"""
         with app.app_context():
-            source = EpgSource.query.get(test_epg_source)
+            source = db.session.get(EpgSource, test_epg_source)
 
             # Create existing channel
             existing = EpgChannel(
@@ -374,7 +374,7 @@ class TestSyncSdChannelsHelper:
     def test_sync_missing_optional_fields(self, app, test_epg_source):
         """Test handling channels with missing optional fields"""
         with app.app_context():
-            source = EpgSource.query.get(test_epg_source)
+            source = db.session.get(EpgSource, test_epg_source)
 
             # Channel with minimal fields
             channels = [
@@ -394,7 +394,7 @@ class TestSyncSdChannelsHelper:
     def test_sync_display_names_json(self, app, test_epg_source):
         """Test that display_names are properly stored as JSON"""
         with app.app_context():
-            source = EpgSource.query.get(test_epg_source)
+            source = db.session.get(EpgSource, test_epg_source)
 
             channels = [
                 {

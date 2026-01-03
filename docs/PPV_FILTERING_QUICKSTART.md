@@ -163,7 +163,7 @@ PPV_FILTERING_ENABLED = config.get('PPV_FILTERING_ENABLED', False)
 **File:** `models.py`
 
 ```python
-from datetime import datetime
+from datetime import datetime, UTC
 
 class PPVEventFilter(db.Model):
     """Rules for filtering PPV channels by provider."""
@@ -226,7 +226,7 @@ class PPVEventFilter(db.Model):
 
 import sqlite3
 import logging
-from datetime import datetime
+from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -442,7 +442,7 @@ def test_ppv_filter(category):
 
 ```python
 import pytest
-from datetime import datetime
+from datetime import datetime, UTC
 from services.ppv_filter_service import PPVFilterService, DEFAULT_FILTER_RULES
 
 class TestPPVFilterService:

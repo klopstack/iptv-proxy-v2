@@ -45,7 +45,7 @@ ref_date = SyncDateService.get_reference_date(db_path)
 The extractor now uses the sync date:
 
 ```python
-from datetime import datetime
+from datetime import datetime, UTC
 from services.ppv_event_extractor import PPVEventExtractor
 from services.sync_date_service import SyncDateService
 
@@ -64,7 +64,7 @@ extractor = PPVEventExtractor(current_date=sync_date)
 All tests in `tests/test_ppv_event_extractor.py` use the sync date:
 
 ```python
-from datetime import datetime
+from datetime import datetime, UTC
 from services.ppv_event_extractor import PPVEventExtractor
 
 # Hardcoded sync reference (matches database value)
@@ -116,7 +116,7 @@ With reference date **2025-12-28**:
 ### Example 1: Check if Date is Far Future
 
 ```python
-from datetime import datetime
+from datetime import datetime, UTC
 from services.ppv_event_extractor import PPVEventExtractor
 from services.sync_date_service import SyncDateService
 

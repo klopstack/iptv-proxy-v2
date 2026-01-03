@@ -522,22 +522,31 @@ class PPVFilterService:
             "%Y-%m-%dT%H:%M:%S",  # 2025-12-27T03:35:06
             "%Y-%m-%d %H:%M",  # 2025-12-27 03:35
             "%Y-%m-%dT%H:%M:%S.%f",  # 2025-12-27T03:35:06.123
-            "%d/%m %H:%M",  # 22/10 19:00 (DD/MM HH:MM)
-            "%m/%d %H:%M",  # 10/22 19:00 (MM/DD HH:MM)
         ]
 
         for fmt in formats:
             try:
                 dt = datetime.strptime(datetime_str, fmt)
+                return dt
+            except ValueError:
+                continue
 
-                # If year is missing (DD/MM or MM/DD format), add current year
-                if dt.year == 1900:
-                    current_year = self.current_time.year
-                    # If month/day is in the past this year, use next year
-                    if dt.replace(year=current_year) < self.current_time:
-                        dt = dt.replace(year=current_year + 1)
-                    else:
-                        dt = dt.replace(year=current_year)
+        # Handle formats without year (DD/MM or MM/DD) with explicit year
+        # to avoid deprecation warning about ambiguous leap day parsing
+        current_year = self.current_time.year
+        year_formats = [
+            ("%d/%m %H:%M", True),  # 22/10 19:00 (DD/MM HH:MM) - European format
+            ("%m/%d %H:%M", False),  # 10/22 19:00 (MM/DD HH:MM) - US format
+        ]
+
+        for fmt, is_european in year_formats:
+            try:
+                # Parse with explicit year to avoid deprecation warning
+                dt = datetime.strptime(f"{current_year} {datetime_str}", f"%Y {fmt}")
+
+                # If month/day is in the past this year, use next year
+                if dt < self.current_time:
+                    dt = datetime.strptime(f"{current_year + 1} {datetime_str}", f"%Y {fmt}")
 
                 return dt
             except ValueError:

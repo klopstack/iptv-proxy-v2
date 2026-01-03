@@ -44,7 +44,7 @@ def test_account(app):
 def test_account_obj(app, test_account):
     """Get the Account object"""
     with app.app_context():
-        yield Account.query.get(test_account)
+        yield db.session.get(Account, test_account)
 
 
 @pytest.fixture
@@ -357,7 +357,7 @@ class TestEpgSourcesCRUD:
 
         # Verify update
         with app.app_context():
-            source = EpgSource.query.get(test_epg_source)
+            source = db.session.get(EpgSource, test_epg_source)
             assert source.name == "Updated Name"
             assert source.priority == 200
 
@@ -374,7 +374,7 @@ class TestEpgSourcesCRUD:
 
         # Verify deletion
         with app.app_context():
-            source = EpgSource.query.get(test_epg_source)
+            source = db.session.get(EpgSource, test_epg_source)
             assert source is None
 
 
@@ -551,7 +551,7 @@ class TestEpgMappings:
     def test_create_epg_mapping_duplicate(self, app, client, test_epg_mapping):
         """Test creating duplicate mapping"""
         with app.app_context():
-            mapping = ChannelEpgMapping.query.get(test_epg_mapping)
+            mapping = db.session.get(ChannelEpgMapping, test_epg_mapping)
             channel_id = mapping.channel_id
             epg_channel_id = mapping.epg_channel_id
 
@@ -574,7 +574,7 @@ class TestEpgMappings:
         )
         assert response.status_code == 201
         with app.app_context():
-            mapping = ChannelEpgMapping.query.get(response.json["mapping_id"])
+            mapping = db.session.get(ChannelEpgMapping, response.json["mapping_id"])
             assert mapping.time_offset_hours == -5
 
     def test_delete_epg_mapping_not_found(self, app, client):
@@ -789,7 +789,7 @@ class TestSyncSdChannelsHelper:
     def test_sync_sd_channels_empty_list(self, app, test_epg_source):
         """Test syncing with empty channel list"""
         with app.app_context():
-            source = EpgSource.query.get(test_epg_source)
+            source = db.session.get(EpgSource, test_epg_source)
             stats = _sync_sd_channels_to_epg(source, [])
 
             assert stats["channels_added"] == 0
@@ -799,7 +799,7 @@ class TestSyncSdChannelsHelper:
     def test_sync_sd_channels_new_channels(self, app, test_epg_source):
         """Test syncing with new channels"""
         with app.app_context():
-            source = EpgSource.query.get(test_epg_source)
+            source = db.session.get(EpgSource, test_epg_source)
 
             channels = [
                 {
@@ -829,7 +829,7 @@ class TestSyncSdChannelsHelper:
     def test_sync_sd_channels_update_existing(self, app, test_epg_source):
         """Test updating existing channels"""
         with app.app_context():
-            source = EpgSource.query.get(test_epg_source)
+            source = db.session.get(EpgSource, test_epg_source)
 
             # Create existing channel
             existing = EpgChannel(
@@ -863,7 +863,7 @@ class TestSyncSdChannelsHelper:
     def test_sync_sd_channels_mixed_operations(self, app, test_epg_source):
         """Test mixed add/update operations"""
         with app.app_context():
-            source = EpgSource.query.get(test_epg_source)
+            source = db.session.get(EpgSource, test_epg_source)
 
             # Create one existing channel
             existing = EpgChannel(
@@ -898,7 +898,7 @@ class TestSyncSdChannelsHelper:
     def test_sync_sd_channels_handles_missing_fields(self, app, test_epg_source):
         """Test handling channels with missing optional fields"""
         with app.app_context():
-            source = EpgSource.query.get(test_epg_source)
+            source = db.session.get(EpgSource, test_epg_source)
 
             # Channel with minimal fields
             channels = [
@@ -926,7 +926,7 @@ class TestSyncSdChannelsHelper:
     def test_sync_sd_channels_display_names_json(self, app, test_epg_source):
         """Test that display_names are properly stored as JSON"""
         with app.app_context():
-            source = EpgSource.query.get(test_epg_source)
+            source = db.session.get(EpgSource, test_epg_source)
 
             channels = [
                 {

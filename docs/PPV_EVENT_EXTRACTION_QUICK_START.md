@@ -113,7 +113,7 @@ print(f"Failed: {len(stats['failures'])}")
 from models import Event, EventChannelLink, Channel, db
 from services.ppv_event_extractor import EventMatcher
 from services.thesportsdb_service import TheSportsDBService
-from datetime import datetime
+from datetime import datetime, UTC
 ```
 
 ### 2. Create Event Record
@@ -385,7 +385,7 @@ else:
 ### Date Range Filters
 ```python
 # Only match events within 30 days
-from datetime import datetime, timedelta
+from datetime import datetime, UTC, timedelta
 
 def should_match_event(event_date):
     now = datetime.now()

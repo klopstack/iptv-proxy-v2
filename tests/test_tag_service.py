@@ -1149,7 +1149,7 @@ class TestProcessAccountTags:
             TagService.process_account_tags(sample_account)
 
             # Verify cleaned name was updated
-            updated_channel = Channel.query.get(1)
+            updated_channel = db.session.get(Channel, 1)
             assert updated_channel.cleaned_name != ""
             assert "US|" not in updated_channel.cleaned_name
 

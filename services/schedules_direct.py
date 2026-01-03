@@ -44,7 +44,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import quote
 
@@ -1319,13 +1319,13 @@ class SchedulesDirectClient:
                 return {
                     "status": "online",
                     "message": "Schedules Direct API is reachable",
-                    "date": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+                    "date": datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S UTC"),
                 }
             else:
                 return {
                     "status": "degraded",
                     "message": f"API returned status code {response.status_code}",
-                    "date": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+                    "date": datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S UTC"),
                 }
         except requests.Timeout:
             return {"status": "offline", "message": "Connection timed out"}

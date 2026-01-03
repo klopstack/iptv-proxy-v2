@@ -81,7 +81,7 @@ sync_date = SyncDateService.get_reference_date("data/iptv_proxy.db")
 ### In Tests
 
 ```python
-from datetime import datetime
+from datetime import datetime, UTC
 
 SYNC_REFERENCE_DATE = datetime(2025, 12, 28, 0, 4, 36)
 

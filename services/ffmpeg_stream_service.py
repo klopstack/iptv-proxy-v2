@@ -19,7 +19,7 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from queue import Empty, Queue
 from typing import Callable, Dict, Generator, Optional
 
@@ -39,7 +39,7 @@ class StreamSubscriber:
     subscriber_id: str
     client_ip: Optional[str]
     queue: "Queue[Optional[bytes]]"
-    joined_at: datetime = field(default_factory=datetime.utcnow)
+    joined_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     bytes_sent: int = 0
     active: bool = True
     ready: bool = False  # Set to True when stream_chunks() starts consuming
@@ -59,8 +59,8 @@ class FFmpegStream:
     user_agent: str = "okhttp/3.14.9"
 
     # State
-    started_at: datetime = field(default_factory=datetime.utcnow)
-    last_activity: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    last_activity: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     bytes_received: int = 0
     is_active: bool = True
     error: Optional[str] = None
@@ -347,7 +347,7 @@ class FFmpegStreamService:
 
                 chunks_read += 1
                 stream.bytes_received += len(chunk)
-                stream.last_activity = datetime.utcnow()
+                stream.last_activity = datetime.now(timezone.utc).replace(tzinfo=None)
 
                 # Distribute to all subscribers
                 with stream.lock:
@@ -476,7 +476,7 @@ class FFmpegStreamService:
 
     def _cleanup_idle_streams(self) -> None:
         """Clean up streams with no subscribers."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         with self._lock:
             streams_to_close = []

@@ -16,7 +16,7 @@ import hashlib
 import logging
 import os
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Tuple
 from urllib.parse import urlparse
@@ -118,7 +118,7 @@ class ImageCacheService:
                 return None
 
             # Check if expired
-            if cached.expires_at and datetime.utcnow() > cached.expires_at:
+            if cached.expires_at and datetime.now(timezone.utc).replace(tzinfo=None) > cached.expires_at:
                 logger.debug(f"Cache expired for {url_hash[:8]}...")
                 return None
 
@@ -133,7 +133,7 @@ class ImageCacheService:
 
             # Update access stats
             cached.hit_count += 1
-            cached.last_accessed_at = datetime.utcnow()
+            cached.last_accessed_at = datetime.now(timezone.utc).replace(tzinfo=None)
             db.session.commit()
 
             return file_path.read_bytes(), cached.content_type or "image/png"
@@ -164,7 +164,7 @@ class ImageCacheService:
             if not force_refresh:
                 existing = CachedImage.query.filter_by(url_hash=url_hash).first()
                 if existing and existing.status == "cached":
-                    if not existing.expires_at or datetime.utcnow() < existing.expires_at:
+                    if not existing.expires_at or datetime.now(timezone.utc).replace(tzinfo=None) < existing.expires_at:
                         return url_hash
 
             # Fetch image
@@ -184,7 +184,7 @@ class ImageCacheService:
                 file_path.write_bytes(image_data)
 
                 # Update database
-                expires_at = datetime.utcnow() + timedelta(days=self.ttl_days)
+                expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=self.ttl_days)
                 relative_path = str(file_path.relative_to(self.cache_dir))
 
                 cached = CachedImage.query.filter_by(url_hash=url_hash).first()
@@ -193,7 +193,7 @@ class ImageCacheService:
                     cached.content_type = content_type
                     cached.file_size = len(image_data)
                     cached.file_path = relative_path
-                    cached.fetched_at = datetime.utcnow()
+                    cached.fetched_at = datetime.now(timezone.utc).replace(tzinfo=None)
                     cached.expires_at = expires_at
                     cached.fetch_count += 1
                     cached.error_message = None
@@ -205,7 +205,7 @@ class ImageCacheService:
                         file_size=len(image_data),
                         file_path=relative_path,
                         status="cached",
-                        fetched_at=datetime.utcnow(),
+                        fetched_at=datetime.now(timezone.utc).replace(tzinfo=None),
                         expires_at=expires_at,
                         fetch_count=1,
                     )
@@ -415,7 +415,7 @@ class ImageCacheService:
         count = 0
         try:
             expired = CachedImage.query.filter(
-                CachedImage.expires_at < datetime.utcnow(), CachedImage.status == "cached"
+                CachedImage.expires_at < datetime.now(timezone.utc).replace(tzinfo=None), CachedImage.status == "cached"
             ).all()
 
             for cached in expired:

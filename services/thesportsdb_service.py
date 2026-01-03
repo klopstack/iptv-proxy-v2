@@ -6,7 +6,7 @@ supporting event lookup, league information, and event matching for PPV channels
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from thesportsdb import events, leagues, teams
@@ -318,7 +318,7 @@ class TheSportsDBService:
             timestamp_str = event.get("strTimestamp")
             if timestamp_str:
                 event_time = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc).replace(tzinfo=None)
                 # Consider event live if within 3.5 hours of start time
                 # (average sports event duration + buffer)
                 return now >= event_time and now <= event_time + timedelta(hours=3.5)
@@ -342,7 +342,7 @@ class TheSportsDBService:
             timestamp_str = event.get("strTimestamp")
             if timestamp_str:
                 event_time = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc).replace(tzinfo=None)
                 return now <= event_time <= now + timedelta(hours=hours_ahead)
         except Exception as e:
             logger.debug(f"Error parsing event timestamp: {e}")

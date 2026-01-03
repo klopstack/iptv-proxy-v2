@@ -501,7 +501,7 @@ For each new provider pattern:
 ### Datetime Parsing Best Practices
 
 ```python
-from datetime import datetime
+from datetime import datetime, UTC
 import re
 
 def extract_datetime(channel_name, pattern):

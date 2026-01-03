@@ -361,7 +361,7 @@ class TestM3UGeneration:
         with app.app_context():
             from models import Account
 
-            account = Account.query.get(test_account)
+            account = db.session.get(Account, test_account)
             account.enabled = False
             db.session.commit()
 
@@ -409,7 +409,7 @@ class TestPlaylistConfigM3U:
         with app.app_context():
             from models import PlaylistConfig
 
-            config = PlaylistConfig.query.get(test_playlist_config)
+            config = db.session.get(PlaylistConfig, test_playlist_config)
             config.enabled = False
             db.session.commit()
 
@@ -435,7 +435,7 @@ class TestEPGProxy:
         with app.app_context():
             from models import Account
 
-            account = Account.query.get(test_account)
+            account = db.session.get(Account, test_account)
             account.enabled = False
             db.session.commit()
 

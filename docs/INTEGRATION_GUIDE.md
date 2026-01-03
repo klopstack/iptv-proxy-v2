@@ -6,7 +6,7 @@
 
 ```python
 from services.ppv_filter_service import PPVFilterService
-from datetime import datetime, date
+from datetime import datetime, UTC, date
 
 # Create service with sync date (when playlist was fetched from IPTV)
 sync_time = datetime.now()  # or actual sync time from your system
@@ -32,7 +32,7 @@ The sync_date should come from when you last fetched channels from the IPTV API:
 
 ```python
 # In your playlist sync routine
-from datetime import datetime
+from datetime import datetime, UTC
 
 class PlaylistManager:
     def sync_channels(self):
@@ -127,7 +127,7 @@ categories = [
 
 ```python
 def test_ppv_integration():
-    from datetime import datetime, date
+    from datetime import datetime, UTC, date
     from services.ppv_filter_service import PPVFilterService
     
     # Setup
@@ -168,7 +168,7 @@ def test_boxing_with_time():
 def test_playlist_filtering():
     """Test filtering PPV channels in playlist generation"""
     from services.ppv_filter_service import PPVFilterService
-    from datetime import datetime
+    from datetime import datetime, UTC
     
     # Simulate playlist from IPTV provider
     channels = [

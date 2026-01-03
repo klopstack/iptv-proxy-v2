@@ -83,7 +83,7 @@ class TestAccountTestConnection:
     def test_test_connection_no_credentials_or_legacy(self, app, client, test_account):
         """Test connection with no credentials or legacy fields"""
         with app.app_context():
-            account = Account.query.get(test_account)
+            account = db.session.get(Account, test_account)
             account.username = None
             account.password = None
             db.session.commit()

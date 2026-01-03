@@ -20,7 +20,7 @@ import secrets
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from queue import Empty, Queue
 from typing import Any, Callable, Dict, Generator, Optional
 
@@ -44,8 +44,8 @@ class StreamSubscriber:
     subscriber_id: str
     client_ip: Optional[str]
     queue: "Queue[Optional[bytes]]"  # None signals end of stream
-    joined_at: datetime = field(default_factory=datetime.utcnow)
-    last_read: datetime = field(default_factory=datetime.utcnow)
+    joined_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    last_read: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     bytes_sent: int = 0
     active: bool = True
     ready: bool = False  # Set to True when stream_chunks() starts - prevents queue overflow before Flask is ready
@@ -66,8 +66,8 @@ class SharedStream:
     _last_no_sub_log: Optional[datetime] = None
 
     # State
-    started_at: datetime = field(default_factory=datetime.utcnow)
-    last_activity: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    last_activity: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     bytes_received: int = 0
     is_active: bool = True
     error: Optional[str] = None
@@ -285,7 +285,7 @@ class StreamMultiplexer:
                         logger.debug(f"Subscriber {subscriber.subscriber_id[:8]}... received end signal")
                         break
 
-                    subscriber.last_read = datetime.utcnow()
+                    subscriber.last_read = datetime.now(timezone.utc).replace(tzinfo=None)
                     subscriber.bytes_sent += len(chunk)
                     yield chunk
 
@@ -339,7 +339,7 @@ class StreamMultiplexer:
                     break
 
                 stream.bytes_received += len(chunk)
-                stream.last_activity = datetime.utcnow()
+                stream.last_activity = datetime.now(timezone.utc).replace(tzinfo=None)
 
                 # Distribute chunk to all subscribers
                 # Get subscriber list while holding lock, then release before blocking puts
@@ -376,7 +376,7 @@ class StreamMultiplexer:
 
                 # Check if we still have subscribers (rate-limit logging to avoid spam)
                 if not stream.subscribers:
-                    now = datetime.utcnow()
+                    now = datetime.now(timezone.utc).replace(tzinfo=None)
                     if stream._last_no_sub_log is None or (now - stream._last_no_sub_log).total_seconds() >= 10:
                         logger.info(f"Stream {stream.stream_key} has no subscribers, will close soon")
                         stream._last_no_sub_log = now
@@ -453,7 +453,7 @@ class StreamMultiplexer:
 
     def _cleanup_idle_streams(self) -> None:
         """Clean up streams with no subscribers."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         with self._lock:
             streams_to_close = []

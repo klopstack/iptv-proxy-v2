@@ -27,7 +27,7 @@ import json
 import logging
 import re
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
 
@@ -540,7 +540,7 @@ class EpgService:
             "total_programs": 0,
         }
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         seen_channel_ids: Set[str] = set()
 
         # Track channel data and program stats as we stream
@@ -596,7 +596,7 @@ class EpgService:
                                     pass
 
         except ValueError as e:
-            source.last_sync = datetime.utcnow()
+            source.last_sync = datetime.now(timezone.utc).replace(tzinfo=None)
             source.last_sync_status = "error"
             source.last_sync_message = str(e)
             db.session.commit()
@@ -1396,7 +1396,7 @@ class EpgService:
                         mapping.epg_channel_id = matched_epg.id
                         mapping.mapping_type = match_type
                         mapping.confidence = confidence
-                        mapping.updated_at = datetime.utcnow()
+                        mapping.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
                         logger.debug("  Updated existing mapping")
                 else:
                     mapping = ChannelEpgMapping(
@@ -2288,7 +2288,7 @@ class EpgService:
                 mapping.epg_channel_id = matched_epg.id
                 mapping.mapping_type = match_type
                 mapping.confidence = confidence
-                mapping.updated_at = datetime.utcnow()
+                mapping.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         else:
             mapping = ChannelEpgMapping(
                 channel_id=channel.id,
@@ -3188,7 +3188,7 @@ def generate_ppv_epg_entries(account_id: Optional[int] = None, duration_hours: i
         return programs
 
     # Generate EPG entry for each active PPV channel
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     end_time = now + timedelta(hours=duration_hours)
 
     # Format times in XMLTV format
@@ -3263,7 +3263,7 @@ def get_ppv_epg_xmltv(account_id: Optional[int] = None, duration_hours: int = 8)
         return ET.tostring(root, encoding="unicode", xml_declaration=True).encode("utf-8")
 
     # Time for programs
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     end_time = now + timedelta(hours=duration_hours)
     start_str = now.strftime("%Y%m%d%H%M%S") + " +0000"
     stop_str = end_time.strftime("%Y%m%d%H%M%S") + " +0000"

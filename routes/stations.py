@@ -6,6 +6,7 @@ import logging
 from flask import Blueprint, jsonify, request
 
 from error_handling import handle_errors
+from models import Account, db
 
 logger = logging.getLogger(__name__)
 
@@ -204,10 +205,9 @@ def preview_channel_enrichment(account_id):
     Returns:
         JSON with matched channels and their potential enrichments
     """
-    from models import Account
     from services.fcc_facility_service import FccFacilityService
 
-    account = Account.query.get_or_404(account_id)
+    account = db.get_or_404(Account, account_id)
 
     # Get pagination params
     limit = request.args.get("limit", 50, type=int)
@@ -255,10 +255,9 @@ def apply_channel_enrichment(account_id):
     Returns:
         JSON with enrichment results
     """
-    from models import Account
     from services.fcc_facility_service import FccFacilityService
 
-    Account.query.get_or_404(account_id)
+    db.get_or_404(Account, account_id)
 
     # Get options from request
     data = request.get_json() or {}
@@ -329,7 +328,7 @@ def get_channels_by_callsign(callsign):
     accounts_dict = {}
     for channel in channels:
         if channel.account_id not in accounts_dict:
-            account = Account.query.get(channel.account_id)
+            account = db.session.get(Account, channel.account_id)
             accounts_dict[channel.account_id] = {
                 "account_id": channel.account_id,
                 "account_name": account.name if account else "Unknown",

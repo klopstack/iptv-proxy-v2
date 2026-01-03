@@ -4,12 +4,12 @@ Tests for image cache service and routes
 Uses shared fixtures from conftest.py for proper test isolation.
 """
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from models import CachedImage
+from models import CachedImage, db
 
 # client fixture is provided by conftest.py
 # For tests needing special image cache setup, use image_cache_client instead
@@ -165,7 +165,7 @@ class TestImageCacheServiceWithDB:
             assert len(url_hash) == 64
 
             # Verify database entry
-            cached = CachedImage.query.filter_by(url_hash=url_hash).first()
+            cached = db.session.query(CachedImage).filter_by(url_hash=url_hash).first()
             assert cached is not None
             assert cached.status == "cached"
             assert cached.original_url == url
@@ -189,7 +189,7 @@ class TestImageCacheServiceWithDB:
                 status="cached",
                 content_type="image/png",
                 file_path="ab/test.png",
-                expires_at=datetime.utcnow() + timedelta(days=7),
+                expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=7),
             )
             db.session.add(cached)
             db.session.commit()
@@ -306,7 +306,7 @@ class TestImageRoutes:
                 url_hash="expired" + "0" * 57,
                 original_url="https://example.com/old.png",
                 status="cached",
-                expires_at=datetime.utcnow() - timedelta(days=1),
+                expires_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1),
             )
             db.session.add(cached)
             db.session.commit()
@@ -337,7 +337,7 @@ class TestImageRoutes:
 
         # Verify deleted
         with app.app_context():
-            assert CachedImage.query.get(entry_id) is None
+            assert db.session.get(CachedImage, entry_id) is None
 
     def test_delete_cache_entry_not_found(self, image_cache_client):
         """Test deleting non-existent cache entry"""

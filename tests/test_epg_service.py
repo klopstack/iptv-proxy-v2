@@ -1705,10 +1705,10 @@ class TestFccEnhancedEpgMatching:
         from models import FccFacility
 
         with app.app_context():
-            facility = FccFacility.query.get(fcc_test_facility)
+            facility = db.session.get(FccFacility, fcc_test_facility)
 
             # Build callsign index
-            epg_channel = EpgChannel.query.get(kabc_epg_channel["epg_channel_id"])
+            epg_channel = db.session.get(EpgChannel, kabc_epg_channel["epg_channel_id"])
             epg_by_callsign = {"KABC": epg_channel, "KABC-TV": epg_channel}
 
             # Create a mock channel
@@ -1734,7 +1734,7 @@ class TestFccEnhancedEpgMatching:
         from models import FccFacility
 
         with app.app_context():
-            facility = FccFacility.query.get(fcc_test_facility)
+            facility = db.session.get(FccFacility, fcc_test_facility)
 
             # Create EPG channel for ABC network
             source = EpgSource(
@@ -3489,10 +3489,6 @@ class TestMatchChannelsToEpgFccEnhanced:
                 db.session.delete(channel)
 
             db.session.delete(source)
-            db.session.delete(account)
-            db.session.commit()
-            # Cleanup
-            db.session.delete(channel)
             db.session.delete(account)
             db.session.commit()
 

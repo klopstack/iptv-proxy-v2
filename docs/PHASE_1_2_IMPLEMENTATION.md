@@ -252,7 +252,7 @@ Comprehensive test suite in `tests/test_ppv_filter_service.py`:
 
 ```python
 from services.ppv_filter_service import PPVFilterService
-from datetime import datetime, date
+from datetime import datetime, UTC, date
 
 # Create service with sync date (when playlist was fetched)
 sync_time = datetime(2025, 1, 15, 14, 30, 0)  # 2:30 PM on Jan 15

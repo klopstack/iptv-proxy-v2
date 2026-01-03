@@ -284,7 +284,7 @@ class TestMultiAccountPlaylists:
             mock_quality.collapse_duplicates.return_value = [
                 {
                     "channel": Channel.query.filter_by(stream_id=1).first(),
-                    "account": Account.query.get(1),
+                    "account": db.session.get(Account, 1),
                     "stream_id": 1,
                     "cleaned_name": "ESPN",
                     "tags": ["HD", "SPORTS"],
@@ -450,7 +450,7 @@ class TestSlugBasedPlaylistGeneration:
     # def test_generate_by_slug_disabled(self, app, client, tag_filter_config):
     #     """Test that disabled configs can't be accessed by slug"""
     #     with app.app_context():
-    #         config = PlaylistConfig.query.get(tag_filter_config)
+    #         config = db.session.get(PlaylistConfig, tag_filter_config)
     #         config.enabled = False
     #         db.session.commit()
 

@@ -6,7 +6,7 @@ Handles syncing from different EPG sources: providers, URLs, Schedules Direct, X
 """
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Tuple
 
 from models import EpgSource, db
@@ -192,7 +192,7 @@ class EpgSyncService:
             message: Status message
             stats: Sync statistics with 'channels_added' and 'channels_updated'
         """
-        source.last_sync = datetime.utcnow()
+        source.last_sync = datetime.now(timezone.utc).replace(tzinfo=None)
         source.last_sync_status = "success" if success else "error"
         source.last_sync_message = message
 

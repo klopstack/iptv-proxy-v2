@@ -52,7 +52,7 @@ rule = {
 When creating PPVFilterService, pass the **playlist sync date**:
 
 ```python
-from datetime import datetime
+from datetime import datetime, UTC
 
 # When syncing playlists from IPTV provider
 sync_time = datetime.now()
@@ -101,7 +101,7 @@ Result: HIDDEN (in the past)
 ### Create Service
 ```python
 from services.ppv_filter_service import PPVFilterService
-from datetime import datetime, date
+from datetime import datetime, UTC, date
 
 service = PPVFilterService(
     sync_date=date(2025, 1, 15),

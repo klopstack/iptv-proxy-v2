@@ -10,7 +10,7 @@ This service is responsible for:
 
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Tuple
 
 from models import Account, ActiveStream, Credential, db
@@ -127,8 +127,8 @@ class ConnectionManager:
             stream_id=stream_id,
             client_ip=client_ip,
             session_token=session_token,
-            started_at=datetime.utcnow(),
-            last_activity=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            last_activity=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         db.session.add(active_stream)
 
@@ -190,7 +190,7 @@ class ConnectionManager:
 
         active_stream = ActiveStream.query.filter_by(session_token=session_token).first()
         if active_stream:
-            active_stream.last_activity = datetime.utcnow()
+            active_stream.last_activity = datetime.now(timezone.utc).replace(tzinfo=None)
             db.session.commit()
             return True
         return False
@@ -206,7 +206,7 @@ class ConnectionManager:
             account_id: Optional account to clean up (None = all accounts)
             timeout_seconds: Seconds since last activity to consider stale
         """
-        cutoff = datetime.utcnow() - timedelta(seconds=timeout_seconds)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=timeout_seconds)
 
         query = db.session.query(ActiveStream).filter(ActiveStream.last_activity < cutoff)
 

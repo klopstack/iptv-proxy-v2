@@ -206,7 +206,7 @@ def delete_cache_entry(entry_id):
     """Delete a specific cache entry."""
     from models import CachedImage, db
 
-    cached = CachedImage.query.get_or_404(entry_id)
+    cached = db.get_or_404(CachedImage, entry_id)
     cache = get_image_cache()
 
     # Delete file if it exists

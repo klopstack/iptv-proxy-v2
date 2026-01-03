@@ -2,7 +2,7 @@
 Database models for IPTV Proxy
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask_sqlalchemy import SQLAlchemy
 
@@ -17,7 +17,11 @@ class SyncMetadata(db.Model):  # type: ignore[name-defined]
     id = db.Column(db.Integer, primary_key=True)
     key = db.Column(db.String(100), unique=True, nullable=False)  # e.g., 'last_full_sync', 'last_fcc_sync'
     value = db.Column(db.Text)  # JSON or string value
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     @staticmethod
     def get(key, default=None):
@@ -31,7 +35,7 @@ class SyncMetadata(db.Model):  # type: ignore[name-defined]
         record = SyncMetadata.query.filter_by(key=key).first()
         if record:
             record.value = value
-            record.updated_at = datetime.utcnow()
+            record.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         else:
             record = SyncMetadata(key=key, value=value)
             db.session.add(record)
@@ -62,8 +66,12 @@ class Account(db.Model):  # type: ignore[name-defined]
     # PPV visibility settings: 'hide_all' | 'hide_inactive' (default) | 'show_all'
     ppv_visibility = db.Column(db.String(20), default="hide_inactive", nullable=False)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     # Relationships
     filters = db.relationship("Filter", backref="account", lazy=True, cascade="all, delete-orphan")
@@ -117,8 +125,12 @@ class Credential(db.Model):  # type: ignore[name-defined]
     exp_date = db.Column(db.String(50))  # Expiration timestamp from provider
 
     enabled = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     def is_available(self):
         """Check if this credential has available connection slots."""
@@ -140,8 +152,12 @@ class Filter(db.Model):  # type: ignore[name-defined]
     filter_action = db.Column(db.String(20), nullable=False)  # whitelist, blacklist
     filter_value = db.Column(db.Text, nullable=False)  # The actual filter value
     enabled = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     def __repr__(self):
         return f"<Filter {self.name} ({self.filter_type})>"
@@ -158,8 +174,12 @@ class RuleSet(db.Model):  # type: ignore[name-defined]
     is_default = db.Column(db.Boolean, default=False)  # If true, applied to accounts with no rulesets
     enabled = db.Column(db.Boolean, default=True)
     priority = db.Column(db.Integer, default=100)  # Order when multiple rulesets on same account
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     # Relationships
     rules = db.relationship(
@@ -179,7 +199,7 @@ class AccountRuleSet(db.Model):  # type: ignore[name-defined]
     account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False)
     ruleset_id = db.Column(db.Integer, db.ForeignKey("rulesets.id"), nullable=False)
     priority = db.Column(db.Integer, default=100)  # Order to apply rulesets for this account
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     # Unique constraint
     __table_args__ = (db.UniqueConstraint("account_id", "ruleset_id", name="_account_ruleset_uc"),)
@@ -204,8 +224,12 @@ class TagRule(db.Model):  # type: ignore[name-defined]
     replacement = db.Column(db.String(255), nullable=True)  # Text to replace matched pattern with (None = just remove)
     priority = db.Column(db.Integer, default=100)  # Processing order (lower first)
     enabled = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     def __repr__(self):
         return f"<TagRule {self.name}: {self.pattern} -> {self.tag_name}>"
@@ -223,11 +247,15 @@ class Category(db.Model):  # type: ignore[name-defined]
     parent_id = db.Column(db.Integer, nullable=True)
 
     # Sync metadata
-    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    last_seen = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     is_active = db.Column(db.Boolean, default=True)
     is_ppv = db.Column(db.Boolean, default=False, index=True)  # PPV category flag
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     # Unique constraint
     __table_args__ = (
@@ -261,12 +289,16 @@ class Channel(db.Model):  # type: ignore[name-defined]
     tv_archive_duration = db.Column(db.Integer)
 
     # Sync metadata
-    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    last_seen = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     is_active = db.Column(db.Boolean, default=True)
     is_visible = db.Column(db.Boolean, default=True)  # Pre-computed filter result
     is_ppv = db.Column(db.Boolean, default=False, index=True)  # PPV channel (set at sync based on category)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     # Third-party provider IDs
     thesportsdb_id = db.Column(db.String(50), nullable=True, index=True)  # TheSportsDB event ID for PPV
@@ -374,16 +406,20 @@ class Event(db.Model):  # type: ignore[name-defined]
 
     # Sync metadata
     data_completeness = db.Column(db.String(20), default="partial")  # partial, complete, enriched
-    last_updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     # Relationships
     channels = db.relationship(
         "Channel",
         secondary="event_channel_links",
-        backref=db.backref("events", lazy="dynamic"),
+        backref=db.backref("events", lazy="dynamic", viewonly=True),
         foreign_keys="[EventChannelLink.event_id, EventChannelLink.channel_id]",
-        overlaps="channel_links,event_links",
+        overlaps="channel_links,event_links,events,channels",
     )
 
     __table_args__ = (
@@ -419,13 +455,17 @@ class EventChannelLink(db.Model):  # type: ignore[name-defined]
     match_confidence = db.Column(db.Float, default=1.0)
     match_method = db.Column(db.String(50))  # direct_search, calendar_browse, manual, etc.
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     # Relationships
     event = db.relationship(
         "Event",
-        backref=db.backref("channel_links", cascade="all, delete-orphan"),
+        backref=db.backref("channel_links", cascade="all, delete-orphan", overlaps="channels"),
         overlaps="channels,events",
     )
     channel = db.relationship(
@@ -452,7 +492,7 @@ class Tag(db.Model):  # type: ignore[name-defined]
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False, index=True)  # Normalized tag name
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     def __repr__(self):
         return f"<Tag {self.name}>"
@@ -474,8 +514,12 @@ class ChannelTag(db.Model):  # type: ignore[name-defined]
     stream_id = db.Column(db.String(50), nullable=False)  # Stream ID from IPTV provider
     tag_id = db.Column(db.Integer, db.ForeignKey("tags.id"), nullable=False, index=True)
     source = db.Column(db.String(20), default=SOURCE_EXTRACTION, nullable=False, index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     # Relationships
     tag = db.relationship("Tag", backref="channel_tags")
@@ -524,8 +568,12 @@ class ChannelLink(db.Model):  # type: ignore[name-defined]
     # Whether this link was auto-detected or manually created
     auto_detected = db.Column(db.Boolean, default=False)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     # Relationships
     channel = db.relationship(
@@ -561,8 +609,8 @@ class ActiveStream(db.Model):  # type: ignore[name-defined]
     stream_id = db.Column(db.String(50), nullable=False)  # Stream being watched
     client_ip = db.Column(db.String(45))  # Client's IP address
     session_token = db.Column(db.String(64), unique=True, nullable=False)  # Unique session identifier
-    started_at = db.Column(db.DateTime, default=datetime.utcnow)
-    last_activity = db.Column(db.DateTime, default=datetime.utcnow)
+    started_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    last_activity = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     # Relationships
     credential = db.relationship("Credential", backref="active_streams")
@@ -592,8 +640,12 @@ class PlaylistConfig(db.Model):  # type: ignore[name-defined]
     tag_match_mode = db.Column(db.String(10), default="any")  # all, any
 
     enabled = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     def __repr__(self):
         return f"<PlaylistConfig {self.name}>"
@@ -641,8 +693,12 @@ class EpgSource(db.Model):  # type: ignore[name-defined]
     last_sync_message = db.Column(db.Text)
     channel_count = db.Column(db.Integer, default=0)  # Channels in this source
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     # Relationships
     account = db.relationship("Account", backref="epg_sources")
@@ -678,9 +734,13 @@ class EpgChannel(db.Model):  # type: ignore[name-defined]
     first_program = db.Column(db.DateTime)  # Earliest program start time
     last_program = db.Column(db.DateTime)  # Latest program end time
 
-    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_seen = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     # Unique constraint per source
     __table_args__ = (
@@ -711,8 +771,12 @@ class ChannelEpgMapping(db.Model):  # type: ignore[name-defined]
     # Allow override - if True, this mapping takes precedence
     is_override = db.Column(db.Boolean, default=False)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     # Relationships
     channel = db.relationship("Channel", backref="epg_mappings")
@@ -748,8 +812,12 @@ class SdLineup(db.Model):  # type: ignore[name-defined]
     # Sync status
     last_sync = db.Column(db.DateTime)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     # Relationships
     source = db.relationship("EpgSource", backref="sd_lineups")
@@ -777,8 +845,12 @@ class SdStation(db.Model):  # type: ignore[name-defined]
     broadcast_language = db.Column(db.String(100))  # JSON array as string
     logo_url = db.Column(db.String(500))
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     # Relationships
     lineup = db.relationship("SdLineup", backref="stations")
@@ -816,7 +888,7 @@ class CachedImage(db.Model):  # type: ignore[name-defined]
     hit_count = db.Column(db.Integer, default=0)  # Number of times served from cache
 
     # Timestamps
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     fetched_at = db.Column(db.DateTime)  # When last successfully fetched
     expires_at = db.Column(db.DateTime)  # When cache entry should be refreshed
     last_accessed_at = db.Column(db.DateTime)  # When last served to a client
@@ -873,8 +945,12 @@ class FccFacility(db.Model):  # type: ignore[name-defined]
 
     # Timestamps
     last_update = db.Column(db.DateTime)  # From FCC data
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     __table_args__ = (
         db.Index("idx_fcc_callsign_service", "callsign", "service_code"),
@@ -920,8 +996,12 @@ class FccCorrection(db.Model):  # type: ignore[name-defined]
     # Metadata
     reason = db.Column(db.Text)  # Why this correction was needed
     source = db.Column(db.String(100))  # Where the correct info came from (e.g., Wikipedia, station website)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     __table_args__ = (db.UniqueConstraint("callsign", "facility_id", name="uq_fcc_correction_callsign_facility"),)
 
@@ -953,8 +1033,12 @@ class EpgMatchRuleSet(db.Model):  # type: ignore[name-defined]
     is_default = db.Column(db.Boolean, default=False)  # Applied to accounts with no assigned rulesets
     enabled = db.Column(db.Boolean, default=True)
     priority = db.Column(db.Integer, default=100)  # Order when multiple rulesets apply
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     # Relationships
     rules = db.relationship(
@@ -978,7 +1062,7 @@ class AccountEpgMatchRuleSet(db.Model):  # type: ignore[name-defined]
     account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False)
     ruleset_id = db.Column(db.Integer, db.ForeignKey("epg_match_rulesets.id"), nullable=False)
     priority = db.Column(db.Integer, default=100)  # Order to apply rulesets for this account
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     # Unique constraint
     __table_args__ = (db.UniqueConstraint("account_id", "ruleset_id", name="_account_epg_match_ruleset_uc"),)
@@ -1105,8 +1189,12 @@ class EpgMatchRule(db.Model):  # type: ignore[name-defined]
     enabled = db.Column(db.Boolean, default=True)
     stop_on_match = db.Column(db.Boolean, default=True)  # Stop processing if this rule matches
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     def __repr__(self):
         return f"<EpgMatchRule {self.name}: {self.match_type}>"
@@ -1148,8 +1236,12 @@ class EpgExclusionPattern(db.Model):  # type: ignore[name-defined]
     enabled = db.Column(db.Boolean, default=True)
     priority = db.Column(db.Integer, default=100)  # Lower = check first
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     def __repr__(self):
         return f"<EpgExclusionPattern {self.name}: {self.pattern_type}>"
@@ -1217,8 +1309,12 @@ class EpgChannelNameMapping(db.Model):  # type: ignore[name-defined]
 
     enabled = db.Column(db.Boolean, default=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     def __repr__(self):
         return f"<EpgChannelNameMapping {self.name}: {self.old_name} -> {self.new_name}>"
@@ -1253,8 +1349,12 @@ class FccMatchNetwork(db.Model):  # type: ignore[name-defined]
     enabled = db.Column(db.Boolean, default=True)
     priority = db.Column(db.Integer, default=100)  # Lower = higher priority
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     def __repr__(self):
         return f"<FccMatchNetwork {self.name}>"
@@ -1287,8 +1387,12 @@ class FccMatchChannelPattern(db.Model):  # type: ignore[name-defined]
     enabled = db.Column(db.Boolean, default=True)
     priority = db.Column(db.Integer, default=100)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     def __repr__(self):
         return f"<FccMatchChannelPattern {self.name}>"
@@ -1326,8 +1430,12 @@ class FccMatchLocationPattern(db.Model):  # type: ignore[name-defined]
     enabled = db.Column(db.Boolean, default=True)
     priority = db.Column(db.Integer, default=100)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     def __repr__(self):
         return f"<FccMatchLocationPattern {self.name}>"
@@ -1379,8 +1487,12 @@ class FccMatchStrategy(db.Model):  # type: ignore[name-defined]
     enabled = db.Column(db.Boolean, default=True)
     priority = db.Column(db.Integer, default=100)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     def __repr__(self):
         return f"<FccMatchStrategy {self.name}: {self.strategy_type}>"
@@ -1407,8 +1519,12 @@ class EpgCountrySuffix(db.Model):  # type: ignore[name-defined]
     enabled = db.Column(db.Boolean, default=True)
     priority = db.Column(db.Integer, default=100)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     @property
     def suffixes_list(self):
@@ -1463,8 +1579,12 @@ class QualityTag(db.Model):  # type: ignore[name-defined]
 
     enabled = db.Column(db.Boolean, default=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     def __repr__(self):
         return f"<QualityTag {self.tag_name}: {self.quality_score}>"
@@ -1492,8 +1612,12 @@ class CountryTag(db.Model):  # type: ignore[name-defined]
 
     enabled = db.Column(db.Boolean, default=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     def __repr__(self):
         return f"<CountryTag {self.tag_name}>"
@@ -1522,8 +1646,12 @@ class CallsignSuffix(db.Model):  # type: ignore[name-defined]
     enabled = db.Column(db.Boolean, default=True)
     priority = db.Column(db.Integer, default=100)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     def __repr__(self):
         return f"<CallsignSuffix {self.suffix}>"
@@ -1597,7 +1725,9 @@ class ChannelHealthCheck(db.Model):  # type: ignore[name-defined]
 
     # Timing info
     check_duration_ms = db.Column(db.Integer)  # How long the check took
-    checked_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    checked_at = db.Column(
+        db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False, index=True
+    )
 
     # Which credential was used (for debugging)
     credential_id = db.Column(db.Integer, db.ForeignKey("credentials.id"), nullable=True)
@@ -1676,8 +1806,12 @@ class ChannelHealthStatus(db.Model):  # type: ignore[name-defined]
     ignored_at = db.Column(db.DateTime)  # When user marked as ignored
     ignored_reason = db.Column(db.Text)  # Optional reason for ignoring
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     # Relationships
     channel = db.relationship(
@@ -1707,7 +1841,11 @@ class ChannelHealthConfig(db.Model):  # type: ignore[name-defined]
     key = db.Column(db.String(100), unique=True, nullable=False)
     value = db.Column(db.Text, nullable=False)
     description = db.Column(db.Text)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     # Default configuration values
     DEFAULTS = {
@@ -1777,7 +1915,7 @@ class ChannelHealthConfig(db.Model):  # type: ignore[name-defined]
         record = ChannelHealthConfig.query.filter_by(key=key).first()
         if record:
             record.value = str(value)
-            record.updated_at = datetime.utcnow()
+            record.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             if description:
                 record.description = description
         else:
@@ -1819,7 +1957,11 @@ class Settings(db.Model):  # type: ignore[name-defined]
     key = db.Column(db.String(100), unique=True, nullable=False)
     value = db.Column(db.Text, nullable=False)
     description = db.Column(db.Text)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     # Default configuration values
     DEFAULTS = {
@@ -1852,7 +1994,7 @@ class Settings(db.Model):  # type: ignore[name-defined]
         record = Settings.query.filter_by(key=key).first()
         if record:
             record.value = str(value)
-            record.updated_at = datetime.utcnow()
+            record.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             if description:
                 record.description = description
         else:

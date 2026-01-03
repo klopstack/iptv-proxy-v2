@@ -657,7 +657,7 @@ class TagService:
         Returns:
             Dict with processing statistics
         """
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         from models import Account, Channel, ChannelTag, Tag, db
 
@@ -672,7 +672,7 @@ class TagService:
             return {"success": False, "error": "Account not synced. Please sync channels first."}
 
         # Mark start time for this processing run
-        processing_start = datetime.utcnow()
+        processing_start = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Get tag rules for this account
         tag_rules = TagService.get_rules_for_account(account)

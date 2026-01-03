@@ -104,7 +104,7 @@ def create_ruleset():
 @rulesets_bp.route("/api/rulesets/<int:ruleset_id>", methods=["GET"])
 def get_ruleset(ruleset_id):
     """Get specific ruleset with its rules"""
-    ruleset = RuleSet.query.get_or_404(ruleset_id)
+    ruleset = db.get_or_404(RuleSet, ruleset_id)
 
     return jsonify(
         {

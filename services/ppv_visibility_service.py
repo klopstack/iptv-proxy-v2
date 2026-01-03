@@ -2,7 +2,7 @@
 PPV Filtering Service - Apply PPV visibility rules based on account settings
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from services.ppv_filter_service import PPVFilterService
 
@@ -26,7 +26,7 @@ class PPVVisibilityService:
         """
         self.account = account
         self.ppv_visibility = getattr(account, "ppv_visibility", self.HIDE_INACTIVE)
-        self.ppv_filter = PPVFilterService(current_time=datetime.utcnow())
+        self.ppv_filter = PPVFilterService(current_time=datetime.now(timezone.utc).replace(tzinfo=None))
 
     def should_show_channel(self, channel):
         """
@@ -74,7 +74,7 @@ class PPVVisibilityService:
 
             if event_datetime:
                 # If datetime is in future, show it
-                return event_datetime > datetime.utcnow()
+                return event_datetime > datetime.now(timezone.utc).replace(tzinfo=None)
             else:
                 # If we can't parse a datetime, default to showing it
                 # (incomplete channel info, not actively filtered)

@@ -3,7 +3,7 @@ EPG (Electronic Program Guide) management routes
 """
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List
 
 from flask import Blueprint, jsonify, request
@@ -43,7 +43,7 @@ def _sync_sd_channels_to_epg(source: EpgSource, channels: List[Dict]) -> Dict:
         "channels_removed": 0,
     }
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     seen_channel_ids = set()
 
     # Get existing channels for this source
@@ -1250,7 +1250,7 @@ def sync_sd_lineup(lineup_id):
 
 def sync_sd_lineup_impl(source: EpgSource, lineup: SdLineup) -> dict:
     """Implementation of SD lineup sync"""
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     client = SchedulesDirectClient(source.sd_username, source.sd_password)
     client.authenticate()
@@ -1325,7 +1325,7 @@ def sync_sd_lineup_impl(source: EpgSource, lineup: SdLineup) -> dict:
 
     # Update lineup stats
     lineup.channel_count = len(channels)
-    lineup.last_sync = datetime.utcnow()
+    lineup.last_sync = datetime.now(timezone.utc).replace(tzinfo=None)
 
     db.session.commit()
 

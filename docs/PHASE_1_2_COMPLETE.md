@@ -74,7 +74,7 @@ When only a time is found (no explicit date), uses **playlist sync date**:
 
 ```python
 from services.ppv_filter_service import PPVFilterService
-from datetime import datetime
+from datetime import datetime, UTC
 
 # Create service with sync date
 sync_time = datetime.now()

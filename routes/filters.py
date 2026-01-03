@@ -51,7 +51,7 @@ def create_filter():
     data = request.validated_data
 
     # Validate account exists
-    Account.query.get_or_404(data["account_id"])
+    db.get_or_404(Account, data["account_id"])
 
     filter_obj = Filter(
         account_id=data["account_id"],
@@ -91,7 +91,7 @@ def create_filter():
 @validate_request_data(FilterUpdateSchema)
 def update_filter(filter_id):
     """Update a filter"""
-    filter_obj = Filter.query.get_or_404(filter_id)
+    filter_obj = db.get_or_404(Filter, filter_id)
     data = request.validated_data
 
     filter_obj.name = data.get("name", filter_obj.name)
@@ -124,7 +124,7 @@ def update_filter(filter_id):
 @filters_bp.route("/api/filters/<int:filter_id>", methods=["DELETE"])
 def delete_filter(filter_id):
     """Delete a filter"""
-    filter_obj = Filter.query.get_or_404(filter_id)
+    filter_obj = db.get_or_404(Filter, filter_id)
     account_id = filter_obj.account_id
 
     db.session.delete(filter_obj)

@@ -104,7 +104,7 @@ def sync_epg_source(source_id):
         ...
     
     # Database update and response
-    source.last_sync = datetime.utcnow()
+    source.last_sync = datetime.now(UTC)
     db.session.commit()
     return jsonify(...)
 ```
