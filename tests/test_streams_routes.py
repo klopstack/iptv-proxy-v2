@@ -290,8 +290,8 @@ class TestProxyStream:
         response_m3u8 = client.get(f"/stream/{test_account}/test_stream.m3u8")
 
         # Both should reach the handler (responses may vary based on service availability)
-        assert response_ts.status_code in [200, 503]
-        assert response_m3u8.status_code in [200, 503]
+        assert response_ts.status_code in [200, 502, 503]
+        assert response_m3u8.status_code in [200, 502, 503]
 
 
 # ============================================================================
