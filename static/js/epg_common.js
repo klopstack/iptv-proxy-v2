@@ -2,6 +2,22 @@
 // EPG Common Utilities
 // ============================================================================
 
+// Global state shared across EPG modules
+let accounts = [];
+let sources = [];
+let matchTypes = [];
+
+// Bootstrap modals (initialized on DOM ready)
+let sourceModal;
+let searchLineupModal;
+let manualMappingModal;
+let sdStationsModal;
+let sourceMappingsModal;
+let rulesetModal;
+let ruleModal;
+let exclusionModal;
+let assignModal;
+
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
@@ -45,4 +61,22 @@ function showToast(message, type = 'success') {
     
     // Remove from DOM after hidden
     toastElement.addEventListener('hidden.bs.toast', () => toastElement.remove());
+}
+
+// Initialize Bootstrap modals after DOM is ready
+function initializeBootstrapModals() {
+    // Safely initialize each modal only if the element exists
+    try {
+        if (document.getElementById('sourceModal')) sourceModal = new bootstrap.Modal(document.getElementById('sourceModal'));
+        if (document.getElementById('searchLineupModal')) searchLineupModal = new bootstrap.Modal(document.getElementById('searchLineupModal'));
+        if (document.getElementById('manualMappingModal')) manualMappingModal = new bootstrap.Modal(document.getElementById('manualMappingModal'));
+        if (document.getElementById('sdStationsModal')) sdStationsModal = new bootstrap.Modal(document.getElementById('sdStationsModal'));
+        if (document.getElementById('sourceMappingsModal')) sourceMappingsModal = new bootstrap.Modal(document.getElementById('sourceMappingsModal'));
+        if (document.getElementById('rulesetModal')) rulesetModal = new bootstrap.Modal(document.getElementById('rulesetModal'));
+        if (document.getElementById('ruleModal')) ruleModal = new bootstrap.Modal(document.getElementById('ruleModal'));
+        if (document.getElementById('exclusionModal')) exclusionModal = new bootstrap.Modal(document.getElementById('exclusionModal'));
+        if (document.getElementById('assignModal')) assignModal = new bootstrap.Modal(document.getElementById('assignModal'));
+    } catch (error) {
+        console.warn('Some modal elements were not found:', error.message);
+    }
 }

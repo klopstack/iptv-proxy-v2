@@ -88,7 +88,7 @@ async function showAssignModal(rulesetId) {
     html += '</div>';
     
     document.getElementById('accounts-assign-list').innerHTML = html;
-    new bootstrap.Modal(document.getElementById('assignRulesetModal')).show();
+    if (assignModal) assignModal.show();
 }
 
 async function toggleAssignment(accountId, isCurrentlyAssigned) {

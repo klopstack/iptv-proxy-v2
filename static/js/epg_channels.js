@@ -12,9 +12,17 @@ let epgChannelsState = {
 };
 
 async function loadEpgChannels() {
-    const sourceId = document.getElementById('channelSourceSelect').value;
-    const search = document.getElementById('channelSearch').value;
+    const sourceSelect = document.getElementById('channelSourceSelect');
+    const searchInput = document.getElementById('channelSearch');
     const container = document.getElementById('channels-list');
+    
+    // Return early if elements don't exist (feature not available on this page)
+    if (!sourceSelect || !searchInput || !container) {
+        return;
+    }
+    
+    const sourceId = sourceSelect.value;
+    const search = searchInput.value;
     
     epgChannelsState = {
         offset: 0,

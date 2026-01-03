@@ -13,7 +13,7 @@ function showCreateRuleModal(rulesetId) {
     populateRuleAccountDropdown();
     resetRulePreview();
     updateRuleFormVisibility();
-    new bootstrap.Modal(document.getElementById('ruleModal')).show();
+    if (ruleModal) ruleModal.show();
 }
 
 async function editRule(ruleId) {
@@ -42,7 +42,7 @@ async function editRule(ruleId) {
     populateRuleAccountDropdown();
     resetRulePreview();
     updateRuleFormVisibility();
-    new bootstrap.Modal(document.getElementById('ruleModal')).show();
+    if (ruleModal) ruleModal.show();
 }
 
 function updateRuleFormVisibility() {

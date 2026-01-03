@@ -21,20 +21,28 @@ function updateAutoMatchButton() {
     const dropdown = document.getElementById('auto-match-dropdown');
     const rulesetInfo = document.getElementById('account-ruleset-info');
     
+    // Only update if elements exist (may not be visible on non-mappings tabs)
+    if (!btn || !dropdown || !rulesetInfo) {
+        return;
+    }
+    
     if (accountId) {
         btn.disabled = false;
-        dropdown.disabled = false;
+        if (dropdown) dropdown.disabled = false;
         rulesetInfo.style.display = 'flex';
         loadAccountRulesetInfo(accountId);
     } else {
         btn.disabled = true;
-        dropdown.disabled = true;
+        if (dropdown) dropdown.disabled = true;
         rulesetInfo.style.display = 'none';
     }
 }
 
 async function loadAccountRulesetInfo(accountId) {
     const infoText = document.getElementById('ruleset-info-text');
+    // Return early if element doesn't exist (not on the mappings tab yet)
+    if (!infoText) return;
+    
     try {
         const response = await fetch(`/api/accounts/${accountId}/epg-match-rulesets`);
         const data = await response.json();
@@ -62,15 +70,36 @@ async function loadAccountRulesetInfo(accountId) {
 
 async function loadCategoriesForAccount(accountId) {
     const categorySelect = document.getElementById('mappingCategorySelect');
-    categorySelect.innerHTML = '<option value="">All Categories</option>';
+    categorySelect.innerHTML = '<option value="">Loading categories...</option>';
     
     if (!accountId) {
+        categorySelect.innerHTML = '<option value="">Select an account first</option>';
         return;
     }
     
     try {
         const response = await fetch(`/api/categories?account_id=${accountId}&include_empty=false&include_ppv=false`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const categories = await response.json();
+        
+        if (!Array.isArray(categories)) {
+            throw new Error('Categories response is not an array');
+        }
+        
+        categorySelect.innerHTML = '<option value="">All Categories</option>';
+        
+        if (categories.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = '(No categories available)';
+            opt.disabled = true;
+            categorySelect.appendChild(opt);
+            return;
+        }
         
         for (const cat of categories) {
             const opt = document.createElement('option');
@@ -80,6 +109,12 @@ async function loadCategoriesForAccount(accountId) {
         }
     } catch (error) {
         console.error('Error loading categories:', error);
+        categorySelect.innerHTML = '<option value="">Error loading categories</option>';
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = `(${error.message})`;
+        opt.disabled = true;
+        categorySelect.appendChild(opt);
     }
 }
 

@@ -304,7 +304,7 @@ async function viewStations(lineupId, lineupName) {
     document.getElementById('stationSearch').value = '';
     const container = document.getElementById('sd-stations-list');
     container.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
-    sdStationsModal.show();
+    if (sdStationsModal) sdStationsModal.show();
     
     try {
         const response = await fetch(`/api/epg/sd/lineups/${lineupId}/stations`);

@@ -1,9 +1,7 @@
 // ============================================================================
 // Match Rules Common Utilities
 // ============================================================================
-
-let accounts = [];
-let matchTypes = [];
+// Note: accounts and matchTypes are declared globally in epg_common.js
 
 function escapeHtml(text) {
     if (!text) return '';

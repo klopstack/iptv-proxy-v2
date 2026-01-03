@@ -1,16 +1,10 @@
 // ============================================================================
 // EPG Sources Management
 // ============================================================================
+// Note: accounts, sources, sourceModal, searchLineupModal, manualMappingModal,
+// sdStationsModal, sourceMappingsModal are declared in epg_common.js
 
-let sources = [];
-let accounts = [];
-const sourceModal = new bootstrap.Modal(document.getElementById('sourceModal'));
-const searchLineupModal = new bootstrap.Modal(document.getElementById('searchLineupModal'));
-const manualMappingModal = new bootstrap.Modal(document.getElementById('manualMappingModal'));
-const sdStationsModal = new bootstrap.Modal(document.getElementById('sdStationsModal'));
-const sourceMappingsModal = new bootstrap.Modal(document.getElementById('sourceMappingsModal'));
-
-// Source mappings state
+    // Source mappings state
 let currentSourceMappings = {
     sourceId: null,
     sourceName: '',
@@ -245,7 +239,7 @@ async function saveSource() {
         });
         
         if (response.ok) {
-            sourceModal.hide();
+            if (sourceModal) sourceModal.hide();
             await loadSources();
             alert('✓ EPG source saved successfully');
         } else {
@@ -282,7 +276,7 @@ function editSource(id) {
     
     onSourceTypeChange();
     document.getElementById('sourceModalLabel').textContent = 'Edit EPG Source';
-    sourceModal.show();
+    if (sourceModal) sourceModal.show();
 }
 
 async function deleteSource(id) {
@@ -459,7 +453,7 @@ async function showSourceMappings(sourceId, sourceName) {
         loadSourceMappingsPage();
     };
     
-    sourceMappingsModal.show();
+    if (sourceMappingsModal) sourceMappingsModal.show();
     await loadSourceMappingsPage();
 }
 

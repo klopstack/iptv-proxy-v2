@@ -66,7 +66,7 @@ function showCreateExclusionModal() {
     populateExclusionAccountDropdown();
     resetExclusionPreview();
     
-    new bootstrap.Modal(document.getElementById('exclusionModal')).show();
+    if (exclusionModal) exclusionModal.show();
 }
 
 async function editExclusion(exclusionId) {
@@ -87,7 +87,7 @@ async function editExclusion(exclusionId) {
     populateExclusionAccountDropdown();
     resetExclusionPreview();
     
-    new bootstrap.Modal(document.getElementById('exclusionModal')).show();
+    if (exclusionModal) exclusionModal.show();
 }
 
 async function saveExclusion() {

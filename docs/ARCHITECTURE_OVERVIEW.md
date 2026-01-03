@@ -482,3 +482,259 @@ The same PPV placeholder detection patterns are defined in multiple files:
 ```
 
 </details>
+
+---
+
+## Database Schema Analysis
+
+### Schema Overview
+
+The database uses SQLite with 40+ tables organized into several domains:
+
+| Domain | Tables | Purpose |
+|--------|--------|---------|
+| **Core** | accounts, credentials, filters | User accounts and authentication |
+| **Content** | channels, categories, tags, channel_tags | IPTV channel data |
+| **Rules** | rulesets, tag_rules, account_rulesets | Tag extraction |
+| **EPG** | epg_sources, epg_channels, channel_epg_mappings | EPG data |
+| **EPG Matching** | epg_match_rulesets, epg_match_rules, epg_exclusion_patterns | EPG matching rules |
+| **Schedules Direct** | sd_lineups, sd_stations | SD integration |
+| **FCC** | fcc_facilities, fcc_corrections, fcc_match_* | FCC database |
+| **PPV** | events, event_channel_links | PPV event tracking |
+| **Health** | channel_health_checks, channel_health_status | Stream monitoring |
+| **Config** | settings, sync_metadata, channel_health_config | App configuration |
+| **Cache** | cached_images, active_streams | Runtime state |
+
+### Index Coverage
+
+The database has **57 explicit indexes** plus automatic unique constraint indexes. Generally well-indexed.
+
+#### Well-Indexed Tables ✅
+- `channels` - 6 indexes (account_id, name, category_id, is_ppv, thesportsdb_id, enrichment)
+- `channel_tags` - 4 indexes (account_id, tag_id, source, composite)
+- `fcc_facilities` - 6 indexes (callsign, city/state, network, DMA)
+- `events` - 6 indexes (external_id, scheduled_at, teams, league, status)
+- `channel_health_checks` - 2 indexes (channel+time composite, result)
+
+#### Missing Indexes ⚠️
+
+| Table | Missing Index | Impact |
+|-------|---------------|--------|
+| `filters` | `account_id` | Slow filter lookups per account |
+| `tag_rules` | `ruleset_id` | Slow rule lookups per ruleset |
+| `account_rulesets` | `account_id`, `ruleset_id` individual | Uses composite only |
+| `account_epg_match_rulesets` | `account_id`, `ruleset_id` individual | Uses composite only |
+| `epg_match_rules` | `ruleset_id` | Slow rule lookups ⚠️ Has index but FK query may not use |
+| `channels` | `is_active` | Common filter not indexed |
+| `channels` | `is_visible` | Common filter not indexed |
+| `channels` | `(account_id, is_active)` composite | Frequently queried together |
+
+---
+
+### Data Duplication Issues
+
+#### 1. **JSON Fields Storing Relationships** (Design Smell)
+
+Several models store arrays as JSON text instead of using proper relational tables:
+
+| Model | JSON Field | Should Be |
+|-------|------------|-----------|
+| `PlaylistConfig` | `include_accounts` | Separate `playlist_config_accounts` table |
+| `PlaylistConfig` | `exclude_accounts` | Separate table |
+| `PlaylistConfig` | `include_tags` | Separate `playlist_config_tags` table |
+| `PlaylistConfig` | `exclude_tags` | Separate table |
+| `EpgMatchRule` | `required_tags` | Separate `epg_rule_tags` table |
+| `EpgMatchRule` | `excluded_tags` | Separate table |
+| `EpgMatchRule` | `country_codes` | Separate table |
+| `EpgMatchRule` | `epg_source_ids` | Separate table |
+| `EpgChannel` | `display_names_json` | Separate `epg_channel_names` table |
+| `EpgChannel` | `matched_channels_json` | Use `channel_epg_mappings` instead |
+| `FccMatchNetwork` | `tag_patterns` | Separate `fcc_network_tags` table |
+| `FccMatchChannelPattern` | `networks` | Separate table |
+| `EpgCountrySuffix` | `epg_suffixes` | Separate `country_suffix_values` table |
+
+**Impact:**
+- Cannot query by array contents efficiently (no SQL `WHERE tag IN (...)`)
+- Requires application-level JSON parsing on every access
+- No referential integrity for stored IDs
+- Difficult to update single elements
+
+#### 2. **Denormalized Counts**
+
+| Table | Field | Issue |
+|-------|-------|-------|
+| `EpgSource` | `channel_count` | Must be manually kept in sync |
+| `SdLineup` | `channel_count` | Must be manually kept in sync |
+| `EpgChannel` | `program_count` | Must be manually kept in sync |
+| `ChannelHealthStatus` | `total_checks`, `successful_checks`, `failed_checks` | Aggregates of `channel_health_checks` |
+
+**Recommendation:** Use `COUNT()` queries or triggers instead of cached counts that can become stale.
+
+#### 3. **Duplicate Category Information**
+
+The `Channel.category_id` points to `Category.id`, but `Category` also stores `category_id` (the provider's external ID). This creates confusion and potential inconsistency.
+
+```
+Channel.category_id → Category.id (internal)
+Category.category_id → Provider's external ID (string)
+```
+
+**Better approach:** Rename `Category.category_id` to `external_category_id` for clarity.
+
+---
+
+### Application Workarounds
+
+The application code contains several workarounds for database design issues:
+
+#### 1. **Manual JSON Serialization Throughout**
+
+Every route that reads `PlaylistConfig` must do:
+```python
+"include_accounts": json.loads(c.include_accounts) if c.include_accounts else [],
+"exclude_accounts": json.loads(c.exclude_accounts) if c.exclude_accounts else [],
+```
+
+**Files affected:** `routes/playlists.py`, `routes/epg/match_rules.py`, `services/epg_match_rules_service.py`
+
+**Fix:** Add `@property` methods to models:
+```python
+@property
+def include_accounts_list(self):
+    return json.loads(self.include_accounts) if self.include_accounts else []
+```
+
+#### 2. **N+1 Query Patterns**
+
+Found in multiple locations where relationships are accessed in loops without eager loading:
+
+| File | Pattern | Fix |
+|------|---------|-----|
+| `routes/accounts.py` | `for cred in credentials: ActiveStream.query.filter_by(credential_id=cred.id).count()` | Use `GROUP BY` |
+| `routes/rulesets.py` | `len(rs.rules)` in list comprehension | Use `joinedload(RuleSet.rules)` |
+| `services/tag_service.py` | Tag lookup per tag name | Use `IN` query |
+| `services/connection_manager.py` | Active stream count per credential | Use `GROUP BY` |
+| `services/fcc_facility_service.py` | Callsign suffix loop queries | Use `OR` conditions |
+
+#### 3. **Python Filtering Instead of SQL**
+
+```python
+# routes/playlists.py - loads all configs then filters in Python
+configs = PlaylistConfig.query.all()
+for c in configs:
+    if slugify(c.name) == slug.lower():  # Should be SQL WHERE
+```
+
+#### 4. **Legacy Field Handling**
+
+The `Account` model has legacy `username`/`password` fields alongside the `credentials` relationship:
+```python
+def get_primary_credential(self):
+    if self.credentials:
+        return self.credentials[0]
+    # Fallback to legacy fields for backward compatibility
+    if self.username and self.password:
+        return type("LegacyCredential", (), {...})()  # Creates fake object!
+```
+
+**This creates a mock object at runtime** - a workaround for incomplete data migration.
+
+---
+
+### Performance Issues
+
+#### 1. **Missing Composite Indexes for Common Queries**
+
+| Query Pattern | Tables | Current | Recommended |
+|---------------|--------|---------|-------------|
+| Channels by account + active | channels | Separate indexes | `(account_id, is_active)` |
+| Channels by account + visible | channels | Separate indexes | `(account_id, is_visible)` |
+| Tags by account + source | channel_tags | Has `(account_id, tag_id)` | Add `(account_id, source)` |
+| Health checks by channel + time | channel_health_checks | Has composite ✅ | Good |
+
+#### 2. **Large Text Fields Without Length Limits**
+
+| Table | Field | Issue |
+|-------|-------|-------|
+| `Channel` | `stream_icon` | VARCHAR(500) may truncate URLs |
+| `Channel` | `direct_source` | VARCHAR(500) may truncate URLs |
+| `CachedImage` | `original_url` | VARCHAR(2000) - good |
+| `FccFacility` | `nielsen_dma` | VARCHAR(100) - DMA names can be long |
+
+#### 3. **No Soft Delete Pattern**
+
+Channels use `is_active` flag but:
+- No index on `is_active` alone
+- Queries must always filter by `is_active=True`
+- Stale data accumulates
+
+**Recommendation:** Either add index or implement periodic cleanup.
+
+#### 4. **Channel Health Check Growth**
+
+`channel_health_checks` stores every health check forever. With 10,000 channels and checks every 30 minutes:
+- 10,000 × 48 checks/day = 480,000 rows/day
+- 14.4 million rows/month
+
+**Recommendation:** Implement retention policy (keep last N days, aggregate older data).
+
+---
+
+### Key-Value Tables Pattern
+
+Three tables use the key-value pattern: `settings`, `sync_metadata`, `channel_health_config`
+
+**Issues:**
+- No type safety (all values are TEXT)
+- No schema validation
+- Difficult to query multiple settings efficiently
+
+**These tables duplicate each other's pattern** - could be consolidated into single `app_config` table with `category` column.
+
+---
+
+### Foreign Key Cascade Issues
+
+#### Missing ON DELETE CASCADE
+
+| Table | FK Field | Issue |
+|-------|----------|-------|
+| `filters` | `account_id` | No cascade - orphans on account delete |
+| `tag_rules` | `ruleset_id` | No cascade - orphans on ruleset delete |
+| `active_streams` | `credential_id` | No cascade - orphans on credential delete |
+
+The SQLAlchemy models define `cascade="all, delete-orphan"` but the **database constraints** may not have been created with `ON DELETE CASCADE`, causing inconsistency between ORM and raw SQL operations.
+
+---
+
+### Recommendations Summary
+
+#### High Priority (Performance)
+
+1. **Add missing indexes:**
+   ```sql
+   CREATE INDEX idx_filters_account ON filters(account_id);
+   CREATE INDEX idx_tag_rules_ruleset ON tag_rules(ruleset_id);
+   CREATE INDEX idx_channels_account_active ON channels(account_id, is_active);
+   CREATE INDEX idx_channels_account_visible ON channels(account_id, is_visible);
+   ```
+
+2. **Fix N+1 queries** in routes/accounts.py, services/tag_service.py
+
+3. **Add computed properties** to models for JSON fields
+
+#### Medium Priority (Design)
+
+4. **Normalize JSON arrays** to proper tables (PlaylistConfig tags/accounts first)
+
+5. **Add retention policy** for channel_health_checks
+
+6. **Complete Account migration** - remove legacy username/password fields
+
+#### Low Priority (Cleanup)
+
+7. **Consolidate key-value tables** (settings, sync_metadata, channel_health_config)
+
+8. **Rename ambiguous fields** (Category.category_id → external_category_id)
+
+9. **Add ON DELETE CASCADE** to all FK constraints in database

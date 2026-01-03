@@ -29,6 +29,11 @@ async function loadRulesets(preserveExpanded = false) {
             `;
         } else {
             rulesets.forEach(ruleset => {
+                // Expand all rulesets by default if not preserving state
+                if (!preserveExpanded && expandedRulesets.size === 0) {
+                    expandedRulesets.add(ruleset.id);
+                }
+                
                 const defaultBadge = ruleset.is_default ? '<span class="badge bg-primary ms-2">Default</span>' : '';
                 const status = ruleset.enabled ? '<span class="badge bg-success">Enabled</span>' : '<span class="badge bg-secondary">Disabled</span>';
                 const isExpanded = expandedRulesets.has(ruleset.id);
@@ -165,7 +170,7 @@ function showCreateRulesetModal() {
     document.getElementById('rulesetForm').reset();
     document.getElementById('ruleset-id').value = '';
     document.getElementById('ruleset-enabled').checked = true;
-    new bootstrap.Modal(document.getElementById('rulesetModal')).show();
+    if (rulesetModal) rulesetModal.show();
 }
 
 async function editRuleset(rulesetId) {
@@ -180,7 +185,7 @@ async function editRuleset(rulesetId) {
     document.getElementById('ruleset-is-default').checked = ruleset.is_default;
     document.getElementById('ruleset-enabled').checked = ruleset.enabled;
     
-    new bootstrap.Modal(document.getElementById('rulesetModal')).show();
+    if (rulesetModal) rulesetModal.show();
 }
 
 async function saveRuleset() {

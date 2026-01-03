@@ -107,36 +107,56 @@
 
                         <!-- Filters -->
                         <div class="row mb-3">
-                            <div class="col-md-3">
-                                <label for="account-filter" class="form-label">Account:</label>
-                                <select class="form-select form-select-sm" id="account-filter">
-                                    <option value="">All Accounts</option>
+                            <div class="col-md-2">
+                                <label for="mappingAccountSelect" class="form-label">Account:</label>
+                                <select class="form-select form-select-sm" id="mappingAccountSelect">
+                                    <option value="">Select Account...</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
-                                <label for="epg-source-filter" class="form-label">EPG Source:</label>
-                                <select class="form-select form-select-sm" id="epg-source-filter">
+                            <div class="col-md-2">
+                                <label for="mappingCategorySelect" class="form-label">Category:</label>
+                                <select class="form-select form-select-sm" id="mappingCategorySelect">
+                                    <option value="">All Categories</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="mappingEpgSourceSelect" class="form-label">EPG Source:</label>
+                                <select class="form-select form-select-sm" id="mappingEpgSourceSelect">
                                     <option value="">All Sources</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
-                                <label for="view-mode" class="form-label">View:</label>
-                                <select class="form-select form-select-sm" id="view-mode">
+                            <div class="col-md-2">
+                                <label for="mappingViewSelect" class="form-label">View:</label>
+                                <select class="form-select form-select-sm" id="mappingViewSelect">
                                     <option value="all">All Channels</option>
                                     <option value="mapped">Mapped Only</option>
                                     <option value="unmapped">Unmapped Only</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label class="form-label">&nbsp;</label>
-                                <button class="btn btn-sm btn-primary w-100" id="run-matching-btn">
-                                    <i class="bi bi-magic"></i> Run Auto-Match
+                                <button class="btn btn-sm btn-primary w-100" id="auto-match-btn" disabled>
+                                    <i class="bi bi-magic"></i> Auto-Match
                                 </button>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">&nbsp;</label>
+                                <div class="form-check mt-2">
+                                    <input type="checkbox" class="form-check-input" id="showFilteredChannels">
+                                    <label class="form-check-label small" for="showFilteredChannels">
+                                        Show filtered
+                                    </label>
+                                </div>
                             </div>
                         </div>
 
+                        <!-- Ruleset Info -->
+                        <div id="account-ruleset-info" class="alert alert-light d-none d-flex align-items-center mb-3" style="display: none;">
+                            <div id="ruleset-info-text" class="w-100"></div>
+                        </div>
+
                         <!-- Mappings List -->
-                        <div id="mappings-list">
+                        <div id="mappings-list" style="height: 600px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px; padding: 10px;">
                             <div class="text-center py-4 text-muted">
                                 Select an account to view channel mappings
                             </div>
@@ -259,11 +279,29 @@
 <script src="{{ url_for('static', filename='js/match_rules_reference.js') }}"></script>
 
 <script>
+/* global
+    bootstrap, accounts, sources, matchTypes, debounce, escapeHtml, showToast, initializeBootstrapModals,
+    loadAccounts, loadSources, loadMatchTypes, loadEpgChannels, loadMappings, loadMoreMappings,
+    loadCategoriesForAccount, updateAutoMatchButton, runAutoMatch, clearCategoryMappings,
+    mappingsState, onSourceTypeChange, saveSource, testSdCredentials, loadCoverage,
+    testGrabber, loadSdStatus, populateSdSourceSelect, loadSdLineups, searchLineups,
+    searchEpgChannels, saveManualMapping, setupEpgChannelScroll, filterStations,
+    loadXmltvGrabbers, loadXmltvConfigs, loadRulesets, loadExclusions, loadReference,
+    showCreateRulesetModal, createDefaultRuleset, createDefaultExclusions, 
+    showCreateExclusionModal, saveRuleset, saveRule, saveExclusion, 
+    previewExclusionPattern, previewRulePattern, showRulesetRules, showAssignModal,
+    editRuleset, deleteRuleset, duplicateRuleset, showCreateRuleModal, editRule,
+    deleteRule, editExclusion, deleteExclusion, toggleAssignment, updateRuleFormVisibility
+*/
+
 // ============================================================================
 // EPG Management Page Initialization
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Initialize Bootstrap modals
+    initializeBootstrapModals();
+    
     // Load common data
     await Promise.all([
         loadAccounts(),
@@ -271,74 +309,99 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadMatchTypes()
     ]);
     
-    // Set up EPG tabs event listeners
-    document.getElementById('sourceType').addEventListener('change', onSourceTypeChange);
-    document.getElementById('save-source-btn').addEventListener('click', saveSource);
-    document.getElementById('testSdCredentialsBtn').addEventListener('click', testSdCredentials);
-    document.getElementById('testGrabberBtn').addEventListener('click', testGrabber);
-    document.getElementById('refresh-coverage-btn').addEventListener('click', loadCoverage);
-    document.getElementById('add-source-btn').addEventListener('click', () => {
+    // Populate account dropdown for mappings
+    const mappingAccountSelect = document.getElementById('mappingAccountSelect');
+    accounts.forEach(account => {
+        const option = document.createElement('option');
+        option.value = account.id;
+        option.textContent = account.name || `Account ${account.id}`;
+        mappingAccountSelect.appendChild(option);
+    });
+    
+    // Auto-load categories for first account if available
+    if (accounts.length > 0) {
+        mappingAccountSelect.value = accounts[0].id;
+        await loadCategoriesForAccount(accounts[0].id);
+        loadMappings();
+    }
+    
+    // Populate EPG source dropdown for mappings
+    const mappingEpgSourceSelect = document.getElementById('mappingEpgSourceSelect');
+    sources.forEach(source => {
+        const option = document.createElement('option');
+        option.value = source.id;
+        option.textContent = source.name || `Source ${source.id}`;
+        mappingEpgSourceSelect.appendChild(option);
+    });
+    
+    // Set up EPG tabs event listeners (with null checks)
+    const addListener = (id, event, handler) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener(event, handler);
+    };
+    
+    addListener('sourceType', 'change', onSourceTypeChange);
+    addListener('save-source-btn', 'click', saveSource);
+    addListener('testSdCredentialsBtn', 'click', testSdCredentials);
+    addListener('testGrabberBtn', 'click', testGrabber);
+    addListener('refresh-coverage-btn', 'click', loadCoverage);
+    addListener('add-source-btn', 'click', () => {
         document.getElementById('sourceId').value = '';
         document.getElementById('sourceForm').reset();
         document.getElementById('sourceModalLabel').textContent = 'Add EPG Source';
         onSourceTypeChange();
     });
     
-    // Channels tab
-    document.getElementById('channelSourceSelect').addEventListener('change', loadEpgChannels);
-    document.getElementById('channelSearch').addEventListener('input', debounce(loadEpgChannels, 300));
-    
     // Mappings tab
-    document.getElementById('mappingAccountSelect').addEventListener('change', async (e) => {
+    addListener('mappingAccountSelect', 'change', async (e) => {
         await loadCategoriesForAccount(e.target.value);
         document.getElementById('mappingCategorySelect').value = '';
         updateAutoMatchButton();
         loadMappings();
     });
-    document.getElementById('mappingCategorySelect').addEventListener('change', loadMappings);
-    document.getElementById('mappingViewSelect').addEventListener('change', loadMappings);
-    document.getElementById('showFilteredChannels').addEventListener('change', loadMappings);
-    document.getElementById('auto-match-btn').addEventListener('click', () => runAutoMatch());
-    document.getElementById('clear-category-mappings-btn').addEventListener('click', (e) => {
-        e.preventDefault();
-        clearCategoryMappings();
-    });
+    addListener('mappingCategorySelect', 'change', loadMappings);
+    addListener('mappingEpgSourceSelect', 'change', loadMappings);
+    addListener('mappingViewSelect', 'change', loadMappings);
+    addListener('showFilteredChannels', 'change', loadMappings);
+    addListener('auto-match-btn', 'click', () => runAutoMatch());
     
     // Infinite scroll for mappings
     const mappingsList = document.getElementById('mappings-list');
-    mappingsList.addEventListener('scroll', () => {
-        if (mappingsState.hasMore && !mappingsState.loading) {
-            const scrollHeight = mappingsList.scrollHeight;
-            const scrollTop = mappingsList.scrollTop;
-            const clientHeight = mappingsList.clientHeight;
-            
-            if (scrollTop + clientHeight >= scrollHeight - 100) {
-                loadMoreMappings();
+    if (mappingsList) {
+        mappingsList.addEventListener('scroll', () => {
+            if (mappingsState.hasMore && !mappingsState.loading) {
+                const scrollHeight = mappingsList.scrollHeight;
+                const scrollTop = mappingsList.scrollTop;
+                const clientHeight = mappingsList.clientHeight;
+                
+                if (scrollTop + clientHeight >= scrollHeight - 100) {
+                    loadMoreMappings();
+                }
             }
-        }
-    });
+        });
+    }
     
     // SD tab
-    document.getElementById('sdSourceSelect').addEventListener('change', loadSdLineups);
-    document.getElementById('searchLineupsBtn').addEventListener('click', searchLineups);
+    addListener('sdSourceSelect', 'change', loadSdLineups);
+    addListener('searchLineupsBtn', 'click', searchLineups);
     
     // Manual mapping
-    document.getElementById('manualMappingEpgSearch').addEventListener('input', debounce(() => searchEpgChannels(true), 300));
-    document.getElementById('manualMappingEpgSource').addEventListener('change', () => searchEpgChannels(true));
-    document.getElementById('saveManualMappingBtn').addEventListener('click', saveManualMapping);
+    addListener('manualMappingEpgSearch', 'input', debounce(() => searchEpgChannels(true), 300));
+    addListener('manualMappingEpgSource', 'change', () => searchEpgChannels(true));
+    addListener('saveManualMappingBtn', 'click', saveManualMapping);
     setupEpgChannelScroll();
     
     // SD stations search
-    document.getElementById('stationSearch').addEventListener('input', debounce(filterStations, 200));
+    addListener('stationSearch', 'input', debounce(filterStations, 200));
     
     // Tab change handlers
-    document.getElementById('channels-tab').addEventListener('shown.bs.tab', loadEpgChannels);
-    document.getElementById('mappings-tab').addEventListener('shown.bs.tab', loadMappings);
-    document.getElementById('sd-tab').addEventListener('shown.bs.tab', () => {
+    addListener('channels-tab', 'shown.bs.tab', loadEpgChannels);
+    addListener('mappings-tab', 'shown.bs.tab', loadMappings);
+    addListener('sd-tab', 'shown.bs.tab', () => {
         loadSdStatus();
         populateSdSourceSelect();
     });
-    document.getElementById('xmltv-tab').addEventListener('shown.bs.tab', () => {
+    addListener('xmltv-tab', 'shown.bs.tab', () => {
         loadXmltvGrabbers();
         loadXmltvConfigs();
     });
@@ -350,19 +413,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     ]);
     
     // Set up match rules tabs
-    document.getElementById('exclusions-tab').addEventListener('shown.bs.tab', loadExclusions);
-    document.getElementById('reference-tab').addEventListener('shown.bs.tab', loadReference);
+    addListener('exclusions-tab', 'shown.bs.tab', loadExclusions);
+    addListener('reference-tab', 'shown.bs.tab', loadReference);
     
     // Set up button listeners
-    document.getElementById('create-ruleset-btn').addEventListener('click', showCreateRulesetModal);
-    document.getElementById('create-default-ruleset-btn').addEventListener('click', createDefaultRuleset);
-    document.getElementById('create-default-exclusions-btn').addEventListener('click', createDefaultExclusions);
-    document.getElementById('create-exclusion-btn').addEventListener('click', showCreateExclusionModal);
-    document.getElementById('save-ruleset-btn').addEventListener('click', saveRuleset);
-    document.getElementById('save-rule-btn').addEventListener('click', saveRule);
-    document.getElementById('save-exclusion-btn').addEventListener('click', saveExclusion);
-    document.getElementById('preview-exclusion-btn').addEventListener('click', previewExclusionPattern);
-    document.getElementById('preview-rule-btn').addEventListener('click', previewRulePattern);
+    addListener('create-ruleset-btn', 'click', showCreateRulesetModal);
+    addListener('create-default-ruleset-btn', 'click', createDefaultRuleset);
+    addListener('create-default-exclusions-btn', 'click', createDefaultExclusions);
+    addListener('create-exclusion-btn', 'click', showCreateExclusionModal);
+    addListener('save-ruleset-btn', 'click', saveRuleset);
+    addListener('save-rule-btn', 'click', saveRule);
+    addListener('save-exclusion-btn', 'click', saveExclusion);
+    addListener('preview-exclusion-btn', 'click', previewExclusionPattern);
+    addListener('preview-rule-btn', 'click', previewRulePattern);
     
     // Set up event delegation for dynamic buttons
     document.addEventListener('click', async (e) => {
@@ -413,23 +476,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const ruleAction = document.getElementById('rule-action');
     if (ruleMatchType) ruleMatchType.addEventListener('change', updateRuleFormVisibility);
     if (ruleAction) ruleAction.addEventListener('change', updateRuleFormVisibility);
-});
-
-document.addEventListener('DOMContentLoaded', function() {
-    // Load sources on page load
-    if (window.loadEPGSources) {
-        window.loadEPGSources();
-    }
-    
-    // Load rulesets when match rules tab is shown
-    const rulesetsTab = document.getElementById('rulesets-subtab');
-    if (rulesetsTab) {
-        rulesetsTab.addEventListener('shown.bs.tab', function() {
-            if (window.loadRulesets) {
-                window.loadRulesets();
-            }
-        });
-    }
 });
 </script>
 

@@ -14,7 +14,7 @@ function showManualMappingModal(channelId, channelName) {
     document.getElementById('manualMappingTimeOffset').value = '0';
     document.getElementById('selectedEpgChannel').style.display = 'none';
     epgSearchState = { search: '', offset: 0, hasMore: true, loading: false };
-    manualMappingModal.show();
+    if (manualMappingModal) manualMappingModal.show();
 }
 
 function clearSelectedEpgChannel() {

@@ -207,5 +207,5 @@ function quickCreateGrabberSource(grabberName) {
     }, 100);
     
     document.getElementById('sourceModalLabel').textContent = 'Add EPG Source';
-    sourceModal.show();
+    if (sourceModal) sourceModal.show();
 }
