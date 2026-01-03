@@ -1975,6 +1975,16 @@ class Settings(db.Model):  # type: ignore[name-defined]
             "true",
             "Proxy tvg-logo URLs through local cache for improved reliability and privacy. Set to 'false' to use original URLs.",
         ),
+        # PPV enrichment feature toggle
+        "ppv_enrichment_enabled": (
+            "true",
+            "Enable PPV event enrichment with TheSportsDB data (requires API key). Set to 'false' to disable.",
+        ),
+        # PPV enrichment API key for TheSportsDB
+        "ppv_thesportsdb_api_key": (
+            "",
+            "TheSportsDB API key for PPV event enrichment. Leave empty to use free tier (limited requests).",
+        ),
     }
 
     @staticmethod

@@ -71,3 +71,9 @@ def stations_page():
 def channel_health_page():
     """Channel Health Monitor page"""
     return render_template("channel_health.html")
+
+
+@web_bp.route("/ppv")
+def ppv_page():
+    """PPV Management page - enrichment, visibility, filtering, and queue status"""
+    return render_template("ppv.html")

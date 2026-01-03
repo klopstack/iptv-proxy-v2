@@ -1,0 +1,713 @@
+{% extends "base.html" %}
+
+{% block title %}PPV Management - IPTV Proxy{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Pay-Per-View (PPV) Management</h1>
+</div>
+
+<!-- Tabs for different PPV sections -->
+<ul class="nav nav-tabs mb-4" id="ppvTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="enrichment-tab" data-bs-toggle="tab" data-bs-target="#enrichment-section"
+                type="button" role="tab">
+            <i class="bi bi-star"></i> Enrichment
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="visibility-tab" data-bs-toggle="tab" data-bs-target="#visibility-section"
+                type="button" role="tab">
+            <i class="bi bi-eye"></i> Visibility
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="filtering-tab" data-bs-toggle="tab" data-bs-target="#filtering-section"
+                type="button" role="tab">
+            <i class="bi bi-funnel"></i> Filtering
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="queue-tab" data-bs-toggle="tab" data-bs-target="#queue-section"
+                type="button" role="tab">
+            <i class="bi bi-hourglass-split"></i> Queue Status
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="ppvTabsContent">
+    <!-- Enrichment Section -->
+    <div class="tab-pane fade show active" id="enrichment-section" role="tabpanel">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card mb-4">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="bi bi-star"></i> PPV Event Enrichment</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">
+                            Enhance pay-per-view channels with detailed event information from TheSportsDB, including match details, teams, venues, and more.
+                        </p>
+
+                        <form id="ppv-enrichment-form">
+                            <div class="mb-3 form-check form-switch">
+                                <input type="checkbox" class="form-check-input" id="ppv-enrichment-enabled">
+                                <label class="form-check-label" for="ppv-enrichment-enabled">
+                                    <strong>Enable PPV Enrichment</strong>
+                                </label>
+                            </div>
+                            <div class="form-text mb-3">
+                                When enabled, the system will automatically match PPV events with TheSportsDB data to extract event details, teams, and other metadata.
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="ppv-api-key" class="form-label">
+                                    <strong>TheSportsDB API Key (Optional)</strong>
+                                </label>
+                                <input type="password" class="form-control" id="ppv-api-key" placeholder="Leave blank to use free tier">
+                                <div class="form-text">
+                                    Get a free API key from <a href="https://www.thesportsdb.com/api_key.php" target="_blank">TheSportsDB</a>.
+                                    <br>Free tier: ~500 requests/day | Premium tier: Higher limits with API key
+                                    <br><button type="button" class="btn btn-sm btn-link p-0" id="toggle-api-key">Show</button>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-info small mb-3">
+                                <i class="bi bi-info-circle"></i>
+                                <strong>How it works:</strong> PPV enrichment processes new/updated events automatically during scheduled syncs. 
+                                Event data includes sport type, teams, leagues, venues, and match details.
+                            </div>
+
+                            <button type="submit" class="btn btn-warning">
+                                <i class="bi bi-save"></i> Save Enrichment Settings
+                            </button>
+                        </form>
+                        <div id="ppv-enrichment-status" class="mt-3" style="display: none;"></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="bi bi-lightning-charge"></i> Enrichment Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="enrichment-settings-info" class="small">
+                            <div class="text-center">
+                                <div class="spinner-border spinner-border-sm" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card bg-light mb-4">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-info-circle"></i> About Enrichment</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="small mb-2"><strong>What is enrichment?</strong></p>
+                        <p class="small">
+                            PPV enrichment matches your channel names against TheSportsDB's extensive database of sports events.
+                            This adds rich metadata to your PPV channels for better organization and filtering.
+                        </p>
+                        <p class="small mb-2"><strong>Data added:</strong></p>
+                        <ul class="small">
+                            <li>Sport type (Football, Basketball, etc.)</li>
+                            <li>Team/league information</li>
+                            <li>Venue and location</li>
+                            <li>Event status and timing</li>
+                            <li>Broadcast details</li>
+                        </ul>
+                        <p class="small text-muted">
+                            <strong>Note:</strong> Enrichment works best with channel names containing event/team information (e.g., "UFC 293: Silva vs Adesanya").
+                        </p>
+                    </div>
+                </div>
+
+                <div class="card bg-light">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-gear"></i> TheSportsDB</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="small">
+                            <a href="https://www.thesportsdb.com/" target="_blank">TheSportsDB</a> is a free, community-driven sports database containing information about athletes, teams, events, and more.
+                        </p>
+                        <p class="small mb-0">
+                            <a href="https://www.thesportsdb.com/api_key.php" target="_blank" class="btn btn-sm btn-primary">Get API Key</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Visibility Section -->
+    <div class="tab-pane fade" id="visibility-section" role="tabpanel">
+        <div class="row">
+            <div class="col-md-10">
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="bi bi-eye"></i> PPV Channel Visibility</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-4">
+                            Configure how PPV channels are displayed in playlists. Settings are per-account and affect all playlist generation.
+                        </p>
+
+                        <div id="accounts-visibility-list" class="mb-3">
+                            <div class="text-center">
+                                <div class="spinner-border spinner-border-sm" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info small">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Visibility Options:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li><strong>Hide All PPV:</strong> Don't show any pay-per-view channels in playlists</li>
+                                <li><strong>Hide Inactive PPV:</strong> Show only upcoming/active PPV events, hide past events (default)</li>
+                                <li><strong>Show All PPV:</strong> Show all pay-per-view channels including inactive ones</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtering Section -->
+    <div class="tab-pane fade" id="filtering-section" role="tabpanel">
+        <div class="row">
+            <div class="col-md-10">
+                <div class="card mb-4">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="bi bi-funnel"></i> PPV Event Filtering</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-4">
+                            Use filters to include or exclude PPV channels based on categories, names, or custom patterns.
+                        </p>
+
+                        <div class="alert alert-info small mb-4">
+                            <i class="bi bi-lightbulb"></i>
+                            <strong>Filtering Tips:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li>Go to <a href="/filters" class="alert-link">Filters</a> to create account-specific filter rules</li>
+                                <li>Use category filters to include/exclude PPV categories by name</li>
+                                <li>Use regex patterns to match specific event names or sports types</li>
+                                <li>Combine with visibility settings for complete control</li>
+                                <li>Use tag-based filters on playlists after enrichment to filter by event type</li>
+                            </ul>
+                        </div>
+
+                        <h6 class="mb-3"><i class="bi bi-book"></i> Quick Start</h6>
+                        <ol class="small">
+                            <li>Go to <strong>Filters</strong> page</li>
+                            <li>Select your IPTV account</li>
+                            <li>Create a new filter with type <code>category</code> or <code>channel_name</code></li>
+                            <li>Set value to PPV category name (e.g., "PPV Events")</li>
+                            <li>Choose <code>Include</code> to show only those categories, or <code>Exclude</code> to hide them</li>
+                        </ol>
+
+                        <div class="alert alert-warning small mt-4">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Note:</strong> Filters work in combination with visibility settings. 
+                            For example, if visibility is "Hide Inactive PPV" and a filter excludes a category, 
+                            only upcoming/active events in non-excluded categories will show.
+                        </div>
+
+                        <a href="/filters" class="btn btn-success">
+                            <i class="bi bi-pencil"></i> Go to Filters
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Queue Status Section -->
+    <div class="tab-pane fade" id="queue-section" role="tabpanel">
+        <div class="row">
+            <div class="col-md-10">
+                <div class="card mb-4">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0"><i class="bi bi-hourglass-split"></i> Enrichment Queue Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">
+                            Monitor the status of PPV enrichment queue processing. Shows current progress and API usage statistics.
+                        </p>
+
+                        <div id="queue-status-container" class="mb-4">
+                            <div class="text-center">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h6 class="mb-3"><i class="bi bi-play-circle"></i> Manual Processing</h6>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="max-requests" class="form-label">Max API Requests</label>
+                                <input type="number" class="form-control" id="max-requests" value="10" min="1" max="30">
+                                <small class="text-muted">Up to 30 requests can be made per minute</small>
+                            </div>
+                        </div>
+
+                        <button id="process-queue-btn" class="btn btn-primary">
+                            <i class="bi bi-lightning-charge"></i> Process Queue Now
+                        </button>
+
+                        <button id="queue-all-ppv-btn" class="btn btn-outline-primary ms-2">
+                            <i class="bi bi-plus-circle"></i> Queue All PPV Channels
+                        </button>
+
+                        <div id="queue-processing-status" class="mt-3" style="display: none;"></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="bi bi-graph-up"></i> Queue Statistics</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="queue-stats" class="small">
+                            <div class="text-center">
+                                <div class="spinner-border spinner-border-sm" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-info-circle"></i> About Queue</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="small mb-2"><strong>What is the enrichment queue?</strong></p>
+                        <p class="small">
+                            The enrichment queue manages PPV channels waiting to be matched with event data from TheSportsDB.
+                            Channels are automatically queued during account syncs, but you can manually queue or reprocess them here.
+                        </p>
+                        <p class="small mb-2"><strong>Queue States:</strong></p>
+                        <ul class="small">
+                            <li><strong>Queued:</strong> Waiting to be processed</li>
+                            <li><strong>Processing:</strong> Currently being matched</li>
+                            <li><strong>Matched:</strong> Successfully enriched</li>
+                            <li><strong>No Match:</strong> Event not found in database</li>
+                            <li><strong>Error:</strong> Processing failed</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ============================================================================
+// PPV Enrichment Settings
+// ============================================================================
+
+async function loadPPVEnrichmentSettings() {
+    try {
+        const response = await fetch('/api/ppv-enrichment/config');
+        const data = await response.json();
+
+        document.getElementById('ppv-enrichment-enabled').checked = data.enabled;
+
+        if (!data.has_api_key) {
+            document.getElementById('ppv-api-key').value = '';
+        }
+    } catch (error) {
+        console.error('Error loading PPV enrichment settings:', error);
+    }
+}
+
+document.getElementById('ppv-enrichment-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const enabled = document.getElementById('ppv-enrichment-enabled').checked;
+    const apiKey = document.getElementById('ppv-api-key').value.trim();
+    const statusEl = document.getElementById('ppv-enrichment-status');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Saving...';
+    statusEl.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/ppv-enrichment/config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                enabled: enabled,
+                api_key: apiKey || null
+            })
+        });
+
+        if (!response.ok) throw new Error('Failed to save settings');
+
+        statusEl.className = 'alert alert-success mt-3';
+        statusEl.innerHTML = '<i class="bi bi-check-circle"></i> PPV enrichment settings saved successfully!';
+        statusEl.style.display = 'block';
+
+        setTimeout(() => {
+            statusEl.style.display = 'none';
+        }, 3000);
+
+        await loadPPVEnrichmentSettings();
+    } catch (error) {
+        statusEl.className = 'alert alert-danger mt-3';
+        statusEl.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Error: ${error.message}`;
+        statusEl.style.display = 'block';
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }
+});
+
+document.getElementById('toggle-api-key').addEventListener('click', function (e) {
+    e.preventDefault();
+    const input = document.getElementById('ppv-api-key');
+    const btn = this;
+
+    if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = 'Hide';
+    } else {
+        input.type = 'password';
+        btn.textContent = 'Show';
+    }
+});
+
+async function loadEnrichmentSettings() {
+    try {
+        const response = await fetch('/api/ppv-enrichment/settings');
+        const data = await response.json();
+
+        const html = `
+            <div class="row">
+                <div class="col-md-6">
+                    <dl class="small">
+                        <dt>Batch Size</dt>
+                        <dd>${data.batch_size} channels per request</dd>
+                        <dt>Rate Limiting</dt>
+                        <dd>${data.requests_per_minute} requests/minute</dd>
+                        <dt>Request Interval</dt>
+                        <dd>${data.request_interval_seconds} seconds between requests</dd>
+                    </dl>
+                </div>
+                <div class="col-md-6">
+                    <dl class="small">
+                        <dt>Max Retries</dt>
+                        <dd>${data.max_retry_attempts} attempts</dd>
+                        <dt>TheSportsDB Rate Limit</dt>
+                        <dd>${data.thesportsdb_rate_limit} requests per ${data.thesportsdb_rate_limit_window}</dd>
+                    </dl>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('enrichment-settings-info').innerHTML = html;
+    } catch (error) {
+        console.error('Error loading enrichment settings:', error);
+        document.getElementById('enrichment-settings-info').innerHTML =
+            `<div class="alert alert-danger small">Error loading settings: ${error.message}</div>`;
+    }
+}
+
+// ============================================================================
+// PPV Visibility Management
+// ============================================================================
+
+async function loadAccountsVisibility() {
+    try {
+        const response = await fetch('/api/accounts');
+        const accounts = await response.json();
+
+        let html = '<div class="list-group">';
+
+        for (const account of accounts) {
+            const visibilityOptions = [
+                { value: 'hide_all', label: 'Hide All PPV' },
+                { value: 'hide_inactive', label: 'Hide Inactive PPV (default)' },
+                { value: 'show_all', label: 'Show All PPV' }
+            ];
+
+            html += `
+                <div class="list-group-item">
+                    <div class="row align-items-center">
+                        <div class="col-md-3">
+                            <h6 class="mb-0">${account.name}</h6>
+                            <small class="text-muted">${account.server}</small>
+                        </div>
+                        <div class="col-md-6">
+                            <select class="form-select form-select-sm ppv-visibility-select" data-account-id="${account.id}" data-current="${account.ppv_visibility}">
+            `;
+
+            for (const option of visibilityOptions) {
+                const selected = account.ppv_visibility === option.value ? 'selected' : '';
+                html += `<option value="${option.value}" ${selected}>${option.label}</option>`;
+            }
+
+            html += `
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted visibility-status-${account.id}"></small>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        html += '</div>';
+        document.getElementById('accounts-visibility-list').innerHTML = html;
+
+        // Add event listeners to all visibility selects
+        document.querySelectorAll('.ppv-visibility-select').forEach(select => {
+            select.addEventListener('change', handleVisibilityChange);
+        });
+    } catch (error) {
+        console.error('Error loading accounts visibility:', error);
+        document.getElementById('accounts-visibility-list').innerHTML =
+            `<div class="alert alert-danger">Error loading visibility settings: ${error.message}</div>`;
+    }
+}
+
+async function handleVisibilityChange(e) {
+    const select = e.target;
+    const accountId = select.dataset.accountId;
+    const newVisibility = select.value;
+    const statusEl = document.querySelector(`.visibility-status-${accountId}`);
+
+    try {
+        statusEl.innerHTML = '<i class="bi bi-hourglass-split"></i> Saving...';
+
+        const response = await fetch(`/api/accounts/${accountId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ppv_visibility: newVisibility })
+        });
+
+        if (!response.ok) throw new Error('Failed to update visibility');
+
+        statusEl.innerHTML = '<i class="bi bi-check-circle text-success"></i> Saved';
+        setTimeout(() => {
+            statusEl.innerHTML = '';
+        }, 2000);
+    } catch (error) {
+        statusEl.innerHTML = `<i class="bi bi-exclamation-triangle text-danger"></i> Error`;
+        console.error('Error updating visibility:', error);
+    }
+}
+
+// ============================================================================
+// Queue Status and Processing
+// ============================================================================
+
+async function loadQueueStatus() {
+    try {
+        const response = await fetch('/api/ppv-enrichment/status');
+        const data = await response.json();
+
+        const html = `
+            <div class="row text-center">
+                <div class="col-md-3">
+                    <div class="h5 mb-0 text-primary">${data.queue_status.queued}</div>
+                    <small class="text-muted">Queued</small>
+                </div>
+                <div class="col-md-3">
+                    <div class="h5 mb-0 text-info">${data.queue_status.processing}</div>
+                    <small class="text-muted">Processing</small>
+                </div>
+                <div class="col-md-3">
+                    <div class="h5 mb-0 text-success">${data.queue_status.matched}</div>
+                    <small class="text-muted">Matched</small>
+                </div>
+                <div class="col-md-3">
+                    <div class="h5 mb-0 text-warning">${data.queue_status.no_match}</div>
+                    <small class="text-muted">No Match</small>
+                </div>
+            </div>
+
+            <hr>
+
+            <div class="row small">
+                <div class="col-md-6">
+                    <h6>API Usage</h6>
+                    <div class="progress mb-2">
+                        <div class="progress-bar" style="width: ${(data.api_usage.requests_today / data.api_usage.daily_limit) * 100}%"></div>
+                    </div>
+                    <small class="text-muted">${data.api_usage.requests_today} / ${data.api_usage.daily_limit} daily requests</small>
+                </div>
+                <div class="col-md-6">
+                    <h6>Timing</h6>
+                    <dl class="mb-0">
+                        <dt>Last Run:</dt>
+                        <dd class="small">${new Date(data.timing.last_run).toLocaleString()}</dd>
+                        <dt>Next Run:</dt>
+                        <dd class="small">${new Date(data.timing.next_run).toLocaleString()}</dd>
+                    </dl>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('queue-status-container').innerHTML = html;
+    } catch (error) {
+        console.error('Error loading queue status:', error);
+        document.getElementById('queue-status-container').innerHTML =
+            `<div class="alert alert-danger">Error loading queue status: ${error.message}</div>`;
+    }
+}
+
+async function loadQueueStats() {
+    try {
+        const response = await fetch('/api/ppv-enrichment/status');
+        const data = await response.json();
+
+        const html = `
+            <div class="row small">
+                <div class="col-md-6">
+                    <dl>
+                        <dt>Total Queued</dt>
+                        <dd>${data.cumulative_stats.total_queued.toLocaleString()}</dd>
+                        <dt>Total Processed</dt>
+                        <dd>${data.cumulative_stats.total_processed.toLocaleString()}</dd>
+                    </dl>
+                </div>
+                <div class="col-md-6">
+                    <dl>
+                        <dt>Retry Pending</dt>
+                        <dd>${data.queue_status.retry_pending}</dd>
+                        <dt>Total Failures</dt>
+                        <dd>${data.cumulative_stats.total_failures}</dd>
+                    </dl>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('queue-stats').innerHTML = html;
+    } catch (error) {
+        console.error('Error loading queue stats:', error);
+        document.getElementById('queue-stats').innerHTML =
+            `<div class="alert alert-danger small">Error loading stats: ${error.message}</div>`;
+    }
+}
+
+document.getElementById('process-queue-btn').addEventListener('click', async function () {
+    const maxRequests = parseInt(document.getElementById('max-requests').value);
+    const btn = this;
+    const statusEl = document.getElementById('queue-processing-status');
+    const originalText = btn.innerHTML;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Processing...';
+    statusEl.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/ppv-enrichment/process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ max_requests: maxRequests })
+        });
+
+        if (!response.ok) throw new Error('Failed to process queue');
+
+        const result = await response.json();
+
+        statusEl.className = 'alert alert-success';
+        statusEl.innerHTML = `
+            <i class="bi bi-check-circle"></i> Processing completed!<br>
+            <small>Processed: ${result.processed} | Matched: ${result.matched} | Failed: ${result.failed}</small>
+        `;
+        statusEl.style.display = 'block';
+
+        // Refresh queue status
+        await loadQueueStatus();
+        await loadQueueStats();
+    } catch (error) {
+        statusEl.className = 'alert alert-danger';
+        statusEl.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Error: ${error.message}`;
+        statusEl.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+});
+
+document.getElementById('queue-all-ppv-btn').addEventListener('click', async function () {
+    if (!confirm('Queue all PPV channels for enrichment? This may take a while.')) {
+        return;
+    }
+
+    const btn = this;
+    const statusEl = document.getElementById('queue-processing-status');
+    const originalText = btn.innerHTML;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Queuing...';
+    statusEl.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/ppv-enrichment/queue/all-ppv', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) throw new Error('Failed to queue PPV channels');
+
+        const result = await response.json();
+
+        statusEl.className = 'alert alert-success';
+        statusEl.innerHTML = `
+            <i class="bi bi-check-circle"></i> Channels queued successfully!<br>
+            <small>Queued: ${result.queued}</small>
+        `;
+        statusEl.style.display = 'block';
+
+        // Refresh queue status
+        await loadQueueStatus();
+        await loadQueueStats();
+    } catch (error) {
+        statusEl.className = 'alert alert-danger';
+        statusEl.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Error: ${error.message}`;
+        statusEl.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+});
+
+// ============================================================================
+// Page Load
+// ============================================================================
+
+loadPPVEnrichmentSettings();
+loadEnrichmentSettings();
+loadAccountsVisibility();
+loadQueueStatus();
+loadQueueStats();
+
+// Refresh queue status every 30 seconds
+setInterval(() => {
+    loadQueueStatus();
+    loadQueueStats();
+}, 30000);
+</script>
+{% endblock %}
