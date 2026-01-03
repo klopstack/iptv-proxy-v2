@@ -155,6 +155,9 @@ class SyncScheduler:
                     "accounts": get_sync_info(SYNC_KEY_LAST_ACCOUNT_SYNC, self._account_interval_hours),
                     "epg": get_sync_info(SYNC_KEY_LAST_EPG_SYNC, self._epg_interval_hours),
                     "fcc": get_sync_info(SYNC_KEY_LAST_FCC_SYNC, self._fcc_interval_hours),
+                    "ppv_enrichment": get_sync_info(
+                        SYNC_KEY_LAST_PPV_ENRICHMENT, DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS
+                    ),
                 },
             }
 
@@ -492,31 +495,65 @@ class SyncScheduler:
 
     def _enrich_ppv_events(self):
         """
-        Enrich PPV events with TheSportsDB data.
+        Enrich PPV events using calendar-based scraping.
 
-        Runs hourly to respect free tier API rate limits (~500/day).
-        Processes queued PPV channels and links them to sports events.
+        Runs hourly. Uses calendar scraping for bulk event discovery
+        (no API rate limits), then fetches event details via API.
         """
         try:
-            from services.ppv_enrichment_service import get_enrichment_queue
+            from models import Account, Channel
+            from services.ppv_calendar_enrichment_service import get_calendar_enrichment_service
 
-            queue = get_enrichment_queue(self.app)
+            logger.info("Starting PPV calendar-based enrichment")
 
-            logger.info("Starting PPV event enrichment processing")
+            service = get_calendar_enrichment_service(self.app)
 
-            # Process queued channels (respects rate limits internally)
-            stats = queue.process_queue()
+            # Get all enabled accounts with PPV channels
+            accounts = Account.query.filter_by(enabled=True).all()
+            total_stats = {
+                "total_channels": 0,
+                "processed": 0,
+                "matched": 0,
+                "no_extraction": 0,
+                "no_match": 0,
+            }
+
+            for account in accounts:
+                # Get PPV channels that need enrichment (queued or not yet processed)
+                channels = (
+                    Channel.query.filter(
+                        Channel.account_id == account.id,
+                        Channel.is_ppv.is_(True),
+                        Channel.ppv_enrichment_status.in_([None, "queued", "retry_pending"]),
+                    )
+                    .limit(100)
+                    .all()
+                )  # Process in batches
+
+                if not channels:
+                    continue
+
+                logger.info(f"Enriching {len(channels)} PPV channels for account {account.name}")
+
+                # Run enrichment (uses calendar scraping, not API)
+                results = service.enrich_channels(channels, fetch_details=False)
+
+                # Aggregate stats
+                for key in total_stats:
+                    if key in results:
+                        total_stats[key] += results[key]
 
             logger.info(
-                f"PPV enrichment batch: "
-                f"{stats['processed']} processed, "
-                f"{stats['matched']} matched, "
-                f"{stats['failed']} failed, "
-                f"{stats['api_requests_made']} API requests"
+                f"PPV enrichment complete: "
+                f"{total_stats['processed']} processed, "
+                f"{total_stats['matched']} matched, "
+                f"{total_stats['no_match']} no match, "
+                f"{total_stats['no_extraction']} no extraction"
             )
 
-            if stats.get("rate_limited"):
-                logger.info("TheSportsDB API daily limit reached, " "resuming enrichment tomorrow")
+            # Start detail fetcher thread if not already running
+            if total_stats["matched"] > 0:
+                service.start_detail_fetcher()
 
         except Exception as e:
             logger.error(f"Error enriching PPV events: {e}", exc_info=True)

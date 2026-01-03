@@ -96,40 +96,42 @@ class PPVEnrichmentQueue:
         Returns:
             Dict with queuing statistics
         """
-        with self.app.app_context():
-            queued = 0
-            skipped_already_matched = 0
+        queued = 0
+        skipped_already_matched = 0
 
-            for channel in channels:
-                # Check if already enriched
-                if self._is_channel_enriched(channel):
-                    skipped_already_matched += 1
-                    continue
+        for channel in channels:
+            # Check if already enriched
+            if self._is_channel_enriched(channel):
+                skipped_already_matched += 1
+                continue
 
-                # Mark for processing
-                if not channel.ppv_enrichment_queue_id:
-                    channel.ppv_enrichment_queue_id = self._generate_queue_id()
-                    channel.ppv_enrichment_status = "queued"
-                    channel.ppv_enrichment_attempts = 0
-                    queued += 1
+            # Mark for processing - create queue ID if needed
+            is_new = not channel.ppv_enrichment_queue_id
+            if is_new:
+                channel.ppv_enrichment_queue_id = self._generate_queue_id()
+                queued += 1
 
-            if queued > 0:
-                db.session.commit()
-                logger.info(f"Queued {queued} PPV channels for enrichment")
+            # Always reset status to queued and attempts to 0
+            channel.ppv_enrichment_status = "queued"
+            channel.ppv_enrichment_attempts = 0
 
-            total = SyncMetadata.get(METADATA_KEY_ENRICHMENT_QUEUED, "0")
-            try:
-                total = int(total) + queued
-            except (ValueError, TypeError):
-                total = queued
+        # Always commit changes (includes status resets for re-queued channels)
+        db.session.commit()
+        logger.info(f"Queued {queued} PPV channels for enrichment")
 
-            SyncMetadata.set(METADATA_KEY_ENRICHMENT_QUEUED, str(total))
+        total = SyncMetadata.get(METADATA_KEY_ENRICHMENT_QUEUED, "0")
+        try:
+            total = int(total) + queued
+        except (ValueError, TypeError):
+            total = queued
 
-            return {
-                "queued": queued,
-                "skipped_already_matched": skipped_already_matched,
-                "total_queued": total,
-            }
+        SyncMetadata.set(METADATA_KEY_ENRICHMENT_QUEUED, str(total))
+
+        return {
+            "queued": queued,
+            "skipped_already_matched": skipped_already_matched,
+            "total_queued": total,
+        }
 
     def process_queue(self, max_requests: Optional[int] = None) -> Dict[str, int]:
         """
@@ -306,12 +308,17 @@ class PPVEnrichmentQueue:
 
     def _get_next_batch(self, batch_size: int) -> List[Channel]:
         """Get next batch of channels to process."""
+        from sqlalchemy import case
+
         return (
             Channel.query.filter(
-                Channel.is_ppv is True,
+                Channel.is_ppv.is_(True),
                 Channel.ppv_enrichment_status.in_(["queued", "retry_pending", "error"]),
             )
-            .order_by(Channel.ppv_enrichment_status == "retry_pending")
+            .order_by(
+                # Prioritize retry_pending channels (status = 'retry_pending' first)
+                case((Channel.ppv_enrichment_status == "retry_pending", 0), else_=1)
+            )
             .limit(batch_size)
             .all()
         )

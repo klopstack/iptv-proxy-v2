@@ -1,0 +1,563 @@
+"""
+TheSportsDB Calendar Scraper Service
+
+Scrapes the TheSportsDB calendar page to get event information without using the API.
+This bypasses the API rate limit for bulk event discovery.
+
+The calendar page at https://www.thesportsdb.com/browse_calendar/?s=&d=YYYY-MM-DD
+contains a table of all events for a given date with:
+- Time (UTC)
+- League name and icon
+- Event name (e.g., "Team A vs Team B")
+- Link to event detail page (contains event ID)
+"""
+
+import logging
+import re
+import time
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urljoin
+
+import requests
+from bs4 import BeautifulSoup
+
+logger = logging.getLogger(__name__)
+
+# Calendar page URL template
+CALENDAR_URL_TEMPLATE = "https://www.thesportsdb.com/browse_calendar/?s={sport}&d={date}"
+
+# Cache TTL in seconds (12 hours - calendar data doesn't change frequently)
+CACHE_TTL_SECONDS = 3600 * 12
+
+# Request timeout
+REQUEST_TIMEOUT = 30
+
+# Delay between requests to be nice to the server
+REQUEST_DELAY_SECONDS = 0.5
+
+
+class CalendarEvent:
+    """Represents an event parsed from the calendar page."""
+
+    def __init__(
+        self,
+        event_id: str,
+        event_name: str,
+        league_name: str,
+        time_utc: str,
+        date: str,
+        home_team: Optional[str] = None,
+        away_team: Optional[str] = None,
+        event_url: Optional[str] = None,
+        league_icon_url: Optional[str] = None,
+        country_flag_url: Optional[str] = None,
+    ):
+        self.event_id = event_id
+        self.event_name = event_name
+        self.league_name = league_name
+        self.time_utc = time_utc
+        self.date = date
+        self.home_team = home_team
+        self.away_team = away_team
+        self.event_url = event_url
+        self.league_icon_url = league_icon_url
+        self.country_flag_url = country_flag_url
+
+    @property
+    def scheduled_at(self) -> Optional[datetime]:
+        """Parse the scheduled datetime from date and time_utc."""
+        try:
+            # Parse time like "00:00" or "14:30"
+            time_parts = self.time_utc.replace(" UTC", "").strip().split(":")
+            hour = int(time_parts[0])
+            minute = int(time_parts[1]) if len(time_parts) > 1 else 0
+
+            # Parse date (YYYY-MM-DD)
+            date_parts = self.date.split("-")
+            year = int(date_parts[0])
+            month = int(date_parts[1])
+            day = int(date_parts[2])
+
+            return datetime(year, month, day, hour, minute, tzinfo=timezone.utc)
+        except (ValueError, IndexError) as e:
+            logger.warning(f"Failed to parse datetime for event {self.event_id}: {e}")
+            return None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "event_id": self.event_id,
+            "event_name": self.event_name,
+            "league_name": self.league_name,
+            "time_utc": self.time_utc,
+            "date": self.date,
+            "home_team": self.home_team,
+            "away_team": self.away_team,
+            "event_url": self.event_url,
+            "league_icon_url": self.league_icon_url,
+            "country_flag_url": self.country_flag_url,
+            "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
+        }
+
+    def __repr__(self) -> str:
+        return f"CalendarEvent({self.event_id}: {self.event_name} @ {self.time_utc})"
+
+
+class TheSportsDBCalendarScraper:
+    """
+    Scrapes TheSportsDB calendar pages to discover events without using the API.
+
+    This service:
+    1. Fetches calendar HTML pages for specific dates
+    2. Parses event information including event IDs from links
+    3. Caches results to avoid repeated requests
+    4. Provides fuzzy matching for PPV channel names to events
+    """
+
+    def __init__(self, cache_ttl: int = CACHE_TTL_SECONDS):
+        """
+        Initialize the calendar scraper.
+
+        Args:
+            cache_ttl: Cache time-to-live in seconds
+        """
+        self._cache: Dict[str, Tuple[List[CalendarEvent], float]] = {}
+        self._cache_ttl = cache_ttl
+        self._last_request_time = 0.0
+        self._session = requests.Session()
+        self._session.headers.update(
+            {
+                "User-Agent": "Mozilla/5.0 (compatible; IPTV-Proxy/1.0; +https://github.com)",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+            }
+        )
+
+    def _rate_limit(self) -> None:
+        """Enforce rate limiting between requests."""
+        now = time.time()
+        elapsed = now - self._last_request_time
+        if elapsed < REQUEST_DELAY_SECONDS:
+            time.sleep(REQUEST_DELAY_SECONDS - elapsed)
+        self._last_request_time = time.time()
+
+    def _get_cache_key(self, date: str, sport: str = "") -> str:
+        """Generate cache key for a date/sport combination."""
+        return f"{date}:{sport}"
+
+    def _is_cache_valid(self, cache_key: str) -> bool:
+        """Check if cached data is still valid."""
+        if cache_key not in self._cache:
+            return False
+        _, timestamp = self._cache[cache_key]
+        return (time.time() - timestamp) < self._cache_ttl
+
+    def get_events_for_date(self, date: str, sport: str = "", force_refresh: bool = False) -> List[CalendarEvent]:
+        """
+        Get all events for a specific date from the calendar page.
+
+        Args:
+            date: Date in YYYY-MM-DD format
+            sport: Optional sport filter (empty string for all sports)
+            force_refresh: If True, bypass cache
+
+        Returns:
+            List of CalendarEvent objects for the date
+        """
+        cache_key = self._get_cache_key(date, sport)
+
+        # Check cache first
+        if not force_refresh and self._is_cache_valid(cache_key):
+            events, _ = self._cache[cache_key]
+            logger.debug(f"Cache hit for {cache_key}: {len(events)} events")
+            return events
+
+        # Fetch from web
+        try:
+            events = self._fetch_calendar_page(date, sport)
+            self._cache[cache_key] = (events, time.time())
+            logger.info(f"Fetched {len(events)} events for {date} (sport={sport or 'all'})")
+            return events
+        except Exception as e:
+            logger.error(f"Failed to fetch calendar for {date}: {e}")
+            # Return cached data if available, even if expired
+            if cache_key in self._cache:
+                events, _ = self._cache[cache_key]
+                logger.warning(f"Using stale cache for {date} due to fetch error")
+                return events
+            return []
+
+    def _fetch_calendar_page(self, date: str, sport: str = "") -> List[CalendarEvent]:
+        """
+        Fetch and parse a calendar page.
+
+        Args:
+            date: Date in YYYY-MM-DD format
+            sport: Optional sport filter
+
+        Returns:
+            List of CalendarEvent objects
+        """
+        self._rate_limit()
+
+        url = CALENDAR_URL_TEMPLATE.format(sport=sport, date=date)
+        logger.debug(f"Fetching calendar: {url}")
+
+        response = self._session.get(url, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+
+        return self._parse_calendar_html(response.text, date)
+
+    def _parse_calendar_html(self, html: str, date: str) -> List[CalendarEvent]:
+        """
+        Parse calendar HTML to extract events.
+
+        The HTML structure has table rows like:
+        <tr>
+            <td>00:00 UTC </td>
+            <td width='20'> </td>
+            <td><img src='league_icon'/> League Name</td>
+            <td width='20'> </td>
+            <td><img src='flag'/> <a href='/event/123456-event-slug'/>Event Name</a></td>
+        </tr>
+
+        Args:
+            html: Raw HTML content
+            date: Date string for the events
+
+        Returns:
+            List of CalendarEvent objects
+        """
+        events = []
+        soup = BeautifulSoup(html, "html.parser")
+
+        # Find all table rows in the main content
+        rows = soup.find_all("tr")
+
+        for row in rows:
+            try:
+                event = self._parse_event_row(row, date)
+                if event:
+                    events.append(event)
+            except Exception as e:
+                logger.debug(f"Failed to parse row: {e}")
+                continue
+
+        return events
+
+    def _parse_event_row(self, row, date: str) -> Optional[CalendarEvent]:
+        """
+        Parse a single table row to extract event information.
+
+        Args:
+            row: BeautifulSoup Tag for the <tr> element
+            date: Date string for the event
+
+        Returns:
+            CalendarEvent or None if row doesn't contain a valid event
+        """
+        cells = row.find_all("td")
+        if len(cells) < 5:
+            return None
+
+        # Cell 0: Time (e.g., "00:00 UTC")
+        time_cell = cells[0]
+        time_text = time_cell.get_text(strip=True)
+        if "UTC" not in time_text:
+            return None
+
+        # Clean time text (remove arrow image indicator for "On Now" events)
+        time_utc = time_text.replace("UTC", "").strip()
+        # Handle times with leading zeros and spaces
+        time_utc = re.sub(r"^\s*", "", time_utc)
+
+        # Cell 2: League info (icon + name)
+        league_cell = cells[2]
+        league_img = league_cell.find("img")
+        league_icon_url = league_img.get("src") if league_img else None
+        league_name = league_cell.get_text(strip=True)
+
+        # Cell 4: Event info (flag + link to event)
+        event_cell = cells[4]
+        flag_img = event_cell.find("img")
+        country_flag_url = flag_img.get("src") if flag_img else None
+
+        # Find the event link - it contains the event ID
+        event_link = event_cell.find("a")
+        if not event_link:
+            return None
+
+        event_href = event_link.get("href", "")
+
+        # The event name might be inside the link OR as text after the link
+        # Try link text first, then fall back to full cell text
+        event_name = event_link.get_text(strip=True)
+        if not event_name:
+            # Event name is outside the link - get full cell text and strip img text
+            event_name = event_cell.get_text(strip=True)
+
+        # Extract event ID from href like "/event/2376181-fresno-state-vs-nevada"
+        event_id_match = re.search(r"/event/(\d+)", event_href)
+        if not event_id_match:
+            return None
+
+        event_id = event_id_match.group(1)
+        event_url = urljoin("https://www.thesportsdb.com", event_href)
+
+        # Try to extract team names from event name
+        home_team, away_team = self._parse_teams_from_event_name(event_name)
+
+        return CalendarEvent(
+            event_id=event_id,
+            event_name=event_name,
+            league_name=league_name,
+            time_utc=time_utc,
+            date=date,
+            home_team=home_team,
+            away_team=away_team,
+            event_url=event_url,
+            league_icon_url=league_icon_url,
+            country_flag_url=country_flag_url,
+        )
+
+    def _parse_teams_from_event_name(self, event_name: str) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Extract team names from event name like "Team A vs Team B".
+
+        Args:
+            event_name: Event name string
+
+        Returns:
+            Tuple of (home_team, away_team) or (None, None) if not parseable
+        """
+        # Common separators: "vs", "vs.", "at", "@", "-"
+        patterns = [
+            r"(.+?)\s+vs\.?\s+(.+)",
+            r"(.+?)\s+at\s+(.+)",
+            r"(.+?)\s+@\s+(.+)",
+        ]
+
+        for pattern in patterns:
+            match = re.match(pattern, event_name, re.IGNORECASE)
+            if match:
+                return match.group(1).strip(), match.group(2).strip()
+
+        return None, None
+
+    def get_events_for_date_range(
+        self, start_date: str, end_date: str, sport: str = ""
+    ) -> Dict[str, List[CalendarEvent]]:
+        """
+        Get events for a range of dates.
+
+        Args:
+            start_date: Start date in YYYY-MM-DD format
+            end_date: End date in YYYY-MM-DD format
+            sport: Optional sport filter
+
+        Returns:
+            Dict mapping date strings to lists of events
+        """
+        results = {}
+
+        start = datetime.strptime(start_date, "%Y-%m-%d")
+        end = datetime.strptime(end_date, "%Y-%m-%d")
+
+        current = start
+        while current <= end:
+            date_str = current.strftime("%Y-%m-%d")
+            results[date_str] = self.get_events_for_date(date_str, sport)
+            current += timedelta(days=1)
+
+        return results
+
+    def find_matching_events(
+        self,
+        date: str,
+        competitors: Optional[Tuple[str, str]] = None,
+        event_name_keywords: Optional[List[str]] = None,
+        league_name: Optional[str] = None,
+        time_utc: Optional[str] = None,
+        time_tolerance_minutes: int = 120,
+    ) -> List[Tuple[CalendarEvent, float]]:
+        """
+        Find events matching given criteria with confidence scores.
+
+        Args:
+            date: Date in YYYY-MM-DD format
+            competitors: Tuple of (team1, team2) to match
+            event_name_keywords: Keywords that should appear in event name
+            league_name: League name to match
+            time_utc: Expected time in HH:MM format
+            time_tolerance_minutes: How many minutes difference to allow for time matching
+
+        Returns:
+            List of (CalendarEvent, confidence_score) tuples, sorted by confidence descending
+        """
+        events = self.get_events_for_date(date)
+        matches = []
+
+        for event in events:
+            confidence = self._calculate_match_confidence(
+                event,
+                competitors=competitors,
+                event_name_keywords=event_name_keywords,
+                league_name=league_name,
+                time_utc=time_utc,
+                time_tolerance_minutes=time_tolerance_minutes,
+            )
+
+            if confidence > 0:
+                matches.append((event, confidence))
+
+        # Sort by confidence descending
+        matches.sort(key=lambda x: x[1], reverse=True)
+        return matches
+
+    def _calculate_match_confidence(
+        self,
+        event: CalendarEvent,
+        competitors: Optional[Tuple[str, str]] = None,
+        event_name_keywords: Optional[List[str]] = None,
+        league_name: Optional[str] = None,
+        time_utc: Optional[str] = None,
+        time_tolerance_minutes: int = 120,
+    ) -> float:
+        """
+        Calculate confidence score for an event match.
+
+        Scoring:
+        - Competitor match (both teams): +0.6
+        - Competitor match (one team): +0.3
+        - Keyword match: +0.1 per keyword
+        - League match: +0.1
+        - Time match (within tolerance): +0.1
+        - Exact time match: +0.1 bonus
+
+        Returns:
+            Confidence score between 0.0 and 1.0
+        """
+        score = 0.0
+        event_name_lower = event.event_name.lower()
+
+        # Competitor matching
+        if competitors:
+            comp1_lower = competitors[0].lower()
+            comp2_lower = competitors[1].lower()
+
+            comp1_match = self._fuzzy_team_match(comp1_lower, event)
+            comp2_match = self._fuzzy_team_match(comp2_lower, event)
+
+            if comp1_match and comp2_match:
+                score += 0.6  # Both teams match
+            elif comp1_match or comp2_match:
+                score += 0.3  # One team matches
+
+        # Keyword matching
+        if event_name_keywords:
+            for keyword in event_name_keywords:
+                if keyword.lower() in event_name_lower:
+                    score += 0.1
+
+        # League matching
+        if league_name and league_name.lower() in event.league_name.lower():
+            score += 0.1
+
+        # Time matching
+        if time_utc:
+            time_diff = self._time_difference_minutes(time_utc, event.time_utc)
+            if time_diff is not None:
+                if time_diff == 0:
+                    score += 0.2  # Exact match
+                elif time_diff <= time_tolerance_minutes:
+                    score += 0.1  # Within tolerance
+
+        return min(score, 1.0)
+
+    def _fuzzy_team_match(self, team_name: str, event: CalendarEvent) -> bool:
+        """
+        Check if team name matches event teams using fuzzy matching.
+
+        Args:
+            team_name: Team name to search for (lowercase)
+            event: CalendarEvent to check
+
+        Returns:
+            True if team name matches home or away team
+        """
+        team_name = team_name.lower().strip()
+
+        # Check direct matches against parsed team names
+        if event.home_team and team_name in event.home_team.lower():
+            return True
+        if event.away_team and team_name in event.away_team.lower():
+            return True
+
+        # Check against full event name
+        if team_name in event.event_name.lower():
+            return True
+
+        # Try partial matching (e.g., "Arsenal" should match "Arsenal FC")
+        team_words = team_name.split()
+        event_name_lower = event.event_name.lower()
+
+        # If all words in team name appear in event name, consider it a match
+        if all(word in event_name_lower for word in team_words):
+            return True
+
+        return False
+
+    def _time_difference_minutes(self, time1: str, time2: str) -> Optional[int]:
+        """
+        Calculate difference in minutes between two time strings.
+
+        Args:
+            time1: Time in HH:MM format
+            time2: Time in HH:MM format
+
+        Returns:
+            Absolute difference in minutes, or None if parsing fails
+        """
+        try:
+            # Parse time1
+            parts1 = time1.strip().split(":")
+            h1, m1 = int(parts1[0]), int(parts1[1]) if len(parts1) > 1 else 0
+
+            # Parse time2
+            parts2 = time2.strip().split(":")
+            h2, m2 = int(parts2[0]), int(parts2[1]) if len(parts2) > 1 else 0
+
+            minutes1 = h1 * 60 + m1
+            minutes2 = h2 * 60 + m2
+
+            return abs(minutes1 - minutes2)
+        except (ValueError, IndexError):
+            return None
+
+    def clear_cache(self) -> None:
+        """Clear all cached calendar data."""
+        self._cache.clear()
+        logger.info("Calendar cache cleared")
+
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Get cache statistics."""
+        now = time.time()
+        valid_entries = sum(1 for _, (_, ts) in self._cache.items() if (now - ts) < self._cache_ttl)
+        return {
+            "total_entries": len(self._cache),
+            "valid_entries": valid_entries,
+            "cache_ttl_seconds": self._cache_ttl,
+        }
+
+
+# Global singleton instance
+_calendar_scraper: Optional[TheSportsDBCalendarScraper] = None
+
+
+def get_calendar_scraper() -> TheSportsDBCalendarScraper:
+    """Get or create the global calendar scraper instance."""
+    global _calendar_scraper
+    if _calendar_scraper is None:
+        _calendar_scraper = TheSportsDBCalendarScraper()
+    return _calendar_scraper

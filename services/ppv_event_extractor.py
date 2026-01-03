@@ -28,7 +28,11 @@ class PPVEventExtractor:
     # Two-branch pattern:
     # Branch 1 (groups 1,2): "vs" with optional commas (for tennis: "Federer, Roger vs Nadal, Rafael @ time")
     # Branch 2 (groups 3,4): "at/@/versus/-" without commas (other sports)
-    COMPETITOR_PATTERN = r"([#A-Za-z0-9\s&\'\-,]+?)\s+(?:vs\.?)\s+([#A-Za-z0-9\s&\'\-,\.]+?)(?=\s*[@|(\[]|$)|([#A-Za-z0-9\s&\'-]+?)\s+(?:at\.?|versus|@|-)\s+([#A-Za-z0-9\s&\'-\-\.]+?)(?=\s*[-|(\[]|$)"
+    # NOTE: The second group can capture trailing time which gets cleaned by _clean_team_name
+    COMPETITOR_PATTERN = r"([#A-Za-z0-9\s&\'\-,]+?)\s+(?:vs\.?)\s+([#A-Za-z0-9\s&\'\-,\.:]+?)(?=\s*[@|(\[]|$)|([#A-Za-z0-9\s&\'-]+?)\s+(?:at\.?|versus|@|-)\s+([#A-Za-z0-9\s&\'-\-\.]+?)(?=\s*[-|(\[]|$)"
+
+    # Pattern to strip trailing time from team names (e.g., "Sudan 16:00pm" -> "Sudan")
+    TRAILING_TIME_PATTERN = r"\s+\d{1,2}:\d{2}\s*(?:am|pm)?$"
 
     # Placeholder pattern: channels marked as "NO EVENT STREAMING"
     NO_EVENT_PATTERN = r"NO EVENT STREAMING"
@@ -404,6 +408,8 @@ class PPVEventExtractor:
 
     def _clean_team_name(self, name: str) -> str:
         """Clean team name by removing common cruft."""
+        # Remove trailing time patterns like "16:00pm", "11:55am"
+        name = re.sub(self.TRAILING_TIME_PATTERN, "", name, flags=re.IGNORECASE)
         # Remove provider/region codes like ":Viaplay SE", ":Sportsnet+"
         name = re.sub(r":\w+.*$", "", name)
         # Remove leading ranking numbers like "#25" or just "25"

@@ -157,36 +157,38 @@ def test_ppv_event_extractor():
         return False
 
 
-def test_ppv_enrichment_queue():
-    """Test PPV enrichment queue integration."""
+def test_ppv_calendar_enrichment():
+    """Test PPV calendar enrichment service integration."""
     print("\n" + "=" * 80)
-    print("TESTING PPV ENRICHMENT QUEUE")
+    print("TESTING PPV CALENDAR ENRICHMENT SERVICE")
     print("=" * 80)
 
     try:
-        from services.ppv_enrichment_service import (
-            DEFAULT_REQUESTS_PER_MINUTE,
-            THESPORTSDB_REQUEST_WINDOW_SECONDS,
-            THESPORTSDB_REQUESTS_PER_MINUTE,
-        )
+        from services.ppv_calendar_enrichment_service import API_REQUESTS_PER_MINUTE, DETAIL_FETCH_BATCH_SIZE
 
-        print("\n[Test 1] Queue Configuration")
+        print("\n[Test 1] Service Configuration")
         # Test the constants directly
-        print(f"  ✓ TheSportsDB requests per minute: {THESPORTSDB_REQUESTS_PER_MINUTE}")
-        print(f"  ✓ Request window: {THESPORTSDB_REQUEST_WINDOW_SECONDS} seconds")
-        print(f"  ✓ Conservative default: {DEFAULT_REQUESTS_PER_MINUTE}")
+        print(f"  ✓ API requests per minute (for details): {API_REQUESTS_PER_MINUTE}")
+        print(f"  ✓ Detail fetch batch size: {DETAIL_FETCH_BATCH_SIZE}")
 
-        # Check if service can be instantiated with proper parameters
-        if THESPORTSDB_REQUESTS_PER_MINUTE == 30 and THESPORTSDB_REQUEST_WINDOW_SECONDS == 60:
+        # Check configuration values are reasonable
+        if API_REQUESTS_PER_MINUTE <= 30 and DETAIL_FETCH_BATCH_SIZE > 0:
             print("  ✓ Rate limiting constants are correct")
         else:
             print("  ✗ Rate limiting constants incorrect")
             return False
 
+        print("\n[Test 2] Calendar Scraper")
+        from services.thesportsdb_calendar_scraper import TheSportsDBCalendarScraper
+
+        scraper = TheSportsDBCalendarScraper()
+        print("  ✓ Calendar scraper instantiated")
+        print(f"  ✓ Cache TTL: {scraper.cache_ttl_seconds} seconds")
+
         return True
     except Exception as e:
-        print(f"✗ PPV Enrichment Queue Error: {e}")
-        logger.exception("PPV enrichment queue error")
+        print(f"✗ PPV Calendar Enrichment Error: {e}")
+        logger.exception("PPV calendar enrichment error")
         return False
 
 
@@ -304,27 +306,17 @@ def test_rate_limiting():
     print("=" * 80)
 
     try:
-        from services.ppv_enrichment_service import (
-            DEFAULT_REQUESTS_PER_MINUTE,
-            THESPORTSDB_REQUEST_WINDOW_SECONDS,
-            THESPORTSDB_REQUESTS_PER_MINUTE,
-        )
+        from services.ppv_calendar_enrichment_service import API_REQUESTS_PER_MINUTE, DETAIL_FETCH_BATCH_SIZE
 
-        print("\n[Test 1] Rate Limit Constants")
-        print(f"  ✓ TheSportsDB API limit: {THESPORTSDB_REQUESTS_PER_MINUTE} requests/minute")
-        print(f"  ✓ Request window: {THESPORTSDB_REQUEST_WINDOW_SECONDS} seconds")
-        print(f"  ✓ Conservative default: {DEFAULT_REQUESTS_PER_MINUTE} requests/minute")
+        print("\n[Test 1] Rate Limit Constants (Calendar Enrichment)")
+        print(f"  ✓ API requests per minute (details only): {API_REQUESTS_PER_MINUTE}")
+        print(f"  ✓ Detail fetch batch size: {DETAIL_FETCH_BATCH_SIZE}")
+        print("  ✓ Calendar scraping: No rate limit (HTML scraping)")
 
-        if THESPORTSDB_REQUESTS_PER_MINUTE == 30:
-            print("  ✓ Rate limit correctly set to 30/minute")
+        if API_REQUESTS_PER_MINUTE <= 30:
+            print("  ✓ Rate limit correctly set under 30/minute")
         else:
-            print(f"  ✗ Rate limit should be 30/minute, got {THESPORTSDB_REQUESTS_PER_MINUTE}")
-            return False
-
-        if THESPORTSDB_REQUEST_WINDOW_SECONDS == 60:
-            print("  ✓ Window correctly set to 60 seconds")
-        else:
-            print(f"  ✗ Window should be 60 seconds, got {THESPORTSDB_REQUEST_WINDOW_SECONDS}")
+            print(f"  ✗ Rate limit should be <= 30/minute, got {API_REQUESTS_PER_MINUTE}")
             return False
 
         return True
@@ -344,7 +336,7 @@ def test_all():
     results = {
         "TheSportsDB Service": test_thesportsdb_service(),
         "PPV Event Extractor": test_ppv_event_extractor(),
-        "PPV Enrichment Queue": test_ppv_enrichment_queue(),
+        "PPV Calendar Enrichment": test_ppv_calendar_enrichment(),
         "Real-World Matching": test_real_world_matching(),
         "HTML Search Patterns": test_html_search_patterns(),
         "Rate Limiting": test_rate_limiting(),

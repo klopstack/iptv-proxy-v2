@@ -116,7 +116,7 @@ class TestChannelHealthRoutesExtended:
         assert data["success"] is True
         assert "categories" in data
 
-    def test_get_categories_with_account_filter(self, client, app, test_account, test_category):
+    def test_get_categories_with_account_filter(self, client, app, test_account, test_category, test_channel):
         """Test getting categories filtered by account."""
         response = client.get(f"/api/channel-health/categories?account_id={test_account}")
         assert response.status_code == 200

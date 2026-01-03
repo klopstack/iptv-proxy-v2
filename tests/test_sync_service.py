@@ -7,7 +7,7 @@ Uses shared fixtures from conftest.py for proper test isolation.
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
-from models import Account, Category, Channel, db
+from models import Account, Category, Channel, Event, EventChannelLink, db
 from services.sync_service import ChannelSyncService
 
 # app fixture is provided by conftest.py
@@ -311,3 +311,147 @@ class TestChannelSyncService:
             assert "Account1" in synced_names
             assert "Account3" in synced_names
             assert "Account2" not in synced_names
+
+    @patch("services.sync_service.IPTVService")
+    def test_ppv_channel_name_change_resets_enrichment(self, mock_iptv_class, app):
+        """Test that PPV channel name change resets enrichment status and removes event links"""
+        with app.app_context():
+            account = Account(
+                name="Test Account", server="test.com:8080", username="test", password="test", enabled=True
+            )
+            db.session.add(account)
+            db.session.commit()
+            account_id = account.id
+
+            # Create PPV category
+            category = Category(account_id=account_id, category_id="ppv", category_name="PPV", parent_id=0)
+            db.session.add(category)
+            db.session.commit()
+
+            # Add existing PPV channel with enrichment data
+            existing_channel = Channel(
+                account_id=account_id,
+                stream_id="101",
+                name="UFC 300: Jones vs Miocic",
+                cleaned_name="UFC 300: Jones vs Miocic",
+                category_id=category.id,
+                is_ppv=True,
+                is_active=True,
+                last_seen=datetime.now(timezone.utc),
+                ppv_enrichment_status="matched",
+                ppv_enrichment_queue_id="queue_12345",
+                ppv_enrichment_attempts=1,
+                thesportsdb_id="123456",
+            )
+            db.session.add(existing_channel)
+            db.session.commit()
+            channel_id = existing_channel.id
+
+            # Create an event and link it to the channel
+            event = Event(
+                external_id="123456",
+                source=Event.SOURCE_THESPORTSDB,
+                home_team_id="1",
+                home_team_name="Jon Jones",
+                away_team_id="2",
+                away_team_name="Stipe Miocic",
+                scheduled_at=datetime.now(timezone.utc),
+                status=Event.STATUS_SCHEDULED,
+            )
+            db.session.add(event)
+            db.session.commit()
+
+            link = EventChannelLink(
+                event_id=event.id,
+                channel_id=channel_id,
+                match_confidence=0.9,
+                match_method="calendar_browse",
+            )
+            db.session.add(link)
+            db.session.commit()
+
+            # Verify link exists
+            links_before = EventChannelLink.query.filter_by(channel_id=channel_id).count()
+            assert links_before == 1
+
+            # Mock IPTVService to return channel with new name (different event)
+            mock_service = Mock()
+            mock_service.get_live_categories.return_value = [
+                {"category_id": "ppv", "category_name": "PPV", "parent_id": 0}
+            ]
+            mock_service.get_live_streams.return_value = [
+                {
+                    "stream_id": 101,
+                    "name": "UFC 301: New Fight Card",  # Name changed!
+                    "category_id": "ppv",
+                }
+            ]
+            mock_iptv_class.return_value = mock_service
+
+            result = ChannelSyncService.sync_account(account_id)
+
+            assert result["success"] is True
+            assert result["channels_updated"] == 1
+
+            # Verify channel was enqueued for re-enrichment
+            updated_channel = db.session.get(Channel, channel_id)
+            assert updated_channel.name == "UFC 301: New Fight Card"
+            assert updated_channel.ppv_enrichment_status == "queued"  # Enqueued for enrichment
+            assert updated_channel.ppv_enrichment_queue_id is not None  # Has a queue ID
+            assert updated_channel.ppv_enrichment_queue_id.startswith("sync_")
+            assert updated_channel.ppv_enrichment_attempts == 0
+            assert updated_channel.ppv_enrichment_error is None
+            assert updated_channel.thesportsdb_id is None
+
+            # Verify event link was removed
+            links_after = EventChannelLink.query.filter_by(channel_id=channel_id).count()
+            assert links_after == 0
+
+    @patch("services.sync_service.IPTVService")
+    def test_non_ppv_channel_name_change_does_not_reset_enrichment(self, mock_iptv_class, app):
+        """Test that non-PPV channel name change does NOT reset enrichment fields"""
+        with app.app_context():
+            account = Account(
+                name="Test Account", server="test.com:8080", username="test", password="test", enabled=True
+            )
+            db.session.add(account)
+            db.session.commit()
+            account_id = account.id
+
+            # Add existing non-PPV channel with enrichment status (shouldn't be touched)
+            existing_channel = Channel(
+                account_id=account_id,
+                stream_id="201",
+                name="ESPN HD",
+                cleaned_name="ESPN HD",
+                is_ppv=False,
+                is_active=True,
+                last_seen=datetime.now(timezone.utc),
+                ppv_enrichment_status="matched",  # Has enrichment status somehow
+                ppv_enrichment_queue_id="queue_999",
+            )
+            db.session.add(existing_channel)
+            db.session.commit()
+            channel_id = existing_channel.id
+
+            # Mock IPTVService to return channel with new name
+            mock_service = Mock()
+            mock_service.get_live_categories.return_value = []
+            mock_service.get_live_streams.return_value = [
+                {
+                    "stream_id": 201,
+                    "name": "ESPN 4K",  # Name changed
+                    "category_id": "",
+                }
+            ]
+            mock_iptv_class.return_value = mock_service
+
+            result = ChannelSyncService.sync_account(account_id)
+
+            assert result["success"] is True
+
+            # Verify enrichment status was NOT reset for non-PPV channel
+            updated_channel = db.session.get(Channel, channel_id)
+            assert updated_channel.name == "ESPN 4K"
+            assert updated_channel.ppv_enrichment_status == "matched"
+            assert updated_channel.ppv_enrichment_queue_id == "queue_999"

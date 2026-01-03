@@ -762,6 +762,7 @@ class ChannelHealthService:
         Get a summary of channel health counts without channel details.
 
         This is much faster than get_health_report for large datasets.
+        Only counts visible (non-filtered) channels, matching what the scanner processes.
 
         Args:
             account_id: Filter by account (None for all accounts)
@@ -772,12 +773,13 @@ class ChannelHealthService:
         """
         from sqlalchemy import func
 
-        # Build base query for counting
+        # Build base query for counting - only visible channels
         base_query = (
             db.session.query(Channel)
             .join(Account)
             .outerjoin(ChannelHealthStatus)
             .filter(Account.enabled == True)  # noqa: E712
+            .filter(Channel.is_visible == True)  # noqa: E712  # Only count visible (non-filtered) channels
         )
 
         if account_id:
@@ -787,6 +789,7 @@ class ChannelHealthService:
             base_query = base_query.filter(Channel.category_id == category_id)
 
         # Count by status using a single query with conditional aggregation
+        # Only count visible (non-filtered) channels to match what gets scanned
         status_counts = (
             db.session.query(
                 func.sum(
@@ -825,6 +828,7 @@ class ChannelHealthService:
             .join(Account)
             .outerjoin(ChannelHealthStatus)
             .filter(Account.enabled == True)  # noqa: E712
+            .filter(Channel.is_visible == True)  # noqa: E712  # Only count visible (non-filtered) channels
         )
 
         if account_id:
@@ -852,26 +856,12 @@ class ChannelHealthService:
                 "config": ChannelHealthConfig.get_all(),
             }
 
-        # Count PPV channels (excluded from health scanning) using the is_ppv column
-        ppv_query = (
-            db.session.query(func.count(Channel.id))
-            .join(Account)
-            .filter(Account.enabled == True)  # noqa: E712
-            .filter(Channel.is_ppv == True)  # noqa: E712
-        )
-
-        if account_id:
-            ppv_query = ppv_query.filter(Channel.account_id == account_id)
-
-        if category_id:
-            ppv_query = ppv_query.filter(Channel.category_id == category_id)
-
-        ppv_count = ppv_query.scalar() or 0
+        # PPV channels are excluded from scanning and not included in the summary
+        # No need to count them separately since they're filtered out
 
         return {
             "summary": {
                 "total": result.total or 0,
-                "ppv": ppv_count,
                 "by_status": {
                     ChannelHealthStatus.STATUS_UNKNOWN: result.unknown or 0,
                     ChannelHealthStatus.STATUS_HEALTHY: result.healthy or 0,
@@ -914,8 +904,13 @@ class ChannelHealthService:
         Returns:
             Dict with paginated channels and metadata
         """
-        # Build base query
-        query = Channel.query.join(Account).outerjoin(ChannelHealthStatus).filter(Account.enabled == True)  # noqa: E712
+        # Build base query - only include visible (non-filtered) channels by default
+        query = (
+            Channel.query.join(Account)
+            .outerjoin(ChannelHealthStatus)
+            .filter(Account.enabled == True)  # noqa: E712
+            .filter(Channel.is_visible == True)  # noqa: E712  # Only show visible channels
+        )
 
         # Apply filters
         if account_id:
@@ -980,7 +975,7 @@ class ChannelHealthService:
             if channel.category:
                 category_info = {
                     "id": channel.category.id,
-                    "name": channel.category.category_name,
+                    "category_name": channel.category.category_name,
                 }
 
             # Get EPG info if requested

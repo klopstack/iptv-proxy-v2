@@ -13,7 +13,7 @@ import logging
 from flask import Blueprint, jsonify, request
 
 from error_handling import handle_errors
-from models import Category, ChannelHealthConfig, ChannelHealthStatus
+from models import Category, Channel, ChannelHealthConfig, ChannelHealthStatus
 from services.channel_health_service import ChannelHealthService
 
 logger = logging.getLogger(__name__)
@@ -157,13 +157,16 @@ def get_channels_paginated():
 def get_categories():
     """
     Get list of categories for filtering.
+    Only returns categories that have at least one visible channel.
 
     Query parameters:
     - account_id (optional): Filter categories by account ID
     """
     account_id = request.args.get("account_id", type=int)
 
-    query = Category.query
+    # Only get categories that have visible channels
+    query = Category.query.join(Channel).filter(Channel.is_visible == True).distinct()  # noqa: E712
+
     if account_id:
         query = query.filter(Category.account_id == account_id)
 

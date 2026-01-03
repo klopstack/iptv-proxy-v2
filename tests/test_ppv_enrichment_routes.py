@@ -41,51 +41,35 @@ class TestPPVEnrichmentRoutes:
         db.session.commit()
         return channels
 
-    @patch("routes.ppv_enrichment.get_enrichment_queue")
-    def test_get_enrichment_status(self, mock_get_queue, client, test_account, test_ppv_channels):
+    @patch("routes.ppv_enrichment.get_calendar_enrichment_service")
+    def test_get_enrichment_status(self, mock_get_service, client, test_account, test_ppv_channels):
         """Test getting enrichment status."""
-        # Mock the queue instance returned by get_enrichment_queue
-        mock_queue = MagicMock()
-        mock_queue.get_enrichment_status.return_value = {
-            "queue_status": {"queued": 3, "processing": 0, "matched": 0},
-            "cumulative_stats": {"total_queued": 3, "total_processed": 0},
-            "api_usage": {"requests_today": 0, "daily_limit": 500},
-            "timing": {},
+        # Mock the service instance
+        mock_service = MagicMock()
+        mock_service.get_status.return_value = {
+            "detail_queue_size": 3,
+            "detail_thread_running": False,
+            "calendar_cache_stats": {"size": 0},
+            "cumulative_stats": {"calendar_processed": "0", "calendar_matched": "0"},
+            "session_stats": {},
         }
-        mock_get_queue.return_value = mock_queue
+        mock_get_service.return_value = mock_service
 
         response = client.get("/api/ppv-enrichment/status")
         assert response.status_code == 200
         data = response.get_json()
-        assert "queue_status" in data
+        assert "detail_queue_size" in data
 
-    @patch("routes.ppv_enrichment.get_enrichment_queue")
-    def test_queue_all_ppv_channels(self, mock_get_queue, client, test_account, test_ppv_channels):
+    def test_queue_all_ppv_channels(self, client, test_account, test_ppv_channels):
         """Test queuing all PPV channels."""
-        mock_queue = MagicMock()
-        mock_queue.queue_channels_for_enrichment.return_value = {
-            "queued": 3,
-            "skipped_already_matched": 0,
-            "total_queued": 3,
-        }
-        mock_get_queue.return_value = mock_queue
-
         response = client.post("/api/ppv-enrichment/queue/all-ppv", json={}, content_type="application/json")
         assert response.status_code == 200
         data = response.get_json()
         assert "queued" in data
+        assert data["queued"] == 3
 
-    @patch("routes.ppv_enrichment.get_enrichment_queue")
-    def test_queue_account_channels(self, mock_get_queue, client, test_account, test_ppv_channels):
+    def test_queue_account_channels(self, client, test_account, test_ppv_channels):
         """Test queuing channels for a specific account."""
-        mock_queue = MagicMock()
-        mock_queue.queue_channels_for_enrichment.return_value = {
-            "queued": 3,
-            "skipped_already_matched": 0,
-            "total_queued": 3,
-        }
-        mock_get_queue.return_value = mock_queue
-
         response = client.post(
             "/api/ppv-enrichment/queue/all-ppv",
             json={"account_id": test_account.id},
@@ -106,70 +90,53 @@ class TestPPVEnrichmentRoutes:
         data = response.get_json()
         assert "error" in data
 
-    @patch("routes.ppv_enrichment.get_enrichment_queue")
-    def test_process_enrichment_queue(self, mock_get_queue, client):
-        """Test processing the enrichment queue."""
-        mock_queue = MagicMock()
-        mock_queue.process_queue.return_value = {
+    @patch("routes.ppv_enrichment.get_calendar_enrichment_service")
+    def test_process_enrichment(self, mock_get_service, client, test_account, test_ppv_channels):
+        """Test processing enrichment."""
+        mock_service = MagicMock()
+        mock_service.enrich_channels.return_value = {
             "processed": 2,
             "matched": 1,
             "no_match": 1,
-            "requests_used": 2,
         }
-        mock_get_queue.return_value = mock_queue
+        mock_get_service.return_value = mock_service
 
         response = client.post("/api/ppv-enrichment/process", json={}, content_type="application/json")
         assert response.status_code == 200
         data = response.get_json()
         assert "processed" in data
 
-    @patch("routes.ppv_enrichment.get_enrichment_queue")
-    def test_process_with_max_requests(self, mock_get_queue, client):
-        """Test processing queue with max_requests parameter."""
-        mock_queue = MagicMock()
-        mock_queue.process_queue.return_value = {
-            "processed": 5,
-            "matched": 3,
-            "no_match": 2,
-            "requests_used": 5,
+    @patch("routes.ppv_enrichment.get_calendar_enrichment_service")
+    def test_process_with_account_id(self, mock_get_service, client, test_account, test_ppv_channels):
+        """Test processing with account_id parameter."""
+        mock_service = MagicMock()
+        mock_service.enrich_channels.return_value = {
+            "processed": 3,
+            "matched": 2,
+            "no_match": 1,
         }
-        mock_get_queue.return_value = mock_queue
+        mock_get_service.return_value = mock_service
 
         response = client.post(
             "/api/ppv-enrichment/process",
-            json={"max_requests": 5},
+            json={"account_id": test_account.id},
             content_type="application/json",
         )
         assert response.status_code == 200
         data = response.get_json()
         assert "processed" in data
 
-    @patch("routes.ppv_enrichment.get_enrichment_queue")
-    def test_get_enrichment_settings(self, mock_get_queue, client):
+    def test_get_enrichment_settings(self, client):
         """Test getting enrichment settings."""
-        mock_queue = MagicMock()
-        mock_queue.batch_size = 10
-        mock_queue.requests_per_minute = 30
-        mock_queue.request_interval_seconds = 2.0
-        mock_get_queue.return_value = mock_queue
-
         response = client.get("/api/ppv-enrichment/settings")
         assert response.status_code == 200
         data = response.get_json()
-        assert "batch_size" in data
-        assert data["batch_size"] == 10
+        assert "detail_fetch_batch_size" in data
+        assert "calendar_scraping" in data
+        assert "detail_fetching" in data
 
-    @patch("routes.ppv_enrichment.get_enrichment_queue")
-    def test_queue_specific_channels(self, mock_get_queue, client, test_ppv_channels):
+    def test_queue_specific_channels(self, client, test_ppv_channels):
         """Test queuing specific channels by ID."""
-        mock_queue = MagicMock()
-        mock_queue.queue_channels_for_enrichment.return_value = {
-            "queued": 2,
-            "skipped_already_matched": 0,
-            "total_queued": 2,
-        }
-        mock_get_queue.return_value = mock_queue
-
         channel_ids = [test_ppv_channels[0].id, test_ppv_channels[1].id]
         response = client.post(
             "/api/ppv-enrichment/queue/channels",
@@ -179,6 +146,7 @@ class TestPPVEnrichmentRoutes:
         assert response.status_code == 200
         data = response.get_json()
         assert "queued" in data
+        assert data["queued"] == 2
 
     def test_queue_channels_missing_channel_ids(self, client):
         """Test queuing channels without providing channel_ids."""
@@ -202,38 +170,50 @@ class TestPPVEnrichmentRoutes:
         data = response.get_json()
         assert "error" in data
 
-    @patch("routes.ppv_enrichment.get_enrichment_queue")
-    def test_process_queue_error_handling(self, mock_get_queue, client):
-        """Test error handling when processing queue fails."""
-        mock_queue = MagicMock()
-        mock_queue.process_queue.side_effect = Exception("Test error")
-        mock_get_queue.return_value = mock_queue
+    @patch("routes.ppv_enrichment.get_calendar_enrichment_service")
+    def test_process_error_handling(self, mock_get_service, client, test_account, test_ppv_channels):
+        """Test error handling when processing fails."""
+        mock_service = MagicMock()
+        mock_service.enrich_channels.side_effect = Exception("Test error")
+        mock_get_service.return_value = mock_service
 
         response = client.post("/api/ppv-enrichment/process", json={}, content_type="application/json")
         assert response.status_code == 500
         data = response.get_json()
         assert "error" in data
 
-    @patch("routes.ppv_enrichment.get_enrichment_queue")
-    def test_get_status_error_handling(self, mock_get_queue, client):
+    @patch("routes.ppv_enrichment.get_calendar_enrichment_service")
+    def test_get_status_error_handling(self, mock_get_service, client):
         """Test error handling when getting status fails."""
-        mock_queue = MagicMock()
-        mock_queue.get_enrichment_status.side_effect = Exception("Status error")
-        mock_get_queue.return_value = mock_queue
+        mock_service = MagicMock()
+        mock_service.get_status.side_effect = Exception("Status error")
+        mock_get_service.return_value = mock_service
 
         response = client.get("/api/ppv-enrichment/status")
         assert response.status_code == 500
         data = response.get_json()
         assert "error" in data
 
-    @patch("routes.ppv_enrichment.get_enrichment_queue")
-    def test_queue_all_error_handling(self, mock_get_queue, client, test_ppv_channels):
-        """Test error handling when queuing all fails."""
-        mock_queue = MagicMock()
-        mock_queue.queue_channels_for_enrichment.side_effect = Exception("Queue error")
-        mock_get_queue.return_value = mock_queue
+    @patch("routes.ppv_enrichment.get_calendar_enrichment_service")
+    def test_start_detail_thread(self, mock_get_service, client):
+        """Test starting the detail fetcher thread."""
+        mock_service = MagicMock()
+        mock_get_service.return_value = mock_service
 
-        response = client.post("/api/ppv-enrichment/queue/all-ppv", json={}, content_type="application/json")
-        assert response.status_code == 500
+        response = client.post("/api/ppv-enrichment/detail-thread/start")
+        assert response.status_code == 200
         data = response.get_json()
-        assert "error" in data
+        assert data["running"] is True
+        mock_service.start_detail_fetcher.assert_called_once()
+
+    @patch("routes.ppv_enrichment.get_calendar_enrichment_service")
+    def test_stop_detail_thread(self, mock_get_service, client):
+        """Test stopping the detail fetcher thread."""
+        mock_service = MagicMock()
+        mock_get_service.return_value = mock_service
+
+        response = client.post("/api/ppv-enrichment/detail-thread/stop")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["running"] is False
+        mock_service.stop_detail_fetcher.assert_called_once()

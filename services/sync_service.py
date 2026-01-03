@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
-from models import Account, Category, Channel, ChannelLink, ChannelTag, Tag, db
+from models import Account, Category, Channel, ChannelLink, ChannelTag, EventChannelLink, Tag, db
 from services.iptv_service import IPTVService
 from services.tag_service import TagService
 
@@ -281,6 +281,23 @@ class ChannelSyncService:
                 changed = False
 
                 if chan.name != name:
+                    # Name changed - for PPV channels, this means a new event
+                    # Reset enrichment status and enqueue for re-enrichment
+                    if chan.is_ppv and chan.ppv_enrichment_status:
+                        logger.info(
+                            f"PPV channel name changed from '{chan.name}' to '{name}' - "
+                            f"resetting enrichment and enqueueing for re-enrichment"
+                        )
+                        chan.ppv_enrichment_status = "queued"  # Enqueue for enrichment
+                        chan.ppv_enrichment_queue_id = f"sync_{now.timestamp()}"
+                        chan.ppv_enrichment_attempts = 0
+                        chan.ppv_enrichment_error = None
+                        chan.ppv_enrichment_last_attempt = None
+                        chan.thesportsdb_id = None
+
+                        # Remove any existing event links for this channel
+                        EventChannelLink.query.filter_by(channel_id=chan.id).delete()
+
                     chan.name = name
                     changed = True
                 if chan.cleaned_name != cleaned_name:

@@ -1,13 +1,17 @@
 """
 API endpoints for PPV event enrichment management
+
+Uses the calendar-based enrichment service which:
+1. Scrapes TheSportsDB calendar (no rate limits) for event matching
+2. Fetches detailed event info via API (rate limited) in background thread
 """
 
 import logging
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from flask_cors import cross_origin
 
-from services.ppv_enrichment_service import get_enrichment_queue
+from services.ppv_calendar_enrichment_service import get_calendar_enrichment_service
 
 logger = logging.getLogger(__name__)
 
@@ -18,43 +22,33 @@ ppv_enrichment_bp = Blueprint("ppv_enrichment", __name__, url_prefix="/api/ppv-e
 @cross_origin()
 def get_enrichment_status():
     """
-    Get PPV enrichment queue status and statistics.
+    Get PPV enrichment service status and statistics.
 
-    Returns enrichment progress, API usage, and next scheduled run.
+    Returns enrichment progress, calendar cache stats, and detail thread status.
 
     Response:
     {
-        "queue_status": {
-            "queued": 245,
-            "processing": 0,
-            "retry_pending": 12,
-            "matched": 1203,
-            "no_match": 45,
-            "error": 8
+        "detail_queue_size": 12,
+        "detail_thread_running": true,
+        "calendar_cache_stats": {
+            "size": 7,
+            "hit_rate": 0.85
         },
         "cumulative_stats": {
-            "total_queued": 1513,
-            "total_processed": 1268,
-            "total_failures": 8
+            "calendar_processed": "1268",
+            "calendar_matched": "1203",
+            "details_fetched": "456"
         },
-        "api_usage": {
-            "requests_today": 92,
-            "daily_limit": 500,
-            "requests_remaining": 408,
-            "reset_at": "2026-01-03T00:00:00+00:00",
-            "requests_per_hour_limit": 20
-        },
-        "timing": {
-            "last_run": "2026-01-02T20:15:00+00:00",
-            "next_run": "2026-01-02T21:15:00+00:00"
+        "session_stats": {
+            "channels_processed": 100,
+            "events_matched": 85,
+            "details_fetched": 20
         }
     }
     """
     try:
-        from flask import current_app
-
-        queue = get_enrichment_queue(current_app)
-        status = queue.get_enrichment_status()
+        service = get_calendar_enrichment_service(current_app)
+        status = service.get_status()
 
         return jsonify(status), 200
 
@@ -65,33 +59,51 @@ def get_enrichment_status():
 
 @ppv_enrichment_bp.route("/process", methods=["POST"])
 @cross_origin()
-def process_enrichment_queue():
+def process_enrichment():
     """
     Manually trigger PPV enrichment processing.
 
     Optional JSON body:
     {
-        "max_requests": 25  # Max API requests to make (max 30/minute)
+        "account_id": 1,        # Optional: only process channels from this account
+        "fetch_details": true   # Whether to fetch detailed event info (default: true)
     }
 
     Returns processing statistics.
     """
     try:
-        from flask import current_app
+        from models import Channel
 
-        queue = get_enrichment_queue(current_app)
+        service = get_calendar_enrichment_service(current_app)
 
         data = request.get_json() or {}
-        max_requests = data.get("max_requests")
+        account_id = data.get("account_id")
+        fetch_details = data.get("fetch_details", True)
 
-        logger.info(f"Manual enrichment trigger" f"{f' with max_requests={max_requests}' if max_requests else ''}")
+        # Load PPV channels to process
+        query = Channel.query.filter(
+            Channel.is_ppv.is_(True),
+            Channel.ppv_enrichment_status.in_([None, "queued", "retry_pending", "no_match"]),
+        )
+        if account_id:
+            query = query.filter_by(account_id=account_id)
 
-        stats = queue.process_queue(max_requests=max_requests)
+        channels = query.all()
 
-        return jsonify(stats), 200
+        if not channels:
+            return jsonify({"message": "No PPV channels need enrichment", "processed": 0}), 200
+
+        logger.info(
+            f"Manual enrichment trigger for {len(channels)} channels"
+            f"{f' from account {account_id}' if account_id else ''}"
+        )
+
+        results = service.enrich_channels(channels, fetch_details=fetch_details)
+
+        return jsonify(results), 200
 
     except Exception as e:
-        logger.error(f"Error processing enrichment queue: {e}", exc_info=True)
+        logger.error(f"Error processing enrichment: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
@@ -104,17 +116,13 @@ def queue_channels_for_enrichment():
     JSON body:
     {
         "channel_ids": [1, 2, 3],  # IDs of channels to queue
-        "account_id": 1  # Optional: only queue channels from this account
+        "account_id": 1           # Optional: only queue channels from this account
     }
 
     Returns queuing statistics.
     """
     try:
-        from flask import current_app
-
-        from models import Channel
-
-        queue = get_enrichment_queue(current_app)
+        from models import Channel, db
 
         data = request.get_json() or {}
         channel_ids = data.get("channel_ids", [])
@@ -136,14 +144,20 @@ def queue_channels_for_enrichment():
                 404,
             )
 
-        logger.info(
-            f"Queuing {len(channels)} channels for enrichment" f"{f' from account {account_id}' if account_id else ''}"
-        )
+        # Reset enrichment status to queued
+        queued = 0
+        for channel in channels:
+            if channel.is_ppv:
+                channel.ppv_enrichment_status = "queued"
+                channel.ppv_enrichment_attempts = 0
+                channel.ppv_enrichment_error = None
+                queued += 1
 
-        # Queue channels
-        stats = queue.queue_channels_for_enrichment(channels)
+        db.session.commit()
 
-        return jsonify(stats), 200
+        logger.info(f"Queued {queued} channels for enrichment" f"{f' from account {account_id}' if account_id else ''}")
+
+        return jsonify({"queued": queued, "total_requested": len(channel_ids)}), 200
 
     except Exception as e:
         logger.error(f"Error queuing channels: {e}", exc_info=True)
@@ -154,7 +168,7 @@ def queue_channels_for_enrichment():
 @cross_origin()
 def queue_all_ppv_channels():
     """
-    Queue all unmatched PPV channels for enrichment.
+    Queue all PPV channels for enrichment (reset their status to 'queued').
 
     Optional JSON body:
     {
@@ -164,16 +178,12 @@ def queue_all_ppv_channels():
     Returns queuing statistics.
     """
     try:
-        from flask import current_app
+        from models import Channel, db
 
-        from models import Channel
-
-        queue = get_enrichment_queue(current_app)
-
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or {}
         account_id = data.get("account_id")
 
-        # Load all unmatched PPV channels
+        # Load all PPV channels
         query = Channel.query.filter_by(is_ppv=True)
         if account_id:
             query = query.filter_by(account_id=account_id)
@@ -186,15 +196,26 @@ def queue_all_ppv_channels():
                 404,
             )
 
+        # Reset enrichment status to queued
+        queued = 0
+        skipped_already_matched = 0
+
+        for channel in channels:
+            if channel.ppv_enrichment_status == "matched":
+                skipped_already_matched += 1
+                # Still reset to allow re-enrichment
+            channel.ppv_enrichment_status = "queued"
+            channel.ppv_enrichment_attempts = 0
+            channel.ppv_enrichment_error = None
+            queued += 1
+
+        db.session.commit()
+
         logger.info(
-            f"Queuing {len(channels)} PPV channels for enrichment"
-            f"{f' from account {account_id}' if account_id else ''}"
+            f"Queued {queued} PPV channels for enrichment" f"{f' from account {account_id}' if account_id else ''}"
         )
 
-        # Queue channels
-        stats = queue.queue_channels_for_enrichment(channels)
-
-        return jsonify(stats), 200
+        return jsonify({"queued": queued, "skipped_already_matched": skipped_already_matched}), 200
 
     except Exception as e:
         logger.error(f"Error queuing PPV channels: {e}", exc_info=True)
@@ -205,24 +226,26 @@ def queue_all_ppv_channels():
 @cross_origin()
 def get_enrichment_settings():
     """
-    Get current PPV enrichment settings.
+    Get current PPV enrichment service settings.
 
-    Returns configuration details including rate limits and batch size.
+    Returns configuration details including rate limits for detail fetching.
     """
     try:
-        from flask import current_app
-
-        queue = get_enrichment_queue(current_app)
+        from services.ppv_calendar_enrichment_service import API_REQUESTS_PER_MINUTE, DETAIL_FETCH_BATCH_SIZE
 
         return (
             jsonify(
                 {
-                    "batch_size": queue.batch_size,
-                    "requests_per_minute": queue.requests_per_minute,
-                    "request_interval_seconds": queue.request_interval_seconds,
-                    "max_retry_attempts": 3,
-                    "thesportsdb_rate_limit": 30,
-                    "thesportsdb_rate_limit_window": "1 minute",
+                    "detail_fetch_batch_size": DETAIL_FETCH_BATCH_SIZE,
+                    "api_requests_per_minute": API_REQUESTS_PER_MINUTE,
+                    "calendar_scraping": {
+                        "rate_limited": False,
+                        "cache_ttl_seconds": 3600,
+                    },
+                    "detail_fetching": {
+                        "rate_limited": True,
+                        "requests_per_minute": API_REQUESTS_PER_MINUTE,
+                    },
                 }
             ),
             200,
@@ -230,4 +253,41 @@ def get_enrichment_settings():
 
     except Exception as e:
         logger.error(f"Error getting enrichment settings: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@ppv_enrichment_bp.route("/detail-thread/start", methods=["POST"])
+@cross_origin()
+def start_detail_thread():
+    """
+    Start the background detail fetching thread.
+
+    The detail thread fetches full event information (descriptions, logos, etc.)
+    from the API for events that were matched via calendar scraping.
+    """
+    try:
+        service = get_calendar_enrichment_service(current_app)
+        service.start_detail_fetcher()
+
+        return jsonify({"message": "Detail fetcher thread started", "running": True}), 200
+
+    except Exception as e:
+        logger.error(f"Error starting detail thread: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@ppv_enrichment_bp.route("/detail-thread/stop", methods=["POST"])
+@cross_origin()
+def stop_detail_thread():
+    """
+    Stop the background detail fetching thread.
+    """
+    try:
+        service = get_calendar_enrichment_service(current_app)
+        service.stop_detail_fetcher()
+
+        return jsonify({"message": "Detail fetcher thread stopped", "running": False}), 200
+
+    except Exception as e:
+        logger.error(f"Error stopping detail thread: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
