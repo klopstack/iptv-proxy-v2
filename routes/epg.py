@@ -358,7 +358,7 @@ def sync_epg_source(source_id):
     success, message, stats = EpgSyncService.sync_source(source)
 
     # Update source sync status
-    EpgSyncService.update_source_sync_status(source_id, success, message, stats)
+    EpgSyncService.update_source_sync_status(source, success, message, stats)
 
     # Update PPV visibility for provider accounts
     if success and source.source_type == "provider":

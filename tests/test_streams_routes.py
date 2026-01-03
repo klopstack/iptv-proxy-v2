@@ -327,7 +327,7 @@ class TestStreamConnectivityTest:
             assert data["success"] is False
             assert data["checks"]["credential_available"] is False
 
-    @patch("routes.streams.requests.head")
+    @patch("services.stream_proxy_service.requests.head")
     def test_test_stream_upstream_success(self, mock_head, app, client, test_account):
         """Test connectivity check succeeds when upstream returns 200"""
         with app.app_context():
@@ -348,7 +348,7 @@ class TestStreamConnectivityTest:
         data = response.json
         assert data["success"] is True
 
-    @patch("routes.streams.requests.head")
+    @patch("services.stream_proxy_service.requests.head")
     def test_test_stream_upstream_connection_error(self, mock_head, app, client, test_account):
         """Test connectivity check handles connection errors"""
         import requests
@@ -368,7 +368,7 @@ class TestStreamConnectivityTest:
         assert data["success"] is False
         assert "connection" in data["error"].lower()
 
-    @patch("routes.streams.requests.head")
+    @patch("services.stream_proxy_service.requests.head")
     def test_test_stream_upstream_404(self, mock_head, app, client, test_account):
         """Test connectivity check reports 404 from upstream"""
         with app.app_context():
@@ -389,7 +389,7 @@ class TestStreamConnectivityTest:
         assert data["success"] is False
         assert "404" in data["error"] or "not found" in data["error"].lower()
 
-    @patch("routes.streams.requests.head")
+    @patch("services.stream_proxy_service.requests.head")
     def test_test_stream_results_structure(self, mock_head, app, client, test_account):
         """Test connectivity check returns proper result structure"""
         with app.app_context():

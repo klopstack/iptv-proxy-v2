@@ -143,7 +143,7 @@ class TestStreamTest:
             response = client.get(f"/stream/{account_id}/test123/test")
             assert response.status_code == 503
 
-    @patch("routes.streams.requests.head")
+    @patch("services.stream_proxy_service.requests.head")
     def test_stream_test_success(self, mock_head, client, app, setup_account):
         """Test successful stream test"""
         with app.app_context():
@@ -158,7 +158,7 @@ class TestStreamTest:
             data = response.get_json()
             assert data["success"] is True
 
-    @patch("routes.streams.requests.head")
+    @patch("services.stream_proxy_service.requests.head")
     def test_stream_test_timeout(self, mock_head, client, app, setup_account):
         """Test stream test with timeout"""
         import requests
@@ -174,7 +174,7 @@ class TestStreamTest:
             # Error message contains "timed out" from the exception
             assert "timed out" in data["error"].lower()
 
-    @patch("routes.streams.requests.head")
+    @patch("services.stream_proxy_service.requests.head")
     def test_stream_test_connection_error(self, mock_head, client, app, setup_account):
         """Test stream test with connection error"""
         import requests
@@ -188,8 +188,8 @@ class TestStreamTest:
             data = response.get_json()
             assert data["success"] is False
 
-    @patch("routes.streams.requests.head")
-    @patch("routes.streams.requests.get")
+    @patch("services.stream_proxy_service.requests.head")
+    @patch("services.stream_proxy_service.requests.get")
     def test_stream_test_head_not_supported(self, mock_get, mock_head, client, app, setup_account):
         """Test stream test when HEAD returns 405"""
         with app.app_context():

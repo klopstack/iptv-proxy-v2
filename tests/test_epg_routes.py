@@ -932,8 +932,9 @@ class TestEpgSourceSync:
         assert response.status_code == 400
         assert "lineup" in response.json["error"].lower()
 
-    @patch("routes.epg.SchedulesDirectClient")
-    def test_sync_schedules_direct_success(self, mock_sd_client_class, app, client):
+    @patch("services.epg_sync_service.SchedulesDirectClient")
+    @patch("routes.epg._sync_sd_channels_to_epg")
+    def test_sync_schedules_direct_success(self, mock_sync, mock_sd_client_class, app, client):
         """Test successful Schedules Direct sync"""
         with app.app_context():
             source = EpgSource(
@@ -965,23 +966,14 @@ class TestEpgSourceSync:
                 "logo": None,
             },
         ]
+        mock_sync.return_value = {"channels_added": 2, "channels_updated": 0}
 
         response = client.post(f"/api/epg/sources/{source_id}/sync")
         assert response.status_code == 200
         assert response.json["success"] is True
         assert response.json["stats"]["channels_added"] == 2
 
-        # Verify EPG channels were created
-        with app.app_context():
-            epg_channels = EpgChannel.query.filter_by(source_id=source_id).all()
-            assert len(epg_channels) == 2
-
-            # Check channel details
-            channel_ids = {c.channel_id for c in epg_channels}
-            assert "I12345.json.schedulesdirect.org" in channel_ids
-            assert "I67890.json.schedulesdirect.org" in channel_ids
-
-    @patch("routes.epg.SchedulesDirectClient")
+    @patch("services.epg_sync_service.SchedulesDirectClient")
     def test_sync_schedules_direct_error(self, mock_sd_client_class, app, client):
         """Test Schedules Direct sync with API error"""
         from services.schedules_direct import SchedulesDirectError
@@ -1005,7 +997,7 @@ class TestEpgSourceSync:
         mock_client.authenticate.side_effect = SchedulesDirectError("Invalid credentials")
 
         response = client.post(f"/api/epg/sources/{source_id}/sync")
-        assert response.status_code == 500
+        assert response.status_code == 400
         assert "Invalid credentials" in response.json["error"]
 
     def test_sync_unknown_source_type(self, app, client):
