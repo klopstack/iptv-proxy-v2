@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from models import Account, Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
-from routes.epg import _sync_sd_channels_to_epg
+from routes.epg.sources import _sync_sd_channels_to_epg
 
 # ============================================================================
 # Fixtures
@@ -422,7 +422,7 @@ class TestSyncSdChannelsHelper:
 class TestSchedulesDirectAuth:
     """Tests for Schedules Direct authentication"""
 
-    @patch("routes.epg.validate_credentials")
+    @patch("services.schedules_direct.validate_credentials")
     def test_test_sd_credentials_missing_username(self, mock_validate, app, client):
         """Test SD credentials check without username"""
         response = client.post(
@@ -431,7 +431,7 @@ class TestSchedulesDirectAuth:
         )
         assert response.status_code == 400
 
-    @patch("routes.epg.validate_credentials")
+    @patch("services.schedules_direct.validate_credentials")
     def test_test_sd_credentials_missing_password(self, mock_validate, app, client):
         """Test SD credentials check without password"""
         response = client.post(
@@ -440,7 +440,7 @@ class TestSchedulesDirectAuth:
         )
         assert response.status_code == 400
 
-    @patch("routes.epg.validate_credentials")
+    @patch("services.schedules_direct.validate_credentials")
     def test_test_sd_credentials_success(self, mock_validate, app, client):
         """Test successful SD credentials validation"""
         mock_validate.return_value = {"success": True, "subscription_expired": False}
@@ -451,7 +451,7 @@ class TestSchedulesDirectAuth:
         )
         assert response.status_code == 200
 
-    @patch("routes.epg.validate_credentials")
+    @patch("services.schedules_direct.validate_credentials")
     def test_test_sd_credentials_failure(self, mock_validate, app, client):
         """Test failed SD credentials validation"""
         mock_validate.return_value = {"success": False, "error": "Invalid credentials"}

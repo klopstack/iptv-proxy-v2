@@ -113,7 +113,7 @@ class EpgSyncService:
             return False, "No Schedules Direct lineup selected", {}
 
         try:
-            from routes.epg import _sync_sd_channels_to_epg
+            from routes.epg.sources import _sync_sd_channels_to_epg  # type: ignore[attr-defined]
 
             # Initialize SD client and authenticate
             sd_client = SchedulesDirectClient(source.sd_username, source.sd_password)

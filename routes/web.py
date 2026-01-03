@@ -51,14 +51,8 @@ def settings_page():
 
 @web_bp.route("/epg")
 def epg_page():
-    """EPG (Electronic Program Guide) management page"""
-    return render_template("epg.html")
-
-
-@web_bp.route("/epg-match-rules")
-def epg_match_rules_page():
-    """EPG Match Rules configuration page"""
-    return render_template("epg_match_rules.html")
+    """EPG (Electronic Program Guide) management page - unified interface for sources, channels, mappings, and configuration"""
+    return render_template("epg_management.html")
 
 
 @web_bp.route("/stations")

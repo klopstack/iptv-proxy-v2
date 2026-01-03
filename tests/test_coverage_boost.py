@@ -840,7 +840,7 @@ class TestErrorHandling:
         )
         assert response.status_code == 404
 
-    @patch("routes.epg.SchedulesDirectClient")
+    @patch("services.schedules_direct.SchedulesDirectClient")
     def test_sync_sd_handles_error(self, MockClient, app, client, sd_epg_source):
         """Test SD sync handles API errors gracefully"""
         from services.schedules_direct import SchedulesDirectError
@@ -864,7 +864,7 @@ class TestSdChannelsToEpg:
 
     def test_sync_sd_channels_new(self, app):
         """Test syncing new SD channels creates EpgChannel records"""
-        from routes.epg import _sync_sd_channels_to_epg
+        from routes.epg.sources import _sync_sd_channels_to_epg
 
         with app.app_context():
             source = EpgSource(
@@ -900,7 +900,7 @@ class TestSdChannelsToEpg:
 
     def test_sync_sd_channels_update(self, app):
         """Test syncing SD channels updates existing records"""
-        from routes.epg import _sync_sd_channels_to_epg
+        from routes.epg.sources import _sync_sd_channels_to_epg
 
         with app.app_context():
             source = EpgSource(
@@ -939,7 +939,7 @@ class TestSdChannelsToEpg:
 
     def test_sync_sd_channels_skip_no_station_id(self, app):
         """Test syncing skips channels without station ID"""
-        from routes.epg import _sync_sd_channels_to_epg
+        from routes.epg.sources import _sync_sd_channels_to_epg
 
         with app.app_context():
             source = EpgSource(

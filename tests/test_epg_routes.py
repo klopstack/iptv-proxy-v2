@@ -933,7 +933,7 @@ class TestEpgSourceSync:
         assert "lineup" in response.json["error"].lower()
 
     @patch("services.epg_sync_service.SchedulesDirectClient")
-    @patch("routes.epg._sync_sd_channels_to_epg")
+    @patch("routes.epg.sources._sync_sd_channels_to_epg")
     def test_sync_schedules_direct_success(self, mock_sync, mock_sd_client_class, app, client):
         """Test successful Schedules Direct sync"""
         with app.app_context():
@@ -1045,7 +1045,7 @@ class TestSchedulesDirectAPI:
         assert response.status_code == 400
         assert "required" in response.json["error"].lower()
 
-    @patch("routes.epg.validate_credentials")
+    @patch("services.schedules_direct.validate_credentials")
     def test_test_sd_credentials_success(self, mock_validate, app, client):
         """Test successful SD credential validation"""
         mock_validate.return_value = {
@@ -1062,7 +1062,7 @@ class TestSchedulesDirectAPI:
         assert response.status_code == 200
         assert response.json["success"] is True
 
-    @patch("routes.epg.validate_credentials")
+    @patch("services.schedules_direct.validate_credentials")
     def test_test_sd_credentials_failure(self, mock_validate, app, client):
         """Test failed SD credential validation"""
         mock_validate.return_value = {
@@ -1106,7 +1106,7 @@ class TestSchedulesDirectAPI:
         assert response.status_code == 400
         assert "credentials" in response.json["error"].lower()
 
-    @patch("routes.epg.SchedulesDirectClient")
+    @patch("routes.epg.schedules_direct.SchedulesDirectClient")
     def test_search_sd_lineups_success(self, MockClient, app, client):
         """Test successful SD lineup search"""
         # Create SD source with credentials
@@ -1132,7 +1132,7 @@ class TestSchedulesDirectAPI:
         assert response.json["success"] is True
         assert len(response.json["lineups"]) == 1
 
-    @patch("routes.epg.SchedulesDirectClient")
+    @patch("routes.epg.schedules_direct.SchedulesDirectClient")
     def test_search_sd_lineups_error(self, MockClient, app, client):
         """Test SD lineup search with error"""
         from services.schedules_direct import SchedulesDirectError
@@ -1209,7 +1209,7 @@ class TestAccountEpgSource:
         assert response.json["success"] is True
         assert response.json["source_id"] == 1
 
-    @patch("routes.epg.IPTVService")
+    @patch("routes.epg.channels.IPTVService")
     @patch("services.epg_service.EpgService.sync_epg_source")
     @patch("services.epg_service.EpgService.create_provider_epg_source")
     def test_create_account_epg_source_with_sync(

@@ -62,8 +62,11 @@ from routes.accounts import accounts_bp
 from routes.api import api_bp, set_scheduler
 from routes.channel_health import channel_health_bp
 from routes.channel_links import channel_links_bp
-from routes.epg import epg_bp
-from routes.epg_match_rules import epg_match_rules_bp
+from routes.epg.channels import account_epg_channels_bp, epg_channels_bp
+from routes.epg.match_rules import account_epg_match_rules_bp, epg_match_rules_bp
+from routes.epg.schedules_direct import schedules_direct_bp
+from routes.epg.sources import epg_sources_bp
+from routes.epg.xmltv import xmltv_bp
 from routes.fcc_match_patterns import fcc_match_patterns_bp
 from routes.filters import filters_bp
 from routes.images import images_bp
@@ -82,8 +85,13 @@ app.register_blueprint(rulesets_bp)
 app.register_blueprint(playlists_bp)
 app.register_blueprint(api_bp)
 app.register_blueprint(streams_bp)
-app.register_blueprint(epg_bp)
+app.register_blueprint(epg_sources_bp)
+app.register_blueprint(epg_channels_bp)
+app.register_blueprint(account_epg_channels_bp)
 app.register_blueprint(epg_match_rules_bp)
+app.register_blueprint(account_epg_match_rules_bp)
+app.register_blueprint(schedules_direct_bp)
+app.register_blueprint(xmltv_bp)
 app.register_blueprint(fcc_match_patterns_bp)
 app.register_blueprint(images_bp)
 app.register_blueprint(channel_links_bp)

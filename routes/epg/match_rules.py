@@ -36,8 +36,9 @@ from services.epg_match_rules_service import clear_fcc_pattern_cache
 
 logger = logging.getLogger(__name__)
 
-# Create blueprint
-epg_match_rules_bp = Blueprint("epg_match_rules", __name__)
+# Create blueprints
+epg_match_rules_bp = Blueprint("epg_match_rules", __name__, url_prefix="/api/epg-match-rules")
+account_epg_match_rules_bp = Blueprint("account_epg_match_rules", __name__)
 
 # Initialize cache service
 cache_service = CacheService()
@@ -111,7 +112,7 @@ def _serialize_channel_name_mapping(mapping: EpgChannelNameMapping) -> dict:
 # ============================================================================
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/rulesets", methods=["GET"])
+@epg_match_rules_bp.route("/rulesets", methods=["GET"])
 def get_epg_match_rulesets():
     """Get all EPG match rulesets with assigned accounts"""
     rulesets = EpgMatchRuleSet.query.order_by(EpgMatchRuleSet.priority, EpgMatchRuleSet.name).all()
@@ -147,7 +148,7 @@ def get_epg_match_rulesets():
     )
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/rulesets", methods=["POST"])
+@epg_match_rules_bp.route("/rulesets", methods=["POST"])
 @validate_request_data(EpgMatchRuleSetCreateSchema)
 def create_epg_match_ruleset():
     """Create a new EPG match ruleset"""
@@ -186,7 +187,7 @@ def create_epg_match_ruleset():
     )
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/rulesets/<int:ruleset_id>", methods=["GET"])
+@epg_match_rules_bp.route("/rulesets/<int:ruleset_id>", methods=["GET"])
 def get_epg_match_ruleset(ruleset_id):
     """Get a specific EPG match ruleset with its rules"""
     ruleset = EpgMatchRuleSet.query.get_or_404(ruleset_id)
@@ -204,7 +205,7 @@ def get_epg_match_ruleset(ruleset_id):
     )
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/rulesets/<int:ruleset_id>", methods=["PUT"])
+@epg_match_rules_bp.route("/rulesets/<int:ruleset_id>", methods=["PUT"])
 @validate_request_data(EpgMatchRuleSetUpdateSchema)
 def update_epg_match_ruleset(ruleset_id):
     """Update an EPG match ruleset"""
@@ -233,7 +234,7 @@ def update_epg_match_ruleset(ruleset_id):
     )
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/rulesets/<int:ruleset_id>", methods=["DELETE"])
+@epg_match_rules_bp.route("/rulesets/<int:ruleset_id>", methods=["DELETE"])
 def delete_epg_match_ruleset(ruleset_id):
     """Delete an EPG match ruleset"""
     ruleset = EpgMatchRuleSet.query.get_or_404(ruleset_id)
@@ -248,7 +249,7 @@ def delete_epg_match_ruleset(ruleset_id):
     return "", 204
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/rulesets/<int:ruleset_id>/duplicate", methods=["POST"])
+@epg_match_rules_bp.route("/rulesets/<int:ruleset_id>/duplicate", methods=["POST"])
 def duplicate_epg_match_ruleset(ruleset_id):
     """Duplicate an EPG match ruleset with all its rules"""
     source = EpgMatchRuleSet.query.get_or_404(ruleset_id)
@@ -318,7 +319,7 @@ def duplicate_epg_match_ruleset(ruleset_id):
 # ============================================================================
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/rules", methods=["GET"])
+@epg_match_rules_bp.route("/rules", methods=["GET"])
 def get_epg_match_rules():
     """Get all EPG match rules, optionally filtered by ruleset"""
     ruleset_id = request.args.get("ruleset_id", type=int)
@@ -332,7 +333,7 @@ def get_epg_match_rules():
     return jsonify([_serialize_epg_match_rule(r) for r in rules])
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/rules", methods=["POST"])
+@epg_match_rules_bp.route("/rules", methods=["POST"])
 @validate_request_data(EpgMatchRuleCreateSchema)
 def create_epg_match_rule():
     """Create a new EPG match rule"""
@@ -370,14 +371,14 @@ def create_epg_match_rule():
     return jsonify(_serialize_epg_match_rule(rule)), 201
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/rules/<int:rule_id>", methods=["GET"])
+@epg_match_rules_bp.route("/rules/<int:rule_id>", methods=["GET"])
 def get_epg_match_rule(rule_id):
     """Get a specific EPG match rule"""
     rule = EpgMatchRule.query.get_or_404(rule_id)
     return jsonify(_serialize_epg_match_rule(rule))
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/rules/<int:rule_id>", methods=["PUT"])
+@epg_match_rules_bp.route("/rules/<int:rule_id>", methods=["PUT"])
 @validate_request_data(EpgMatchRuleUpdateSchema)
 def update_epg_match_rule(rule_id):
     """Update an EPG match rule"""
@@ -427,7 +428,7 @@ def update_epg_match_rule(rule_id):
     return jsonify(_serialize_epg_match_rule(rule))
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/rules/<int:rule_id>", methods=["DELETE"])
+@epg_match_rules_bp.route("/rules/<int:rule_id>", methods=["DELETE"])
 def delete_epg_match_rule(rule_id):
     """Delete an EPG match rule"""
     rule = EpgMatchRule.query.get_or_404(rule_id)
@@ -444,7 +445,7 @@ def delete_epg_match_rule(rule_id):
 # ============================================================================
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/exclusions", methods=["GET"])
+@epg_match_rules_bp.route("/exclusions", methods=["GET"])
 def get_epg_exclusion_patterns():
     """Get all EPG exclusion patterns"""
     patterns = EpgExclusionPattern.query.order_by(EpgExclusionPattern.priority, EpgExclusionPattern.name).all()
@@ -452,7 +453,7 @@ def get_epg_exclusion_patterns():
     return jsonify([_serialize_exclusion_pattern(p) for p in patterns])
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/exclusions", methods=["POST"])
+@epg_match_rules_bp.route("/exclusions", methods=["POST"])
 @validate_request_data(EpgExclusionPatternCreateSchema)
 def create_epg_exclusion_pattern():
     """Create a new EPG exclusion pattern"""
@@ -476,14 +477,14 @@ def create_epg_exclusion_pattern():
     return jsonify(_serialize_exclusion_pattern(pattern)), 201
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/exclusions/<int:pattern_id>", methods=["GET"])
+@epg_match_rules_bp.route("/exclusions/<int:pattern_id>", methods=["GET"])
 def get_epg_exclusion_pattern(pattern_id):
     """Get a specific EPG exclusion pattern"""
     pattern = EpgExclusionPattern.query.get_or_404(pattern_id)
     return jsonify(_serialize_exclusion_pattern(pattern))
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/exclusions/<int:pattern_id>", methods=["PUT"])
+@epg_match_rules_bp.route("/exclusions/<int:pattern_id>", methods=["PUT"])
 @validate_request_data(EpgExclusionPatternUpdateSchema)
 def update_epg_exclusion_pattern(pattern_id):
     """Update an EPG exclusion pattern"""
@@ -513,7 +514,7 @@ def update_epg_exclusion_pattern(pattern_id):
     return jsonify(_serialize_exclusion_pattern(pattern))
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/exclusions/<int:pattern_id>", methods=["DELETE"])
+@epg_match_rules_bp.route("/exclusions/<int:pattern_id>", methods=["DELETE"])
 def delete_epg_exclusion_pattern(pattern_id):
     """Delete an EPG exclusion pattern"""
     pattern = EpgExclusionPattern.query.get_or_404(pattern_id)
@@ -530,7 +531,7 @@ def delete_epg_exclusion_pattern(pattern_id):
 # ============================================================================
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/name-mappings", methods=["GET"])
+@epg_match_rules_bp.route("/name-mappings", methods=["GET"])
 def get_epg_channel_name_mappings():
     """Get all EPG channel name mappings"""
     mappings = EpgChannelNameMapping.query.order_by(EpgChannelNameMapping.priority, EpgChannelNameMapping.name).all()
@@ -538,7 +539,7 @@ def get_epg_channel_name_mappings():
     return jsonify([_serialize_channel_name_mapping(m) for m in mappings])
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/name-mappings", methods=["POST"])
+@epg_match_rules_bp.route("/name-mappings", methods=["POST"])
 @validate_request_data(EpgChannelNameMappingCreateSchema)
 def create_epg_channel_name_mapping():
     """Create a new EPG channel name mapping"""
@@ -563,14 +564,14 @@ def create_epg_channel_name_mapping():
     return jsonify(_serialize_channel_name_mapping(mapping)), 201
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/name-mappings/<int:mapping_id>", methods=["GET"])
+@epg_match_rules_bp.route("/name-mappings/<int:mapping_id>", methods=["GET"])
 def get_epg_channel_name_mapping(mapping_id):
     """Get a specific EPG channel name mapping"""
     mapping = EpgChannelNameMapping.query.get_or_404(mapping_id)
     return jsonify(_serialize_channel_name_mapping(mapping))
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/name-mappings/<int:mapping_id>", methods=["PUT"])
+@epg_match_rules_bp.route("/name-mappings/<int:mapping_id>", methods=["PUT"])
 @validate_request_data(EpgChannelNameMappingUpdateSchema)
 def update_epg_channel_name_mapping(mapping_id):
     """Update an EPG channel name mapping"""
@@ -601,7 +602,7 @@ def update_epg_channel_name_mapping(mapping_id):
     return jsonify(_serialize_channel_name_mapping(mapping))
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/name-mappings/<int:mapping_id>", methods=["DELETE"])
+@epg_match_rules_bp.route("/name-mappings/<int:mapping_id>", methods=["DELETE"])
 def delete_epg_channel_name_mapping(mapping_id):
     """Delete an EPG channel name mapping"""
     mapping = EpgChannelNameMapping.query.get_or_404(mapping_id)
@@ -614,7 +615,7 @@ def delete_epg_channel_name_mapping(mapping_id):
     return "", 204
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/name-mappings/preview", methods=["POST"])
+@epg_match_rules_bp.route("/name-mappings/preview", methods=["POST"])
 def preview_channel_name_mapping():
     """
     Preview how a channel name mapping would transform channel names.
@@ -743,7 +744,7 @@ def preview_channel_name_mapping():
 # ============================================================================
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/exclusions/preview", methods=["POST"])
+@epg_match_rules_bp.route("/exclusions/preview", methods=["POST"])
 def preview_exclusion_pattern():
     """
     Preview which channels would match an exclusion pattern.
@@ -914,7 +915,7 @@ def preview_exclusion_pattern():
     return jsonify({"matches": matches, "total_count": total_count, "showing": len(matches)})
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/rules/preview", methods=["POST"])
+@epg_match_rules_bp.route("/rules/preview", methods=["POST"])
 def preview_rule_pattern():
     """
     Preview which channels would match a rule's pattern.
@@ -1063,7 +1064,7 @@ def preview_rule_pattern():
 # ============================================================================
 
 
-@epg_match_rules_bp.route("/api/accounts/<int:account_id>/epg-match-rulesets", methods=["GET"])
+@account_epg_match_rules_bp.route("/api/accounts/<int:account_id>/epg-match-rulesets", methods=["GET"])
 def get_account_epg_match_rulesets(account_id):
     """Get EPG match rulesets assigned to an account"""
     Account.query.get_or_404(account_id)
@@ -1091,7 +1092,7 @@ def get_account_epg_match_rulesets(account_id):
     )
 
 
-@epg_match_rules_bp.route("/api/accounts/<int:account_id>/epg-match-rulesets", methods=["POST"])
+@account_epg_match_rules_bp.route("/api/accounts/<int:account_id>/epg-match-rulesets", methods=["POST"])
 @validate_request_data(AccountEpgMatchRuleSetAssignSchema)
 def assign_epg_match_ruleset_to_account(account_id):
     """Assign an EPG match ruleset to an account"""
@@ -1128,7 +1129,9 @@ def assign_epg_match_ruleset_to_account(account_id):
     )
 
 
-@epg_match_rules_bp.route("/api/accounts/<int:account_id>/epg-match-rulesets/<int:ruleset_id>", methods=["DELETE"])
+@account_epg_match_rules_bp.route(
+    "/api/accounts/<int:account_id>/epg-match-rulesets/<int:ruleset_id>", methods=["DELETE"]
+)
 def unassign_epg_match_ruleset_from_account(account_id, ruleset_id):
     """Remove an EPG match ruleset assignment from an account"""
     Account.query.get_or_404(account_id)
@@ -1147,7 +1150,7 @@ def unassign_epg_match_ruleset_from_account(account_id, ruleset_id):
 # ============================================================================
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/create-default", methods=["POST"])
+@epg_match_rules_bp.route("/create-default", methods=["POST"])
 @handle_errors(return_json=True, default_message="Error creating default EPG match ruleset")
 def create_default_epg_match_ruleset():
     """Create a default EPG match ruleset with common matching rules"""
@@ -1261,7 +1264,7 @@ def create_default_epg_match_ruleset():
     )
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/create-default-exclusions", methods=["POST"])
+@epg_match_rules_bp.route("/create-default-exclusions", methods=["POST"])
 @handle_errors(return_json=True, default_message="Error creating default exclusion patterns")
 def create_default_exclusion_patterns():
     """Create default exclusion patterns for PPV and event channels"""
@@ -1347,7 +1350,7 @@ def create_default_exclusion_patterns():
 # ============================================================================
 
 
-@epg_match_rules_bp.route("/api/epg-match-rules/match-types", methods=["GET"])
+@epg_match_rules_bp.route("/match-types", methods=["GET"])
 def get_match_types():
     """Get available match types with descriptions"""
     return jsonify(
