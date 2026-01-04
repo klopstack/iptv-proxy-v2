@@ -164,7 +164,8 @@ def get_all_categories():
         cat_data = {
             "id": cat.id,
             "category_id": cat.category_id,
-            "category_name": cat.cleaned_name or cat.category_name,
+            "category_name": cat.category_name,
+            "cleaned_name": cat.cleaned_name,
             "account_id": cat.account_id,
             "account_name": cat.account_name,
             "visible_count": int(cat.visible_count or 0),
@@ -293,9 +294,14 @@ def preview_channels():
         db.get_or_404(Account, account_id)  # Validate account exists
         query = query.filter(Channel.account_id == account_id)
 
-    # Apply category filter if specified
+    # Apply category filter if specified (check both original and cleaned names)
     if category_filter:
-        query = query.filter(Category.category_name == category_filter)
+        query = query.filter(
+            db.or_(
+                Category.category_name == category_filter,
+                Category.cleaned_name == category_filter
+            )
+        )
 
     # Apply tag filter if specified
     if filter_tags:

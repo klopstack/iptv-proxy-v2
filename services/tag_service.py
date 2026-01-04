@@ -262,7 +262,7 @@ class TagService:
     def _cleanup_name(name: str) -> str:
         """
         Clean up channel name after tag extraction:
-        - Remove common separators at start/end (: | - etc)
+        - Remove common separators at start/end (: | - / etc)
         - Trim whitespace
         - Remove multiple spaces
         - Remove empty brackets/parentheses
@@ -272,8 +272,8 @@ class TagService:
 
         # Remove leading/trailing separators and whitespace
         name = name.strip()
-        name = re.sub(r"^[:\-|•]+\s*", "", name)  # Remove leading separators
-        name = re.sub(r"\s*[:\-|•]+$", "", name)  # Remove trailing separators
+        name = re.sub(r"^[:\-|•/]+\s*", "", name)  # Remove leading separators
+        name = re.sub(r"\s*[:\-|•/]+$", "", name)  # Remove trailing separators
 
         # Remove multiple spaces
         name = re.sub(r"\s+", " ", name)
@@ -452,6 +452,18 @@ class TagService:
                 "source": "channel_name",
                 "remove_from_name": True,
                 "priority": 15,
+            },
+            # Generic location prefix with pipe (captures the prefix as tag)
+            # Must use escaped pipe \| in regex and pattern_type MUST be "regex"
+            {
+                "ruleset_id": ruleset.id,
+                "name": "Location Pipe Prefix",
+                "pattern": r"([0-9]?[A-Z]+)\|",
+                "pattern_type": "regex",
+                "tag_name": "__CAPTURE__",
+                "source": "both",
+                "remove_from_name": True,
+                "priority": 10,
             },
             # Quality indicators - Superscript versions (process these first)
             {
@@ -732,10 +744,6 @@ class TagService:
         tags_created = 0
         tags_updated = 0
         channels_updated = 0
-        categories_updated = 0
-
-        # Track categories we've processed to avoid duplicate updates
-        processed_categories = set()
 
         for channel in db_channels:
             category_name = channel.category.category_name if channel.category else ""
@@ -751,13 +759,8 @@ class TagService:
                 channel.updated_at = processing_start
                 channels_updated += 1
 
-            # Update cleaned category name if we have a category and haven't processed it yet
-            if channel.category and channel.category.id not in processed_categories:
-                if channel.category.cleaned_name != cleaned_category_name:
-                    channel.category.cleaned_name = cleaned_category_name
-                    channel.category.updated_at = processing_start
-                    categories_updated += 1
-                processed_categories.add(channel.category.id)
+            # Note: We do NOT update category.cleaned_name here because categories
+            # are updated during sync. Tag reprocessing should only update channels.
 
             # Store tags
             for tag_name in tags:
@@ -815,7 +818,7 @@ class TagService:
         logger.info(
             f"Processed tags for {processed_count} channels in account {account_id}: "
             f"{tags_created} created, {tags_updated} updated, {tags_removed} removed, "
-            f"{channels_updated} channels updated, {categories_updated} categories updated"
+            f"{channels_updated} channels updated"
         )
 
         return {
@@ -827,5 +830,4 @@ class TagService:
             "tags_updated": tags_updated,
             "tags_removed": tags_removed,
             "channels_updated": channels_updated,
-            "categories_updated": categories_updated,
         }

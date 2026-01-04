@@ -12,7 +12,8 @@
 5. [Known Issues](#known-issues)
 6. [Dead Code & Unused Features](#dead-code--unused-features)
 7. [Documentation Discrepancies](#documentation-discrepancies)
-8. [Recommendations](#recommendations)
+8. [External Library Opportunities](#external-library-opportunities)
+9. [Recommendations](#recommendations)
 
 ---
 
@@ -341,11 +342,29 @@ PPV placeholder detection patterns exist in:
 
 ---
 
+## External Library Opportunities
+
+**New Document**: See [EXTERNAL_LIBRARY_RECOMMENDATIONS.md](EXTERNAL_LIBRARY_RECOMMENDATIONS.md) for comprehensive analysis of 11 opportunities to reduce code complexity and testing burden using external libraries.
+
+### Quick Summary
+
+| Opportunity | Library | Impact | Effort |
+|-------------|---------|--------|--------|
+| Replace custom cache | `cachetools` | 60 lines saved | 1 hour |
+| Convert JSON fields to native | `sqlalchemy-json` | 120-160 lines saved | 2 hours |
+| Replace custom scheduler | `APScheduler` | 300-400 lines saved | 4-6 hours |
+| Centralize retry logic | `tenacity` | 40-50 lines saved | 2 hours |
+| Unified config management | `dynaconf` | ~200 lines saved | 3-4 hours |
+
+**Total Potential**: ~600-800 lines of code reduction, 40-60% reduction in testing burden for affected systems.
+
+---
+
 ## Recommendations
 
-### High Priority
+### High Priority (Critical Issues)
 
-1. ~~**Delete `routes/epg.py`**~~ ✅ **DONE**
+1. ✅ **Delete `routes/epg.py`** - DONE
    - Dead code has been removed
 
 2. **Fix copilot-instructions.md**
@@ -353,39 +372,71 @@ PPV placeholder detection patterns exist in:
    - Add EPG/FCC models to key relationships
    - Update file references
 
-3. ~~**Integrate or Remove `PPVFilterService`**~~ ✅ **DONE**
+3. ✅ **Integrate or Remove `PPVFilterService`** - DONE
    - File has been removed from codebase
 
 4. **Integrate or Remove `SdMatchingService`**
    - Either wire into EPG matching or delete
    - 384 lines of unused code
 
-### Medium Priority
+### High-Impact Library Additions (New Priority)
 
-5. ~~**Centralize PPV Constants**~~ ✅ **MOSTLY RESOLVED**
-   - `ppv_filter_service.py` removed, patterns now in fewer files
+5. **Add `cachetools` for in-memory caching** 🟢 RECOMMENDED
+   - Replace `CacheService` with production-grade TTL cache
+   - Reusable across multiple services
+   - Effort: 1 hour, Very Low Risk
+   - See [EXTERNAL_LIBRARY_RECOMMENDATIONS.md#1-caching-layer](EXTERNAL_LIBRARY_RECOMMENDATIONS.md#1-caching-layer-replace-custom-cache-with-cachetools)
 
-6. **Complete Channel Links UI**
-   - Either add UI for time-shifted channels or remove API
-   - Model `ChannelLink` is orphaned (no UI exposure)
+6. **Convert JSON fields to native SQLAlchemy JSON type** 🟢 RECOMMENDED
+   - Eliminate 40+ `json.loads()`/`json.dumps()` calls
+   - Improves code clarity and eliminates boilerplate
+   - Effort: 2 hours, Low Risk
+   - See [EXTERNAL_LIBRARY_RECOMMENDATIONS.md#3-json-field-serialization](EXTERNAL_LIBRARY_RECOMMENDATIONS.md#3-json-field-serialization-use-sqlalchemy-json-or-pydantic)
 
-7. **Complete EPG Name Mappings UI**
-   - Add to EPG management page or remove API
+7. **Add `APScheduler` for job scheduling** 🟡 RECOMMENDED
+   - Replace 562-line custom scheduler
+   - Adds monitoring, persistence, distributed support
+   - Effort: 4-6 hours, Medium Risk
+   - See [EXTERNAL_LIBRARY_RECOMMENDATIONS.md#2-job-scheduling](EXTERNAL_LIBRARY_RECOMMENDATIONS.md#2-job-scheduling-replace-custom-scheduler-with-apscheduler)
 
-8. **Update PPV Documentation**
-   - Remove references to non-existent `PPVEventFilter` model
-   - Update docs referencing removed `ppv_filter_service.py`
-   - Document current Event-based approach
+8. **Add `tenacity` for centralized retry logic** 🟢 RECOMMENDED
+   - Consolidate retry patterns from 3+ locations
+   - Eliminates hardcoded exponential backoff duplication
+   - Effort: 2 hours, Low Risk
+   - See [EXTERNAL_LIBRARY_RECOMMENDATIONS.md#7-request-retry-logic](EXTERNAL_LIBRARY_RECOMMENDATIONS.md#7-request-retry-logic-use-tenacity)
 
-### Low Priority
+9. **Add `dynaconf` for configuration management** 🟡 RECOMMENDED
+   - Unify config sources (env, DB tables, TOML file)
+   - Type-safe config access with validation
+   - Effort: 3-4 hours, Low-Medium Risk
+   - See [EXTERNAL_LIBRARY_RECOMMENDATIONS.md#5-configuration-management](EXTERNAL_LIBRARY_RECOMMENDATIONS.md#5-configuration-management-consolidate-key-value-tables-with-dynaconf)
 
-9. **Add Status Badges to Docs**
-   - ✅ Implemented
-   - ⚠️ Partial
-   - 🔲 Planned
-   - ❌ Deprecated
+### Medium Priority (Code Quality)
 
-10. **Consolidate Test Files**
+10. ~~**Centralize PPV Constants**~~ ✅ **MOSTLY RESOLVED**
+    - `ppv_filter_service.py` removed, patterns now in fewer files
+
+11. **Complete Channel Links UI**
+    - Either add UI for time-shifted channels or remove API
+    - Model `ChannelLink` is orphaned (no UI exposure)
+
+12. **Complete EPG Name Mappings UI**
+    - Add to EPG management page or remove API
+
+13. **Update PPV Documentation**
+    - Remove references to non-existent `PPVEventFilter` model
+    - Update docs referencing removed `ppv_filter_service.py`
+    - Document current Event-based approach
+
+### Low Priority (Nice-to-Have)
+
+14. **Add Status Badges to Docs**
+    - ✅ Implemented
+    - ⚠️ Partial
+    - 🔲 Planned
+    - ❌ Deprecated
+
+15. **Consolidate Test Files**
     - Multiple files test same functionality (`test_epg_comprehensive.py`, `test_epg_routes_comprehensive.py`, `test_coverage_boost.py`)
 
 ---

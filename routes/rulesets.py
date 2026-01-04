@@ -36,19 +36,19 @@ def get_rulesets():
     """Get all rulesets with assigned accounts"""
     rulesets = RuleSet.query.all()
 
-    # Get all account assignments in one query
+    # Get all account assignments in one query with priorities
     assignments = (
-        db.session.query(AccountRuleSet.ruleset_id, Account.id, Account.name)
+        db.session.query(AccountRuleSet.ruleset_id, Account.id, Account.name, AccountRuleSet.priority)
         .join(Account, Account.id == AccountRuleSet.account_id)
         .all()
     )
 
-    # Build a map of ruleset_id -> list of assigned accounts
+    # Build a map of ruleset_id -> list of assigned accounts with priorities
     ruleset_accounts = {}
-    for ruleset_id, account_id, account_name in assignments:
+    for ruleset_id, account_id, account_name, priority in assignments:
         if ruleset_id not in ruleset_accounts:
             ruleset_accounts[ruleset_id] = []
-        ruleset_accounts[ruleset_id].append({"id": account_id, "name": account_name})
+        ruleset_accounts[ruleset_id].append({"id": account_id, "name": account_name, "priority": priority})
 
     return jsonify(
         [

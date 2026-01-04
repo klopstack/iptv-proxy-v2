@@ -2,8 +2,7 @@
 
 {% block title %}Stream Player - IPTV Proxy{% endblock %}
 
-{% block head %}
-<script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.js"></script>
+{% block extra_css %}
 <style>
     #videoContainer {
         width: 100%;
@@ -80,8 +79,9 @@
                             <span class="visually-hidden">Loading...</span>
                         </div>
                         <p class="mt-2">Loading stream...</p>
+                        <p class="text-muted small">Stream will start muted - click the unmute button to enable audio</p>
                     </div>
-                    <video id="videoPlayer" controls autoplay style="display: none;"></video>
+                    <video id="videoPlayer" controls autoplay muted style="display: none;"></video>
                     <div id="playerInfo" class="player-info" style="display: none;">
                         <div id="statsDisplay"></div>
                     </div>
@@ -153,7 +153,10 @@
 </div>
 
 <div id="playerMetadata" data-account-id="{{ account_id }}" data-stream-id="{{ stream_id }}"></div>
+{% endblock %}
 
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/mpegts.min.js') }}"></script>
 <script>
 /* global mpegts */
 let player = null;
@@ -162,7 +165,8 @@ let showStats = false;
 const metadataEl = document.getElementById("playerMetadata");
 const accountId = metadataEl.dataset.accountId;
 const streamId = metadataEl.dataset.streamId;
-const streamUrl = `/stream/${accountId}/${streamId}.ts`;
+// mpegts.js requires absolute URLs for worker threads
+const streamUrl = `${window.location.protocol}//${window.location.host}/stream/${accountId}/${streamId}.ts`;
 
 function initPlayer() {
     console.log("Initializing mpegts.js player for:", streamUrl);
@@ -187,11 +191,31 @@ function initPlayer() {
     }, {
         enableWorker: true,
         enableStashBuffer: true,
-        stashInitialSize: 128,
-        liveBufferLatencyChasing: true,
-        liveBufferLatencyMaxLatency: 3,
-        liveBufferLatencyMinRemain: 0.5,
-        autoCleanupSourceBuffer: true
+        stashInitialSize: 384,  // Increased from 128KB for better buffering
+        
+        // Disable aggressive latency chasing to prevent seeking/skipping
+        liveBufferLatencyChasing: false,
+        
+        // More relaxed buffer settings for stability
+        liveBufferLatencyMaxLatency: 10,  // Increased from 3s
+        liveBufferLatencyMinRemain: 1.5,  // Increased from 0.5s
+        
+        // Fix audio timestamp gaps automatically
+        fixAudioTimestampGap: true,
+        
+        // Auto cleanup but with larger threshold
+        autoCleanupSourceBuffer: true,
+        autoCleanupMaxBackwardDuration: 10,
+        autoCleanupMinBackwardDuration: 5,
+        
+        // Increase segment fetch retry
+        lazyLoad: false,
+        lazyLoadMaxDuration: 3 * 60,
+        lazyLoadRecoverDuration: 30,
+        
+        // Disable stuck detection that causes unwanted seeks
+        enableStashBuffer: true,
+        stashInitialSize: 384
     });
     
     player.attachMediaElement(videoElement);
@@ -225,6 +249,13 @@ function initPlayer() {
         console.log("Video metadata loaded");
         document.getElementById("loadingMessage").style.display = "none";
         videoElement.style.display = "block";
+        
+        // Try to unmute after a short delay if playback started successfully
+        setTimeout(() => {
+            if (!videoElement.paused) {
+                videoElement.muted = false;
+            }
+        }, 1000);
     });
     
     videoElement.addEventListener('error', (e) => {

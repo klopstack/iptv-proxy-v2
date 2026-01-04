@@ -2,19 +2,23 @@
 
 ⚠️ **Note:** This is an actively evolving project. Patterns and architecture may change as requirements become clearer. Use these instructions as a current snapshot, not rigid rules.
 
+## Quick Reference
+
+📋 **Read First**: See [docs/ARCHITECTURE_OVERVIEW.md](../docs/ARCHITECTURE_OVERVIEW.md) for complete system design
+
+💡 **Library Opportunities**: See [docs/EXTERNAL_LIBRARY_RECOMMENDATIONS.md](../docs/EXTERNAL_LIBRARY_RECOMMENDATIONS.md) for ways to reduce code complexity and testing burden
+
 ## Architecture Overview
 
 Flask-based IPTV proxy that sits between Xtream Codes API services and clients, adding tag extraction, advanced filtering, EPG management, and channel health monitoring.
 
 **Current Structure:**
-- `app.py`: Clean entry point (~150 lines) with blueprint registration and scheduler setup
-- `routes/`: Flask blueprints organized by feature (20+ blueprints)
+- `app.py`: Clean entry point (177 lines) with blueprint registration and scheduler setup
+- `routes/`: Flask blueprints organized by feature (17 blueprints)
 - `routes/epg/`: Decomposed EPG routes (sources, channels, match_rules, schedules_direct, xmltv)
-- `models.py`: SQLAlchemy models (~2000 lines, 40+ models)
-- `services/`: Business logic services (~28 files covering IPTV, caching, EPG, PPV, etc.)
+- `models.py`: SQLAlchemy models (2,063 lines, 41 models)
+- `services/`: Business logic services (29 files, ~18,500 lines covering IPTV, caching, EPG, PPV, etc.)
 - `templates/`: Web UI built with Jinja2 templates
-
-⚠️ **Note**: `routes/epg.py` is DEAD CODE - not registered. Use `routes/epg/*.py` instead.
 
 **Data Flow:**
 1. Users add IPTV accounts and configure filters via web UI
@@ -29,14 +33,18 @@ Flask-based IPTV proxy that sits between Xtream Codes API services and clients, 
 - `Account` ↔ many `EpgMatchRuleSet` through `AccountEpgMatchRuleSet`
 - `RuleSet` → many `TagRule` (cascade delete, sorted by priority)
 - `EpgMatchRuleSet` → many `EpgMatchRule` (cascade delete, sorted by priority)
-- `Channel` → `Category`, many `ChannelTag`, `ChannelEpgMapping`, `ChannelHealthStatus`
+- `Channel` → `Category`, many `ChannelTag`, `ChannelEpgMapping`, `ChannelHealthStatus`, `EventChannelLink`
 - `EpgSource` → many `EpgChannel`, `SdLineup` → many `SdStation`
 - `Tag` ↔ many channels via `ChannelTag` (composite key: account_id + stream_id + tag_id)
+- `Event` ↔ many channels via `EventChannelLink` (PPV event tracking from TheSportsDB)
 
-**JSON Storage Pattern:** Several models store arrays as JSON text fields. Always use `json.loads()` when reading and `json.dumps()` when writing:
-- `PlaylistConfig`: include_accounts, exclude_accounts, include_tags, exclude_tags
-- `EpgMatchRule`: required_tags, excluded_tags, country_codes, epg_source_ids
-- `EpgChannel`: display_names_json, matched_channels_json
+**⚠️ IMPORTANT - JSON Field Handling:** Several models store arrays as JSON text fields.
+- **Status**: See recommendation in [docs/EXTERNAL_LIBRARY_RECOMMENDATIONS.md#3-json-field-serialization](../docs/EXTERNAL_LIBRARY_RECOMMENDATIONS.md#3-json-field-serialization-use-sqlalchemy-json-or-pydantic)
+- **Current pattern**: Always use `json.loads()` when reading and `json.dumps()` when writing:
+  - `PlaylistConfig`: include_accounts, exclude_accounts, include_tags, exclude_tags
+  - `EpgMatchRule`: required_tags, excluded_tags, country_codes, epg_source_ids
+  - `EpgChannel`: display_names_json, matched_channels_json
+- **Future**: Converting to native SQLAlchemy JSON type will eliminate all json.loads()/json.dumps() calls
 
 ## Tag Extraction System (Core Feature)
 
@@ -262,3 +270,21 @@ Since patterns are still emerging, feel free to propose refactorings or architec
 - Are there tests to prevent regressions?
 - Does it maintain backward compatibility with existing data?
 - **Have you run `make lint` and `make test`?** (Required!)
+
+## External Library Opportunities
+
+**NEW**: A comprehensive analysis has been completed identifying 11 opportunities to reduce code complexity and testing burden using external libraries. See [docs/EXTERNAL_LIBRARY_RECOMMENDATIONS.md](../docs/EXTERNAL_LIBRARY_RECOMMENDATIONS.md) for:
+
+- **High-impact, low-effort** recommendations (1-2 hours each):
+  - `cachetools` - Replace custom TTL cache service (60 lines saved)
+  - `sqlalchemy-json` - Eliminate JSON serialization boilerplate (120-160 lines saved)
+  - `tenacity` - Consolidate retry logic patterns (40-50 lines saved)
+
+- **High-impact, medium-effort** recommendations (4-6 hours each):
+  - `APScheduler` - Replace custom scheduler (300-400 lines saved)
+  - `dynaconf` - Centralize configuration management (~200 lines saved)
+
+- **Well-designed, keep as-is**:
+  - `stream_multiplexer.py` - Specialized implementation, no suitable general library
+
+When proposing library changes, reference the analysis document and evaluate against the decision framework provided there.

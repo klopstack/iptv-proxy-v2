@@ -115,8 +115,9 @@
                         <textarea class="form-control" id="ruleset-description" rows="2"></textarea>
                     </div>
                     <div class="mb-3">
-                        <label for="ruleset-priority" class="form-label">Priority (lower = higher priority)</label>
+                        <label for="ruleset-priority" class="form-label">Default Priority</label>
                         <input type="number" class="form-control" id="ruleset-priority" value="100">
+                        <small class="form-text text-muted">Default value only. Actual execution priority is set per-account in the Assign modal.</small>
                     </div>
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="ruleset-enabled" checked>
@@ -421,8 +422,8 @@ async function loadRulesets(preserveExpanded = false) {
                 // Show assigned accounts
                 let assignedAccountsBadges = '';
                 if (ruleset.assigned_accounts && ruleset.assigned_accounts.length > 0) {
-                    const accountNames = ruleset.assigned_accounts.map(a => a.name).join(', ');
-                    assignedAccountsBadges = `<span class="badge bg-info ms-2" title="Assigned to: ${accountNames}"><i class="bi bi-person-check"></i> ${ruleset.assigned_accounts.length} account${ruleset.assigned_accounts.length > 1 ? 's' : ''}</span>`;
+                    const accountDetails = ruleset.assigned_accounts.map(a => `${a.name} (priority: ${a.priority})`).join(', ');
+                    assignedAccountsBadges = `<span class="badge bg-info ms-2" title="Assigned to: ${accountDetails}"><i class="bi bi-person-check"></i> ${ruleset.assigned_accounts.length} account${ruleset.assigned_accounts.length > 1 ? 's' : ''}</span>`;
                 }
                 
                 html += `
@@ -430,7 +431,7 @@ async function loadRulesets(preserveExpanded = false) {
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="mb-0">
                                 ${ruleset.name} ${defaultBadge}${assignedAccountsBadges}
-                                <small class="text-muted ms-2">(${ruleset.rule_count} rules, priority: ${ruleset.priority})</small>
+                                <small class="text-muted ms-2">(${ruleset.rule_count} rules)</small>
                             </h5>
                             <div>
                                 ${status}
@@ -943,19 +944,51 @@ async function showAssignRuleset(rulesetId) {
     for (const account of accounts) {
         const response = await fetch(`/api/accounts/${account.id}/rulesets`);
         const accountRulesets = await response.json();
-        const isAssigned = accountRulesets.some(r => r.id === rulesetId);
+        const assignment = accountRulesets.find(r => r.id === rulesetId);
+        const isAssigned = !!assignment;
+        const currentPriority = assignment ? assignment.priority : 100;
         
         html += `
-            <div class="list-group-item d-flex justify-content-between align-items-center">
-                <span>${account.name}</span>
-                ${isAssigned ? 
-                    `<button class="btn btn-sm btn-danger" data-action="unassign" data-account-id="${account.id}" data-ruleset-id="${rulesetId}">
-                        <i class="bi bi-x-circle"></i> Unassign
-                    </button>` :
-                    `<button class="btn btn-sm btn-success" data-action="assign" data-account-id="${account.id}" data-ruleset-id="${rulesetId}">
-                        <i class="bi bi-plus-circle"></i> Assign
-                    </button>`
-                }
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>${account.name}</span>
+                    <div class="d-flex align-items-center gap-2">
+                        ${isAssigned ? 
+                            `<div class="d-flex align-items-center gap-2">
+                                <label class="mb-0 small">Priority:</label>
+                                <input type="number" class="form-control form-control-sm" 
+                                       style="width: 80px" 
+                                       value="${currentPriority}" 
+                                       id="priority-${account.id}-${rulesetId}"
+                                       title="Lower priority runs first">
+                                <button class="btn btn-sm btn-primary" 
+                                        onclick="updateRulesetPriority(event, ${account.id}, ${rulesetId})">
+                                    <i class="bi bi-check"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger" 
+                                        data-action="unassign" 
+                                        data-account-id="${account.id}" 
+                                        data-ruleset-id="${rulesetId}">
+                                    <i class="bi bi-x-circle"></i> Unassign
+                                </button>
+                            </div>` :
+                            `<div class="d-flex align-items-center gap-2">
+                                <label class="mb-0 small">Priority:</label>
+                                <input type="number" class="form-control form-control-sm" 
+                                       style="width: 80px" 
+                                       value="100" 
+                                       id="priority-${account.id}-${rulesetId}"
+                                       title="Lower priority runs first">
+                                <button class="btn btn-sm btn-success" 
+                                        data-action="assign" 
+                                        data-account-id="${account.id}" 
+                                        data-ruleset-id="${rulesetId}">
+                                    <i class="bi bi-plus-circle"></i> Assign
+                                </button>
+                            </div>`
+                        }
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -973,14 +1006,19 @@ async function showAssignRuleset(rulesetId) {
 
 async function assignRuleset(accountId, rulesetId) {
     try {
+        // Get priority from input field
+        const priorityInput = document.getElementById(`priority-${accountId}-${rulesetId}`);
+        const priority = priorityInput ? parseInt(priorityInput.value) : 100;
+        
         const response = await fetch(`/api/accounts/${accountId}/rulesets`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ruleset_id: rulesetId, priority: 100 })
+            body: JSON.stringify({ ruleset_id: rulesetId, priority: priority })
         });
         
         if (response.ok) {
             await refreshAssignRuleset(rulesetId); // Just refresh content, don't re-show modal
+            await loadRulesets(true); // Refresh rulesets display to show updated account badge
         }
     } catch (error) {
         alert('Error assigning ruleset: ' + error.message);
@@ -995,9 +1033,43 @@ async function unassignRuleset(accountId, rulesetId) {
         
         if (response.ok) {
             await refreshAssignRuleset(rulesetId); // Just refresh content, don't re-show modal
+            await loadRulesets(true); // Refresh rulesets display to show updated account badge
         }
     } catch (error) {
         alert('Error unassigning ruleset: ' + error.message);
+    }
+}
+
+async function updateRulesetPriority(event, accountId, rulesetId) {
+    try {
+        // Get priority from input field
+        const priorityInput = document.getElementById(`priority-${accountId}-${rulesetId}`);
+        const priority = priorityInput ? parseInt(priorityInput.value) : 100;
+        
+        // Re-assign with new priority (API will update if already exists)
+        const response = await fetch(`/api/accounts/${accountId}/rulesets`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ruleset_id: rulesetId, priority: priority })
+        });
+        
+        if (response.ok) {
+            // Show brief success feedback
+            const btn = event.target.closest('button');
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check-circle"></i>';
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-success');
+            setTimeout(() => {
+                btn.innerHTML = originalHtml;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-primary');
+            }, 1000);
+            
+            await loadRulesets(true); // Refresh rulesets display to show any changes
+        }
+    } catch (error) {
+        alert('Error updating priority: ' + error.message);
     }
 }
 
@@ -1008,19 +1080,51 @@ async function refreshAssignRuleset(rulesetId) {
     for (const account of accounts) {
         const response = await fetch(`/api/accounts/${account.id}/rulesets`);
         const accountRulesets = await response.json();
-        const isAssigned = accountRulesets.some(r => r.id === rulesetId);
+        const assignment = accountRulesets.find(r => r.id === rulesetId);
+        const isAssigned = !!assignment;
+        const currentPriority = assignment ? assignment.priority : 100;
         
         html += `
-            <div class="list-group-item d-flex justify-content-between align-items-center">
-                <span>${account.name}</span>
-                ${isAssigned ? 
-                    `<button class="btn btn-sm btn-danger" data-action="unassign" data-account-id="${account.id}" data-ruleset-id="${rulesetId}">
-                        <i class="bi bi-x-circle"></i> Unassign
-                    </button>` :
-                    `<button class="btn btn-sm btn-success" data-action="assign" data-account-id="${account.id}" data-ruleset-id="${rulesetId}">
-                        <i class="bi bi-plus-circle"></i> Assign
-                    </button>`
-                }
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>${account.name}</span>
+                    <div class="d-flex align-items-center gap-2">
+                        ${isAssigned ? 
+                            `<div class="d-flex align-items-center gap-2">
+                                <label class="mb-0 small">Priority:</label>
+                                <input type="number" class="form-control form-control-sm" 
+                                       style="width: 80px" 
+                                       value="${currentPriority}" 
+                                       id="priority-${account.id}-${rulesetId}"
+                                       title="Lower priority runs first">
+                                <button class="btn btn-sm btn-primary" 
+                                        onclick="updateRulesetPriority(event, ${account.id}, ${rulesetId})">
+                                    <i class="bi bi-check"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger" 
+                                        data-action="unassign" 
+                                        data-account-id="${account.id}" 
+                                        data-ruleset-id="${rulesetId}">
+                                    <i class="bi bi-x-circle"></i> Unassign
+                                </button>
+                            </div>` :
+                            `<div class="d-flex align-items-center gap-2">
+                                <label class="mb-0 small">Priority:</label>
+                                <input type="number" class="form-control form-control-sm" 
+                                       style="width: 80px" 
+                                       value="100" 
+                                       id="priority-${account.id}-${rulesetId}"
+                                       title="Lower priority runs first">
+                                <button class="btn btn-sm btn-success" 
+                                        data-action="assign" 
+                                        data-account-id="${account.id}" 
+                                        data-ruleset-id="${rulesetId}">
+                                    <i class="bi bi-plus-circle"></i> Assign
+                                </button>
+                            </div>`
+                        }
+                    </div>
+                </div>
             </div>
         `;
     }

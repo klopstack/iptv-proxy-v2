@@ -287,6 +287,11 @@ function renderCategoryCard(cat, activeFilters = []) {
                     <h6 class="card-title text-truncate" title="${escapeHtml(cat.cleaned_name || cat.category_name)}">
                         ${escapeHtml(cat.cleaned_name || cat.category_name)}
                     </h6>
+                    ${cat.cleaned_name && cat.category_name !== cat.cleaned_name ? `
+                    <small class="text-muted d-block mb-2" style="font-size: 0.75rem;" title="Original category name">
+                        <i class="bi bi-arrow-return-right"></i> ${escapeHtml(cat.category_name)}
+                    </small>
+                    ` : ''}
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <small class="text-muted">
                             <span class="text-success">${cat.visible_count}</span> visible / 
