@@ -17,6 +17,7 @@ let rulesetModal;
 let ruleModal;
 let exclusionModal;
 let assignModal;
+let nameMappingModal;
 
 function escapeHtml(text) {
     const div = document.createElement('div');
@@ -76,6 +77,7 @@ function initializeBootstrapModals() {
         if (document.getElementById('ruleModal')) ruleModal = new bootstrap.Modal(document.getElementById('ruleModal'));
         if (document.getElementById('exclusionModal')) exclusionModal = new bootstrap.Modal(document.getElementById('exclusionModal'));
         if (document.getElementById('assignModal')) assignModal = new bootstrap.Modal(document.getElementById('assignModal'));
+        if (document.getElementById('nameMappingModal')) nameMappingModal = new bootstrap.Modal(document.getElementById('nameMappingModal'));
     } catch (error) {
         console.warn('Some modal elements were not found:', error.message);
     }

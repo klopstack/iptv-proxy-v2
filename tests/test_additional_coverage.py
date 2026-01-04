@@ -205,7 +205,7 @@ class TestTagExtractionEdgeCases:
         """Test extraction with no rules"""
         from services.tag_service import TagService
 
-        tags, cleaned = TagService.extract_tags("ESPN HD", "Sports", [])
+        tags, cleaned, _ = TagService.extract_tags("ESPN HD", "Sports", [])
         assert tags == set()
         assert cleaned == "ESPN HD"
 
@@ -231,7 +231,7 @@ class TestTagExtractionEdgeCases:
 
             from services.tag_service import TagService
 
-            tags, cleaned = TagService.extract_tags("ESPN (WABC)", "Sports", [rule])
+            tags, cleaned, _ = TagService.extract_tags("ESPN (WABC)", "Sports", [rule])
             assert "WABC" in tags
             assert "(" not in cleaned
 
@@ -257,7 +257,7 @@ class TestTagExtractionEdgeCases:
 
             from services.tag_service import TagService
 
-            tags, cleaned = TagService.extract_tags("US| ESPN", "Sports", [rule])
+            tags, cleaned, _ = TagService.extract_tags("US| ESPN", "Sports", [rule])
             assert "US" in tags
 
     def test_extract_tags_capture_no_group(self, app):
@@ -284,7 +284,7 @@ class TestTagExtractionEdgeCases:
             from services.tag_service import TagService
 
             # Should not crash, just log warning
-            tags, cleaned = TagService.extract_tags("ESPN HD", "Sports", [rule])
+            tags, cleaned, _ = TagService.extract_tags("ESPN HD", "Sports", [rule])
             # No tags should be captured since there's no group
             assert "__CAPTURE__" not in tags
 

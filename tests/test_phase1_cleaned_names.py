@@ -91,7 +91,7 @@ def test_sync_computes_cleaned_names(app, test_account, test_ruleset):
 
         # Manually create channel to simulate sync
         tag_rules = TagService.get_rules_for_account(test_account)
-        _, cleaned_name = TagService.extract_tags(channel_data["name"], "Movies", tag_rules)
+        _, cleaned_name, _ = TagService.extract_tags(channel_data["name"], "Movies", tag_rules)
 
         channel = Channel(
             account_id=test_account.id,

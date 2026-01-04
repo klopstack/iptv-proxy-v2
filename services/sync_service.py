@@ -188,6 +188,14 @@ class ChannelSyncService:
         """Sync categories for an account"""
         now = datetime.now(timezone.utc)
 
+        # Get account for tag rules
+        account = db.session.get(Account, account_id)
+        if not account:
+            return stats
+
+        # Get tag rules for name cleaning
+        tag_rules = TagService.get_rules_for_account(account)
+
         # Build lookup of existing categories
         existing = {(cat.category_id): cat for cat in Category.query.filter_by(account_id=account_id).all()}
 
@@ -203,11 +211,21 @@ class ChannelSyncService:
 
             is_ppv = is_ppv_category(category_name)
 
+            # Compute cleaned name using tag rules
+            # We pass empty string for channel_name since we're only processing the category
+            _, _, cleaned_category_name = TagService.extract_tags("", category_name, tag_rules)
+
             if category_id in existing:
                 # Update existing
                 cat = existing[category_id]
+                changed = False
                 if cat.category_name != category_name:
                     cat.category_name = category_name
+                    changed = True
+                if cat.cleaned_name != cleaned_category_name:
+                    cat.cleaned_name = cleaned_category_name
+                    changed = True
+                if changed:
                     cat.updated_at = now
                     stats["categories_updated"] += 1
                 cat.last_seen = now
@@ -219,6 +237,7 @@ class ChannelSyncService:
                     account_id=account_id,
                     category_id=category_id,
                     category_name=category_name,
+                    cleaned_name=cleaned_category_name,
                     last_seen=now,
                     is_active=True,
                     is_ppv=is_ppv,
@@ -273,7 +292,7 @@ class ChannelSyncService:
             is_ppv = is_ppv_category(category_name) if category_name else False
 
             # Compute cleaned name using tag rules
-            _, cleaned_name = TagService.extract_tags(name, category_name, tag_rules)
+            _, cleaned_name, _ = TagService.extract_tags(name, category_name, tag_rules)
 
             if stream_id in existing:
                 # Update existing

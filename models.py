@@ -273,6 +273,7 @@ class Category(db.Model):  # type: ignore[name-defined]
     account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False, index=True)
     category_id = db.Column(db.String(50), nullable=False)  # External category ID from provider
     category_name = db.Column(db.String(200), nullable=False)
+    cleaned_name = db.Column(db.String(200))  # Processed name after tag extraction
     parent_id = db.Column(db.Integer, nullable=True)
 
     # Sync metadata

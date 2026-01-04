@@ -591,12 +591,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         for (const cat of categories) {
                             html += `
-                                <tr class="category-row" data-category-name="${(cat.category_name || '').toLowerCase()}">
+                                <tr class="category-row" data-category-name="${((cat.cleaned_name || cat.category_name) || '').toLowerCase()}">
                                     <td>${cat.category_id || 'N/A'}</td>
-                                    <td>${cat.category_name || 'Unnamed'}</td>
+                                    <td>${cat.cleaned_name || cat.category_name || 'Unnamed'}</td>
                                     <td class="text-end">
                                         <button class="btn btn-sm btn-outline-secondary" 
-                                                onclick="addCategoryFilter(${accountId}, '${cat.category_name}')"
+                                                onclick="addCategoryFilter(${accountId}, '${cat.cleaned_name || cat.category_name}')"
                                                 title="Add as filter">
                                             <i class="bi bi-funnel-fill"></i>
                                         </button>

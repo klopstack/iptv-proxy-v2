@@ -758,7 +758,7 @@ function renderChannels(channels) {
         const epgInfo = channel.epg_info 
             ? `<span class="badge bg-success" title="${escapeHtml(channel.epg_info.display_name || '')}"><i class="bi bi-calendar-check"></i> ${channel.epg_info.program_count || 0}</span>`
             : '<span class="badge bg-secondary"><i class="bi bi-calendar-x"></i> None</span>';
-        const categoryName = channel.category ? escapeHtml(channel.category.category_name) : '-';
+        const categoryName = channel.category ? escapeHtml(channel.category.cleaned_name || channel.category.category_name) : '-';
         const channelNameEscaped = escapeHtml(channel.name).replace(/'/g, "\\'");
         
         return `

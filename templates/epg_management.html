@@ -230,6 +230,12 @@
                                 </div>
                             </div>
                             <div class="tab-pane fade" id="exclusions-content">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="mb-0">Exclusion Patterns</h6>
+                                    <button class="btn btn-sm btn-success" id="create-exclusion-btn">
+                                        <i class="bi bi-plus"></i> Add Exclusion
+                                    </button>
+                                </div>
                                 <div id="exclusions-list">
                                     <div class="text-center py-4 text-muted">
                                         Click on Exclusions tab to load...
@@ -237,6 +243,12 @@
                                 </div>
                             </div>
                             <div class="tab-pane fade" id="name-mappings-content">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="mb-0">Channel Name Mappings</h6>
+                                    <button class="btn btn-sm btn-success" id="create-name-mapping-btn">
+                                        <i class="bi bi-plus"></i> Add Name Mapping
+                                    </button>
+                                </div>
                                 <div id="name-mappings-list">
                                     <div class="text-center py-4 text-muted">
                                         Click on Name Mappings tab to load...
@@ -370,6 +382,429 @@
     </div>
 </div>
 
+<!-- ============================================================================ -->
+<!-- Modals for EPG Match Rules -->
+<!-- ============================================================================ -->
+
+<!-- Create/Edit Ruleset Modal -->
+<div class="modal fade" id="rulesetModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rulesetModalTitle">New EPG Match Ruleset</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="rulesetForm">
+                    <input type="hidden" id="ruleset-id">
+                    <div class="mb-3">
+                        <label for="ruleset-name" class="form-label">Name *</label>
+                        <input type="text" class="form-control" id="ruleset-name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ruleset-description" class="form-label">Description</label>
+                        <textarea class="form-control" id="ruleset-description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ruleset-priority" class="form-label">Priority (lower = higher priority)</label>
+                        <input type="number" class="form-control" id="ruleset-priority" value="100">
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="ruleset-is-default" checked>
+                        <label class="form-check-label" for="ruleset-is-default">Default (used when no specific ruleset is assigned)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="ruleset-enabled" checked>
+                        <label class="form-check-label" for="ruleset-enabled">Enabled</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-ruleset-btn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit EPG Match Rule Modal -->
+<div class="modal fade" id="ruleModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="ruleModalTitle">New EPG Match Rule</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="ruleForm">
+                    <input type="hidden" id="rule-id">
+                    <input type="hidden" id="rule-ruleset-id">
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-name" class="form-label">Rule Name *</label>
+                            <input type="text" class="form-control" id="rule-name" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-priority" class="form-label">Priority</label>
+                            <input type="number" class="form-control" id="rule-priority" value="100">
+                            <small class="form-text text-muted">Lower = processed first</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="rule-description" class="form-label">Description</label>
+                        <textarea class="form-control" id="rule-description" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-match-type" class="form-label">Match Type *</label>
+                            <select class="form-select" id="rule-match-type" required>
+                                <option value="provider_id">Provider EPG ID</option>
+                                <option value="callsign">Callsign</option>
+                                <option value="fcc_lookup">FCC Facility Lookup</option>
+                                <option value="exact_name">Exact Name Match</option>
+                                <option value="fuzzy_name">Fuzzy Name Match</option>
+                                <option value="regex">Regex Pattern</option>
+                                <option value="network_fallback">Network Fallback</option>
+                                <option value="category_pattern">Category Pattern</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-source" class="form-label">Source Field *</label>
+                            <select class="form-select" id="rule-source" required>
+                                <option value="cleaned_name">Cleaned Name (recommended)</option>
+                                <option value="original_name">Original Name</option>
+                                <option value="category_name">Category Name</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-action" class="form-label">Action *</label>
+                            <select class="form-select" id="rule-action" required>
+                                <option value="map_epg">Map to EPG</option>
+                                <option value="use_fallback">Use Fallback EPG ID</option>
+                                <option value="skip">Skip (no EPG)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3" id="confidence-group">
+                            <label for="rule-min-confidence" class="form-label">Min Confidence</label>
+                            <input type="number" class="form-control" id="rule-min-confidence" value="0.75" min="0" max="1" step="0.05">
+                            <small class="form-text text-muted">For fuzzy matching (0.0 - 1.0)</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="rule-pattern" class="form-label">Pattern</label>
+                        <input type="text" class="form-control" id="rule-pattern">
+                        <small class="form-text text-muted">For regex, exact, or fuzzy matching</small>
+                    </div>
+                    
+                    <div class="mb-3" id="fallback-group">
+                        <label for="rule-fallback-epg-id" class="form-label">Fallback EPG ID</label>
+                        <input type="text" class="form-control" id="rule-fallback-epg-id">
+                        <small class="form-text text-muted">EPG channel ID to use for fallback action</small>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-category-pattern" class="form-label">Category Pattern (include)</label>
+                            <input type="text" class="form-control" id="rule-category-pattern">
+                            <small class="form-text text-muted">Only process channels in matching categories</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-category-exclude-pattern" class="form-label">Category Pattern (exclude)</label>
+                            <input type="text" class="form-control" id="rule-category-exclude-pattern">
+                            <small class="form-text text-muted">Skip channels in matching categories</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-country-codes" class="form-label">Country Codes</label>
+                            <input type="text" class="form-control" id="rule-country-codes" placeholder="US, CA, GB">
+                            <small class="form-text text-muted">Comma-separated (e.g., US, CA)</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="rule-time-offset" class="form-label">Time Offset (hours)</label>
+                            <input type="number" class="form-control" id="rule-time-offset" value="0">
+                            <small class="form-text text-muted">Adjust EPG times (e.g., +1, -5)</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="rule-enabled" checked>
+                                <label class="form-check-label" for="rule-enabled">Enabled</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="rule-stop-on-match" checked>
+                                <label class="form-check-label" for="rule-stop-on-match">Stop on Match</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Preview Section -->
+                    <div class="mb-3">
+                        <label class="form-label">Preview (optional)</label>
+                        <div class="input-group mb-2">
+                            <select class="form-select" id="rule-account-filter">
+                                <option value="">All accounts</option>
+                            </select>
+                            <button type="button" class="btn btn-outline-secondary" id="preview-rule-btn">
+                                <i class="bi bi-eye"></i> Preview
+                            </button>
+                        </div>
+                        <div id="rule-preview-results" style="display: none;">
+                            <div id="rule-preview-loading" style="display: none;" class="text-center py-2">
+                                <div class="spinner-border spinner-border-sm"></div>
+                            </div>
+                            <div id="rule-preview-error" class="alert alert-danger" style="display: none;"></div>
+                            <div id="rule-preview-content" style="display: none;">
+                                <p class="mb-1"><strong>Matches: <span id="rule-preview-count">0</span></strong> <span id="rule-preview-more" style="display: none;">(showing first 100)</span></p>
+                                <div id="rule-preview-list" style="max-height: 200px; overflow-y: auto;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-rule-btn">Save Rule</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit Exclusion Pattern Modal -->
+<div class="modal fade" id="exclusionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exclusionModalTitle">New Exclusion Pattern</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="exclusionForm">
+                    <input type="hidden" id="exclusion-id">
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="exclusion-name" class="form-label">Name *</label>
+                            <input type="text" class="form-control" id="exclusion-name" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="exclusion-priority" class="form-label">Priority</label>
+                            <input type="number" class="form-control" id="exclusion-priority" value="100">
+                            <small class="form-text text-muted">Lower = processed first</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="exclusion-description" class="form-label">Description</label>
+                        <textarea class="form-control" id="exclusion-description" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="exclusion-pattern-type" class="form-label">Pattern Type *</label>
+                            <select class="form-select" id="exclusion-pattern-type" required>
+                                <option value="contains">Contains</option>
+                                <option value="prefix">Prefix</option>
+                                <option value="suffix">Suffix</option>
+                                <option value="regex">Regex</option>
+                                <option value="exact">Exact</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="exclusion-source-field" class="form-label">Source Field *</label>
+                            <select class="form-select" id="exclusion-source-field" required>
+                                <option value="cleaned_name">Cleaned Name</option>
+                                <option value="original_name">Original Name</option>
+                                <option value="category_name">Category Name</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="exclusion-pattern" class="form-label">Pattern *</label>
+                        <input type="text" class="form-control" id="exclusion-pattern" required>
+                        <small class="form-text text-muted">Pattern to match channels that should not get EPG</small>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="exclusion-case-sensitive">
+                        <label class="form-check-label" for="exclusion-case-sensitive">Case Sensitive</label>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="exclusion-enabled" checked>
+                        <label class="form-check-label" for="exclusion-enabled">Enabled</label>
+                    </div>
+                    
+                    <!-- Preview Section -->
+                    <div class="mb-3">
+                        <label class="form-label">Preview (optional)</label>
+                        <div class="input-group mb-2">
+                            <select class="form-select" id="exclusion-account-filter">
+                                <option value="">All accounts</option>
+                            </select>
+                            <button type="button" class="btn btn-outline-secondary" id="preview-exclusion-btn">
+                                <i class="bi bi-eye"></i> Preview
+                            </button>
+                        </div>
+                        <div id="exclusion-preview-results" style="display: none;">
+                            <div id="exclusion-preview-loading" style="display: none;" class="text-center py-2">
+                                <div class="spinner-border spinner-border-sm"></div>
+                            </div>
+                            <div id="exclusion-preview-error" class="alert alert-danger" style="display: none;"></div>
+                            <div id="exclusion-preview-content" style="display: none;">
+                                <p class="mb-1"><strong>Matches: <span id="exclusion-preview-count">0</span></strong> <span id="exclusion-preview-more" style="display: none;">(showing first 100)</span></p>
+                                <div id="exclusion-preview-list" style="max-height: 200px; overflow-y: auto;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-exclusion-btn">Save Exclusion</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assign Ruleset to Accounts Modal -->
+<div class="modal fade" id="assignModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Assign Ruleset to Accounts</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="assign-ruleset-id">
+                <div id="assign-accounts-list">
+                    <div class="text-center py-3">
+                        <div class="spinner-border spinner-border-sm"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Channel Name Mapping Modal -->
+<div class="modal fade" id="nameMappingModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="nameMappingModalTitle">New Channel Name Mapping</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="nameMappingForm">
+                    <input type="hidden" id="name-mapping-id">
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="name-mapping-name" class="form-label">Mapping Name *</label>
+                            <input type="text" class="form-control" id="name-mapping-name" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="name-mapping-priority" class="form-label">Priority</label>
+                            <input type="number" class="form-control" id="name-mapping-priority" value="100">
+                            <small class="form-text text-muted">Lower = higher priority</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="name-mapping-description" class="form-label">Description</label>
+                        <textarea class="form-control" id="name-mapping-description" rows="2" placeholder="e.g., Bally Sports → FanDuel rebranding"></textarea>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> <strong>How it works:</strong> Channel names matching the "Old Name" pattern will be transformed to use "New Name" for EPG matching. The original channel name in playlists remains unchanged.
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="name-mapping-old-name" class="form-label">Old Name Pattern *</label>
+                            <input type="text" class="form-control" id="name-mapping-old-name" required placeholder="e.g., BALLY SPORTS">
+                            <small class="form-text text-muted">Pattern to find in channel names</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="name-mapping-new-name" class="form-label">New Name *</label>
+                            <input type="text" class="form-control" id="name-mapping-new-name" required placeholder="e.g., FANDUEL SPORTS NETWORK">
+                            <small class="form-text text-muted">Replacement text for EPG matching</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="name-mapping-match-type" class="form-label">Match Type *</label>
+                            <select class="form-select" id="name-mapping-match-type" required>
+                                <option value="contains">Contains (anywhere in name)</option>
+                                <option value="exact">Exact Match</option>
+                                <option value="prefix">Prefix (starts with)</option>
+                                <option value="suffix">Suffix (ends with)</option>
+                                <option value="regex">Regular Expression</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="name-mapping-case-sensitive">
+                                <label class="form-check-label" for="name-mapping-case-sensitive">Case Sensitive</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="name-mapping-enabled" checked>
+                        <label class="form-check-label" for="name-mapping-enabled">Enabled</label>
+                    </div>
+                    
+                    <!-- Preview Section -->
+                    <div class="mb-3">
+                        <label class="form-label">Preview (optional)</label>
+                        <div class="input-group mb-2">
+                            <select class="form-select" id="name-mapping-account-filter">
+                                <option value="">All accounts</option>
+                            </select>
+                            <button type="button" class="btn btn-outline-secondary" id="preview-name-mapping-btn">
+                                <i class="bi bi-eye"></i> Preview
+                            </button>
+                        </div>
+                        <div id="name-mapping-preview-results" style="display: none;">
+                            <div id="name-mapping-preview-loading" style="display: none;" class="text-center py-2">
+                                <div class="spinner-border spinner-border-sm"></div>
+                            </div>
+                            <div id="name-mapping-preview-error" class="alert alert-danger" style="display: none;"></div>
+                            <div id="name-mapping-preview-content" style="display: none;">
+                                <p class="mb-1"><strong>Matches: <span id="name-mapping-preview-count">0</span></strong> <span id="name-mapping-preview-more" style="display: none;">(showing first 100)</span></p>
+                                <div id="name-mapping-preview-list" style="max-height: 200px; overflow-y: auto;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-name-mapping-btn">Save Mapping</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- EPG Management Scripts -->
 <script src="{{ url_for('static', filename='js/epg_common.js') }}"></script>
 <script src="{{ url_for('static', filename='js/epg_sources.js') }}"></script>
@@ -384,6 +819,7 @@
 <script src="{{ url_for('static', filename='js/match_rules_rulesets.js') }}"></script>
 <script src="{{ url_for('static', filename='js/match_rules_rules.js') }}"></script>
 <script src="{{ url_for('static', filename='js/match_rules_exclusions.js') }}"></script>
+<script src="{{ url_for('static', filename='js/match_rules_name_mappings.js') }}"></script>
 <script src="{{ url_for('static', filename='js/match_rules_reference.js') }}"></script>
 
 <script>
@@ -399,7 +835,9 @@
     showCreateExclusionModal, saveRuleset, saveRule, saveExclusion, 
     previewExclusionPattern, previewRulePattern, showRulesetRules, showAssignModal,
     editRuleset, deleteRuleset, duplicateRuleset, showCreateRuleModal, editRule,
-    deleteRule, editExclusion, deleteExclusion, toggleAssignment, updateRuleFormVisibility
+    deleteRule, editExclusion, deleteExclusion, toggleAssignment, updateRuleFormVisibility,
+    loadNameMappings, showCreateNameMappingModal, saveNameMapping, previewNameMapping,
+    editNameMapping, deleteNameMapping
 */
 
 // ============================================================================
@@ -517,11 +955,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Load match rules
     await Promise.all([
         loadRulesets(),
-        loadExclusions()
+        loadExclusions(),
+        loadNameMappings()
     ]);
     
     // Set up match rules tabs
-    addListener('exclusions-tab', 'shown.bs.tab', loadExclusions);
+    addListener('exclusions-subtab', 'shown.bs.tab', loadExclusions);
+    addListener('name-mappings-subtab', 'shown.bs.tab', loadNameMappings);
     addListener('reference-tab', 'shown.bs.tab', loadReference);
     
     // Set up button listeners
@@ -529,11 +969,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     addListener('create-default-ruleset-btn', 'click', createDefaultRuleset);
     addListener('create-default-exclusions-btn', 'click', createDefaultExclusions);
     addListener('create-exclusion-btn', 'click', showCreateExclusionModal);
+    addListener('create-name-mapping-btn', 'click', showCreateNameMappingModal);
     addListener('save-ruleset-btn', 'click', saveRuleset);
     addListener('save-rule-btn', 'click', saveRule);
     addListener('save-exclusion-btn', 'click', saveExclusion);
+    addListener('save-name-mapping-btn', 'click', saveNameMapping);
     addListener('preview-exclusion-btn', 'click', previewExclusionPattern);
     addListener('preview-rule-btn', 'click', previewRulePattern);
+    addListener('preview-name-mapping-btn', 'click', previewNameMapping);
     
     // Set up event delegation for dynamic buttons
     document.addEventListener('click', async (e) => {
@@ -572,6 +1015,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 break;
             case 'delete-exclusion':
                 await deleteExclusion(parseInt(target.dataset.exclusionId));
+                break;
+            case 'edit-name-mapping':
+                await editNameMapping(parseInt(target.dataset.mappingId));
+                break;
+            case 'delete-name-mapping':
+                await deleteNameMapping(parseInt(target.dataset.mappingId));
                 break;
             case 'toggle-assign':
                 await toggleAssignment(parseInt(target.dataset.accountId), target.dataset.assigned === 'true');

@@ -170,10 +170,13 @@ def test_tag_extraction():
         print(f"  Channel: {test['channel_name']}")
         print(f"  Category: {test['category_name']}")
 
-        tags, cleaned_name = TagService.extract_tags(test["channel_name"], test["category_name"], rules)
+        tags, cleaned_name, cleaned_category = TagService.extract_tags(
+            test["channel_name"], test["category_name"], rules
+        )
 
         print(f"  Extracted Tags: {tags}")
-        print(f"  Cleaned Name: {cleaned_name}")
+        print(f"  Cleaned Channel Name: {cleaned_name}")
+        print(f"  Cleaned Category Name: {cleaned_category}")
         print(f"  Expected Tags: {test['expected_tags']}")
         print(f"  Expected Name: {test['expected_name']}")
 

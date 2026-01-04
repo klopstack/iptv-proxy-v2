@@ -385,7 +385,7 @@ def _process_tags_for_account(account_id, streams, categories):
         category_name = category_map.get(category_id, "")
 
         # Extract tags
-        tags, cleaned_name = TagService.extract_tags(channel_name, category_name, tag_rules)
+        tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, tag_rules)
 
         # Store tags
         for tag_name in tags:
@@ -794,7 +794,9 @@ def get_channel_details(account_id, stream_id):
             "stream_id": channel.stream_id,
             "name": channel.name,
             "cleaned_name": channel.cleaned_name,
-            "category": channel.category.category_name if channel.category else "Uncategorized",
+            "category": channel.category.cleaned_name or channel.category.category_name
+            if channel.category
+            else "Uncategorized",
             "category_id": channel.category_id,
             "stream_type": channel.stream_type,
             "stream_icon": channel.stream_icon,
@@ -936,7 +938,7 @@ def preview_account_playlist(account_id):
                 "account_id": ch.account_id,
                 "name": ch.name,
                 "cleaned_name": ch.cleaned_name if ch.cleaned_name is not None else ch.name,
-                "category": ch.category.category_name if ch.category else "Uncategorized",
+                "category": ch.category.cleaned_name or ch.category.category_name if ch.category else "Uncategorized",
                 "category_id": ch.category_id,
                 "icon": ch.stream_icon,
                 "is_visible": True,  # All channels here passed filters
@@ -1017,7 +1019,9 @@ def preview_account_playlist(account_id):
                         "account_id": ch.account_id,
                         "name": ch.name,
                         "cleaned_name": ch.cleaned_name if ch.cleaned_name is not None else ch.name,
-                        "category": ch.category.category_name if ch.category else "Uncategorized",
+                        "category": ch.category.cleaned_name or ch.category.category_name
+                        if ch.category
+                        else "Uncategorized",
                         "category_id": ch.category_id,
                         "icon": ch.stream_icon,
                         "is_visible": ch.is_visible,

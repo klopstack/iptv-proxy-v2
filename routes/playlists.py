@@ -218,7 +218,7 @@ def preview_playlist_config(config_id):
                 category_name = category_map.get(category_id, "")
 
                 # Extract tags for this channel
-                tags, cleaned_name = TagService.extract_tags(channel_name, category_name, tag_rules)
+                tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, tag_rules)
 
                 # Check if channel matches filter criteria
                 if _matches_tag_filter(tags, include_tags, exclude_tags, config.tag_match_mode):
@@ -403,7 +403,9 @@ def generate_playlist(account_id):
     for channel in channels:
         # Use cleaned name (pre-computed during sync)
         display_name = sanitize_m3u_value(channel.cleaned_name or channel.name)
-        category_name = sanitize_m3u_value(channel.category.category_name if channel.category else "Unknown")
+        category_name = sanitize_m3u_value(
+            channel.category.cleaned_name or channel.category.category_name if channel.category else "Unknown"
+        )
 
         # For PPV channels with linked events, use event ID as EPG identifier
         # This allows EPG to be auto-generated from Event records
@@ -652,7 +654,9 @@ def _generate_playlist_from_config(config):
 
         # Use cleaned name (pre-computed during sync/tag processing)
         display_name = sanitize_m3u_value(channel.cleaned_name or channel.name)
-        category_name = sanitize_m3u_value(channel.category.category_name if channel.category else "Unknown")
+        category_name = sanitize_m3u_value(
+            channel.category.cleaned_name or channel.category.category_name if channel.category else "Unknown"
+        )
 
         # Always use standardized EPG ID format to prevent collisions across providers
         tvg_id = f"ch-{account.id}-{channel.stream_id}"

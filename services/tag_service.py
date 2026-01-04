@@ -13,10 +13,10 @@ class TagService:
     """Service for extracting tags from channel and category names"""
 
     @staticmethod
-    def extract_tags(channel_name: str, category_name: str, tag_rules: List) -> Tuple[Set[str], str]:
+    def extract_tags(channel_name: str, category_name: str, tag_rules: List) -> Tuple[Set[str], str, str]:
         """
         Extract tags from channel and category names based on rules.
-        Returns tuple of (set of tag names, cleaned channel name)
+        Returns tuple of (set of tag names, cleaned channel name, cleaned category name)
 
         Args:
             channel_name: The original channel name
@@ -24,28 +24,30 @@ class TagService:
             tag_rules: List of TagRule objects sorted by priority
 
         Returns:
-            Tuple of (set of extracted tag names, cleaned channel name)
+            Tuple of (set of extracted tag names, cleaned channel name, cleaned category name)
         """
         tags = set()
-        cleaned_name = channel_name
+        cleaned_channel_name = channel_name
+        cleaned_category_name = category_name
 
         # Sort rules by priority (should already be sorted, but ensure it)
         sorted_rules = sorted(tag_rules, key=lambda r: r.priority)
 
         for rule in sorted_rules:
             # Determine what text to search in and where to remove from
+            # can_remove_from_channel, can_remove_from_category flags
             if rule.source == "channel_name":
-                search_texts = [(channel_name, True)]  # (text to search, remove from channel name)
+                search_texts = [(channel_name, True, False)]  # (text, remove from channel, remove from category)
             elif rule.source == "category_name":
-                search_texts = [(category_name, False)]  # Search in category, don't remove from channel
+                search_texts = [(category_name, False, True)]  # Search in category, remove from category only
             elif rule.source == "both":
-                # Search in both, but track which one matched
-                search_texts = [(channel_name, True), (category_name, False)]
+                # Search in both, track which one matched
+                search_texts = [(channel_name, True, False), (category_name, False, True)]
             else:
                 continue
 
             # Try to match the pattern in each search text
-            for search_text, can_remove_from_channel in search_texts:
+            for search_text, can_remove_from_channel, can_remove_from_category in search_texts:
                 matched, match_result = TagService._match_pattern(search_text, rule.pattern, rule.pattern_type)
 
                 if matched:
@@ -61,13 +63,27 @@ class TagService:
                                 normalized_capture = TagService.normalize_tag_name(captured)
                                 if normalized_capture:
                                     tags.add(normalized_capture)
-                                # Remove or replace the full match from channel name
-                                if rule.remove_from_name and can_remove_from_channel:
+                                # Remove or replace the full match
+                                if rule.remove_from_name:
                                     replacement = getattr(rule, "replacement", None)
-                                    if replacement is not None:
-                                        cleaned_name = TagService._replace_text(cleaned_name, match_text, replacement)
-                                    else:
-                                        cleaned_name = TagService._remove_text(cleaned_name, match_text)
+                                    if can_remove_from_channel:
+                                        if replacement is not None:
+                                            cleaned_channel_name = TagService._replace_text(
+                                                cleaned_channel_name, match_text, replacement
+                                            )
+                                        else:
+                                            cleaned_channel_name = TagService._remove_text(
+                                                cleaned_channel_name, match_text
+                                            )
+                                    if can_remove_from_category:
+                                        if replacement is not None:
+                                            cleaned_category_name = TagService._replace_text(
+                                                cleaned_category_name, match_text, replacement
+                                            )
+                                        else:
+                                            cleaned_category_name = TagService._remove_text(
+                                                cleaned_category_name, match_text
+                                            )
                             except IndexError:
                                 logger.warning(f"Rule '{rule.name}' uses __CAPTURE__ but regex has no capture group")
                         else:
@@ -84,7 +100,10 @@ class TagService:
                             if normalized_location:  # Only add if not empty after normalization
                                 tags.add(normalized_location)
                             # Replace brackets with just the location text
-                            cleaned_name = cleaned_name.replace(match_text, location)
+                            if can_remove_from_channel:
+                                cleaned_channel_name = cleaned_channel_name.replace(match_text, location)
+                            if can_remove_from_category:
+                                cleaned_category_name = cleaned_category_name.replace(match_text, location)
                     elif rule.tag_name == "__CALLSIGN__":
                         # Extract call sign from parentheses and add as tag
                         import re
@@ -97,35 +116,59 @@ class TagService:
                             if normalized_callsign:  # Only add if not empty after normalization
                                 tags.add(normalized_callsign)
                             # Replace parentheses with just the call sign text
-                            cleaned_name = cleaned_name.replace(match_text, callsign)
+                            if can_remove_from_channel:
+                                cleaned_channel_name = cleaned_channel_name.replace(match_text, callsign)
+                            if can_remove_from_category:
+                                cleaned_category_name = cleaned_category_name.replace(match_text, callsign)
                     elif rule.tag_name != "__CLEANUP__":
                         # Regular tag - normalize for consistency
                         normalized_tag = TagService.normalize_tag_name(rule.tag_name)
                         if normalized_tag:
                             tags.add(normalized_tag)
-                        # Remove or replace in channel name if requested and appropriate
-                        if rule.remove_from_name and can_remove_from_channel and match_text:
+                        # Remove or replace in appropriate name(s) if requested
+                        if rule.remove_from_name and match_text:
                             replacement = getattr(rule, "replacement", None)
-                            if replacement is not None:
-                                cleaned_name = TagService._replace_text(cleaned_name, match_text, replacement)
-                            else:
-                                cleaned_name = TagService._remove_text(cleaned_name, match_text)
+                            if can_remove_from_channel:
+                                if replacement is not None:
+                                    cleaned_channel_name = TagService._replace_text(
+                                        cleaned_channel_name, match_text, replacement
+                                    )
+                                else:
+                                    cleaned_channel_name = TagService._remove_text(cleaned_channel_name, match_text)
+                            if can_remove_from_category:
+                                if replacement is not None:
+                                    cleaned_category_name = TagService._replace_text(
+                                        cleaned_category_name, match_text, replacement
+                                    )
+                                else:
+                                    cleaned_category_name = TagService._remove_text(cleaned_category_name, match_text)
                     else:
                         # Cleanup-only rule - just remove or replace
-                        if rule.remove_from_name and can_remove_from_channel and match_text:
+                        if rule.remove_from_name and match_text:
                             replacement = getattr(rule, "replacement", None)
-                            if replacement is not None:
-                                cleaned_name = TagService._replace_text(cleaned_name, match_text, replacement)
-                            else:
-                                cleaned_name = TagService._remove_text(cleaned_name, match_text)
+                            if can_remove_from_channel:
+                                if replacement is not None:
+                                    cleaned_channel_name = TagService._replace_text(
+                                        cleaned_channel_name, match_text, replacement
+                                    )
+                                else:
+                                    cleaned_channel_name = TagService._remove_text(cleaned_channel_name, match_text)
+                            if can_remove_from_category:
+                                if replacement is not None:
+                                    cleaned_category_name = TagService._replace_text(
+                                        cleaned_category_name, match_text, replacement
+                                    )
+                                else:
+                                    cleaned_category_name = TagService._remove_text(cleaned_category_name, match_text)
 
                     # Stop searching after first match for this rule
                     break
 
-        # Final cleanup of the channel name
-        cleaned_name = TagService._cleanup_name(cleaned_name)
+        # Final cleanup of both names
+        cleaned_channel_name = TagService._cleanup_name(cleaned_channel_name)
+        cleaned_category_name = TagService._cleanup_name(cleaned_category_name)
 
-        return tags, cleaned_name
+        return tags, cleaned_channel_name, cleaned_category_name
 
     @staticmethod
     def _match_pattern(text: str, pattern: str, pattern_type: str):
@@ -689,18 +732,32 @@ class TagService:
         tags_created = 0
         tags_updated = 0
         channels_updated = 0
+        categories_updated = 0
+
+        # Track categories we've processed to avoid duplicate updates
+        processed_categories = set()
 
         for channel in db_channels:
             category_name = channel.category.category_name if channel.category else ""
 
-            # Extract tags and cleaned name
-            tags, cleaned_name = TagService.extract_tags(channel.name, category_name, tag_rules)
+            # Extract tags and cleaned names
+            tags, cleaned_channel_name, cleaned_category_name = TagService.extract_tags(
+                channel.name, category_name, tag_rules
+            )
 
-            # Update cleaned name in database if changed
-            if channel.cleaned_name != cleaned_name:
-                channel.cleaned_name = cleaned_name
+            # Update cleaned channel name in database if changed
+            if channel.cleaned_name != cleaned_channel_name:
+                channel.cleaned_name = cleaned_channel_name
                 channel.updated_at = processing_start
                 channels_updated += 1
+
+            # Update cleaned category name if we have a category and haven't processed it yet
+            if channel.category and channel.category.id not in processed_categories:
+                if channel.category.cleaned_name != cleaned_category_name:
+                    channel.category.cleaned_name = cleaned_category_name
+                    channel.category.updated_at = processing_start
+                    categories_updated += 1
+                processed_categories.add(channel.category.id)
 
             # Store tags
             for tag_name in tags:
@@ -757,7 +814,8 @@ class TagService:
 
         logger.info(
             f"Processed tags for {processed_count} channels in account {account_id}: "
-            f"{tags_created} created, {tags_updated} updated, {tags_removed} removed"
+            f"{tags_created} created, {tags_updated} updated, {tags_removed} removed, "
+            f"{channels_updated} channels updated, {categories_updated} categories updated"
         )
 
         return {
@@ -769,4 +827,5 @@ class TagService:
             "tags_updated": tags_updated,
             "tags_removed": tags_removed,
             "channels_updated": channels_updated,
+            "categories_updated": categories_updated,
         }

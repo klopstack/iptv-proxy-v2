@@ -177,7 +177,7 @@ def get_categories():
         {
             "id": cat.id,
             "category_id": cat.category_id,
-            "name": cat.category_name,
+            "name": cat.cleaned_name or cat.category_name,
             "account_id": cat.account_id,
         }
         for cat in query.all()

@@ -282,7 +282,7 @@ class ReverseEventMatcher:
                 return True
 
         # Check for generic patterns: PPV + number, EVENT + number, etc.
-        generic_keywords = {"ppv", "event", "channel", "stream", "live", "show"}
+        generic_keywords = {"ppv", "event", "channel", "stream", "live", "show", "event", "box", "office"}
         if words <= generic_keywords:
             # All words are generic keywords
             return True
