@@ -29,12 +29,15 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
 
 # SQLite configuration for better concurrency with background scheduler
-# - timeout: Wait up to 30 seconds for locks (default is 5)
+# - timeout: Wait up to 60 seconds for locks (increased from 30)
 # - check_same_thread: Allow use across threads (required for scheduler)
+# - isolation_level: None enables autocommit mode for better concurrency
+# Note: pool_size/max_overflow only apply to non-SQLite databases
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "connect_args": {
-        "timeout": 30,
+        "timeout": 60,
         "check_same_thread": False,
+        "isolation_level": None,  # Autocommit mode
     },
     "pool_pre_ping": True,  # Verify connections before use
 }
@@ -42,6 +45,26 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 # Initialize extensions
 CORS(app)
 db.init_app(app)
+
+# Enable WAL mode for SQLite after db initialization
+if "sqlite" in app.config["SQLALCHEMY_DATABASE_URI"]:
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+
+    @event.listens_for(Engine, "connect")
+    def set_sqlite_pragma(dbapi_conn, connection_record):
+        """Enable WAL mode and other optimizations for SQLite."""
+        cursor = dbapi_conn.cursor()
+        # WAL mode allows concurrent reads during writes
+        cursor.execute("PRAGMA journal_mode=WAL")
+        # Increase cache size to 64MB
+        cursor.execute("PRAGMA cache_size=-64000")
+        # Use memory for temp storage
+        cursor.execute("PRAGMA temp_store=MEMORY")
+        # Synchronous=NORMAL is safe in WAL mode and faster
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
+
 
 # Initialize sync scheduler (6 hours by default, configurable via SYNC_INTERVAL_HOURS env var)
 sync_interval = int(os.getenv("SYNC_INTERVAL_HOURS", "6"))
@@ -72,6 +95,7 @@ from routes.filters import filters_bp
 from routes.images import images_bp
 from routes.playlists import playlists_bp
 from routes.ppv_enrichment import ppv_enrichment_bp
+from routes.ppv_epg import ppv_epg_bp
 from routes.rulesets import rulesets_bp
 from routes.settings import settings_bp
 from routes.stations import stations_bp
@@ -98,6 +122,7 @@ app.register_blueprint(channel_links_bp)
 app.register_blueprint(stations_bp)
 app.register_blueprint(channel_health_bp)
 app.register_blueprint(ppv_enrichment_bp)
+app.register_blueprint(ppv_epg_bp)
 app.register_blueprint(settings_bp)
 
 # Pass scheduler to API blueprint

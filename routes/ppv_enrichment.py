@@ -47,13 +47,21 @@ def get_enrichment_status():
     }
     """
     try:
+        from models import db
+
         service = get_calendar_enrichment_service(current_app._get_current_object())
         status = service.get_status()
+
+        # Clean up any lingering database connections
+        db.session.remove()
 
         return jsonify(status), 200
 
     except Exception as e:
         logger.error(f"Error getting enrichment status: {e}", exc_info=True)
+        from models import db
+
+        db.session.rollback()  # Ensure failed transaction is rolled back
         return jsonify({"error": str(e)}), 500
 
 

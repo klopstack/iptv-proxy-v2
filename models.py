@@ -25,21 +25,50 @@ class SyncMetadata(db.Model):  # type: ignore[name-defined]
 
     @staticmethod
     def get(key, default=None):
-        """Get a metadata value by key"""
-        record = SyncMetadata.query.filter_by(key=key).first()
-        return record.value if record else default
+        """Get a metadata value by key with retry logic for database locks."""
+        import time
+
+        from sqlalchemy.exc import OperationalError
+
+        max_retries = 3
+        retry_delay = 0.5  # seconds
+
+        for attempt in range(max_retries):
+            try:
+                record = SyncMetadata.query.filter_by(key=key).first()
+                return record.value if record else default
+            except OperationalError as e:
+                if "database is locked" in str(e) and attempt < max_retries - 1:
+                    time.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+                    continue
+                raise
 
     @staticmethod
     def set(key, value):
-        """Set a metadata value by key"""
-        record = SyncMetadata.query.filter_by(key=key).first()
-        if record:
-            record.value = value
-            record.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
-        else:
-            record = SyncMetadata(key=key, value=value)
-            db.session.add(record)
-        db.session.commit()
+        """Set a metadata value by key with retry logic for database locks."""
+        import time
+
+        from sqlalchemy.exc import OperationalError
+
+        max_retries = 3
+        retry_delay = 0.5  # seconds
+
+        for attempt in range(max_retries):
+            try:
+                record = SyncMetadata.query.filter_by(key=key).first()
+                if record:
+                    record.value = value
+                    record.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                else:
+                    record = SyncMetadata(key=key, value=value)
+                    db.session.add(record)
+                db.session.commit()
+                break  # Success, exit retry loop
+            except OperationalError as e:
+                if "database is locked" in str(e) and attempt < max_retries - 1:
+                    time.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+                    continue
+                raise
         return record
 
 
@@ -657,13 +686,13 @@ class PlaylistConfig(db.Model):  # type: ignore[name-defined]
 
 
 class EpgSource(db.Model):  # type: ignore[name-defined]
-    """EPG data sources - provider XMLTV, Schedules Direct, external XMLTV files, XMLTV grabbers, etc."""
+    """EPG data sources - provider XMLTV, Schedules Direct, external XMLTV files, XMLTV grabbers, PPV events, etc."""
 
     __tablename__ = "epg_sources"
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    # 'provider', 'schedules_direct', 'xmltv_url', 'xmltv_file', 'xmltv_grabber'
+    # 'provider', 'schedules_direct', 'xmltv_url', 'xmltv_file', 'xmltv_grabber', 'ppv_events'
     source_type = db.Column(db.String(50), nullable=False)
 
     # For provider sources, link to account

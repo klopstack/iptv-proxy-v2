@@ -81,8 +81,7 @@ class SyncScheduler:
 
     def _save_interval(self, key: str, value: int):
         """Save an interval setting to persistent storage"""
-        with self.app.app_context():
-            SyncMetadata.set(key, str(value))
+        SyncMetadata.set(key, str(value))
 
     @property
     def account_interval_hours(self) -> int:
@@ -181,21 +180,19 @@ class SyncScheduler:
 
     def _get_last_sync_time(self, key: str) -> Optional[datetime]:
         """Get the last sync time from persistent storage"""
-        with self.app.app_context():
-            value = SyncMetadata.get(key)
-            if value:
-                try:
-                    return datetime.fromisoformat(value)
-                except (ValueError, TypeError):
-                    return None
-            return None
+        value = SyncMetadata.get(key)
+        if value:
+            try:
+                return datetime.fromisoformat(value)
+            except (ValueError, TypeError):
+                return None
+        return None
 
     def _set_last_sync_time(self, key: str, when: Optional[datetime] = None):
         """Set the last sync time in persistent storage"""
         if when is None:
             when = datetime.now(timezone.utc)
-        with self.app.app_context():
-            SyncMetadata.set(key, when.isoformat())
+        SyncMetadata.set(key, when.isoformat())
 
     def _needs_sync(self, key: str, interval_hours: int) -> bool:
         """Check if a sync is needed based on last sync time"""
