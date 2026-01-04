@@ -10,14 +10,7 @@ A modern web-based IPTV proxy with advanced filtering, tag-based playlist genera
 ✅ **Tag Extraction** - Automatically extract and normalize tags from channel names  
 ✅ **Custom Rulesets** - Create provider-specific tag extraction rules  
 ✅ **Tag-Based Playlists** - Generate playlists filtered by tags  
-✅ **Real-time Preview** - Test filters before applying them  
-✅ **SQLite Database** - Persistent configuration storage  
-✅ **REST API** - Full API for automation  
-✅ **Tested** - Comprehensive test suite included  
-
-## Quick Start
-
-### Docker (Recommended)
+✅ **Xtream Codes API** - Connect IPTV clients (TiviMate, IPTV Smarters) using standard API format  
 
 Using the pre-built image from GitHub Container Registry:
 
@@ -220,6 +213,30 @@ GET /epg/<account_id>.xml
 # Preview channels
 GET /api/accounts/<account_id>/preview?limit=100
 ```
+
+### Xtream Codes API
+
+```bash
+# Connect IPTV clients using standard Xtream API format
+# Configure in client:
+#   Server: http://your-proxy:8000
+#   Username: [your-credential-username]
+#   Password: [your-credential-password]
+
+# Main API endpoint
+GET /player_api.php?username=X&password=Y&action=get_live_streams
+
+# EPG endpoint
+GET /xmltv.php?username=X&password=Y
+
+# Manage credentials
+GET /api/xtream-credentials
+POST /api/xtream-credentials
+PUT /api/xtream-credentials/<id>
+DELETE /api/xtream-credentials/<id>
+```
+
+See [docs/XTREAM_CODES_API.md](docs/XTREAM_CODES_API.md) for complete documentation.
 
 ## Development
 

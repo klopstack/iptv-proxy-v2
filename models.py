@@ -2060,3 +2060,39 @@ class Settings(db.Model):  # type: ignore[name-defined]
 
     def __repr__(self):
         return f"<Settings {self.key}={self.value}>"
+
+
+class XtreamCredential(db.Model):  # type: ignore[name-defined]
+    """Credentials for Xtream Codes API output - allows clients to connect via Xtream API format"""
+
+    __tablename__ = "xtream_credentials"
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    password = db.Column(db.String(100), nullable=False)
+
+    # Link to account or playlist config
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=True, index=True)
+    playlist_config_id = db.Column(db.Integer, db.ForeignKey("playlist_configs.id"), nullable=True, index=True)
+
+    # Optional: Apply same filters as web UI
+    use_filters = db.Column(db.Boolean, default=True)
+    collapse_duplicates = db.Column(db.Boolean, default=False)
+
+    # Metadata
+    enabled = db.Column(db.Boolean, default=True)
+    description = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+
+    # Relationships
+    account = db.relationship("Account", backref="xtream_credentials")
+    playlist_config = db.relationship("PlaylistConfig", backref="xtream_credentials")
+
+    def __repr__(self):
+        source = f"account={self.account_id}" if self.account_id else f"config={self.playlist_config_id}"
+        return f"<XtreamCredential {self.username} ({source})>"

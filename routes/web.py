@@ -71,3 +71,9 @@ def channel_health_page():
 def ppv_page():
     """PPV Management page - enrichment, visibility, filtering, and queue status"""
     return render_template("ppv.html")
+
+
+@web_bp.route("/xtream")
+def xtream_page():
+    """Xtream Codes API credentials management page"""
+    return render_template("xtream.html")

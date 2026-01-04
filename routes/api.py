@@ -297,10 +297,7 @@ def preview_channels():
     # Apply category filter if specified (check both original and cleaned names)
     if category_filter:
         query = query.filter(
-            db.or_(
-                Category.category_name == category_filter,
-                Category.cleaned_name == category_filter
-            )
+            db.or_(Category.category_name == category_filter, Category.cleaned_name == category_filter)
         )
 
     # Apply tag filter if specified

@@ -101,6 +101,7 @@ from routes.settings import settings_bp
 from routes.stations import stations_bp
 from routes.streams import streams_bp
 from routes.web import web_bp
+from routes.xtream import xtream_bp
 
 app.register_blueprint(web_bp)
 app.register_blueprint(accounts_bp)
@@ -124,6 +125,7 @@ app.register_blueprint(channel_health_bp)
 app.register_blueprint(ppv_enrichment_bp)
 app.register_blueprint(ppv_epg_bp)
 app.register_blueprint(settings_bp)
+app.register_blueprint(xtream_bp)
 
 # Pass scheduler to API blueprint
 set_scheduler(sync_scheduler)
