@@ -1,10 +1,15 @@
 """
-PPV Filtering Service - Apply PPV visibility rules based on account settings
+PPV Visibility Service - Apply PPV visibility rules based on account settings
+
+Uses PPVEventExtractor to detect events in channel names and filter inactive channels.
 """
 
+import logging
 from datetime import datetime, timezone
 
-from services.ppv_filter_service import PPVFilterService
+from services.ppv_event_extractor import PPVEventExtractor
+
+logger = logging.getLogger(__name__)
 
 
 class PPVVisibilityService:
@@ -26,14 +31,20 @@ class PPVVisibilityService:
         """
         self.account = account
         self.ppv_visibility = getattr(account, "ppv_visibility", self.HIDE_INACTIVE)
-        self.ppv_filter = PPVFilterService(current_time=datetime.now(timezone.utc).replace(tzinfo=None))
+        self.event_extractor = PPVEventExtractor(current_date=datetime.now(timezone.utc).replace(tzinfo=None))
 
     def should_show_channel(self, channel):
         """
         Determine if a channel should be shown based on PPV visibility rules.
 
+        Uses PPVEventExtractor to detect events in channel names and filter out:
+        - Placeholder channels ("NO EVENT STREAMING")
+        - Inactive channels (empty/generic names)
+        - Past events (event date in the past)
+        - Far-future placeholder dates (2098-12-31, 2099-01-01)
+
         Args:
-            channel: Channel instance to check
+            channel: Channel instance to check (must have name, is_ppv attributes)
 
         Returns:
             bool: True if channel should be shown, False to hide
@@ -47,7 +58,7 @@ class PPVVisibilityService:
             # Hide all PPV channels
             return False
         elif self.ppv_visibility == self.HIDE_INACTIVE:
-            # Hide inactive/past PPV events
+            # Use event extractor to determine if channel has an active event
             return self._is_ppv_active(channel)
         elif self.ppv_visibility == self.SHOW_ALL:
             # Show all PPV channels
@@ -58,30 +69,65 @@ class PPVVisibilityService:
 
     def _is_ppv_active(self, channel):
         """
-        Check if a PPV event is active (not in the past).
+        Check if a PPV channel has an active event.
 
-        Extracts datetime from channel name and compares with current time.
+        Uses PPVEventExtractor to:
+        1. Detect placeholder channels (NO EVENT STREAMING)
+        2. Detect inactive channels (empty/generic names)
+        3. Extract event dates and check if in future
+        4. Detect far-future placeholder dates (2098-12-31)
 
         Args:
-            channel: Channel instance to check
+            channel: Channel instance to check (needs name attribute)
 
         Returns:
-            bool: True if event is in future or currently happening, False if in past
+            bool: True if event is active/upcoming, False if inactive/past
         """
         try:
-            # Try to extract event datetime from channel name
-            event_datetime = self.ppv_filter.parse_iso_datetime_with_24hr(channel.name)
+            # Extract all event information from channel name
+            event_info = self.event_extractor.extract_all(channel.name)
 
-            if event_datetime:
-                # If datetime is in future, show it
-                return event_datetime > datetime.now(timezone.utc).replace(tzinfo=None)
-            else:
-                # If we can't parse a datetime, default to showing it
-                # (incomplete channel info, not actively filtered)
+            # Hide if channel is a placeholder (NO EVENT STREAMING)
+            if event_info.get("is_placeholder"):
+                logger.debug(f"Hiding placeholder channel: {channel.name[:60]}")
+                return False
+
+            # Hide if channel is inactive (empty/generic name)
+            if event_info.get("is_inactive"):
+                logger.debug(f"Hiding inactive channel: {channel.name[:60]}")
+                return False
+
+            # Hide if date was inferred as too far in future (placeholder date)
+            if event_info.get("inferred_how") == "date_too_far_future":
+                logger.debug(f"Hiding far-future placeholder channel: {channel.name[:60]}")
+                return False
+
+            # Check if event has a date
+            event_date = event_info.get("date")
+            if event_date:
+                # Hide if event is in the past
+                current_time = datetime.now(timezone.utc).replace(tzinfo=None)
+                if event_date < current_time:
+                    logger.debug(f"Hiding past event: {channel.name[:60]} (date: {event_date})")
+                    return False
+                else:
+                    # Event is in the future - show it
+                    logger.debug(f"Showing future event: {channel.name[:60]} (date: {event_date})")
+                    return True
+
+            # If no date extracted, check if competitors were found
+            # Channels with competitors but no date are likely upcoming events
+            if event_info.get("competitors"):
+                logger.debug(f"Showing channel with competitors: {channel.name[:60]}")
                 return True
-        except Exception:
-            # If parsing fails, show the channel
-            # (safer to show than hide due to parsing errors)
+
+            # No event information found - default to hiding (conservative)
+            logger.debug(f"Hiding channel with no event info: {channel.name[:60]}")
+            return False
+
+        except Exception as e:
+            # Log error but don't crash - default to showing to avoid hiding valid channels
+            logger.warning(f"Error checking PPV status for channel '{channel.name}': {e}")
             return True
 
     @staticmethod
