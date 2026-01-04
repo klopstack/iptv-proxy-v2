@@ -100,17 +100,23 @@ class PPVEventExtractor:
 
     def is_date_far_future(self, event_date: datetime) -> bool:
         """
-        Check if event date is too far in the future (>1 year).
+        Check if event date is too far in the future (>1 year) or is a placeholder date.
 
         Events more than a year away are likely placeholders or
-        not actually being broadcast.
+        not actually being broadcast. Also catches common placeholder
+        dates used by providers (2098-12-31, 2099-01-01).
 
         Args:
             event_date: Event datetime to check
 
-        Returns: True if date is more than 1 year in the future
+        Returns: True if date is more than 1 year in the future or is a placeholder
         """
         from datetime import timedelta
+
+        # Check for common placeholder dates (2098-12-31, 2099-01-01)
+        # Providers use these far-future dates to mark inactive/empty slots
+        if event_date.year >= 2098:
+            return True
 
         max_future = self.current_date + timedelta(days=365)
         return event_date > max_future
@@ -355,6 +361,15 @@ class PPVEventExtractor:
         # Skip placeholders and inactive channels early
         if result["is_placeholder"] or result["is_inactive"]:
             return result
+
+        # Check for far-future placeholder dates (2098-12-31, 2099-01-01) BEFORE date extraction
+        # These are common provider placeholders that need special handling
+        iso_match = re.search(self.ISO_DATE_PATTERN, channel_name, re.IGNORECASE)
+        if iso_match:
+            year = iso_match.group(1)
+            if int(year) >= 2098:
+                result["inferred_how"] = "date_too_far_future"
+                return result
 
         # Strategy 1: Try full date (Month DD HH:MM)
         full_date = self.extract_date(channel_name)

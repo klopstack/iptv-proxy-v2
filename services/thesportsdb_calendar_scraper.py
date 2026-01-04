@@ -125,6 +125,8 @@ class TheSportsDBCalendarScraper:
         self._cache: Dict[str, Tuple[List[CalendarEvent], float]] = {}
         self._cache_ttl = cache_ttl
         self._last_request_time = 0.0
+        self._cache_hits = 0
+        self._cache_misses = 0
         self._session = requests.Session()
         self._session.headers.update(
             {
@@ -170,10 +172,12 @@ class TheSportsDBCalendarScraper:
         # Check cache first
         if not force_refresh and self._is_cache_valid(cache_key):
             events, _ = self._cache[cache_key]
+            self._cache_hits += 1
             logger.debug(f"Cache hit for {cache_key}: {len(events)} events")
             return events
 
         # Fetch from web
+        self._cache_misses += 1
         try:
             events = self._fetch_calendar_page(date, sport)
             self._cache[cache_key] = (events, time.time())
@@ -544,9 +548,17 @@ class TheSportsDBCalendarScraper:
         """Get cache statistics."""
         now = time.time()
         valid_entries = sum(1 for _, (_, ts) in self._cache.items() if (now - ts) < self._cache_ttl)
+        total = len(self._cache)
+
+        # Calculate hit rate from internal tracking
+        total_requests = getattr(self, "_cache_hits", 0) + getattr(self, "_cache_misses", 0)
+        hit_rate = (getattr(self, "_cache_hits", 0) / total_requests) if total_requests > 0 else 0.0
+
         return {
-            "total_entries": len(self._cache),
+            "size": valid_entries,
+            "total_entries": total,
             "valid_entries": valid_entries,
+            "hit_rate": hit_rate,
             "cache_ttl_seconds": self._cache_ttl,
         }
 

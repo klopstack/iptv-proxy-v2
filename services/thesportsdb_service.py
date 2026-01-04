@@ -288,12 +288,12 @@ class TheSportsDBService:
                 logger.warning(f"Invalid response from eventInfo: {type(result)}")
                 return None
 
-            results = result.get("results", [])
-            if not results:
+            events_list = result.get("events", [])
+            if not events_list:
                 logger.debug(f"Event {event_id} not found")
                 return None
 
-            return results[0]
+            return events_list[0]
 
         except Exception as e:
             logger.error(f"Error fetching event info for {event_id}: {e}")
@@ -309,7 +309,7 @@ class TheSportsDBService:
         Returns:
             True if event is currently being played
         """
-        status = event.get("strStatus", "").lower()
+        status = (event.get("strStatus") or "").lower()
         if "live" in status or "in progress" in status:
             return True
 

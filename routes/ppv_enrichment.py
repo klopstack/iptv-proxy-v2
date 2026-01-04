@@ -47,7 +47,7 @@ def get_enrichment_status():
     }
     """
     try:
-        service = get_calendar_enrichment_service(current_app)
+        service = get_calendar_enrichment_service(current_app._get_current_object())
         status = service.get_status()
 
         return jsonify(status), 200
@@ -74,7 +74,7 @@ def process_enrichment():
     try:
         from models import Channel
 
-        service = get_calendar_enrichment_service(current_app)
+        service = get_calendar_enrichment_service(current_app._get_current_object())
 
         data = request.get_json() or {}
         account_id = data.get("account_id")
@@ -266,7 +266,7 @@ def start_detail_thread():
     from the API for events that were matched via calendar scraping.
     """
     try:
-        service = get_calendar_enrichment_service(current_app)
+        service = get_calendar_enrichment_service(current_app._get_current_object())
         service.start_detail_fetcher()
 
         return jsonify({"message": "Detail fetcher thread started", "running": True}), 200
@@ -283,7 +283,7 @@ def stop_detail_thread():
     Stop the background detail fetching thread.
     """
     try:
-        service = get_calendar_enrichment_service(current_app)
+        service = get_calendar_enrichment_service(current_app._get_current_object())
         service.stop_detail_fetcher()
 
         return jsonify({"message": "Detail fetcher thread stopped", "running": False}), 200

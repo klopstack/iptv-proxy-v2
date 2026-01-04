@@ -28,6 +28,7 @@ Benefits:
 """
 
 import logging
+import random
 import threading
 import time
 from collections import defaultdict
@@ -48,6 +49,10 @@ logger = logging.getLogger(__name__)
 API_REQUESTS_PER_MINUTE = 30  # TheSportsDB official limit
 API_REQUEST_INTERVAL = 60.0 / API_REQUESTS_PER_MINUTE  # ~2 seconds between requests
 
+# Jitter for calendar requests (to avoid bot detection)
+CALENDAR_REQUEST_MIN_DELAY = 0.5  # Minimum delay between calendar requests (seconds)
+CALENDAR_REQUEST_MAX_DELAY = 3.0  # Maximum delay between calendar requests (seconds)
+
 # Processing configuration
 ENRICHMENT_BATCH_SIZE = 100  # Channels to process per batch (larger since no API limits)
 DETAIL_FETCH_BATCH_SIZE = 25  # Events to fetch details for per minute
@@ -56,6 +61,22 @@ MAX_RETRY_ATTEMPTS = 3
 # Match confidence thresholds
 MIN_MATCH_CONFIDENCE = 0.3  # Minimum confidence to consider a match
 HIGH_CONFIDENCE_THRESHOLD = 0.7  # Above this, we're confident in the match
+
+# Generic channel name patterns that indicate inactive/placeholder channels
+# These channels typically don't have actual events broadcasting
+GENERIC_CHANNEL_PATTERNS = [
+    r"^PPV\s*\d+$",  # "PPV 1", "PPV 23"
+    r"^PPV\s*Event\s*\d*$",  # "PPV Event", "PPV Event 1"
+    r"^UFC\s*Event\s*\d*$",  # "UFC Event", "UFC Event 1"
+    r"^Boxing\s*Event\s*\d*$",  # "Boxing Event"
+    r"^MMA\s*Event\s*\d*$",  # "MMA Event"
+    r"^Sports?\s*Event\s*\d*$",  # "Sport Event", "Sports Event 1"
+    r"^Live\s*Event\s*\d*$",  # "Live Event"
+    r"^Event\s*\d+$",  # "Event 1", "Event 23"
+    r"^\d+\s*-\s*PPV",  # "1 - PPV", "23 - PPV"
+    r"^PPV\s*HD\s*\d*$",  # "PPV HD", "PPV HD 1"
+    r"^\(.*\)$",  # Just provider info like "(ESPN)" or "(Fanatiz 012)"
+]
 
 # Metadata keys
 METADATA_KEY_CALENDAR_PROCESSED = "ppv_calendar_processed_count"
@@ -86,6 +107,28 @@ class EnrichmentResult:
         self.match_method = match_method
         self.extraction_result = extraction_result
         self.error = error
+
+
+def is_generic_channel_name(channel_name: str) -> bool:
+    """
+    Check if a channel name is generic/placeholder-like.
+
+    Generic names like "PPV 1", "UFC Event", etc. indicate the channel
+    is not currently broadcasting an actual event and should be filtered.
+
+    Args:
+        channel_name: Channel name to check
+
+    Returns:
+        True if the name is generic/placeholder-like
+    """
+    import re
+
+    name = channel_name.strip()
+    for pattern in GENERIC_CHANNEL_PATTERNS:
+        if re.match(pattern, name, re.IGNORECASE):
+            return True
+    return False
 
 
 class PPVCalendarEnrichmentService:
@@ -151,18 +194,44 @@ class PPVCalendarEnrichmentService:
             # Step 1: Extract event info from all channels
             extraction_results = self._extract_all_channels(channels)
 
-            # Step 2: Filter out no-extraction cases
-            valid_extractions = [
-                (ch, ex)
-                for ch, ex in extraction_results
-                if not ex["is_placeholder"] and not ex.get("is_inactive", False) and ex.get("competitors")
-            ]
+            # Step 2: Filter out no-extraction cases with detailed tracking
+            filter_reasons: Dict[str, int] = defaultdict(int)
+            valid_extractions = []
+
+            for ch, ex in extraction_results:
+                # Check various filter conditions
+                if ex["is_placeholder"]:
+                    filter_reasons["placeholder"] += 1
+                    continue
+                if ex.get("is_inactive", False):
+                    filter_reasons["inactive"] += 1
+                    continue
+                if is_generic_channel_name(ch.name):
+                    filter_reasons["generic_name"] += 1
+                    continue
+                if not ex.get("competitors"):
+                    # Log unusual case: has date but no competitors
+                    if ex.get("date") or ex.get("time_only"):
+                        logger.debug(
+                            f"Channel has date but no competitors: '{ch.name}' - "
+                            f"date={ex.get('date')}, time={ex.get('time_only')}, inferred_how={ex.get('inferred_how')}"
+                        )
+                        filter_reasons["date_but_no_competitors"] += 1
+                    else:
+                        filter_reasons["no_competitors"] += 1
+                    continue
+
+                valid_extractions.append((ch, ex))
 
             no_extraction_count = len(extraction_results) - len(valid_extractions)
             results["no_extraction"] = no_extraction_count
+
+            # Log filter breakdown
+            if filter_reasons:
+                logger.info(f"Filtered out {no_extraction_count} channels: {dict(filter_reasons)}")
+
             logger.info(
-                f"Extracted info from {len(valid_extractions)} channels, "
-                f"{no_extraction_count} filtered out (placeholders/inactive/no-competitors)"
+                f"Extracted info from {len(valid_extractions)} channels, " f"{no_extraction_count} filtered out"
             )
 
             # Step 3: Group channels by inferred date
@@ -177,6 +246,11 @@ class PPVCalendarEnrichmentService:
                 calendar_data[date_str] = events
                 results["calendar_requests_made"] += 1
 
+                # Add jitter to avoid bot detection
+                if date_str != unique_dates[-1]:  # Don't sleep after last request
+                    jitter_delay = random.uniform(CALENDAR_REQUEST_MIN_DELAY, CALENDAR_REQUEST_MAX_DELAY)
+                    time.sleep(jitter_delay)
+
             logger.info(
                 f"Loaded calendar data for {len(unique_dates)} dates, "
                 f"total {sum(len(e) for e in calendar_data.values())} events"
@@ -184,6 +258,7 @@ class PPVCalendarEnrichmentService:
 
             # Step 5: Match channels to calendar events
             event_ids_to_fetch = set()
+            match_failure_reasons: Dict[str, int] = defaultdict(int)
 
             for date_str, channel_extractions in channels_by_date.items():
                 calendar_events = calendar_data.get(date_str, [])
@@ -215,9 +290,27 @@ class PPVCalendarEnrichmentService:
                             channel.ppv_enrichment_status = "no_match"
                     else:
                         results["no_match"] += 1
+                        match_failure_reasons[result.match_method] += 1
+
+                        # Log detailed info for failed matches (sample to avoid log spam)
+                        if results["no_match"] <= 10 or results["no_match"] % 100 == 0:
+                            competitors = extraction.get("competitors")
+                            logger.debug(
+                                f"No match for '{channel.name}': "
+                                f"competitors={competitors}, "
+                                f"date={date_str}, "
+                                f"time={extraction.get('time_only')}, "
+                                f"reason={result.match_method}, "
+                                f"calendar_events_count={len(calendar_events)}"
+                            )
+
                         channel.ppv_enrichment_status = "no_match"
 
                     db.session.commit()
+
+            # Log match failure breakdown
+            if match_failure_reasons:
+                logger.info(f"Match failure breakdown: {dict(match_failure_reasons)}")
 
             results["detail_queue_size"] = len(event_ids_to_fetch)
 
@@ -227,6 +320,10 @@ class PPVCalendarEnrichmentService:
                     self._detail_queue.put(event_id)
 
                 logger.info(f"Queued {len(event_ids_to_fetch)} events for detail fetching")
+
+                # Auto-start the detail fetcher thread if not running
+                if not self._detail_thread or not self._detail_thread.is_alive():
+                    self.start_detail_fetcher()
 
             # Update persistent stats
             self._update_stats(results)
@@ -512,25 +609,33 @@ class PPVCalendarEnrichmentService:
         """
         logger.info("Detail fetch loop started")
 
-        while not self._stop_detail_thread.is_set():
-            try:
-                # Get next event ID from queue (with timeout)
-                event_id = self._detail_queue.get(timeout=5.0)
+        # Create an app context for the entire thread lifetime
+        # This is necessary because Flask contexts are thread-local
+        ctx = self.app.app_context()
+        ctx.push()
 
-                # Fetch details from API
-                self._fetch_event_details(event_id)
+        try:
+            while not self._stop_detail_thread.is_set():
+                try:
+                    # Get next event ID from queue (with timeout)
+                    event_id = self._detail_queue.get(timeout=5.0)
 
-                # Rate limit: wait between requests
-                time.sleep(API_REQUEST_INTERVAL)
+                    # Fetch details from API
+                    self._fetch_event_details(event_id)
 
-                self._detail_queue.task_done()
+                    # Rate limit: wait between requests
+                    time.sleep(API_REQUEST_INTERVAL)
 
-            except Empty:
-                # Queue empty, just continue waiting
-                continue
-            except Exception as e:
-                logger.error(f"Error in detail fetch loop: {e}")
-                time.sleep(1)  # Brief pause on error
+                    self._detail_queue.task_done()
+
+                except Empty:
+                    # Queue empty, just continue waiting
+                    continue
+                except Exception as e:
+                    logger.error(f"Error in detail fetch loop: {e}", exc_info=True)
+                    time.sleep(1)  # Brief pause on error
+        finally:
+            ctx.pop()
 
         logger.info("Detail fetch loop stopped")
 
@@ -538,41 +643,46 @@ class PPVCalendarEnrichmentService:
         """
         Fetch full event details from TheSportsDB API.
 
+        Note: This method must be called within an app context.
+
         Args:
             event_id: TheSportsDB event ID
         """
-        with self.app.app_context():
+        try:
+            # Find the event in our database
+            event = Event.query.filter_by(
+                external_id=event_id,
+                source=Event.SOURCE_THESPORTSDB,
+            ).first()
+
+            if not event:
+                logger.warning(f"Event {event_id} not found in database")
+                return
+
+            # Skip if already has full details
+            if event.data_completeness == "full":
+                logger.debug(f"Event {event_id} already has full details")
+                return
+
+            # Fetch from API
+            api_data = self.thesportsdb.get_event_by_id(event_id)
+
+            if not api_data:
+                logger.warning(f"No API data returned for event {event_id}")
+                return
+
+            # Update event with full details
+            self._update_event_from_api(event, api_data)
+
+            logger.info(f"Fetched full details for event {event_id}")
+            self._stats["api_requests"] += 1
+
+        except Exception as e:
+            logger.error(f"Error fetching details for event {event_id}: {e}")
             try:
-                # Find the event in our database
-                event = Event.query.filter_by(
-                    external_id=event_id,
-                    source=Event.SOURCE_THESPORTSDB,
-                ).first()
-
-                if not event:
-                    logger.warning(f"Event {event_id} not found in database")
-                    return
-
-                # Skip if already has full details
-                if event.data_completeness == "full":
-                    logger.debug(f"Event {event_id} already has full details")
-                    return
-
-                # Fetch from API
-                api_data = self.thesportsdb.get_event_by_id(event_id)
-
-                if not api_data:
-                    logger.warning(f"No API data returned for event {event_id}")
-                    return
-
-                # Update event with full details
-                self._update_event_from_api(event, api_data)
-
-                logger.info(f"Fetched full details for event {event_id}")
-                self._stats["api_requests"] += 1
-
-            except Exception as e:
-                logger.error(f"Error fetching details for event {event_id}: {e}")
+                db.session.rollback()
+            except Exception:
+                pass  # Ignore rollback errors
 
     def _update_event_from_api(self, event: Event, api_data: Dict) -> None:
         """
@@ -614,7 +724,7 @@ class PPVCalendarEnrichmentService:
             event.event_image = api_data.get("strPoster") or api_data.get("strThumb")
 
             # Update status
-            status_str = api_data.get("strStatus", "").lower()
+            status_str = (api_data.get("strStatus") or "").lower()
             if "finished" in status_str or "ft" == status_str:
                 event.status = Event.STATUS_FINISHED
             elif "live" in status_str or "in progress" in status_str:

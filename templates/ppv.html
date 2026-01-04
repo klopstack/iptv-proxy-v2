@@ -10,13 +10,7 @@
 <!-- Tabs for different PPV sections -->
 <ul class="nav nav-tabs mb-4" id="ppvTabs" role="tablist">
     <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="enrichment-tab" data-bs-toggle="tab" data-bs-target="#enrichment-section"
-                type="button" role="tab">
-            <i class="bi bi-star"></i> Enrichment
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="visibility-tab" data-bs-toggle="tab" data-bs-target="#visibility-section"
+        <button class="nav-link active" id="visibility-tab" data-bs-toggle="tab" data-bs-target="#visibility-section"
                 type="button" role="tab">
             <i class="bi bi-eye"></i> Visibility
         </button>
@@ -36,117 +30,10 @@
 </ul>
 
 <div class="tab-content" id="ppvTabsContent">
-    <!-- Enrichment Section -->
-    <div class="tab-pane fade show active" id="enrichment-section" role="tabpanel">
+    <!-- Visibility Section -->
+    <div class="tab-pane fade show active" id="visibility-section" role="tabpanel">
         <div class="row">
             <div class="col-md-8">
-                <div class="card mb-4">
-                    <div class="card-header bg-warning text-dark">
-                        <h5 class="mb-0"><i class="bi bi-star"></i> PPV Event Enrichment</h5>
-                    </div>
-                    <div class="card-body">
-                        <p class="text-muted small mb-3">
-                            Enhance pay-per-view channels with detailed event information from TheSportsDB, including match details, teams, venues, and more.
-                        </p>
-
-                        <form id="ppv-enrichment-form">
-                            <div class="mb-3 form-check form-switch">
-                                <input type="checkbox" class="form-check-input" id="ppv-enrichment-enabled">
-                                <label class="form-check-label" for="ppv-enrichment-enabled">
-                                    <strong>Enable PPV Enrichment</strong>
-                                </label>
-                            </div>
-                            <div class="form-text mb-3">
-                                When enabled, the system will automatically match PPV events with TheSportsDB data to extract event details, teams, and other metadata.
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="ppv-api-key" class="form-label">
-                                    <strong>TheSportsDB API Key (Optional)</strong>
-                                </label>
-                                <input type="password" class="form-control" id="ppv-api-key" placeholder="Leave blank to use free tier">
-                                <div class="form-text">
-                                    <br>Free tier: ~30 requests/minute | Premium tier: Higher limits with API key
-                                    <br><button type="button" class="btn btn-sm btn-link p-0" id="toggle-api-key">Show</button>
-                                </div>
-                            </div>
-
-                            <div class="alert alert-info small mb-3">
-                                <i class="bi bi-info-circle"></i>
-                                <strong>How it works:</strong> PPV enrichment processes new/updated events automatically during scheduled syncs. 
-                                Event data includes sport type, teams, leagues, venues, and match details.
-                            </div>
-
-                            <button type="submit" class="btn btn-warning">
-                                <i class="bi bi-save"></i> Save Enrichment Settings
-                            </button>
-                        </form>
-                        <div id="ppv-enrichment-status" class="mt-3" style="display: none;"></div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header bg-info text-white">
-                        <h5 class="mb-0"><i class="bi bi-lightning-charge"></i> Enrichment Settings</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="enrichment-settings-info" class="small">
-                            <div class="text-center">
-                                <div class="spinner-border spinner-border-sm" role="status">
-                                    <span class="visually-hidden">Loading...</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-4">
-                <div class="card bg-light mb-4">
-                    <div class="card-header">
-                        <h6 class="mb-0"><i class="bi bi-info-circle"></i> About Enrichment</h6>
-                    </div>
-                    <div class="card-body">
-                        <p class="small mb-2"><strong>What is enrichment?</strong></p>
-                        <p class="small">
-                            PPV enrichment matches your channel names against TheSportsDB's extensive database of sports events.
-                            This adds rich metadata to your PPV channels for better organization and filtering.
-                        </p>
-                        <p class="small mb-2"><strong>Data added:</strong></p>
-                        <ul class="small">
-                            <li>Sport type (Football, Basketball, etc.)</li>
-                            <li>Team/league information</li>
-                            <li>Venue and location</li>
-                            <li>Event status and timing</li>
-                            <li>Broadcast details</li>
-                        </ul>
-                        <p class="small text-muted">
-                            <strong>Note:</strong> Enrichment works best with channel names containing event/team information (e.g., "UFC 293: Silva vs Adesanya").
-                        </p>
-                    </div>
-                </div>
-
-                <div class="card bg-light">
-                    <div class="card-header">
-                        <h6 class="mb-0"><i class="bi bi-gear"></i> TheSportsDB</h6>
-                    </div>
-                    <div class="card-body">
-                        <p class="small">
-                            <a href="https://www.thesportsdb.com/" target="_blank">TheSportsDB</a> is a free, community-driven sports database containing information about athletes, teams, events, and more.
-                        </p>
-                        <p class="small mb-0">
-                            <a href="https://www.thesportsdb.com/pricing" target="_blank" class="btn btn-sm btn-primary">Get API Key</a>
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Visibility Section -->
-    <div class="tab-pane fade" id="visibility-section" role="tabpanel">
-        <div class="row">
-            <div class="col-md-10">
                 <div class="card mb-4">
                     <div class="card-header bg-primary text-white">
                         <h5 class="mb-0"><i class="bi bi-eye"></i> PPV Channel Visibility</h5>
@@ -172,6 +59,47 @@
                                 <li><strong>Hide Inactive PPV:</strong> Show only upcoming/active PPV events, hide past events (default)</li>
                                 <li><strong>Show All PPV:</strong> Show all pay-per-view channels including inactive ones</li>
                             </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card bg-light mb-4">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-info-circle"></i> About PPV Enrichment</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="small mb-2"><strong>What is enrichment?</strong></p>
+                        <p class="small">
+                            PPV enrichment matches your channel names against TheSportsDB's extensive database of sports events.
+                            This adds rich metadata to your PPV channels for better organization and filtering.
+                        </p>
+                        <p class="small mb-2"><strong>Data added:</strong></p>
+                        <ul class="small">
+                            <li>Sport type (Football, Basketball, etc.)</li>
+                            <li>Team/league information</li>
+                            <li>Venue and location</li>
+                            <li>Event status and timing</li>
+                            <li>Broadcast details</li>
+                        </ul>
+                        <p class="small text-muted">
+                            <strong>Note:</strong> Enrichment runs automatically via scheduler (hourly) and works best with channel names containing event/team information.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="card bg-light">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-lightbulb"></i> Enrichment Settings</h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="enrichment-settings-info" class="small">
+                            <div class="text-center">
+                                <div class="spinner-border spinner-border-sm" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -251,16 +179,13 @@
                         </div>
 
                         <h6 class="mb-3"><i class="bi bi-play-circle"></i> Manual Processing</h6>
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label for="max-requests" class="form-label">Max API Requests</label>
-                                <input type="number" class="form-control" id="max-requests" value="10" min="1" max="30">
-                                <small class="text-muted">Up to 30 requests can be made per minute</small>
-                            </div>
-                        </div>
+                        <p class="small text-muted mb-3">
+                            Trigger enrichment processing for queued PPV channels. Calendar matching has no rate limits, 
+                            but detailed event fetching is rate limited to 30 API requests per minute.
+                        </p>
 
                         <button id="process-queue-btn" class="btn btn-primary">
-                            <i class="bi bi-lightning-charge"></i> Process Queue Now
+                            <i class="bi bi-lightning-charge"></i> Process Queued Channels
                         </button>
 
                         <button id="queue-all-ppv-btn" class="btn btn-outline-primary ms-2">
@@ -321,79 +246,6 @@
 // PPV Enrichment Settings
 // ============================================================================
 
-async function loadPPVEnrichmentSettings() {
-    try {
-        const response = await fetch('/api/ppv-enrichment/config');
-        const data = await response.json();
-
-        document.getElementById('ppv-enrichment-enabled').checked = data.enabled;
-
-        if (!data.has_api_key) {
-            document.getElementById('ppv-api-key').value = '';
-        }
-    } catch (error) {
-        console.error('Error loading PPV enrichment settings:', error);
-    }
-}
-
-document.getElementById('ppv-enrichment-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const enabled = document.getElementById('ppv-enrichment-enabled').checked;
-    const apiKey = document.getElementById('ppv-api-key').value.trim();
-    const statusEl = document.getElementById('ppv-enrichment-status');
-    const submitBtn = e.target.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
-
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Saving...';
-    statusEl.style.display = 'none';
-
-    try {
-        const response = await fetch('/api/ppv-enrichment/config', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                enabled: enabled,
-                api_key: apiKey || null
-            })
-        });
-
-        if (!response.ok) throw new Error('Failed to save settings');
-
-        statusEl.className = 'alert alert-success mt-3';
-        statusEl.innerHTML = '<i class="bi bi-check-circle"></i> PPV enrichment settings saved successfully!';
-        statusEl.style.display = 'block';
-
-        setTimeout(() => {
-            statusEl.style.display = 'none';
-        }, 3000);
-
-        await loadPPVEnrichmentSettings();
-    } catch (error) {
-        statusEl.className = 'alert alert-danger mt-3';
-        statusEl.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Error: ${error.message}`;
-        statusEl.style.display = 'block';
-    } finally {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = originalText;
-    }
-});
-
-document.getElementById('toggle-api-key').addEventListener('click', function (e) {
-    e.preventDefault();
-    const input = document.getElementById('ppv-api-key');
-    const btn = this;
-
-    if (input.type === 'password') {
-        input.type = 'text';
-        btn.textContent = 'Hide';
-    } else {
-        input.type = 'password';
-        btn.textContent = 'Show';
-    }
-});
-
 async function loadEnrichmentSettings() {
     try {
         const response = await fetch('/api/ppv-enrichment/settings');
@@ -403,20 +255,18 @@ async function loadEnrichmentSettings() {
             <div class="row">
                 <div class="col-md-6">
                     <dl class="small">
-                        <dt>Batch Size</dt>
-                        <dd>${data.batch_size} channels per request</dd>
-                        <dt>Rate Limiting</dt>
-                        <dd>${data.requests_per_minute} requests/minute</dd>
-                        <dt>Request Interval</dt>
-                        <dd>${data.request_interval_seconds} seconds between requests</dd>
+                        <dt>Detail Fetch Batch Size</dt>
+                        <dd>${data.detail_fetch_batch_size} events per minute</dd>
+                        <dt>API Rate Limiting</dt>
+                        <dd>${data.api_requests_per_minute} requests/minute (detail fetching only)</dd>
                     </dl>
                 </div>
                 <div class="col-md-6">
                     <dl class="small">
-                        <dt>Max Retries</dt>
-                        <dd>${data.max_retry_attempts} attempts</dd>
-                        <dt>TheSportsDB Rate Limit</dt>
-                        <dd>${data.thesportsdb_rate_limit} requests per ${data.thesportsdb_rate_limit_window}</dd>
+                        <dt>Calendar Scraping</dt>
+                        <dd>${data.calendar_scraping.rate_limited ? 'Rate limited' : 'No rate limit'} (cached ${data.calendar_scraping.cache_ttl_seconds}s)</dd>
+                        <dt>Detail Fetching</dt>
+                        <dd>Rate limited, ${data.detail_fetching.requests_per_minute} req/min</dd>
                     </dl>
                 </div>
             </div>
@@ -525,23 +375,26 @@ async function loadQueueStatus() {
         const response = await fetch('/api/ppv-enrichment/status');
         const data = await response.json();
 
+        const threadStatus = data.detail_thread_running ? 
+            '<span class="badge bg-success">Running</span>' : 
+            '<span class="badge bg-secondary">Idle</span>';
+
+        const cacheStats = data.calendar_cache_stats || {};
+        const sessionStats = data.session_stats || {};
+        
         const html = `
             <div class="row text-center">
-                <div class="col-md-3">
-                    <div class="h5 mb-0 text-primary">${data.queue_status.queued}</div>
-                    <small class="text-muted">Queued</small>
+                <div class="col-md-4">
+                    <div class="h5 mb-0 text-primary">${parseInt(data.cumulative_stats.calendar_processed) || 0}</div>
+                    <small class="text-muted">Channels Processed (Total)</small>
                 </div>
-                <div class="col-md-3">
-                    <div class="h5 mb-0 text-info">${data.queue_status.processing}</div>
-                    <small class="text-muted">Processing</small>
+                <div class="col-md-4">
+                    <div class="h5 mb-0 text-success">${parseInt(data.cumulative_stats.calendar_matched) || 0}</div>
+                    <small class="text-muted">Events Matched (Total)</small>
                 </div>
-                <div class="col-md-3">
-                    <div class="h5 mb-0 text-success">${data.queue_status.matched}</div>
-                    <small class="text-muted">Matched</small>
-                </div>
-                <div class="col-md-3">
-                    <div class="h5 mb-0 text-warning">${data.queue_status.no_match}</div>
-                    <small class="text-muted">No Match</small>
+                <div class="col-md-4">
+                    <div class="h5 mb-0 text-info">${data.detail_queue_size || 0}</div>
+                    <small class="text-muted">Detail Queue Size</small>
                 </div>
             </div>
 
@@ -549,19 +402,23 @@ async function loadQueueStatus() {
 
             <div class="row small">
                 <div class="col-md-6">
-                    <h6>API Usage</h6>
-                    <div class="progress mb-2">
-                        <div class="progress-bar" style="width: ${(data.api_usage.requests_today / data.api_usage.daily_limit) * 100}%"></div>
-                    </div>
-                    <small class="text-muted">${data.api_usage.requests_today} / ${data.api_usage.daily_limit} daily requests</small>
+                    <h6>Calendar Scraping Cache</h6>
+                    <dl class="mb-0">
+                        <dt>Cache Size:</dt>
+                        <dd>${cacheStats.size || 0} dates cached</dd>
+                        <dt>Hit Rate:</dt>
+                        <dd>${cacheStats.hit_rate ? (cacheStats.hit_rate * 100).toFixed(1) : '0.0'}%</dd>
+                    </dl>
                 </div>
                 <div class="col-md-6">
-                    <h6>Timing</h6>
+                    <h6>Detail Fetcher Thread</h6>
                     <dl class="mb-0">
-                        <dt>Last Run:</dt>
-                        <dd class="small">${new Date(data.timing.last_run).toLocaleString()}</dd>
-                        <dt>Next Run:</dt>
-                        <dd class="small">${new Date(data.timing.next_run).toLocaleString()}</dd>
+                        <dt>Status:</dt>
+                        <dd>${threadStatus}</dd>
+                        <dt>Queue Size:</dt>
+                        <dd>${data.detail_queue_size || 0}</dd>
+                        <dt>Session Stats:</dt>
+                        <dd>${sessionStats.channels_processed || 0} processed, ${sessionStats.events_matched || 0} matched</dd>
                     </dl>
                 </div>
             </div>
@@ -584,18 +441,18 @@ async function loadQueueStats() {
             <div class="row small">
                 <div class="col-md-6">
                     <dl>
-                        <dt>Total Queued</dt>
-                        <dd>${data.cumulative_stats.total_queued.toLocaleString()}</dd>
-                        <dt>Total Processed</dt>
-                        <dd>${data.cumulative_stats.total_processed.toLocaleString()}</dd>
+                        <dt>Channels Processed (Total)</dt>
+                        <dd>${data.cumulative_stats.calendar_processed.toLocaleString()}</dd>
+                        <dt>Events Matched (Total)</dt>
+                        <dd>${data.cumulative_stats.calendar_matched.toLocaleString()}</dd>
                     </dl>
                 </div>
                 <div class="col-md-6">
                     <dl>
-                        <dt>Retry Pending</dt>
-                        <dd>${data.queue_status.retry_pending}</dd>
-                        <dt>Total Failures</dt>
-                        <dd>${data.cumulative_stats.total_failures}</dd>
+                        <dt>Details Fetched (Total)</dt>
+                        <dd>${data.cumulative_stats.details_fetched.toLocaleString()}</dd>
+                        <dt>Session Matched</dt>
+                        <dd>${data.session_stats.events_matched || 0}</dd>
                     </dl>
                 </div>
             </div>
@@ -610,7 +467,6 @@ async function loadQueueStats() {
 }
 
 document.getElementById('process-queue-btn').addEventListener('click', async function () {
-    const maxRequests = parseInt(document.getElementById('max-requests').value);
     const btn = this;
     const statusEl = document.getElementById('queue-processing-status');
     const originalText = btn.innerHTML;
@@ -623,17 +479,17 @@ document.getElementById('process-queue-btn').addEventListener('click', async fun
         const response = await fetch('/api/ppv-enrichment/process', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ max_requests: maxRequests })
+            body: JSON.stringify({ fetch_details: true })
         });
 
-        if (!response.ok) throw new Error('Failed to process queue');
+        if (!response.ok) throw new Error('Failed to process enrichment');
 
         const result = await response.json();
 
         statusEl.className = 'alert alert-success';
         statusEl.innerHTML = `
-            <i class="bi bi-check-circle"></i> Processing completed!<br>
-            <small>Processed: ${result.processed} | Matched: ${result.matched} | Failed: ${result.failed}</small>
+            <i class="bi bi-check-circle"></i> Enrichment completed!<br>
+            <small>Processed: ${result.processed} | Matched: ${result.matched} | No Match: ${result.no_match}</small>
         `;
         statusEl.style.display = 'block';
 
@@ -676,7 +532,7 @@ document.getElementById('queue-all-ppv-btn').addEventListener('click', async fun
         statusEl.className = 'alert alert-success';
         statusEl.innerHTML = `
             <i class="bi bi-check-circle"></i> Channels queued successfully!<br>
-            <small>Queued: ${result.queued}</small>
+            <small>Queued: ${result.queued} | Already Matched: ${result.skipped_already_matched}</small>
         `;
         statusEl.style.display = 'block';
 
@@ -697,16 +553,20 @@ document.getElementById('queue-all-ppv-btn').addEventListener('click', async fun
 // Page Load
 // ============================================================================
 
-loadPPVEnrichmentSettings();
 loadEnrichmentSettings();
 loadAccountsVisibility();
 loadQueueStatus();
 loadQueueStats();
 
-// Refresh queue status every 30 seconds
+// Refresh status every 30 seconds
 setInterval(() => {
     loadQueueStatus();
     loadQueueStats();
 }, 30000);
+
+// Refresh enrichment settings every 60 seconds
+setInterval(() => {
+    loadEnrichmentSettings();
+}, 60000);
 </script>
 {% endblock %}

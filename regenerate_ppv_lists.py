@@ -27,13 +27,25 @@ def regenerate_ppv_lists():
 
     extractable = []
     no_data = []
+    date_but_no_competitors = []  # Suspicious category
+
+    # Statistics tracking
+    stats = {
+        "total_lines": 0,
+        "with_competitors": 0,
+        "with_date": 0,
+        "with_both": 0,
+        "date_but_no_competitors": 0,
+        "placeholders": 0,
+        "inactive": 0,
+        "no_extraction": 0,
+    }
 
     logger.info("Reading PPV.list...")
     try:
         with open("PPV.list", "r", encoding="utf-8") as f:
-            total_lines = 0
             for line in f:
-                total_lines += 1
+                stats["total_lines"] += 1
                 line = line.strip()
                 if not line:
                     continue
@@ -54,17 +66,50 @@ def regenerate_ppv_lists():
                 # Try to extract event info
                 event_info = extractor.extract_all(channel_name)
 
+                # Track placeholders and inactive channels
+                if event_info and event_info.get("is_placeholder"):
+                    stats["placeholders"] += 1
+                    no_data.append(line)
+                    continue
+
+                if event_info and event_info.get("is_inactive"):
+                    stats["inactive"] += 1
+                    no_data.append(line)
+                    continue
+
+                # Check for far-future placeholder dates (2098-12-31, 2099-01-01)
+                if event_info and event_info.get("inferred_how") == "date_too_far_future":
+                    stats["placeholders"] += 1
+                    no_data.append(line)
+                    continue
+
                 # Check if we got meaningful data
-                # Include any channel where we extracted competitors OR date (or both)
-                # Past events are included too - they can be used for validation and may still be watched
-                if event_info and (event_info.get("competitors") or event_info.get("date")):
+                has_competitors = event_info and event_info.get("competitors")
+                has_date = event_info and (event_info.get("date") or event_info.get("time_only"))
+
+                if has_competitors:
+                    stats["with_competitors"] += 1
+                if has_date:
+                    stats["with_date"] += 1
+                if has_competitors and has_date:
+                    stats["with_both"] += 1
+
+                # Suspicious case: date but no competitors
+                # Most PPV channels include event info if they include a date
+                if has_date and not has_competitors:
+                    stats["date_but_no_competitors"] += 1
+                    date_but_no_competitors.append(line)
+                    # Still add to extractable since we have date info
+                    extractable.append(line)
+                elif has_competitors or has_date:
                     # Has competitors and/or date - extractable
                     extractable.append(line)
                 else:
                     # No extraction at all
+                    stats["no_extraction"] += 1
                     no_data.append(line)
 
-            logger.info(f"Processed {total_lines} total lines")
+            logger.info(f"Processed {stats['total_lines']} total lines")
 
         # Write extractable
         logger.info(f"Writing EXTRACTABLE.list ({len(extractable)} channels)...")
@@ -78,11 +123,36 @@ def regenerate_ppv_lists():
             for line in no_data:
                 f.write(line + "\n")
 
-        # Summary
+        # Write date_but_no_competitors (suspicious cases for analysis)
+        if date_but_no_competitors:
+            logger.info(f"Writing DATE_BUT_NO_COMPETITORS.list ({len(date_but_no_competitors)} channels)...")
+            with open("DATE_BUT_NO_COMPETITORS.list", "w", encoding="utf-8") as f:
+                f.write("# Channels that have date/time info but no competitor extraction\n")
+                f.write("# These are suspicious because most PPV channels with dates include event info\n")
+                f.write("# Format: id|stream_id|channel_name|country|category|0\n")
+                f.write("#\n")
+                for line in date_but_no_competitors:
+                    f.write(line + "\n")
+
+        # Summary with detailed statistics
         logger.info("=" * 70)
+        logger.info("EXTRACTION STATISTICS:")
+        logger.info("=" * 70)
+        logger.info(f"📊 Total channels processed: {stats['total_lines']}")
+        logger.info("")
         logger.info(f"✅ EXTRACTABLE.list: {len(extractable)} channels")
+        logger.info(f"   - With competitors: {stats['with_competitors']}")
+        logger.info(f"   - With date/time: {stats['with_date']}")
+        logger.info(f"   - With both: {stats['with_both']}")
+        logger.info("")
+        logger.info(f"⚠️  DATE_BUT_NO_COMPETITORS.list: {stats['date_but_no_competitors']} channels")
+        logger.info("   (Included in EXTRACTABLE but flagged for analysis)")
+        logger.info("")
         logger.info(f"❌ NO_DATA.list: {len(no_data)} channels")
-        logger.info(f"📊 Total: {len(extractable) + len(no_data)} channels")
+        logger.info(f"   - Placeholders: {stats['placeholders']}")
+        logger.info(f"   - Inactive: {stats['inactive']}")
+        logger.info(f"   - No extraction: {stats['no_extraction']}")
+        logger.info("")
         logger.info(f"📅 Reference date used: {sync_date}")
         logger.info("=" * 70)
 

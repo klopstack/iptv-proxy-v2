@@ -426,7 +426,7 @@ class TestGetEventById:
     def test_get_event_by_id_success(self, mock_event_info):
         """Test successful retrieval of event by ID"""
         mock_event_info.return_value = {
-            "results": [
+            "events": [
                 {
                     "idEvent": "2274922",
                     "strEvent": "Arsenal vs Chelsea",
@@ -444,7 +444,7 @@ class TestGetEventById:
     @patch("services.thesportsdb_service.events.eventInfo")
     def test_get_event_by_id_not_found(self, mock_event_info):
         """Test handling of event not found"""
-        mock_event_info.return_value = {"results": []}
+        mock_event_info.return_value = {"events": []}
 
         service = TheSportsDBService()
         event = service.get_event_by_id("999999")
@@ -508,6 +508,26 @@ class TestIsEventLive:
         }
 
         assert service.is_event_live(event) is False
+
+    def test_is_event_live_with_none_status(self):
+        """Test handling of None status in is_event_live"""
+        service = TheSportsDBService()
+
+        # Event with None status started 1 hour ago (should be live based on timestamp)
+        event = {
+            "strStatus": None,
+            "strTimestamp": (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)).isoformat(),
+        }
+
+        assert service.is_event_live(event) is True
+
+        # Event with None status in future (should not be live)
+        event_future = {
+            "strStatus": None,
+            "strTimestamp": (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1)).isoformat(),
+        }
+
+        assert service.is_event_live(event_future) is False
 
 
 class TestIsEventUpcoming:
@@ -616,6 +636,147 @@ class TestIntegrationWithPPVChannels:
         assert len(events_list) == 5
         # Verify all events are for the correct date
         assert all(e["dateEvent"] == "2026-01-04" for e in events_list)
+
+
+class TestGetEventByIdRealAPIStructure:
+    """Test get_event_by_id with realistic API response structure"""
+
+    @patch("services.thesportsdb_service.events.eventInfo")
+    def test_get_event_by_id_with_full_api_response(self, mock_event_info):
+        """Test with complete API response structure matching real TheSportsDB response"""
+        # This is based on actual API response from TheSportsDB
+        mock_event_info.return_value = {
+            "events": [
+                {
+                    "idEvent": "441613",
+                    "idAPIfootball": None,
+                    "strEvent": "Liverpool vs Swansea",
+                    "strEventAlternate": "Swansea @ Liverpool",
+                    "strFilename": "English Premier League 2014-12-29 Liverpool vs Swansea",
+                    "strSport": "Soccer",
+                    "idLeague": "4328",
+                    "strLeague": "English Premier League",
+                    "strLeagueBadge": "https://r2.thesportsdb.com/images/media/league/badge/dsnjpz1679951317.png",
+                    "strSeason": "2014-2015",
+                    "strDescriptionEN": "",
+                    "strHomeTeam": "Liverpool",
+                    "strAwayTeam": "Swansea",
+                    "intHomeScore": "4",
+                    "intRound": "19",
+                    "intAwayScore": "1",
+                    "intSpectators": "44621",
+                    "strOfficial": None,
+                    "strTimestamp": "2014-12-29T20:00:00",
+                    "dateEvent": "2014-12-29",
+                    "dateEventLocal": "2014-12-29",
+                    "strTime": "20:00:00",
+                    "strTimeLocal": "20:00:00",
+                    "strGroup": None,
+                    "idHomeTeam": "133602",
+                    "strHomeTeamBadge": None,
+                    "idAwayTeam": "133614",
+                    "strAwayTeamBadge": None,
+                    "intScore": None,
+                    "intScoreVotes": None,
+                    "strResult": "",
+                    "idVenue": "15407",
+                    "strVenue": "Anfield",
+                    "strCountry": "England",
+                    "strCity": "Liverpool",
+                    "strPoster": None,
+                    "strSquare": None,
+                    "strFanart": None,
+                    "strThumb": None,
+                    "strBanner": None,
+                    "strMap": None,
+                    "strTweet1": "",
+                    "strVideo": "",
+                    "strStatus": None,
+                    "strPostponed": "no",
+                    "strLocked": "unlocked",
+                }
+            ]
+        }
+
+        service = TheSportsDBService()
+        event = service.get_event_by_id("441613")
+
+        # Verify we get the event data
+        assert event is not None
+        assert event["idEvent"] == "441613"
+        assert event["strEvent"] == "Liverpool vs Swansea"
+        assert event["strHomeTeam"] == "Liverpool"
+        assert event["strAwayTeam"] == "Swansea"
+        assert event["strLeague"] == "English Premier League"
+        assert event["strTimestamp"] == "2014-12-29T20:00:00"
+        assert event["dateEvent"] == "2014-12-29"
+
+    @patch("services.thesportsdb_service.events.eventInfo")
+    def test_get_event_by_id_verifies_events_key_not_results(self, mock_event_info):
+        """Regression test: ensure we use 'events' key, not 'results' key"""
+        # This test explicitly verifies the bug fix where we were looking for "results"
+        # instead of "events" in the API response
+        mock_event_info.return_value = {
+            "events": [
+                {
+                    "idEvent": "2357845",
+                    "strEvent": "Test Event",
+                    "strHomeTeam": "Team A",
+                    "strAwayTeam": "Team B",
+                }
+            ]
+        }
+
+        service = TheSportsDBService()
+        event = service.get_event_by_id("2357845")
+
+        # Should return the event because it's in the "events" array
+        assert event is not None
+        assert event["idEvent"] == "2357845"
+
+    @patch("services.thesportsdb_service.events.eventInfo")
+    def test_get_event_by_id_old_wrong_key_returns_none(self, mock_event_info):
+        """Verify that if API returns unexpected 'results' key, we handle it gracefully"""
+        # If for some reason the API returned "results" instead of "events"
+        mock_event_info.return_value = {
+            "results": [  # Wrong key - should be "events"
+                {
+                    "idEvent": "999999",
+                    "strEvent": "This should not be found",
+                }
+            ]
+        }
+
+        service = TheSportsDBService()
+        event = service.get_event_by_id("999999")
+
+        # Should return None because "events" key is missing
+        assert event is None
+
+    @patch("services.thesportsdb_service.events.eventInfo")
+    def test_get_event_by_id_with_none_status(self, mock_event_info):
+        """Test handling of None status field in API response"""
+        # Some events in the API return None for strStatus instead of a string
+        mock_event_info.return_value = {
+            "events": [
+                {
+                    "idEvent": "123456",
+                    "strEvent": "Event with None status",
+                    "strHomeTeam": "Team A",
+                    "strAwayTeam": "Team B",
+                    "strStatus": None,  # This is what caused the bug
+                    "dateEvent": "2026-01-05",
+                }
+            ]
+        }
+
+        service = TheSportsDBService()
+        event = service.get_event_by_id("123456")
+
+        # Should successfully return the event without crashing
+        assert event is not None
+        assert event["idEvent"] == "123456"
+        assert event["strStatus"] is None
 
 
 if __name__ == "__main__":
