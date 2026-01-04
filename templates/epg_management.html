@@ -262,6 +262,114 @@
     </div>
 </div>
 
+<!-- Add EPG Source Modal -->
+<div class="modal fade" id="sourceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sourceModalLabel">Add EPG Source</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="sourceForm">
+                    <input type="hidden" id="sourceId">
+                    
+                    <div class="mb-3">
+                        <label for="sourceName" class="form-label">Name</label>
+                        <input type="text" class="form-control" id="sourceName" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="sourceType" class="form-label">Source Type</label>
+                        <select class="form-select" id="sourceType" required onchange="onSourceTypeChange()">
+                            <option value="">Select type...</option>
+                            <option value="provider">IPTV Provider</option>
+                            <option value="xmltv_url">XMLTV URL</option>
+                            <option value="schedules_direct">Schedules Direct</option>
+                            <option value="xmltv_grabber">XMLTV Grabber</option>
+                            <option value="ppv_events">PPV Events</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Provider-specific fields -->
+                    <div id="providerFields" style="display: none;">
+                        <div class="mb-3">
+                            <label for="sourceAccountId" class="form-label">Account</label>
+                            <select class="form-select" id="sourceAccountId">
+                                <option value="">Select account...</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- XMLTV URL fields -->
+                    <div id="xmltvUrlFields" style="display: none;">
+                        <div class="mb-3">
+                            <label for="sourceUrl" class="form-label">XMLTV URL</label>
+                            <input type="url" class="form-control" id="sourceUrl">
+                        </div>
+                    </div>
+                    
+                    <!-- Schedules Direct fields -->
+                    <div id="sdFields" style="display: none;">
+                        <div class="mb-3">
+                            <label for="sdUsername" class="form-label">Username</label>
+                            <input type="text" class="form-control" id="sdUsername">
+                        </div>
+                        <div class="mb-3">
+                            <label for="sdPassword" class="form-label">Password</label>
+                            <input type="password" class="form-control" id="sdPassword">
+                        </div>
+                    </div>
+                    
+                    <!-- XMLTV Grabber fields -->
+                    <div id="grabberFields" style="display: none;">
+                        <div class="mb-3">
+                            <label for="grabberSelect" class="form-label">Grabber</label>
+                            <select class="form-select" id="grabberSelect">
+                                <option value="">Select grabber...</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="grabberConfigName" class="form-label">Config Name (optional)</label>
+                            <input type="text" class="form-control" id="grabberConfigName">
+                        </div>
+                        <div class="mb-3">
+                            <label for="grabberDays" class="form-label">Days to grab</label>
+                            <input type="number" class="form-control" id="grabberDays" value="7" min="1" max="14">
+                        </div>
+                        <div class="mb-3">
+                            <label for="grabberOffset" class="form-label">Offset (days)</label>
+                            <input type="number" class="form-control" id="grabberOffset" value="0">
+                        </div>
+                    </div>
+                    
+                    <!-- PPV Events info -->
+                    <div id="ppvFields" style="display: none;">
+                        <div class="alert alert-info">
+                            <small>This EPG source uses enriched PPV event data from your IPTV channels.</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="sourcePriority" class="form-label">Priority</label>
+                        <input type="number" class="form-control" id="sourcePriority" value="50" min="0" max="100">
+                        <small class="text-muted">Lower numbers = higher priority</small>
+                    </div>
+                    
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="sourceEnabled" checked>
+                        <label class="form-check-label" for="sourceEnabled">Enabled</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveSource()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- EPG Management Scripts -->
 <script src="{{ url_for('static', filename='js/epg_common.js') }}"></script>
 <script src="{{ url_for('static', filename='js/epg_sources.js') }}"></script>

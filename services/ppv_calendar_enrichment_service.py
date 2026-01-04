@@ -328,6 +328,30 @@ class PPVCalendarEnrichmentService:
             # Update persistent stats
             self._update_stats(results)
 
+            # Auto-create PPV EPG source if events were created/updated
+            if results.get("events_created", 0) > 0 or results.get("events_updated", 0) > 0:
+                try:
+                    from services.ppv_epg_service import PPVEpgService
+
+                    source_id = PPVEpgService.create_epg_source_for_ppv_events()
+                    logger.info(f"Auto-created/verified PPV EPG source with ID: {source_id}")
+
+                    # Sync events to EPG channels
+                    created, updated = PPVEpgService.sync_ppv_events_to_epg_channels(source_id)
+                    logger.info(f"Synced PPV events to EPG: {created} created, {updated} updated")
+
+                    # Auto-match PPV channels to the EPG
+                    from services.epg_match_rules_service import EpgMatchRulesService
+
+                    match_stats = EpgMatchRulesService.match_ppv_channels_to_epg(source_id=source_id, batch_size=100)
+                    logger.info(
+                        f"Auto-matched PPV channels: {match_stats.get('matched_count', 0)} matched, "
+                        f"{match_stats.get('unmatched_count', 0)} unmatched"
+                    )
+                    results["ppv_epg_matched"] = match_stats.get("matched_count", 0)
+                except Exception as e:
+                    logger.error(f"Failed to auto-create/match PPV EPG source: {e}")
+
             return results
 
     def _extract_all_channels(self, channels: List[Channel]) -> List[Tuple[Channel, Dict]]:

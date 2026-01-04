@@ -165,6 +165,52 @@ def sync_ppv_events_to_source(source_id):
     )
 
 
+@ppv_epg_bp.route("/source/<int:source_id>/match", methods=["POST"])
+@cross_origin()
+@handle_errors()
+def match_ppv_channels_to_epg(source_id):
+    """
+    Match PPV channels to EPG data.
+
+    Automatically maps PPV channels to their corresponding EPG channel entries
+    in the PPV Events EPG source.
+
+    Path Parameters:
+        source_id: PPV Events EPG source ID
+
+    Returns:
+        JSON with matching statistics
+    """
+    from models import EpgSource
+    from services.epg_match_rules_service import EpgMatchRulesService
+
+    # Verify source exists and is PPV type
+    epg_source = db.session.get(EpgSource, source_id)
+    if not epg_source:
+        return jsonify({"error": "EPG source not found"}), 404
+
+    if epg_source.source_type != "ppv_events":
+        return jsonify({"error": "Source is not a PPV Events source"}), 400
+
+    # Run matching
+    batch_size = request.json.get("batch_size", 100) if request.json else 100
+    match_stats = EpgMatchRulesService.match_ppv_channels_to_epg(source_id=source_id, batch_size=batch_size)
+
+    # Check for errors
+    if "error" in match_stats:
+        return jsonify(match_stats), 400
+
+    return jsonify(
+        {
+            "matched_count": match_stats["matched_count"],
+            "unmatched_count": match_stats["unmatched_count"],
+            "skipped_existing_count": match_stats["skipped_existing_count"],
+            "total_channels": match_stats["total_channels"],
+            "message": f"Matched {match_stats['matched_count']} PPV channels to EPG",
+        }
+    )
+
+
 @ppv_epg_bp.route("/source/<int:source_id>", methods=["GET"])
 @cross_origin()
 @handle_errors()

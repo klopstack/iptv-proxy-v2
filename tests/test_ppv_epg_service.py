@@ -567,3 +567,127 @@ class TestPPVEpgRoutes:
             assert data["id"] == source_id
             assert data["name"] == "Test Source"
             assert data["source_type"] == "ppv_events"
+
+    def test_auto_creation_after_enrichment(self, app):
+        """Test that PPV EPG source is auto-created after successful enrichment"""
+        with app.app_context():
+            from models import Account, Category, Event
+
+            # Create test data
+            account = Account(name="Test Account", server="http://test.com", username="test", password="test")
+            db.session.add(account)
+            db.session.flush()
+
+            category = Category(account_id=account.id, category_id="ppv", category_name="PPV")
+            db.session.add(category)
+            db.session.flush()
+
+            # Create an event
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            event = Event(
+                external_id="auto_test",
+                source=Event.SOURCE_THESPORTSDB,
+                sport="Soccer",
+                league_name="Test League",
+                home_team_id="123",
+                home_team_name="Team A",
+                away_team_id="456",
+                away_team_name="Team B",
+                scheduled_at=now + timedelta(hours=2),
+                status=Event.STATUS_SCHEDULED,
+                is_ppv=True,
+            )
+            db.session.add(event)
+            db.session.commit()
+
+            # Verify no PPV EPG source exists initially
+            initial_source = EpgSource.query.filter_by(source_type="ppv_events").first()
+            assert initial_source is None
+
+            # Test auto-creation by directly calling the service method
+            from services.ppv_epg_service import PPVEpgService
+
+            source_id = PPVEpgService.create_epg_source_for_ppv_events()
+
+            # Fetch the created source
+            source = db.session.get(EpgSource, source_id)
+
+            # Verify EPG source was created
+            assert source is not None
+            assert source.source_type == "ppv_events"
+            assert source.name == "PPV Events"
+            assert source.enabled is True
+
+            # Verify idempotency - calling again should return same source ID
+            source_id2 = PPVEpgService.create_epg_source_for_ppv_events()
+            assert source_id2 == source_id
+
+
+def test_ppv_channel_epg_matching(app, sample_events):
+    """Test that PPV channels are correctly matched to EPG data"""
+    with app.app_context():
+        from models import Account, Category, Channel, ChannelEpgMapping, Event, EventChannelLink
+        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.ppv_epg_service import PPVEpgService
+
+        # Get the event created by fixture
+        event = Event.query.first()
+        assert event is not None
+
+        # Create a PPV channel
+        account = Account.query.first()
+        category = Category.query.first()
+
+        channel = Channel(
+            account_id=account.id,
+            stream_id=9999,
+            name="UFC 300 Main Event",
+            category_id=category.id,
+            stream_type="live",
+            stream_icon="http://example.com/icon.png",
+            epg_channel_id=None,
+            is_ppv=True,
+        )
+        db.session.add(channel)
+        db.session.commit()
+
+        # Link the channel to the event
+        link = EventChannelLink(channel_id=channel.id, event_id=event.id, match_method="test", match_confidence=1.0)
+        db.session.add(link)
+        db.session.commit()
+
+        # Create EPG source and sync events
+        source_id = PPVEpgService.create_epg_source_for_ppv_events()
+        created, updated = PPVEpgService.sync_ppv_events_to_epg_channels(source_id)
+        assert created > 0
+
+        # Verify EPG channel was created with event-based ID
+        epg_channel = EpgChannel.query.filter_by(source_id=source_id).first()
+        assert epg_channel is not None
+        assert epg_channel.channel_id == f"ppv-event-{event.external_id}"
+
+        # Now run the matching
+        stats = EpgMatchRulesService.match_ppv_channels_to_epg(source_id)
+
+        # Verify stats
+        assert stats["total_channels"] == 1
+        assert stats["matched_count"] == 1
+        assert stats["unmatched_count"] == 0
+        assert stats["skipped_existing_count"] == 0
+
+        # Verify mapping was created
+        mapping = ChannelEpgMapping.query.filter_by(channel_id=channel.id).first()
+        assert mapping is not None
+        assert mapping.epg_channel_id == epg_channel.id
+        assert mapping.mapping_type == "ppv_auto"
+        assert mapping.confidence == 1.0
+
+        # Test idempotency - running again should skip the existing mapping
+        stats2 = EpgMatchRulesService.match_ppv_channels_to_epg(source_id)
+        assert stats2["total_channels"] == 1
+        assert stats2["matched_count"] == 0
+        assert stats2["skipped_existing_count"] == 1
+
+        # Verify only one mapping exists
+        all_mappings = ChannelEpgMapping.query.filter_by(channel_id=channel.id).all()
+        assert len(all_mappings) == 1

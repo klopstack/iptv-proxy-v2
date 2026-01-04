@@ -180,9 +180,10 @@ function renderSources() {
 function onSourceTypeChange() {
     const type = document.getElementById('sourceType').value;
     document.getElementById('providerFields').style.display = type === 'provider' ? 'block' : 'none';
-    document.getElementById('xmltvFields').style.display = type === 'xmltv_url' ? 'block' : 'none';
+    document.getElementById('xmltvUrlFields').style.display = type === 'xmltv_url' ? 'block' : 'none';
     document.getElementById('sdFields').style.display = type === 'schedules_direct' ? 'block' : 'none';
     document.getElementById('grabberFields').style.display = type === 'xmltv_grabber' ? 'block' : 'none';
+    document.getElementById('ppvFields').style.display = type === 'ppv_events' ? 'block' : 'none';
     
     if (type === 'xmltv_grabber') {
         populateGrabberSelect();

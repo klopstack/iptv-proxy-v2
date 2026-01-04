@@ -1539,6 +1539,125 @@ class EpgMatchRulesService:
     # ========================================================================
 
     @staticmethod
+    def match_ppv_channels_to_epg(
+        source_id: int,
+        batch_size: int = 50,
+    ) -> Dict:
+        """
+        Match PPV channels to the PPV Events EPG source.
+
+        This specialized method matches PPV channels (is_ppv=True) across all accounts
+        to the PPV Events EPG source. It's designed to run automatically after PPV enrichment.
+
+        Args:
+            source_id: PPV Events EPG source ID
+            batch_size: Number of channels to process before committing
+
+        Returns:
+            Dict with matching statistics
+        """
+        from models import EpgChannel, EpgSource
+
+        total_channels = 0
+        matched_count = 0
+        unmatched_count = 0
+        skipped_existing_count = 0
+
+        # Verify source exists and is PPV type
+        source = db.session.get(EpgSource, source_id)
+        if not source or source.source_type != "ppv_events":
+            logger.error(f"Invalid PPV EPG source ID: {source_id}")
+            return {
+                "total_channels": 0,
+                "matched_count": 0,
+                "unmatched_count": 0,
+                "error": "Invalid PPV EPG source",
+            }
+
+        # Get all active PPV channels across all accounts
+        ppv_channels = (
+            Channel.query.filter_by(is_active=True, is_visible=True, is_ppv=True)
+            .order_by(Channel.account_id, Channel.stream_id)
+            .all()
+        )
+
+        total_channels = len(ppv_channels)
+        logger.info(f"Matching {total_channels} PPV channels to EPG source {source_id}")
+
+        # Get all EPG channels for this source indexed by channel_id
+        # EPG channels use format: ppv-event-{external_id}
+        epg_channels_map = {
+            epg_ch.channel_id: epg_ch for epg_ch in EpgChannel.query.filter_by(source_id=source_id).all()
+        }
+
+        # Load event links for PPV channels to map channels to events
+        from models import Event, EventChannelLink
+
+        event_links = (
+            db.session.query(EventChannelLink.channel_id, Event.external_id)
+            .join(Event, EventChannelLink.event_id == Event.id)
+            .filter(EventChannelLink.channel_id.in_([ch.id for ch in ppv_channels]))
+            .all()
+        )
+        channel_to_event_map = {channel_id: external_id for channel_id, external_id in event_links}
+
+        batch_count = 0
+        for channel in ppv_channels:
+            # Check if already mapped
+            existing_mapping = ChannelEpgMapping.query.filter_by(channel_id=channel.id).first()
+
+            if existing_mapping:
+                skipped_existing_count += 1
+                continue
+
+            # Get event external_id for this channel
+            event_external_id = channel_to_event_map.get(channel.id)
+            if not event_external_id:
+                # Channel not linked to any event yet
+                unmatched_count += 1
+                continue
+
+            # EPG channel ID format: ppv-event-{external_id}
+            epg_channel_id_str = f"ppv-event-{event_external_id}"
+
+            # Find matching EPG channel
+            epg_channel = epg_channels_map.get(epg_channel_id_str)
+
+            if epg_channel:
+                # Create mapping
+                mapping = ChannelEpgMapping(
+                    channel_id=channel.id,
+                    epg_channel_id=epg_channel.id,
+                    confidence=1.0,  # Direct match
+                    mapping_type="ppv_auto",
+                )
+                db.session.add(mapping)
+                matched_count += 1
+            else:
+                unmatched_count += 1
+
+            batch_count += 1
+            if batch_count >= batch_size:
+                db.session.commit()
+                batch_count = 0
+
+        # Final commit
+        if batch_count > 0:
+            db.session.commit()
+
+        logger.info(
+            f"PPV EPG matching complete: {matched_count} matched, {unmatched_count} unmatched, "
+            f"{skipped_existing_count} already mapped"
+        )
+
+        return {
+            "total_channels": total_channels,
+            "matched_count": matched_count,
+            "unmatched_count": unmatched_count,
+            "skipped_existing_count": skipped_existing_count,
+        }
+
+    @staticmethod
     def match_channels_with_rules(
         account_id: int,
         source_id: Optional[int] = None,
