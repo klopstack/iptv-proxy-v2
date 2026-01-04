@@ -1,13 +1,13 @@
 """
 PPV Visibility Service - Apply PPV visibility rules based on account settings
 
-Uses PPVEventExtractor to detect events in channel names and filter inactive channels.
+Uses database Event records created by ppv_calendar_enrichment_service for filtering.
 """
 
 import logging
 from datetime import datetime, timezone
 
-from services.ppv_event_extractor import PPVEventExtractor
+from models import Event, EventChannelLink, db
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class PPVVisibilityService:
         """
         self.account = account
         self.ppv_visibility = getattr(account, "ppv_visibility", self.HIDE_INACTIVE)
-        self.event_extractor = PPVEventExtractor(current_date=datetime.now(timezone.utc).replace(tzinfo=None))
+        self._event_cache = {}  # Cache event lookups for this service instance
 
     def should_show_channel(self, channel):
         """
@@ -71,59 +71,80 @@ class PPVVisibilityService:
         """
         Check if a PPV channel has an active event.
 
-        Uses PPVEventExtractor to:
-        1. Detect placeholder channels (NO EVENT STREAMING)
-        2. Detect inactive channels (empty/generic names)
-        3. Extract event dates and check if in future
-        4. Detect far-future placeholder dates (2098-12-31)
+        Queries Event records linked to this channel via EventChannelLink.
+        Events are created by ppv_calendar_enrichment_service which:
+        1. Extracts event info from channel names
+        2. Matches against TheSportsDB calendar
+        3. Creates Event records with full details
 
         Args:
-            channel: Channel instance to check (needs name attribute)
+            channel: Channel instance to check (needs id attribute)
 
         Returns:
-            bool: True if event is active/upcoming, False if inactive/past
+            bool: True if event is active/upcoming, False if inactive/past/no event
         """
         try:
-            # Extract all event information from channel name
-            event_info = self.event_extractor.extract_all(channel.name)
+            # Check cache first
+            cache_key = channel.id
+            if cache_key in self._event_cache:
+                event = self._event_cache[cache_key]
+            else:
+                # Query linked event for this channel
+                event = (
+                    db.session.query(Event)
+                    .join(EventChannelLink, Event.id == EventChannelLink.event_id)
+                    .filter(EventChannelLink.channel_id == channel.id)
+                    .order_by(Event.scheduled_at.desc())  # Most recent event first
+                    .first()
+                )
+                self._event_cache[cache_key] = event
 
-            # Hide if channel is a placeholder (NO EVENT STREAMING)
-            if event_info.get("is_placeholder"):
-                logger.debug(f"Hiding placeholder channel: {channel.name[:60]}")
-                return False
-
-            # Hide if channel is inactive (empty/generic name)
-            if event_info.get("is_inactive"):
-                logger.debug(f"Hiding inactive channel: {channel.name[:60]}")
-                return False
-
-            # Hide if date was inferred as too far in future (placeholder date)
-            if event_info.get("inferred_how") == "date_too_far_future":
-                logger.debug(f"Hiding far-future placeholder channel: {channel.name[:60]}")
-                return False
-
-            # Check if event has a date
-            event_date = event_info.get("date")
-            if event_date:
-                # Hide if event is in the past
-                current_time = datetime.now(timezone.utc).replace(tzinfo=None)
-                if event_date < current_time:
-                    logger.debug(f"Hiding past event: {channel.name[:60]} (date: {event_date})")
+            # If no event linked, check enrichment status
+            if not event:
+                # If enrichment explicitly marked as "no_match", hide channel (no active event)
+                if channel.ppv_enrichment_status == "no_match":
+                    logger.debug(f"Hiding channel with no_match status: {channel.name[:60]}")
                     return False
-                else:
-                    # Event is in the future - show it
-                    logger.debug(f"Showing future event: {channel.name[:60]} (date: {event_date})")
+
+                # If enrichment is queued or processing, show channel (optimistic)
+                if channel.ppv_enrichment_status in ("queued", "processing"):
+                    logger.debug(f"Showing channel being enriched: {channel.name[:60]}")
                     return True
 
-            # If no date extracted, check if competitors were found
-            # Channels with competitors but no date are likely upcoming events
-            if event_info.get("competitors"):
-                logger.debug(f"Showing channel with competitors: {channel.name[:60]}")
-                return True
+                # If enrichment failed with error, show channel (avoid hiding valid channels)
+                if channel.ppv_enrichment_status == "error":
+                    logger.debug(f"Showing channel with enrichment error: {channel.name[:60]}")
+                    return True
 
-            # No event information found - default to hiding (conservative)
-            logger.debug(f"Hiding channel with no event info: {channel.name[:60]}")
-            return False
+                # No event and no enrichment status - default to hiding (conservative)
+                logger.debug(f"Hiding channel with no linked event: {channel.name[:60]}")
+                return False
+
+            # Have an event - check if it's in the future
+            current_time = datetime.now(timezone.utc).replace(tzinfo=None)
+
+            # Check event status first
+            if event.status == Event.STATUS_CANCELLED:
+                logger.debug(f"Hiding cancelled event: {channel.name[:60]} (event: {event.external_id})")
+                return False
+
+            if event.status == Event.STATUS_FINISHED:
+                logger.debug(f"Hiding finished event: {channel.name[:60]} (event: {event.external_id})")
+                return False
+
+            # Check scheduled time
+            if event.scheduled_at < current_time:
+                # Event in past - hide it
+                logger.debug(
+                    f"Hiding past event: {channel.name[:60]} (date: {event.scheduled_at}, event: {event.external_id})"
+                )
+                return False
+
+            # Event is in the future or live - show it
+            logger.debug(
+                f"Showing future/live event: {channel.name[:60]} (date: {event.scheduled_at}, event: {event.external_id})"
+            )
+            return True
 
         except Exception as e:
             # Log error but don't crash - default to showing to avoid hiding valid channels

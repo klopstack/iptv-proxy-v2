@@ -378,6 +378,21 @@ def generate_playlist(account_id):
     # Get primary credential for direct URL mode
     primary_cred = account.get_primary_credential() if not use_proxy else None
 
+    # Load event IDs for PPV channels (for EPG identifiers)
+    from models import Event, EventChannelLink
+
+    ppv_channel_ids = [ch.id for ch in channels if ch.is_ppv]
+    event_map = {}
+    if ppv_channel_ids:
+        event_links = (
+            db.session.query(EventChannelLink.channel_id, Event.id, Event.external_id)
+            .join(Event, EventChannelLink.event_id == Event.id)
+            .filter(EventChannelLink.channel_id.in_(ppv_channel_ids))
+            .all()
+        )
+        for channel_id, event_id, external_id in event_links:
+            event_map[channel_id] = (event_id, external_id)
+
     # Generate M3U
     m3u_lines = ["#EXTM3U"]
     for channel in channels:
@@ -385,8 +400,16 @@ def generate_playlist(account_id):
         display_name = sanitize_m3u_value(channel.cleaned_name or channel.name)
         category_name = sanitize_m3u_value(channel.category.category_name if channel.category else "Unknown")
 
-        # Always use standardized EPG ID format to prevent collisions across providers
-        tvg_id = f"ch-{account_id}-{channel.stream_id}"
+        # For PPV channels with linked events, use event ID as EPG identifier
+        # This allows EPG to be auto-generated from Event records
+        if channel.is_ppv and channel.id in event_map:
+            event_id, external_id = event_map[channel.id]
+            tvg_id = f"event-{event_id}"
+            logger.debug(f"PPV channel {channel.name[:60]} using event EPG ID: {tvg_id} (external: {external_id})")
+        else:
+            # Standard EPG ID format for non-PPV or unlinked channels
+            tvg_id = f"ch-{account_id}-{channel.stream_id}"
+
         original_icon = channel.stream_icon or ""
 
         # Proxy icon URL if enabled
