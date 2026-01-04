@@ -325,15 +325,20 @@ def generate_playlist(account_id):
     # Initialize image cache if proxying icons
     image_cache = ImageCacheService.get_instance() if proxy_icons else None
 
-    # Build base query - use pre-computed is_visible
+    # Build base query - fetch all active channels, will apply filters dynamically
     query = (
         db.session.query(Channel)
-        .filter(Channel.account_id == account_id, Channel.is_active, Channel.is_visible)
+        .filter(Channel.account_id == account_id, Channel.is_active)
         .join(Category, Channel.category_id == Category.id, isouter=True)
     )
 
     # Get all matching channels
     channels = query.order_by(Channel.name).all()
+
+    # Apply filters dynamically to channels
+    from services.filter_service import FilterService
+
+    channels = FilterService.apply_filters_to_channels(channels, account_id)
 
     # Apply PPV visibility filtering based on account settings
     ppv_service = PPVVisibilityService(account)
@@ -542,10 +547,10 @@ def _generate_playlist_from_config(config):
 
     for account in accounts:
         # Build query for channels from this account
-        # Use pre-computed is_visible (account-level filters already applied)
+        # Filters will be applied dynamically via FilterService
         query = (
             db.session.query(Channel)
-            .filter(Channel.account_id == account.id, Channel.is_active, Channel.is_visible)
+            .filter(Channel.account_id == account.id, Channel.is_active)
             .join(Category, Channel.category_id == Category.id, isouter=True)
         )
 
@@ -586,6 +591,11 @@ def _generate_playlist_from_config(config):
 
         # Get all matching channels
         channels = query.order_by(Channel.name).all()
+
+        # Apply filters dynamically via FilterService (includes is_visible check)
+        from services.filter_service import FilterService
+
+        channels = FilterService.apply_filters_to_channels(channels, account.id)
 
         # Apply PPV visibility filtering based on account settings
         ppv_service = PPVVisibilityService(account)
@@ -714,15 +724,20 @@ def proxy_epg(account_id):
     # Check if we should collapse duplicates (same logic as M3U generation)
     collapse_duplicates = request.args.get("collapse_duplicates", "").lower() == "true"
 
-    # Build base query - same filtering as M3U generation (is_visible filters out down channels)
+    # Build base query - filters applied dynamically via FilterService
     query = (
         db.session.query(Channel)
-        .filter(Channel.account_id == account_id, Channel.is_active, Channel.is_visible)
+        .filter(Channel.account_id == account_id, Channel.is_active)
         .join(Category, Channel.category_id == Category.id, isouter=True)
     )
 
     # Get all matching channels
     channels = query.order_by(Channel.name).all()
+
+    # Apply filters dynamically (includes is_visible check)
+    from services.filter_service import FilterService
+
+    channels = FilterService.apply_filters_to_channels(channels, account_id)
 
     # If collapsing duplicates, load tags and collapse (same logic as M3U)
     if collapse_duplicates:

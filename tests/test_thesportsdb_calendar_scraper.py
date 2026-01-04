@@ -77,6 +77,54 @@ class TestCalendarEvent:
 
         assert event.scheduled_at is None
 
+    def test_scheduled_at_handles_empty_time(self):
+        """Test scheduled_at returns None for empty time string."""
+        event = CalendarEvent(
+            event_id="2385975",
+            event_name="Test Event",
+            league_name="Test League",
+            time_utc="",
+            date="2024-06-15",
+        )
+
+        assert event.scheduled_at is None
+
+    def test_scheduled_at_handles_empty_date(self):
+        """Test scheduled_at returns None for empty date string."""
+        event = CalendarEvent(
+            event_id="123",
+            event_name="Test Event",
+            league_name="Test League",
+            time_utc="14:30",
+            date="",
+        )
+
+        assert event.scheduled_at is None
+
+    def test_scheduled_at_handles_malformed_time_parts(self):
+        """Test scheduled_at returns None when time has empty parts."""
+        event = CalendarEvent(
+            event_id="123",
+            event_name="Test Event",
+            league_name="Test League",
+            time_utc=":30",  # Empty hour part
+            date="2024-06-15",
+        )
+
+        assert event.scheduled_at is None
+
+    def test_scheduled_at_handles_malformed_date_parts(self):
+        """Test scheduled_at returns None when date has missing parts."""
+        event = CalendarEvent(
+            event_id="123",
+            event_name="Test Event",
+            league_name="Test League",
+            time_utc="14:30",
+            date="2024--15",  # Empty month part
+        )
+
+        assert event.scheduled_at is None
+
     def test_to_dict(self):
         """Test dictionary conversion."""
         event = CalendarEvent(
@@ -104,9 +152,9 @@ class TestTheSportsDBCalendarScraper:
     """Tests for TheSportsDBCalendarScraper class."""
 
     @pytest.fixture
-    def scraper(self):
-        """Create a scraper instance for testing."""
-        return TheSportsDBCalendarScraper(cache_ttl=60)
+    def scraper(self, tmp_path):
+        """Create a scraper instance for testing with isolated cache."""
+        return TheSportsDBCalendarScraper(cache_ttl=60, cache_dir=str(tmp_path))
 
     def test_cache_key_generation(self, scraper):
         """Test cache key format."""
@@ -495,9 +543,9 @@ class TestIntegration:
     """Integration tests (with mocked HTTP)."""
 
     @pytest.fixture
-    def scraper(self):
-        """Create a scraper instance."""
-        return TheSportsDBCalendarScraper()
+    def scraper(self, tmp_path):
+        """Create a scraper instance with isolated cache."""
+        return TheSportsDBCalendarScraper(cache_dir=str(tmp_path))
 
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_calendar_page")
     def test_get_events_for_date_uses_cache(self, mock_fetch, scraper):
@@ -544,3 +592,183 @@ class TestIntegration:
         # Force refresh should fetch again
         scraper.get_events_for_date("2024-03-01", force_refresh=True)
         assert mock_fetch.call_count == 2
+
+
+class TestPersistentCache:
+    """Tests for persistent cache functionality."""
+
+    @pytest.fixture
+    def temp_cache_dir(self, tmp_path):
+        """Create a temporary cache directory."""
+        return str(tmp_path)
+
+    @pytest.fixture
+    def scraper_with_temp_cache(self, temp_cache_dir):
+        """Create a scraper with a temporary cache directory."""
+        return TheSportsDBCalendarScraper(cache_ttl=60, cache_dir=temp_cache_dir)
+
+    def test_cache_file_path_set(self, scraper_with_temp_cache, temp_cache_dir):
+        """Test that cache file path is set correctly."""
+        import os
+
+        expected_path = os.path.join(temp_cache_dir, "calendar_cache.json")
+        assert scraper_with_temp_cache._cache_file == expected_path
+
+    @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_calendar_page")
+    def test_save_persistent_cache(self, mock_fetch, scraper_with_temp_cache, temp_cache_dir):
+        """Test that cache is saved to disk."""
+        import json
+        import os
+
+        mock_events = [
+            CalendarEvent(
+                event_id="1",
+                event_name="Test Event",
+                league_name="Test League",
+                time_utc="15:00",
+                date="2024-03-01",
+                home_team="Team A",
+                away_team="Team B",
+            )
+        ]
+        mock_fetch.return_value = mock_events
+
+        # Fetch events (should trigger cache save)
+        scraper_with_temp_cache.get_events_for_date("2024-03-01")
+
+        # Check cache file exists
+        cache_file = os.path.join(temp_cache_dir, "calendar_cache.json")
+        assert os.path.exists(cache_file)
+
+        # Check cache content
+        with open(cache_file, "r") as f:
+            data = json.load(f)
+
+        assert "2024-03-01:" in data
+        assert len(data["2024-03-01:"]["events"]) == 1
+        assert data["2024-03-01:"]["events"][0]["event_id"] == "1"
+
+    def test_load_persistent_cache(self, temp_cache_dir):
+        """Test that cache is loaded from disk on startup."""
+        import json
+        import os
+        import time
+
+        # Create a cache file manually
+        cache_file = os.path.join(temp_cache_dir, "calendar_cache.json")
+        cache_data = {
+            "2024-03-01:": {
+                "timestamp": time.time(),
+                "events": [
+                    {
+                        "event_id": "saved1",
+                        "event_name": "Saved Event",
+                        "league_name": "Saved League",
+                        "time_utc": "15:00",
+                        "date": "2024-03-01",
+                        "home_team": None,
+                        "away_team": None,
+                        "event_url": None,
+                        "league_icon_url": None,
+                        "country_flag_url": None,
+                        "scheduled_at": "2024-03-01T15:00:00+00:00",
+                    }
+                ],
+            }
+        }
+
+        os.makedirs(temp_cache_dir, exist_ok=True)
+        with open(cache_file, "w") as f:
+            json.dump(cache_data, f)
+
+        # Create scraper - should load cache
+        scraper = TheSportsDBCalendarScraper(cache_ttl=60, cache_dir=temp_cache_dir)
+
+        # Check that cache was loaded
+        assert scraper._cache_disk_loads == 1
+        assert "2024-03-01:" in scraper._cache
+        events, _ = scraper._cache["2024-03-01:"]
+        assert len(events) == 1
+        assert events[0].event_id == "saved1"
+
+    def test_expired_cache_not_loaded(self, temp_cache_dir):
+        """Test that expired cache entries are not loaded."""
+        import json
+        import os
+        import time
+
+        # Create a cache file with old timestamp
+        cache_file = os.path.join(temp_cache_dir, "calendar_cache.json")
+        cache_data = {
+            "2024-03-01:": {
+                "timestamp": time.time() - 100000,  # Very old
+                "events": [
+                    {
+                        "event_id": "old1",
+                        "event_name": "Old Event",
+                        "league_name": "Old League",
+                        "time_utc": "15:00",
+                        "date": "2024-03-01",
+                        "home_team": None,
+                        "away_team": None,
+                        "event_url": None,
+                        "league_icon_url": None,
+                        "country_flag_url": None,
+                        "scheduled_at": "2024-03-01T15:00:00+00:00",
+                    }
+                ],
+            }
+        }
+
+        os.makedirs(temp_cache_dir, exist_ok=True)
+        with open(cache_file, "w") as f:
+            json.dump(cache_data, f)
+
+        # Create scraper with short TTL
+        scraper = TheSportsDBCalendarScraper(cache_ttl=60, cache_dir=temp_cache_dir)
+
+        # Expired entry should not be loaded
+        assert "2024-03-01:" not in scraper._cache
+
+    def test_clear_cache_with_persistent(self, scraper_with_temp_cache, temp_cache_dir):
+        """Test clearing cache also deletes persistent file."""
+        import os
+
+        # Add something to cache
+        import time
+
+        scraper_with_temp_cache._cache["test:"] = ([], time.time())
+
+        # Create a cache file
+        cache_file = os.path.join(temp_cache_dir, "calendar_cache.json")
+        os.makedirs(temp_cache_dir, exist_ok=True)
+        with open(cache_file, "w") as f:
+            f.write("{}")
+
+        assert os.path.exists(cache_file)
+
+        # Clear cache
+        scraper_with_temp_cache.clear_cache(include_persistent=True)
+
+        # Check memory cache is cleared
+        assert len(scraper_with_temp_cache._cache) == 0
+
+        # Check file is deleted
+        assert not os.path.exists(cache_file)
+
+    def test_get_cache_stats_includes_persistent(self, scraper_with_temp_cache, temp_cache_dir):
+        """Test that cache stats include persistent cache info."""
+        import os
+
+        # Create a cache file
+        cache_file = os.path.join(temp_cache_dir, "calendar_cache.json")
+        os.makedirs(temp_cache_dir, exist_ok=True)
+        with open(cache_file, "w") as f:
+            f.write('{"test": "data"}')
+
+        stats = scraper_with_temp_cache.get_cache_stats()
+
+        assert "persistent_cache_file" in stats
+        assert "persistent_cache_size_bytes" in stats
+        assert stats["persistent_cache_size_bytes"] > 0
+        assert stats["disk_loads"] >= 0

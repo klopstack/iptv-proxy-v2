@@ -12,7 +12,9 @@ contains a table of all events for a given date with:
 - Link to event detail page (contains event ID)
 """
 
+import json
 import logging
+import os
 import re
 import time
 from datetime import datetime, timedelta, timezone
@@ -29,6 +31,9 @@ CALENDAR_URL_TEMPLATE = "https://www.thesportsdb.com/browse_calendar/?s={sport}&
 
 # Cache TTL in seconds (12 hours - calendar data doesn't change frequently)
 CACHE_TTL_SECONDS = 3600 * 12
+
+# Persistent cache file path (relative to app data directory)
+PERSISTENT_CACHE_FILENAME = "calendar_cache.json"
 
 # Request timeout
 REQUEST_TIMEOUT = 30
@@ -68,13 +73,28 @@ class CalendarEvent:
     def scheduled_at(self) -> Optional[datetime]:
         """Parse the scheduled datetime from date and time_utc."""
         try:
+            # Validate inputs are not empty
+            if not self.time_utc or not self.date:
+                logger.warning(
+                    f"Empty time or date for event {self.event_id}: " f"time_utc='{self.time_utc}', date='{self.date}'"
+                )
+                return None
+
             # Parse time like "00:00" or "14:30"
             time_parts = self.time_utc.replace(" UTC", "").strip().split(":")
+            if not time_parts[0]:  # Empty hour part
+                logger.warning(f"Empty hour in time_utc for event {self.event_id}: '{self.time_utc}'")
+                return None
+
             hour = int(time_parts[0])
-            minute = int(time_parts[1]) if len(time_parts) > 1 else 0
+            minute = int(time_parts[1]) if len(time_parts) > 1 and time_parts[1] else 0
 
             # Parse date (YYYY-MM-DD)
             date_parts = self.date.split("-")
+            if len(date_parts) != 3 or not all(date_parts):
+                logger.warning(f"Invalid date format for event {self.event_id}: '{self.date}'")
+                return None
+
             year = int(date_parts[0])
             month = int(date_parts[1])
             day = int(date_parts[2])
@@ -113,20 +133,34 @@ class TheSportsDBCalendarScraper:
     2. Parses event information including event IDs from links
     3. Caches results to avoid repeated requests
     4. Provides fuzzy matching for PPV channel names to events
+    5. Persists cache to disk to survive restarts
     """
 
-    def __init__(self, cache_ttl: int = CACHE_TTL_SECONDS):
+    def __init__(self, cache_ttl: int = CACHE_TTL_SECONDS, cache_dir: Optional[str] = None):
         """
         Initialize the calendar scraper.
 
         Args:
             cache_ttl: Cache time-to-live in seconds
+            cache_dir: Directory for persistent cache file (default: data/)
         """
         self._cache: Dict[str, Tuple[List[CalendarEvent], float]] = {}
         self._cache_ttl = cache_ttl
         self._last_request_time = 0.0
         self._cache_hits = 0
         self._cache_misses = 0
+        self._cache_disk_loads = 0
+
+        # Set up persistent cache path
+        if cache_dir is None:
+            # Default to data/ directory relative to app root
+            cache_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+        self._cache_dir = cache_dir
+        self._cache_file = os.path.join(cache_dir, PERSISTENT_CACHE_FILENAME)
+
+        # Load persistent cache on startup
+        self._load_persistent_cache()
+
         self._session = requests.Session()
         self._session.headers.update(
             {
@@ -143,6 +177,81 @@ class TheSportsDBCalendarScraper:
         if elapsed < REQUEST_DELAY_SECONDS:
             time.sleep(REQUEST_DELAY_SECONDS - elapsed)
         self._last_request_time = time.time()
+
+    def _load_persistent_cache(self) -> None:
+        """Load cache from disk if available."""
+        if not os.path.exists(self._cache_file):
+            logger.debug(f"No persistent cache file found at {self._cache_file}")
+            return
+
+        try:
+            with open(self._cache_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            loaded_count = 0
+            now = time.time()
+
+            for cache_key, entry in data.items():
+                timestamp = entry.get("timestamp", 0)
+                # Only load entries that are still valid
+                if (now - timestamp) < self._cache_ttl:
+                    events_data = entry.get("events", [])
+                    events = [
+                        CalendarEvent(
+                            event_id=ev["event_id"],
+                            event_name=ev["event_name"],
+                            league_name=ev["league_name"],
+                            time_utc=ev["time_utc"],
+                            date=ev["date"],
+                            home_team=ev.get("home_team"),
+                            away_team=ev.get("away_team"),
+                            event_url=ev.get("event_url"),
+                            league_icon_url=ev.get("league_icon_url"),
+                            country_flag_url=ev.get("country_flag_url"),
+                        )
+                        for ev in events_data
+                    ]
+                    self._cache[cache_key] = (events, timestamp)
+                    loaded_count += 1
+
+            if loaded_count > 0:
+                self._cache_disk_loads = loaded_count
+                logger.info(
+                    f"Loaded {loaded_count} date entries from persistent cache "
+                    f"({sum(len(e) for e, _ in self._cache.values())} total events)"
+                )
+        except (json.JSONDecodeError, IOError, KeyError) as e:
+            logger.warning(f"Failed to load persistent cache: {e}")
+
+    def _save_persistent_cache(self) -> None:
+        """Save current cache to disk."""
+        try:
+            # Ensure cache directory exists
+            os.makedirs(self._cache_dir, exist_ok=True)
+
+            # Convert cache to JSON-serializable format
+            data = {}
+            now = time.time()
+
+            for cache_key, (events, timestamp) in self._cache.items():
+                # Only save entries that are still valid
+                if (now - timestamp) < self._cache_ttl:
+                    data[cache_key] = {
+                        "timestamp": timestamp,
+                        "events": [ev.to_dict() for ev in events],
+                    }
+
+            with open(self._cache_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+
+            total_events = 0
+            for entry in data.values():
+                events_list = entry.get("events", [])
+                if isinstance(events_list, list):
+                    total_events += len(events_list)
+            logger.debug(f"Saved {len(data)} date entries to persistent cache " f"({total_events} total events)")
+        except (IOError, TypeError) as e:
+            logger.warning(f"Failed to save persistent cache: {e}")
 
     def _get_cache_key(self, date: str, sport: str = "") -> str:
         """Generate cache key for a date/sport combination."""
@@ -181,6 +290,8 @@ class TheSportsDBCalendarScraper:
         try:
             events = self._fetch_calendar_page(date, sport)
             self._cache[cache_key] = (events, time.time())
+            # Save to persistent cache after fetching new data
+            self._save_persistent_cache()
             logger.info(f"Fetched {len(events)} events for {date} (sport={sport or 'all'})")
             return events
         except Exception as e:
@@ -539,27 +650,51 @@ class TheSportsDBCalendarScraper:
         except (ValueError, IndexError):
             return None
 
-    def clear_cache(self) -> None:
-        """Clear all cached calendar data."""
+    def clear_cache(self, include_persistent: bool = True) -> None:
+        """
+        Clear all cached calendar data.
+
+        Args:
+            include_persistent: If True, also delete the persistent cache file
+        """
         self._cache.clear()
-        logger.info("Calendar cache cleared")
+        if include_persistent and os.path.exists(self._cache_file):
+            try:
+                os.remove(self._cache_file)
+                logger.info("Calendar cache cleared (including persistent cache)")
+            except IOError as e:
+                logger.warning(f"Failed to delete persistent cache: {e}")
+        else:
+            logger.info("Calendar cache cleared (memory only)")
 
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
         now = time.time()
         valid_entries = sum(1 for _, (_, ts) in self._cache.items() if (now - ts) < self._cache_ttl)
         total = len(self._cache)
+        total_events = sum(len(events) for events, _ in self._cache.values())
 
         # Calculate hit rate from internal tracking
-        total_requests = getattr(self, "_cache_hits", 0) + getattr(self, "_cache_misses", 0)
-        hit_rate = (getattr(self, "_cache_hits", 0) / total_requests) if total_requests > 0 else 0.0
+        total_requests = self._cache_hits + self._cache_misses
+        hit_rate = (self._cache_hits / total_requests) if total_requests > 0 else 0.0
+
+        # Check persistent cache file
+        persistent_size = 0
+        if os.path.exists(self._cache_file):
+            persistent_size = os.path.getsize(self._cache_file)
 
         return {
             "size": valid_entries,
             "total_entries": total,
             "valid_entries": valid_entries,
+            "total_events": total_events,
             "hit_rate": hit_rate,
+            "cache_hits": self._cache_hits,
+            "cache_misses": self._cache_misses,
+            "disk_loads": self._cache_disk_loads,
             "cache_ttl_seconds": self._cache_ttl,
+            "persistent_cache_file": self._cache_file,
+            "persistent_cache_size_bytes": persistent_size,
         }
 
 

@@ -74,6 +74,7 @@ def get_all_categories():
             Category.account_id,
             Category.is_ppv,
             Account.name.label("account_name"),
+            # Note: is_visible used for stats only. Actual filtering done via FilterService
             db.func.sum(
                 db.case((db.and_(Channel.is_visible == True, Channel.is_active == True), 1), else_=0)  # noqa: E712
             ).label("visible_count"),
@@ -118,6 +119,7 @@ def get_all_categories():
 
     if not include_empty:
         # Filter to categories that have at least one visible channel
+        # Note: is_visible used for stats filtering only
         query = query.having(
             db.func.sum(
                 db.case(
@@ -277,11 +279,11 @@ def preview_channels():
     # Normalize for case-insensitive matching
     filter_tags = TagService.normalize_filter_tags(filter_tags)
 
-    # Build base query
+    # Build base query - filters will be applied dynamically
     query = (
         db.session.query(Channel)
         .join(Category, Channel.category_id == Category.id, isouter=True)
-        .filter(Channel.is_active, Channel.is_visible)
+        .filter(Channel.is_active)
     )
 
     # Apply account filter if specified
@@ -307,11 +309,32 @@ def preview_channels():
 
         query = query.filter(Channel.stream_id.in_(tag_subquery))
 
-    # Get total count
-    total = query.count()
+    # Get all channels (we need to apply filters dynamically)
+    all_channels = query.order_by(Channel.name).all()
 
-    # Get paginated results
-    channels = query.order_by(Channel.name).offset(offset).limit(limit).all()
+    # Apply filters dynamically per account
+    # Group channels by account and filter each group
+    from services.filter_service import FilterService
+
+    channels_by_account = {}
+    for ch in all_channels:
+        if ch.account_id not in channels_by_account:
+            channels_by_account[ch.account_id] = []
+        channels_by_account[ch.account_id].append(ch)
+
+    # Filter each account's channels
+    filtered_channels = []
+    for acc_id, acc_channels in channels_by_account.items():
+        filtered_channels.extend(FilterService.apply_filters_to_channels(acc_channels, acc_id))
+
+    # Sort all filtered channels by name
+    filtered_channels.sort(key=lambda ch: ch.name or "")
+
+    # Get total count after filtering
+    total = len(filtered_channels)
+
+    # Apply pagination
+    channels = filtered_channels[offset : offset + limit]
 
     # Batch-load tags for all channels at once
     stream_ids = [ch.stream_id for ch in channels]

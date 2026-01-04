@@ -4,7 +4,7 @@ Filter service for computing and caching filter results
 
 import logging
 import re
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from models import Account, Channel, ChannelTag, Filter, Tag, db
 
@@ -269,6 +269,75 @@ class FilterService:
             return False
 
         return False
+
+    @staticmethod
+    def apply_filters_to_channels(
+        channels: List[Channel],
+        account_id: int,
+        channel_tags_map: Optional[Dict[str, List[str]]] = None,
+    ) -> List[Channel]:
+        """
+        Apply filters to a list of channels dynamically without updating database.
+
+        This is used for real-time filtering in previews and playlist generation.
+        Respects the is_visible flag for explicit channel hiding.
+
+        Args:
+            channels: List of Channel objects to filter
+            account_id: Account ID to get filters from
+            channel_tags_map: Optional pre-loaded map of stream_id -> list of tag names.
+                            If not provided, tags will be loaded for channels that need them.
+
+        Returns:
+            List of channels that pass all filters
+        """
+        if not channels:
+            return []
+
+        # First, filter out explicitly hidden channels (is_visible=False)
+        # This flag is used for explicit channel hiding feature, separate from filters
+        channels = [ch for ch in channels if ch.is_visible]
+
+        # Get enabled filters for this account
+        filters = Filter.query.filter_by(account_id=account_id, enabled=True).all()
+
+        # If no filters, all channels pass (except PPV placeholders)
+        if not filters:
+            # Still filter out PPV placeholders
+            return [ch for ch in channels if not is_ppv_placeholder_name(ch.name)]
+
+        # Check if we need to load tags
+        has_tag_filters = any(f.filter_type == "tag" for f in filters)
+        if has_tag_filters and channel_tags_map is None:
+            # Load tags for all channels in batches
+            channel_tags_map = {}
+            stream_ids = [ch.stream_id for ch in channels]
+            batch_size = 1000
+
+            for i in range(0, len(stream_ids), batch_size):
+                batch = stream_ids[i : i + batch_size]
+                tags_query = (
+                    db.session.query(ChannelTag.stream_id, Tag.name)
+                    .join(Tag)
+                    .filter(ChannelTag.account_id == account_id, ChannelTag.stream_id.in_(batch))
+                    .all()
+                )
+
+                for stream_id, tag_name in tags_query:
+                    if stream_id not in channel_tags_map:
+                        channel_tags_map[stream_id] = []
+                    channel_tags_map[stream_id].append(tag_name)
+
+        # Apply filters to each channel
+        filtered_channels = []
+        for channel in channels:
+            category_name = channel.category.category_name if channel.category else ""
+            channel_tags = channel_tags_map.get(channel.stream_id, []) if channel_tags_map else []
+
+            if FilterService._channel_passes_filters(channel, category_name, channel_tags, filters):
+                filtered_channels.append(channel)
+
+        return filtered_channels
 
     @staticmethod
     def invalidate_account(account_id: int) -> None:

@@ -60,6 +60,15 @@ omit = [
     "measure_ppv_extraction.py",
     "regenerate_ppv_lists.py",
     "analyze_date_but_no_competitors.py",
+    "analyze_matcher_failures.py",
+    "analyze_matcher_hit_rate.py",
+    "analyze_ppv_channel_names.py",
+    "test_dynamic_filtering.py",
+    "test_extractor_vs_matcher.py",
+    "test_extractor_vs_matcher_quick.py",
+    "test_last_name_matching_demo.py",
+    "test_matcher_improvements.py",
+    "test_reverse_matcher.py",
     "export_ppv_from_db.py",
 ]
 

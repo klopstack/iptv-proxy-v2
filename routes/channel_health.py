@@ -165,6 +165,7 @@ def get_categories():
     account_id = request.args.get("account_id", type=int)
 
     # Only get categories that have visible channels
+    # Note: is_visible used for category filtering. Actual channel filtering done via FilterService
     query = Category.query.join(Channel).filter(Channel.is_visible == True).distinct()  # noqa: E712
 
     if account_id:

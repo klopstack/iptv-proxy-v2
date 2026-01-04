@@ -430,7 +430,8 @@ def get_account_stats(account_id):
         # Use database stats (fast!)
         category_count = db.session.query(Category.id).filter_by(account_id=account_id).count()
 
-        # Get visible/hidden counts
+        # Get visible/hidden counts (raw pre-computed stats)
+        # Note: is_visible is used here for stats only. Actual filtering is done dynamically via FilterService
         visible_count = Channel.query.filter_by(account_id=account_id, is_active=True, is_visible=True).count()
         hidden_count = channel_count - visible_count
 
@@ -861,13 +862,12 @@ def preview_account_playlist(account_id):
     if not has_synced:
         return jsonify({"success": False, "error": "Account not synced. Please sync the account first."}), 503
 
-    # Build base query - use pre-computed is_visible
+    # Build base query - only filter by active status, apply filters dynamically later
     base_query = (
         db.session.query(Channel)
         .filter(
             Channel.account_id == account_id,
             Channel.is_active,
-            Channel.is_visible,  # Use pre-computed filter result
         )
         .join(Category, Channel.category_id == Category.id, isouter=True)
     )
@@ -905,6 +905,11 @@ def preview_account_playlist(account_id):
         # to properly group and collapse them, then paginate the result
         all_channels = base_query.all()
 
+        # Apply filters dynamically to channels
+        from services.filter_service import FilterService
+
+        all_channels = FilterService.apply_filters_to_channels(all_channels, account_id)
+
         # Get ALL channel IDs for batch tag loading
         all_channel_ids = [ch.stream_id for ch in all_channels]
 
@@ -934,7 +939,7 @@ def preview_account_playlist(account_id):
                 "category": ch.category.category_name if ch.category else "Uncategorized",
                 "category_id": ch.category_id,
                 "icon": ch.stream_icon,
-                "is_visible": ch.is_visible,
+                "is_visible": True,  # All channels here passed filters
                 "tags": tags_map.get(ch.stream_id, []),
             }
             for ch in all_channels
@@ -965,9 +970,23 @@ def preview_account_playlist(account_id):
         )
     else:
         # Standard pagination without collapsing
-        # Get total count BEFORE pagination
-        total = base_query.count()
-        channels = base_query.limit(limit).offset(offset).all()
+        # For accurate pagination with filters, we need to:
+        # 1. Load all channels (or use a larger batch)
+        # 2. Apply filters
+        # 3. Then paginate
+        # This is necessary because filters can't be applied at SQL level efficiently
+        all_channels = base_query.all()
+
+        # Apply filters dynamically to channels
+        from services.filter_service import FilterService
+
+        filtered_channels = FilterService.apply_filters_to_channels(all_channels, account_id)
+
+        # Get total count AFTER filtering
+        total = len(filtered_channels)
+
+        # Apply pagination to filtered results
+        channels = filtered_channels[offset : offset + limit]
 
         # Get channel IDs for batch tag loading
         channel_ids = [ch.stream_id for ch in channels]
