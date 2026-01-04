@@ -5,8 +5,9 @@ services:
     build: .
     container_name: iptv-proxy-v2
     restart: unless-stopped
-    ports:
-      - "8889:8000"
+    network_mode: "host"  # Use host network to avoid Docker NAT issues with IPTV streams
+    # ports: # Not needed in host mode - service runs directly on host port 8000
+    #   - "8889:8000"
     volumes:
       - ./data:/app/data  # Persist database
     environment:
@@ -22,9 +23,5 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    networks:
-      - default
 
-networks:
-  default:
-    driver: bridge
+# networks section removed - not compatible with host networking

@@ -121,14 +121,33 @@ class ChannelHealthService:
         # First, try to get stream info using ffprobe
         try:
             # Check if stream is accessible and get basic info
+            # Optimized for live IPTV streams:
+            # - analyzeduration: Only analyze first 2 seconds of stream (2000000 microseconds)
+            # - probesize: Only read first 1MB to determine format (1000000 bytes)
+            # - timeout: Overall timeout for the operation
+            # - rw_timeout: Timeout for each I/O operation (5 seconds)
             probe_cmd = [
                 "ffprobe",
                 "-v",
                 "error",
                 "-user_agent",
                 user_agent,
+                "-analyzeduration",
+                "2000000",  # 2 seconds - enough to detect stream format
+                "-probesize",
+                "500000",  # 500KB - reduced to speed up detection
                 "-timeout",
-                str(duration_seconds * 1000000),  # microseconds
+                str(duration_seconds * 1000000),  # microseconds - overall timeout
+                "-rw_timeout",
+                "3000000",  # 3 seconds per I/O operation - fail fast if no data
+                "-reconnect",
+                "1",  # Allow reconnect on connection failure
+                "-reconnect_at_eof",
+                "0",  # Don't reconnect at EOF
+                "-reconnect_streamed",
+                "1",  # Allow reconnect for streamed data
+                "-reconnect_delay_max",
+                "2",  # Max 2 seconds delay between reconnect attempts
                 "-show_streams",
                 "-show_format",
                 "-print_format",
@@ -157,6 +176,13 @@ class ChannelHealthService:
                     return {
                         "result": ChannelHealthCheck.RESULT_TIMEOUT,
                         "error_message": error_msg[:500],
+                    }
+                elif "4XX Client Error" in error_msg or "429" in error_msg:
+                    # Connection limit or too many requests - skip this check
+                    # This is not a stream health issue, just timing/capacity
+                    return {
+                        "result": ChannelHealthCheck.RESULT_SKIPPED,
+                        "error_message": "Connection limit reached or stream in use",
                     }
                 elif "404" in error_msg or "403" in error_msg:
                     # Extract HTTP status code
@@ -339,9 +365,11 @@ class ChannelHealthService:
     @staticmethod
     def _update_health_status(channel_id: int, check: ChannelHealthCheck) -> None:
         """Update the aggregated health status for a channel based on a new check."""
-        # Get or create health status
-        status = ChannelHealthStatus.query.filter_by(channel_id=channel_id).first()
+        # Get or create health status with proper locking to prevent race conditions
+        # Use with_for_update() to lock the row while we're updating it
+        status = ChannelHealthStatus.query.filter_by(channel_id=channel_id).with_for_update().first()
         if not status:
+            # Try to create a new status record
             status = ChannelHealthStatus(
                 channel_id=channel_id,
                 status=ChannelHealthStatus.STATUS_UNKNOWN,
@@ -352,6 +380,17 @@ class ChannelHealthService:
                 distinct_failure_periods=0,
             )
             db.session.add(status)
+            # Flush to get the ID and detect conflicts early
+            try:
+                db.session.flush()
+            except Exception:
+                # Race condition - another worker created it first
+                # Rollback and re-fetch with lock
+                db.session.rollback()
+                status = ChannelHealthStatus.query.filter_by(channel_id=channel_id).with_for_update().first()
+                if not status:
+                    # Very unlikely, but re-raise if still not found
+                    raise
 
         now = datetime.now(timezone.utc)
 
@@ -563,7 +602,7 @@ class ChannelHealthService:
         This is the main entry point for scanning. It:
         1. Checks how many connections are available for scanning
         2. Gets channels that need scanning
-        3. Performs health checks on each channel
+        3. Performs health checks on each channel (in parallel using multiple credentials)
         4. Records results
 
         Args:
@@ -585,7 +624,7 @@ class ChannelHealthService:
                 "scanned": 0,
             }
 
-        # Get channels to scan
+        # Get channels to scan - use all available connections
         channels = ChannelHealthService.get_channels_to_scan(
             account_id, limit=min(max_channels, available_connections * 5)
         )
@@ -601,58 +640,107 @@ class ChannelHealthService:
             "scanned": 0,
             "healthy": 0,
             "failed": 0,
+            "skipped": 0,
             "errors": [],
         }
 
-        for channel in channels:
-            # Re-check connection availability before each scan
-            # (client may have connected)
+        # Use threading to check multiple channels simultaneously
+        import threading
+
+        from flask import current_app
+
+        # Get the Flask app instance to pass to threads
+        app = current_app._get_current_object()  # type: ignore[attr-defined]
+
+        # Thread-safe results lock
+        results_lock = threading.Lock()
+
+        def scan_single_channel(channel: Channel) -> None:
+            """Worker function to scan a single channel"""
+            # Each thread needs its own Flask application context
+            with app.app_context():
+                session_token: Optional[str] = None
+                try:
+                    # Get a credential for scanning
+                    credential = ConnectionManager.get_available_credential(account_id)
+                    if not credential:
+                        with results_lock:
+                            results["errors"].append(f"Channel {channel.id}: No credentials available")
+                        return
+
+                    credential_id: Optional[int] = getattr(credential, "id", None)
+
+                    # Acquire connection
+                    if credential_id is None:
+                        with results_lock:
+                            results["errors"].append(f"Channel {channel.id}: Credential has no ID")
+                        return
+
+                    session_token, error = ConnectionManager.acquire_connection(
+                        credential_id, f"health_check_{channel.stream_id}", "health_scanner"
+                    )
+
+                    if not session_token:
+                        with results_lock:
+                            results["errors"].append(f"Channel {channel.id}: Could not acquire connection: {error}")
+                        return
+
+                    try:
+                        # Perform health check
+                        check_result = ChannelHealthService.check_channel_health(channel, credential, analysis_duration)
+
+                        # Record result
+                        ChannelHealthService.record_health_check(channel.id, check_result, credential_id)
+
+                        with results_lock:
+                            results["scanned"] += 1
+                            result_type = check_result.get("result")
+                            if result_type == ChannelHealthCheck.RESULT_SUCCESS:
+                                results["healthy"] += 1
+                            elif result_type == ChannelHealthCheck.RESULT_SKIPPED:
+                                results["skipped"] += 1
+                            else:
+                                results["failed"] += 1
+
+                    except Exception as check_error:
+                        logger.error(f"Error during health check for channel {channel.id}: {check_error}")
+                        with results_lock:
+                            results["errors"].append(f"Channel {channel.id}: {str(check_error)}")
+
+                except Exception as e:
+                    logger.error(f"Error scanning channel {channel.id}: {e}")
+                    with results_lock:
+                        results["errors"].append(f"Channel {channel.id}: {str(e)}")
+                finally:
+                    # Always release connection if it was acquired
+                    if session_token:
+                        try:
+                            ConnectionManager.release_connection(session_token)
+                        except Exception as release_error:
+                            logger.error(f"Error releasing connection {session_token[:8]}...: {release_error}")
+
+        # Create and start worker threads - up to available_connections
+        threads = []
+        for channel in channels[:max_channels]:
+            # Check if we still have connections available
             if ChannelHealthService.get_available_scan_connections(account_id) <= 0:
-                results["message"] = "Scanning paused - connections needed for clients"
+                with results_lock:
+                    results["message"] = "Scanning paused - connections needed for clients"
                 break
 
-            try:
-                # Get a credential for scanning
-                credential = ConnectionManager.get_available_credential(account_id)
-                if not credential:
-                    results["message"] = "No credentials available"
-                    break
+            thread = threading.Thread(target=scan_single_channel, args=(channel,))
+            thread.start()
+            threads.append(thread)
 
-                credential_id: Optional[int] = getattr(credential, "id", None)
+            # Limit concurrent threads to available connections
+            if len(threads) >= available_connections:
+                # Wait for at least one thread to complete before starting more
+                threads[0].join()
+                threads.pop(0)
 
-                # Acquire connection
-                if credential_id is None:
-                    results["errors"].append("Credential has no ID")
-                    continue
-
-                session_token, error = ConnectionManager.acquire_connection(
-                    credential_id, f"health_check_{channel.stream_id}", "health_scanner"
-                )
-
-                if not session_token:
-                    results["errors"].append(f"Could not acquire connection: {error}")
-                    continue
-
-                try:
-                    # Perform health check
-                    check_result = ChannelHealthService.check_channel_health(channel, credential, analysis_duration)
-
-                    # Record result
-                    ChannelHealthService.record_health_check(channel.id, check_result, credential_id)
-
-                    results["scanned"] += 1
-                    if check_result.get("result") == ChannelHealthCheck.RESULT_SUCCESS:
-                        results["healthy"] += 1
-                    else:
-                        results["failed"] += 1
-
-                finally:
-                    # Always release connection
-                    ConnectionManager.release_connection(session_token)
-
-            except Exception as e:
-                logger.error(f"Error scanning channel {channel.id}: {e}")
-                results["errors"].append(f"Channel {channel.id}: {str(e)}")
+        # Wait for all remaining threads to complete
+        for thread in threads:
+            thread.join()
 
         return results
 

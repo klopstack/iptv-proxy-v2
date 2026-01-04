@@ -1,6 +1,6 @@
 # IPTV Proxy v2 - Architecture Overview
 
-> **Document Status**: Generated January 2026  
+> **Document Status**: Updated January 3, 2026  
 > **Purpose**: Comprehensive architecture documentation with known issues, duplications, and improvement recommendations.
 
 ## Table of Contents
@@ -27,7 +27,8 @@
 │  │   Web UI     │     │   REST API   │     │    Playlist/EPG Endpoints    ││
 │  │  (Jinja2)    │────▶│  (Flask BP)  │────▶│   /playlist/<id>.m3u         ││
 │  │  templates/  │     │   routes/*   │     │   /epg/<id>.xml              ││
-│  └──────────────┘     └──────────────┘     └──────────────────────────────┘│
+│  └──────────────┘     └──────────────┘     │   /ppv-epg/<id>.xml          ││
+│         │                    │            └──────────────────────────────┘│
 │         │                    │                         │                    │
 │         ▼                    ▼                         ▼                    │
 │  ┌──────────────────────────────────────────────────────────────────────┐  │
@@ -38,7 +39,11 @@
 │  │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────────┘ │  │
 │  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────────┐ │  │
 │  │  │ FilterSvc   │ │ PPVEnrich   │ │ ScheduleSvc │ │ FccFacilitySvc  │ │  │
-│  │  │             │ │ (TheSportsDB│ │ (Background)│ │ (Callsign->City)│ │  │
+│  │  │             │ │ +Calendar   │ │ (Background)│ │ (Callsign->City)│ │  │
+│  │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────────┘ │  │
+│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────────┐ │  │
+│  │  │PPVEpgSvc   │ │PPVVisibility│ │ SyncService │ │ ChannelHealth   │ │  │
+│  │  │(EPG XML)   │ │(Event-based)│ │ (Channels)  │ │ (Monitoring)    │ │  │
 │  │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────────┘ │  │
 │  └──────────────────────────────────────────────────────────────────────┘  │
 │                                    │                                        │
@@ -46,6 +51,7 @@
 │  ┌──────────────────────────────────────────────────────────────────────┐  │
 │  │                       SQLite Database (SQLAlchemy)                    │  │
 │  │  accounts, channels, categories, tags, filters, rulesets, epg_*      │  │
+│  │  events, event_channel_links, fcc_*, channel_health_*, settings      │  │
 │  └──────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -55,7 +61,7 @@
 │                         External Services                                   │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐ │
 │  │ Xtream Codes    │  │ Schedules Direct│  │ TheSportsDB (PPV Events)    │ │
-│  │ IPTV Providers  │  │ (EPG Data)      │  │ (Free tier limited)         │ │
+│  │ IPTV Providers  │  │ (EPG Data)      │  │ Calendar scraper + API      │ │
 │  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -66,11 +72,11 @@
 
 ### 1. Flask Application (`app.py`)
 
-**Status**: ✅ Clean entry point (153 lines)
+**Status**: ✅ Clean entry point (177 lines)
 
 The application has been successfully refactored from a monolithic ~1300-line file to a clean entry point that:
-- Initializes Flask app and extensions
-- Registers 20+ blueprints for routes
+- Initializes Flask app and extensions (SQLite with WAL mode)
+- Registers 22 blueprints for routes
 - Starts the background sync scheduler
 - Provides CLI commands (`flask init-db`)
 
@@ -80,7 +86,7 @@ web_bp, accounts_bp, filters_bp, rulesets_bp, playlists_bp, api_bp,
 streams_bp, epg_sources_bp, epg_channels_bp, account_epg_channels_bp,
 epg_match_rules_bp, account_epg_match_rules_bp, schedules_direct_bp,
 xmltv_bp, fcc_match_patterns_bp, images_bp, channel_links_bp,
-stations_bp, channel_health_bp, ppv_enrichment_bp, settings_bp
+stations_bp, channel_health_bp, ppv_enrichment_bp, ppv_epg_bp, settings_bp
 ```
 
 ### 2. Routes Organization (`routes/`)
@@ -105,6 +111,7 @@ stations_bp, channel_health_bp, ppv_enrichment_bp, settings_bp
 | `stations_bp` | `stations.py` | FCC station lookup |
 | `channel_health_bp` | `channel_health.py` | Stream health monitoring |
 | `ppv_enrichment_bp` | `ppv_enrichment.py` | PPV event enrichment |
+| `ppv_epg_bp` | `ppv_epg.py` | PPV EPG XML generation |
 | `settings_bp` | `settings.py` | Global app settings |
 
 ### 3. Services Layer (`services/`)
@@ -125,23 +132,25 @@ stations_bp, channel_health_bp, ppv_enrichment_bp, settings_bp
 | `ImageCacheService` | `image_cache_service.py` | Icon proxy cache | ✅ Active |
 | `QualityService` | `quality_service.py` | Quality tag ranking | ✅ Active |
 | `ChannelHealthService` | `channel_health_service.py` | Stream health checks | ✅ Active |
-| `PPVEnrichmentService` | `ppv_enrichment_service.py` | PPV event enrichment | ⚠️ Partial |
-| `TheSportsDBService` | `thesportsdb_service.py` | TheSportsDB API | ⚠️ Partial |
-| `PPVFilterService` | `ppv_filter_service.py` | PPV visibility filtering | ⚠️ **NOT INTEGRATED** |
+| `PPVCalendarEnrichmentService` | `ppv_calendar_enrichment_service.py` | TheSportsDB calendar scraping & Event creation | ✅ Active |
+| `PPVEpgService` | `ppv_epg_service.py` | PPV EPG XML generation | ✅ Active |
+| `TheSportsDBService` | `thesportsdb_service.py` | TheSportsDB API | ✅ Active |
+| `TheSportsDBCalendarScraper` | `thesportsdb_calendar_scraper.py` | Calendar HTML scraping | ✅ Active |
 | `SdMatchingService` | `sd_matching_service.py` | SD callsign matching | ⚠️ **NOT INTEGRATED** |
 | `SyncDateService` | `sync_date_service.py` | PPV date inference | ⚠️ **NOT INTEGRATED** |
+| `ChannelSyncService` | `sync_service.py` | Channel synchronization from providers | ✅ Active |
 | `StreamProxyService` | `stream_proxy_service.py` | Stream proxying | ✅ Active |
 | `StreamMultiplexer` | `stream_multiplexer.py` | Multi-credential streams | ✅ Active |
 | `ConnectionManager` | `connection_manager.py` | Credential pool management | ✅ Active |
 | `FfmpegStreamService` | `ffmpeg_stream_service.py` | Stream analysis | ✅ Active |
-| `PPVEventExtractor` | `ppv_event_extractor.py` | Event info extraction | ⚠️ Partial |
-| `PPVVisibilityService` | `ppv_visibility_service.py` | PPV visibility logic | ✅ Active |
+| `PPVEventExtractor` | `ppv_event_extractor.py` | Event info extraction | ✅ Active |
+| `PPVVisibilityService` | `ppv_visibility_service.py` | PPV visibility logic (uses Event records) | ✅ Active |
 
 ---
 
 ## Data Models
 
-### Core Models (`models.py` - 2033 lines)
+### Core Models (`models.py` - 2061 lines, 41 models)
 
 ```
 Account
@@ -157,7 +166,15 @@ Channel
 ├── ChannelEpgMapping[]       # EPG mappings
 ├── ChannelLink[]             # Time-shifted variants
 ├── ChannelHealthStatus       # Health monitoring
-└── EventChannelLink[]        # PPV event associations
+├── EventChannelLink[]        # PPV event associations
+└── is_ppv, ppv_visibility    # PPV detection and visibility
+
+Event
+├── EventChannelLink[]        # Linked channels
+├── external_id               # TheSportsDB event ID
+├── scheduled_at              # Event datetime
+├── teams (home/away)         # Participants
+└── status                    # scheduled/live/finished
 
 RuleSet
 └── TagRule[]                 # Tag extraction rules
@@ -219,9 +236,10 @@ EpgSource
 | Streams | 9 | Proxy, multiplexing |
 | Images | 5 | Icon caching |
 | PPV Enrichment | 6 | Event enrichment |
+| PPV EPG | 4 | PPV-specific EPG generation |
 | Settings | 4 | Global settings |
 | XMLTV Grabbers | 6 | Grabber management |
-| **Total** | **~186** | |
+| **Total** | **~257** | (257 route decorators) |
 
 ---
 
@@ -229,37 +247,29 @@ EpgSource
 
 ### 1. Dead Code Files
 
-#### `routes/epg.py` - **1336 lines of DEAD CODE**
+#### `routes/epg.py` - ✅ **DELETED**
 
-The file `routes/epg.py` contains a complete EPG routing implementation that is **NOT REGISTERED** in `app.py`. The functionality has been refactored into `routes/epg/*.py` modules.
-
-**Action**: Delete `routes/epg.py` (ensure tests import from `routes/epg/sources.py` instead)
+The old `routes/epg.py` monolithic file has been removed. EPG functionality is now properly decomposed into `routes/epg/*.py` modules.
 
 ### 2. Duplicate Code
 
-#### `sync_sd_channels_to_epg` Function
+#### `sync_sd_channels_to_epg` Function - ✅ **RESOLVED**
 
-Exists in THREE locations with identical implementation:
-- `routes/epg.py:29` (dead file)
-- `routes/epg/common.py:18` (canonical)
-- Used via import aliasing in `routes/epg/sources.py:13`
+Now exists only in `routes/epg/common.py` (canonical location).
 
-**Action**: Keep only `routes/epg/common.py` implementation, update test imports
+#### `sync_sd_lineup_impl` Function - ✅ **RESOLVED**
 
-#### `sync_sd_lineup_impl` Function
-
-Duplicated between:
-- `routes/epg.py:800` (dead file)
-- `routes/epg/common.py:106` (canonical)
+Now exists only in `routes/epg/common.py` (canonical location).
 
 ### 3. PPV Placeholder Patterns
 
-The same PPV placeholder detection patterns are defined in multiple files:
-- `services/ppv_filter_service.py`
+PPV placeholder detection patterns exist in:
 - `services/ppv_visibility_service.py`
 - `services/ppv_event_extractor.py`
 
-**Action**: Centralize to single module (suggest `services/ppv_constants.py`)
+**Note**: `ppv_filter_service.py` has been removed. Remaining duplication is minimal.
+
+**Action**: Consider centralizing to `services/ppv_constants.py` if patterns diverge.
 
 ---
 
@@ -290,9 +300,10 @@ The same PPV placeholder detection patterns are defined in multiple files:
 
 | Service | File | Issue |
 |---------|------|-------|
-| `SdMatchingService` | `sd_matching_service.py` | 385 lines, fully implemented, not imported by any route |
-| `PPVFilterService` | `ppv_filter_service.py` | 1019 lines, not integrated into FilterService |
-| `SyncDateService` | `sync_date_service.py` | Created for PPV, not wired to routes |
+| `SdMatchingService` | `sd_matching_service.py` | 384 lines, fully implemented, not imported by any route |
+| `SyncDateService` | `sync_date_service.py` | 79 lines, created for PPV, not wired to routes |
+
+**Note**: `PPVFilterService` (`ppv_filter_service.py`) has been removed from the codebase.
 
 ### Unused Models
 
@@ -309,24 +320,24 @@ The same PPV placeholder detection patterns are defined in multiple files:
 
 | Documented Feature | Status |
 |-------------------|--------|
-| `PPVEventFilter` Model | ❌ Not implemented (documented in 6+ files) |
-| `/api/ppv-filters/*` Endpoints | ❌ Not implemented |
-| Database-driven PPV rules | ❌ Hardcoded in service instead |
+| `PPVEventFilter` Model | ❌ Not implemented (referenced in docs, feature uses Event model instead) |
+| `/api/ppv-filters/*` Endpoints | ❌ Not implemented (uses PPVVisibilityService with Event records) |
+| Database-driven PPV rules | ✅ Partially implemented via Event model & EventChannelLink |
 
 ### Outdated Documentation
 
 | File | Issue |
 |------|-------|
-| `.github/copilot-instructions.md` | States `app.py` is "~1300 lines" - actually 153 lines now |
-| `.github/copilot-instructions.md` | Lists models that don't include EPG/FCC models |
-| `docs/PPV_FILTERING_*.md` | Reference `PPVEventFilter` model that doesn't exist |
+| `.github/copilot-instructions.md` | States `app.py` is "~150 lines" - actually 177 lines now |
+| `docs/PPV_FILTERING_*.md` | Reference `PPVEventFilter` model that doesn't exist (uses Event model) |
+| Multiple PPV docs | Reference removed `ppv_filter_service.py` |
 
-### Contradictory Status
+### Known Rate Limits
 
-| Topic | Conflict |
-|-------|----------|
-| TheSportsDB Rate Limits | Docs say 500/day, 20/hour, 30/min - actual code uses 25/min |
-| PPV Enrichment | Some docs say "Complete ✅", `EPG_GENERATION_STATUS.md` says "NOT GENERATING" |
+| Service | Limit |
+|---------|-------|
+| TheSportsDB Calendar | 25 requests/minute (used by calendar scraper) |
+| TheSportsDB API | Free tier - limited requests |
 
 ---
 
@@ -334,39 +345,37 @@ The same PPV placeholder detection patterns are defined in multiple files:
 
 ### High Priority
 
-1. **Delete `routes/epg.py`**
-   - 1336 lines of dead code
-   - Update test imports to use `routes/epg/sources.py`
+1. ~~**Delete `routes/epg.py`**~~ ✅ **DONE**
+   - Dead code has been removed
 
 2. **Fix copilot-instructions.md**
-   - Update architecture description (app.py is 153 lines, not 1300)
+   - Update architecture description (app.py is 177 lines)
    - Add EPG/FCC models to key relationships
    - Update file references
 
-3. **Integrate or Remove `PPVFilterService`**
-   - Either wire into `FilterService` or delete
-   - 1019 lines of unused code
+3. ~~**Integrate or Remove `PPVFilterService`**~~ ✅ **DONE**
+   - File has been removed from codebase
 
 4. **Integrate or Remove `SdMatchingService`**
    - Either wire into EPG matching or delete
-   - 385 lines of unused code
+   - 384 lines of unused code
 
 ### Medium Priority
 
-5. **Centralize PPV Constants**
-   - Create `services/ppv_constants.py`
-   - Move placeholder patterns to single location
+5. ~~**Centralize PPV Constants**~~ ✅ **MOSTLY RESOLVED**
+   - `ppv_filter_service.py` removed, patterns now in fewer files
 
 6. **Complete Channel Links UI**
    - Either add UI for time-shifted channels or remove API
-   - Model `ChannelLink` is orphaned
+   - Model `ChannelLink` is orphaned (no UI exposure)
 
 7. **Complete EPG Name Mappings UI**
    - Add to EPG management page or remove API
 
 8. **Update PPV Documentation**
    - Remove references to non-existent `PPVEventFilter` model
-   - Mark feature as "hardcoded rules, no DB model"
+   - Update docs referencing removed `ppv_filter_service.py`
+   - Document current Event-based approach
 
 ### Low Priority
 
@@ -385,20 +394,21 @@ The same PPV placeholder detection patterns are defined in multiple files:
 
 | Directory | Files | Lines (approx) |
 |-----------|-------|----------------|
-| `routes/` | 18 | ~6,500 |
-| `routes/epg/` | 7 | ~3,000 |
-| `services/` | 28 | ~12,000 |
-| `models.py` | 1 | 2,033 |
-| `templates/` | 17 | ~3,500 |
-| `tests/` | 40+ | ~20,000 |
-| `docs/` | 60+ | ~15,000 |
+| `routes/` | 17 | ~6,852 |
+| `routes/epg/` | 6 | ~3,315 |
+| `services/` | 29 | ~17,000 |
+| `models.py` | 1 | 2,061 |
+| `templates/` | 15 | ~11,888 |
+| `tests/` | 60 | ~35,872 |
+| `docs/` | 67 | ~15,000+ |
+| `migrations/` | 34 | - |
 
 ---
 
 ## Appendix: Full Route List
 
 <details>
-<summary>Click to expand all 186 routes</summary>
+<summary>Click to expand all ~257 routes</summary>
 
 ```
 /                                          GET
@@ -466,6 +476,8 @@ The same PPV placeholder detection patterns are defined in multiple files:
 /playlist/config/<id>.m3u                  GET
 /playlist/config/<slug>.m3u                GET
 /ppv                                       GET
+/ppv-epg/<id>.xml                          GET
+/ppv-epg/config/<id>.xml                   GET
 /rulesets                                  GET
 /settings                                  GET
 /stations                                  GET
@@ -494,20 +506,21 @@ The database uses SQLite with 40+ tables organized into several domains:
 | Domain | Tables | Purpose |
 |--------|--------|---------|
 | **Core** | accounts, credentials, filters | User accounts and authentication |
-| **Content** | channels, categories, tags, channel_tags | IPTV channel data |
+| **Content** | channels, categories, tags, channel_tags, channel_links | IPTV channel data |
 | **Rules** | rulesets, tag_rules, account_rulesets | Tag extraction |
 | **EPG** | epg_sources, epg_channels, channel_epg_mappings | EPG data |
-| **EPG Matching** | epg_match_rulesets, epg_match_rules, epg_exclusion_patterns | EPG matching rules |
+| **EPG Matching** | epg_match_rulesets, epg_match_rules, epg_exclusion_patterns, epg_channel_name_mappings | EPG matching rules |
 | **Schedules Direct** | sd_lineups, sd_stations | SD integration |
-| **FCC** | fcc_facilities, fcc_corrections, fcc_match_* | FCC database |
-| **PPV** | events, event_channel_links | PPV event tracking |
-| **Health** | channel_health_checks, channel_health_status | Stream monitoring |
-| **Config** | settings, sync_metadata, channel_health_config | App configuration |
+| **FCC** | fcc_facilities, fcc_corrections, fcc_match_networks, fcc_match_channel_patterns, fcc_match_location_patterns, fcc_match_strategies | FCC database |
+| **PPV** | events, event_channel_links | PPV event tracking (with TheSportsDB integration) |
+| **Health** | channel_health_checks, channel_health_status, channel_health_config | Stream monitoring |
+| **Config** | settings, sync_metadata, playlist_configs | App configuration |
 | **Cache** | cached_images, active_streams | Runtime state |
+| **Pattern Config** | quality_tags, country_tags, callsign_suffixes, epg_country_suffixes | Configurable patterns |
 
 ### Index Coverage
 
-The database has **57 explicit indexes** plus automatic unique constraint indexes. Generally well-indexed.
+The database has **53+ explicit indexes** plus automatic unique constraint indexes. Generally well-indexed.
 
 #### Well-Indexed Tables ✅
 - `channels` - 6 indexes (account_id, name, category_id, is_ppv, thesportsdb_id, enrichment)

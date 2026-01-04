@@ -132,13 +132,34 @@ set_scheduler(sync_scheduler)
 _disable_scheduler = (
     os.getenv("DISABLE_SCHEDULER", "false").lower() == "true" or os.getenv("PYTEST_CURRENT_TEST") is not None
 )
-if not _disable_scheduler:
-    # Start scheduler by default (works with both direct run and gunicorn)
-    # The start() call is idempotent and safe to call multiple times
-    sync_scheduler.start()
-    logger.info(f"Sync scheduler started (interval: {sync_interval} hours)")
-else:
-    logger.info("Sync scheduler disabled (testing or DISABLE_SCHEDULER=true)")
+
+# Scheduler will be started lazily on first request in worker 0 only
+_scheduler_started = False
+
+
+def _ensure_scheduler_started():
+    """Lazy initialization of scheduler - only starts in worker 0."""
+    global _scheduler_started
+    if _scheduler_started or _disable_scheduler:
+        return
+
+    # Use WORKER_ID environment variable (set by gunicorn config)
+    worker_id = os.getenv("WORKER_ID", "0")
+
+    # Only start scheduler in worker 0
+    if worker_id == "0":
+        sync_scheduler.start()
+        logger.info(f"Sync scheduler started in worker {worker_id} (interval: {sync_interval} hours)")
+        _scheduler_started = True
+    else:
+        logger.info(f"Sync scheduler NOT started in worker {worker_id} (running in worker 0 only)")
+        _scheduler_started = True
+
+
+# Register a before_request handler to ensure scheduler starts
+@app.before_request
+def before_request():
+    _ensure_scheduler_started()
 
 
 # ============================================================================

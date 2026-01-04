@@ -329,10 +329,15 @@ class SyncScheduler:
         try:
             from models import ChannelHealthConfig
             from services.channel_health_service import ChannelHealthService
+            from services.connection_manager import ConnectionManager
 
             # Check if scanning is enabled
             if not ChannelHealthConfig.get_bool("scanning_enabled", False):
                 return
+
+            # Clean up stale connections before scanning
+            # This prevents stuck health check sessions from blocking new scans
+            ConnectionManager.cleanup_stale_connections()
 
             # Get all enabled accounts
             accounts = Account.query.filter_by(enabled=True).all()
@@ -353,7 +358,8 @@ class SyncScheduler:
                             f"Health scan for {account.name}: "
                             f"{result.get('scanned', 0)} scanned, "
                             f"{result.get('healthy', 0)} healthy, "
-                            f"{result.get('failed', 0)} failed"
+                            f"{result.get('failed', 0)} failed, "
+                            f"{result.get('skipped', 0)} skipped"
                         )
 
                 except Exception as e:
