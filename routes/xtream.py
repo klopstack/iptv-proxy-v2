@@ -6,7 +6,7 @@ import json
 import logging
 from functools import wraps
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, redirect, request
 
 from error_handling import handle_errors
 from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Settings, Tag, XtreamCredential, db
@@ -220,10 +220,10 @@ def get_live_streams(xtream_cred, account, playlist_config):
             icon_url = image_cache.get_proxy_url(ch.stream_icon, proxy_base)
 
         stream_data = {
-            "num": ch.stream_id,
+            "num": int(ch.stream_id),
             "name": ch.cleaned_name or ch.name,
             "stream_type": "live",
-            "stream_id": ch.stream_id,
+            "stream_id": int(ch.stream_id),
             "stream_icon": icon_url,
             "epg_channel_id": f"ch-{ch.account_id}-{ch.stream_id}",
             "added": str(int(ch.created_at.timestamp())) if ch.created_at else "",
@@ -311,10 +311,10 @@ def get_simple_data_table(xtream_cred, account, playlist_config):
     icon_url = image_cache.get_proxy_url(channel.stream_icon, proxy_base) if channel.stream_icon else ""
 
     info = {
-        "num": channel.stream_id,
+        "num": int(channel.stream_id),
         "name": channel.cleaned_name or channel.name,
         "stream_type": "live",
-        "stream_id": channel.stream_id,
+        "stream_id": int(channel.stream_id),
         "stream_icon": icon_url,
         "epg_channel_id": f"ch-{channel.account_id}-{channel.stream_id}",
         "added": str(int(channel.created_at.timestamp())) if channel.created_at else "",
@@ -518,16 +518,82 @@ def get_xmltv_epg():
     # Generate EPG XML
     if account:
         # Use account EPG endpoint
-        from flask import redirect
-
         return redirect(f"/epg/{account.id}.xml")
     elif playlist_config:
         # Use playlist config EPG endpoint
-        from flask import redirect
-
         return redirect(f"/epg/config/{playlist_config.id}.xml")
     else:
         return "No EPG available", 404
+
+
+# ============================================================================
+# Xtream Stream URLs
+# ============================================================================
+
+
+@xtream_bp.route("/live/<username>/<password>/<int:stream_id>.<ext>", methods=["GET"])
+@xtream_bp.route("/live/<username>/<password>/<int:stream_id>", methods=["GET"])
+def xtream_live_stream(username, password, stream_id, ext="ts"):
+    """
+    Direct stream URL for Xtream clients.
+    Xtream clients construct URLs as: /live/{username}/{password}/{stream_id}.ts
+
+    This endpoint authenticates and proxies to the internal stream handler.
+    """
+    # Authenticate using path credentials
+    xtream_cred = XtreamCredential.query.filter_by(username=username, password=password, enabled=True).first()
+
+    if not xtream_cred:
+        return jsonify({"error": "Invalid credentials"}), 401
+
+    # Get the associated account or playlist config
+    account = None
+    playlist_config = None
+
+    if xtream_cred.account_id:
+        account = Account.query.get(xtream_cred.account_id)
+        if not account or not account.enabled:
+            return jsonify({"error": "Account disabled"}), 403
+    elif xtream_cred.playlist_config_id:
+        playlist_config = PlaylistConfig.query.get(xtream_cred.playlist_config_id)
+        if not playlist_config or not playlist_config.enabled:
+            return jsonify({"error": "Playlist config disabled"}), 403
+    else:
+        return jsonify({"error": "No account or playlist config associated"}), 400
+
+    # Verify stream exists and is accessible for this credential
+    channels = get_channels_for_credential(xtream_cred, account, playlist_config)
+    channel = next((ch for ch in channels if ch.stream_id == stream_id), None)
+
+    if not channel:
+        return jsonify({"error": "Stream not found or not accessible"}), 404
+
+    # Redirect to internal stream proxy
+    # Use the account ID and stream ID for the internal endpoint
+    account_id = account.id if account else playlist_config.id
+    internal_url = f"/stream/{account_id}/{stream_id}.{ext}"
+
+    return redirect(internal_url)
+
+
+@xtream_bp.route("/movie/<username>/<password>/<int:stream_id>.<ext>", methods=["GET"])
+@xtream_bp.route("/movie/<username>/<password>/<int:stream_id>", methods=["GET"])
+def xtream_movie_stream(username, password, stream_id, ext="mp4"):
+    """
+    VOD/Movie stream URL for Xtream clients.
+    VOD not implemented - return not found.
+    """
+    return jsonify({"error": "VOD not available"}), 404
+
+
+@xtream_bp.route("/series/<username>/<password>/<int:stream_id>.<ext>", methods=["GET"])
+@xtream_bp.route("/series/<username>/<password>/<int:stream_id>", methods=["GET"])
+def xtream_series_stream(username, password, stream_id, ext="mp4"):
+    """
+    Series stream URL for Xtream clients.
+    Series not implemented - return not found.
+    """
+    return jsonify({"error": "Series not available"}), 404
 
 
 # ============================================================================
