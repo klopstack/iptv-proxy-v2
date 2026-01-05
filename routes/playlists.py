@@ -621,11 +621,23 @@ def _generate_playlist_from_config(config):
                     tags_map[stream_id].append(tag_name)
 
         # Collect channel data with account info
+        # Extract account data now while it's still in the session
+        # to avoid ObjectDeletedError later when session is closed
+        primary_cred = account.get_primary_credential()
+        account_data = {
+            "id": account.id,
+            "name": account.name,
+            "server": account.server,
+            "username": account.username,
+            "password": account.password,
+            "primary_username": primary_cred.username if primary_cred else account.username,
+            "primary_password": primary_cred.password if primary_cred else account.password,
+        }
         for channel in channels:
             all_channel_data.append(
                 {
                     "channel": channel,
-                    "account": account,
+                    "account_data": account_data,
                     "stream_id": channel.stream_id,
                     "cleaned_name": channel.cleaned_name or channel.name,
                     "tags": tags_map.get(channel.stream_id, []),
@@ -650,7 +662,7 @@ def _generate_playlist_from_config(config):
 
     for data in all_channel_data:
         channel = data["channel"]
-        account = data["account"]
+        account_data = data["account_data"]
 
         # Use cleaned name (pre-computed during sync/tag processing)
         display_name = sanitize_m3u_value(channel.cleaned_name or channel.name)
@@ -659,7 +671,7 @@ def _generate_playlist_from_config(config):
         )
 
         # Always use standardized EPG ID format to prevent collisions across providers
-        tvg_id = f"ch-{account.id}-{channel.stream_id}"
+        tvg_id = f"ch-{account_data['id']}-{channel.stream_id}"
         original_icon = channel.stream_icon or ""
 
         # Proxy icon URL if enabled
@@ -670,7 +682,7 @@ def _generate_playlist_from_config(config):
 
         # Add account name to group title for multi-account playlists
         if len(accounts) > 1:
-            group_title = sanitize_m3u_value(f"{category_name} ({account.name})")
+            group_title = sanitize_m3u_value(f"{category_name} ({account_data['name']})")
         else:
             group_title = category_name
 
@@ -678,17 +690,10 @@ def _generate_playlist_from_config(config):
 
         if use_proxy:
             # Use proxy URL for multiplexed streaming
-            stream_url = f"{proxy_base}/stream/{account.id}/{channel.stream_id}.ts"
+            stream_url = f"{proxy_base}/stream/{account_data['id']}/{channel.stream_id}.ts"
         else:
             # Direct URL to IPTV provider
-            cred = account.get_primary_credential()
-            if cred:
-                stream_url = f"http://{account.server}/live/{cred.username}/{cred.password}/{channel.stream_id}.ts"
-            else:
-                # Fallback for legacy accounts
-                stream_url = (
-                    f"http://{account.server}/live/{account.username}/{account.password}/{channel.stream_id}.ts"
-                )
+            stream_url = f"http://{account_data['server']}/live/{account_data['primary_username']}/{account_data['primary_password']}/{channel.stream_id}.ts"
 
         m3u_lines.append(extinf)
         m3u_lines.append(stream_url)

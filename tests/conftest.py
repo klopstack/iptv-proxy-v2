@@ -37,7 +37,10 @@ def app():
     with flask_app.app_context():
         _db.create_all()
         yield flask_app
+        # Properly dispose of all connections before dropping tables
+        # This prevents "database is locked" errors with SQLite
         _db.session.remove()
+        _db.engine.dispose()
         _db.drop_all()
 
 

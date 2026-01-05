@@ -284,7 +284,15 @@ class TestMultiAccountPlaylists:
             mock_quality.collapse_duplicates.return_value = [
                 {
                     "channel": Channel.query.filter_by(stream_id=1).first(),
-                    "account": db.session.get(Account, 1),
+                    "account_data": {
+                        "id": 1,
+                        "name": "Provider 1",
+                        "server": "server1.example.com",
+                        "username": "user1",
+                        "password": "pass1",
+                        "primary_username": "user1",
+                        "primary_password": "pass1",
+                    },
                     "stream_id": 1,
                     "cleaned_name": "ESPN",
                     "tags": ["HD", "SPORTS"],
