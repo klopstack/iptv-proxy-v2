@@ -146,6 +146,8 @@ function renderSources() {
                     <div class="btn-group btn-group-sm">
                         ${source.source_type === 'schedules_direct' 
                             ? '<button class="btn btn-outline-info" onclick="showSdLineups(' + source.id + ')" title="Manage Lineups"><i class="bi bi-list-ul"></i></button>'
+                            : source.source_type === 'ppv_events'
+                            ? '<button class="btn btn-outline-secondary" disabled title="PPV Events source - synced automatically during PPV enrichment"><i class="bi bi-info-circle"></i></button>'
                             : '<button class="btn btn-outline-primary" onclick="syncSource(' + source.id + ')" title="Sync"><i class="bi bi-arrow-repeat"></i></button>'}
                         <button class="btn btn-outline-secondary" onclick="editSource(${source.id})" title="Edit">
                             <i class="bi bi-pencil"></i>
