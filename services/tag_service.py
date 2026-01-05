@@ -59,7 +59,11 @@ class TagService:
                         # Extract tag from first regex capture group
                         if rule.pattern_type == "regex" and hasattr(match_result, "group"):
                             try:
-                                captured = match_result.group(1).strip()
+                                captured = match_result.group(1)
+                                if captured is None:
+                                    logger.warning(f"Rule '{rule.name}' matched but capture group is empty")
+                                    continue
+                                captured = captured.strip()
                                 normalized_capture = TagService.normalize_tag_name(captured)
                                 if normalized_capture:
                                     tags.add(normalized_capture)
