@@ -403,6 +403,12 @@ def preview_channels():
                 tag_map[stream_id] = []
             tag_map[stream_id].append({"name": tag_name, "source": source})
 
+    # Initialize image cache for proxying icons
+    from services.image_cache_service import ImageCacheService
+
+    image_cache = ImageCacheService.get_instance()
+    proxy_base = f"{request.scheme}://{request.host}"
+
     # Build response
     result = []
     for ch in channels:
@@ -415,7 +421,7 @@ def preview_channels():
                 "cleaned_name": ch.cleaned_name,
                 "category": ch.category.category_name if ch.category else "Uncategorized",
                 "category_id": ch.category_id,
-                "icon": ch.stream_icon,
+                "icon": image_cache.get_proxy_url(ch.stream_icon, proxy_base) if ch.stream_icon else None,
                 "is_visible": ch.is_visible,
                 "tags": tag_map.get(ch.stream_id, []),
             }

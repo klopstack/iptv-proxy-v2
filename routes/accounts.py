@@ -879,7 +879,9 @@ def preview_account_playlist(account_id):
 
     # Apply category filter if specified
     if category_filter:
-        base_query = base_query.filter(Category.category_name == category_filter)
+        base_query = base_query.filter(
+            db.or_(Category.cleaned_name == category_filter, Category.category_name == category_filter)
+        )
 
     # Apply search filter if specified (searches channel name and cleaned name)
     if search_term:
@@ -933,6 +935,12 @@ def preview_account_playlist(account_id):
                     tags_map[stream_id] = []
                 tags_map[stream_id].append(tag_name)
 
+        # Initialize image cache for proxying icons
+        from services.image_cache_service import ImageCacheService
+
+        image_cache = ImageCacheService.get_instance()
+        proxy_base = f"{request.scheme}://{request.host}"
+
         # Build channel dictionaries for collapsing
         channel_dicts = [
             {
@@ -943,7 +951,7 @@ def preview_account_playlist(account_id):
                 "cleaned_name": ch.cleaned_name if ch.cleaned_name is not None else ch.name,
                 "category": ch.category.cleaned_name or ch.category.category_name if ch.category else "Uncategorized",
                 "category_id": ch.category_id,
-                "icon": ch.stream_icon,
+                "icon": image_cache.get_proxy_url(ch.stream_icon, proxy_base) if ch.stream_icon else None,
                 "is_visible": True,  # All channels here passed filters
                 "tags": tags_map.get(ch.stream_id, []),
             }
@@ -1010,6 +1018,12 @@ def preview_account_playlist(account_id):
                 tags_map[stream_id] = []
             tags_map[stream_id].append(tag_name)
 
+        # Initialize image cache for proxying icons
+        from services.image_cache_service import ImageCacheService
+
+        image_cache = ImageCacheService.get_instance()
+        proxy_base = f"{request.scheme}://{request.host}"
+
         return jsonify(
             {
                 "total": total,
@@ -1026,7 +1040,7 @@ def preview_account_playlist(account_id):
                         if ch.category
                         else "Uncategorized",
                         "category_id": ch.category_id,
-                        "icon": ch.stream_icon,
+                        "icon": image_cache.get_proxy_url(ch.stream_icon, proxy_base) if ch.stream_icon else None,
                         "is_visible": ch.is_visible,
                         "tags": tags_map.get(ch.stream_id, []),
                     }

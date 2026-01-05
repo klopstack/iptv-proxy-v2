@@ -107,9 +107,9 @@
                     </div>
                     
                     <div class="mb-3">
-                        <label for="credential-password" class="form-label">Password <span class="text-danger">*</span></label>
+                        <label for="credential-password" class="form-label">Password <span class="text-danger" id="password-required-indicator">*</span></label>
                         <input type="text" class="form-control" id="credential-password" required>
-                        <div class="form-text">Use a unique password different from your provider</div>
+                        <div class="form-text" id="password-help-text">Use a unique password different from your provider</div>
                     </div>
                     
                     <div class="mb-3">
@@ -239,6 +239,10 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('credential-id').value = '';
         document.getElementById('form-error').style.display = 'none';
         document.getElementById('modalTitle').textContent = 'Add Xtream Credential';
+        // Reset password field to required state for adding new credentials
+        document.getElementById('credential-password').required = true;
+        document.getElementById('password-required-indicator').style.display = '';
+        document.getElementById('password-help-text').textContent = 'Use a unique password different from your provider';
         currentEditId = null;
     });
 });
@@ -348,8 +352,14 @@ function saveCredential() {
     const description = document.getElementById('credential-description').value.trim();
     
     // Validation
-    if (!username || !password) {
-        showFormError('Username and password are required');
+    if (!username) {
+        showFormError('Username is required');
+        return;
+    }
+    
+    // Password is only required for new credentials
+    if (!id && !password) {
+        showFormError('Password is required for new credentials');
         return;
     }
     
@@ -360,7 +370,6 @@ function saveCredential() {
     
     const data = {
         username,
-        password,
         account_id: accountId ? parseInt(accountId) : null,
         playlist_config_id: playlistConfigId ? parseInt(playlistConfigId) : null,
         use_filters: useFilters,
@@ -368,6 +377,11 @@ function saveCredential() {
         enabled,
         description
     };
+    
+    // Only include password if it was provided
+    if (password) {
+        data.password = password;
+    }
     
     const method = id ? 'PUT' : 'POST';
     const url = id ? `/api/xtream-credentials/${id}` : '/api/xtream-credentials';
@@ -404,6 +418,9 @@ function editCredential(id) {
             document.getElementById('credential-id').value = cred.id;
             document.getElementById('credential-username').value = cred.username;
             document.getElementById('credential-password').value = ''; // Don't show existing password
+            document.getElementById('credential-password').required = false; // Password optional when editing
+            document.getElementById('password-required-indicator').style.display = 'none';
+            document.getElementById('password-help-text').textContent = 'Leave blank to keep existing password';
             document.getElementById('credential-use-filters').checked = cred.use_filters;
             document.getElementById('credential-collapse-duplicates').checked = cred.collapse_duplicates;
             document.getElementById('credential-enabled').checked = cred.enabled;

@@ -695,7 +695,7 @@ def update_xtream_credential(credential_id):
     data = request.json
 
     # Update fields
-    if "password" in data:
+    if "password" in data and data["password"]:
         credential.password = data["password"]
     if "account_id" in data:
         credential.account_id = data["account_id"]
