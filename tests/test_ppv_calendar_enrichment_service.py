@@ -248,12 +248,20 @@ class TestMatchChannelToCalendar:
         """Test matching when no calendar events available."""
         with app.app_context():
             service = PPVCalendarEnrichmentService(app)
-            channel = Mock(name="UFC Event")
+
+            # Mock ReverseEventMatcher for empty calendar
+            service.reverse_matcher = Mock()
+            service.reverse_matcher.load_events_for_date_range = Mock()
+            service.reverse_matcher.find_matches = Mock(return_value=[])
+
+            channel = Mock()
+            channel.name = "UFC Event"
             extraction = {"competitors": ("Fighter A", "Fighter B")}
 
             result = service._match_channel_to_calendar(channel, extraction, [], "2026-01-05")
 
             assert result.matched is False
+            # With empty calendar_events list, it returns early before calling ReverseEventMatcher
             assert result.match_method == "no_calendar_events"
 
     def test_successful_match(self, app):
@@ -261,7 +269,7 @@ class TestMatchChannelToCalendar:
         with app.app_context():
             service = PPVCalendarEnrichmentService(app)
 
-            # Mock calendar scraper's find_matching_events
+            # Mock the ReverseEventMatcher to return a match
             mock_calendar_event = CalendarEvent(
                 event_id="12345",
                 event_name="Fighter A vs Fighter B",
@@ -272,10 +280,17 @@ class TestMatchChannelToCalendar:
                 away_team="Fighter B",
             )
 
-            service.calendar_scraper = Mock()
-            service.calendar_scraper.find_matching_events.return_value = [(mock_calendar_event, 0.85)]
+            # Mock MatchResult from ReverseEventMatcher
+            mock_match_result = Mock()
+            mock_match_result.event = mock_calendar_event
+            mock_match_result.confidence = 0.85
 
-            channel = Mock(name="UFC: Fighter A vs Fighter B")
+            service.reverse_matcher = Mock()
+            service.reverse_matcher.load_events_for_date_range = Mock()
+            service.reverse_matcher.find_matches = Mock(return_value=[mock_match_result])
+
+            channel = Mock()
+            channel.name = "UFC: Fighter A vs Fighter B"
             extraction = {"competitors": ("Fighter A", "Fighter B"), "time_only": None}
 
             result = service._match_channel_to_calendar(channel, extraction, [mock_calendar_event], "2026-01-05")
@@ -283,11 +298,24 @@ class TestMatchChannelToCalendar:
             assert result.matched is True
             assert result.confidence == 0.85
             assert result.calendar_event == mock_calendar_event
+            # Verify ReverseEventMatcher was called
+            service.reverse_matcher.load_events_for_date_range.assert_called_once()
+            service.reverse_matcher.find_matches.assert_called_once()
 
     def test_low_confidence_no_match(self, app):
         """Test that low confidence scores result in no match."""
         with app.app_context():
             service = PPVCalendarEnrichmentService(app)
+
+            # Mock ReverseEventMatcher to return no matches
+            # (low confidence matches are filtered out by find_matches)
+            service.reverse_matcher = Mock()
+            service.reverse_matcher.load_events_for_date_range = Mock()
+            service.reverse_matcher.find_matches = Mock(return_value=[])  # No matches pass threshold
+
+            channel = Mock()
+            channel.name = "UFC: Fighter A vs Fighter B"
+            extraction = {"competitors": ("Fighter A", "Fighter B"), "time_only": None}
 
             mock_calendar_event = CalendarEvent(
                 event_id="12345",
@@ -297,17 +325,10 @@ class TestMatchChannelToCalendar:
                 date="2026-01-05",
             )
 
-            service.calendar_scraper = Mock()
-            # Return very low confidence
-            service.calendar_scraper.find_matching_events.return_value = [(mock_calendar_event, 0.1)]
-
-            channel = Mock(name="UFC: Fighter A vs Fighter B")
-            extraction = {"competitors": ("Fighter A", "Fighter B"), "time_only": None}
-
             result = service._match_channel_to_calendar(channel, extraction, [mock_calendar_event], "2026-01-05")
 
             assert result.matched is False
-            assert result.match_method == "confidence_too_low"
+            assert result.match_method == "no_match_found"
 
 
 class TestCreateOrUpdateEvent:

@@ -40,6 +40,7 @@ from flask import Flask
 
 from models import Channel, Event, EventChannelLink, SyncMetadata, db
 from services.ppv_event_extractor import PPVEventExtractor
+from services.reverse_event_matcher.orchestrator import ReverseEventMatcher
 from services.thesportsdb_calendar_scraper import CalendarEvent, get_calendar_scraper
 from services.thesportsdb_service import TheSportsDBService
 
@@ -149,6 +150,7 @@ class PPVCalendarEnrichmentService:
         self.app = app
         self.extractor = PPVEventExtractor()
         self.calendar_scraper = get_calendar_scraper()
+        self.reverse_matcher = ReverseEventMatcher(calendar_scraper=self.calendar_scraper)
         self.thesportsdb = TheSportsDBService()
 
         # Queue for events needing detail fetch (secondary thread)
@@ -452,28 +454,27 @@ class PPVCalendarEnrichmentService:
                 match_method="no_calendar_events",
             )
 
-        competitors = extraction.get("competitors")
-        time_only = extraction.get("time_only")
-
-        # Convert time_only tuple (hour, minute, ampm) to HH:MM string
-        time_utc_str = None
-        if time_only:
-            hour, minute, ampm = time_only
-            # Convert to 24-hour format if AM/PM is specified
-            if ampm:
-                ampm = ampm.lower()
-                if ampm == "pm" and hour != 12:
-                    hour += 12
-                elif ampm == "am" and hour == 12:
-                    hour = 0
-            time_utc_str = f"{hour:02d}:{minute:02d}"
-
-        # Use calendar scraper's matching function
-        matches = self.calendar_scraper.find_matching_events(
-            date=date_str,
-            competitors=competitors,
-            time_utc=time_utc_str,
+        # Load events for this date range using ReverseEventMatcher
+        # (it caches internally so multiple calls are efficient)
+        self.reverse_matcher.load_events_for_date_range(
+            start_date=date_str,
+            end_date=date_str,  # Single day
+            days_ahead=0,
+            days_back=0,
         )
+
+        # Use ReverseEventMatcher's find_matches method
+        # This is the new, well-tested matching approach
+        match_results = self.reverse_matcher.find_matches(
+            channel_name=channel.name,
+            max_results=5,
+            min_confidence=MIN_MATCH_CONFIDENCE,
+            use_channel_date=False,  # We already have the date
+        )
+
+        # Convert MatchResult objects to (CalendarEvent, confidence) tuples
+        # to maintain compatibility with existing code
+        matches = [(result.event, result.confidence) for result in match_results]
 
         if not matches:
             return EnrichmentResult(
