@@ -67,9 +67,8 @@ def get_all_categories():
     include_ppv = request.args.get("include_ppv", "true").lower() == "true"
 
     # Get all categories for the account
-    query = (
-        db.session.query(Category, Account.name.label("account_name"))
-        .join(Account, Category.account_id == Account.id)
+    query = db.session.query(Category, Account.name.label("account_name")).join(
+        Account, Category.account_id == Account.id
     )
 
     if account_id:
