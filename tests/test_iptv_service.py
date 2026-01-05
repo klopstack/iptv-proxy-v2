@@ -205,3 +205,151 @@ class TestIPTVService:
 
         call_args = mock_get.call_args
         assert call_args[1]["timeout"] == 30
+
+    @patch("requests.get")
+    def test_get_series_categories(self, mock_get):
+        """Test fetching series categories"""
+        mock_response = Mock()
+        mock_response.json.return_value = [
+            {"category_id": "20", "category_name": "Drama Series"},
+            {"category_id": "21", "category_name": "Comedy Series"},
+        ]
+        mock_get.return_value = mock_response
+
+        service = IPTVService("example.com:8080", "testuser", "testpass")
+        categories = service.get_series_categories()
+
+        assert len(categories) == 2
+        assert categories[0]["category_name"] == "Drama Series"
+        assert categories[1]["category_name"] == "Comedy Series"
+
+        # Verify correct action was passed
+        call_args = mock_get.call_args
+        assert call_args[1]["params"]["action"] == "get_series_categories"
+
+    @patch("requests.get")
+    def test_get_series_no_filter(self, mock_get):
+        """Test fetching all series"""
+        mock_response = Mock()
+        mock_response.json.return_value = [
+            {"series_id": 301, "name": "Breaking Bad", "category_id": "20"},
+            {"series_id": 302, "name": "Game of Thrones", "category_id": "20"},
+        ]
+        mock_get.return_value = mock_response
+
+        service = IPTVService("example.com:8080", "testuser", "testpass")
+        series = service.get_series()
+
+        assert len(series) == 2
+        assert series[0]["name"] == "Breaking Bad"
+        assert series[1]["name"] == "Game of Thrones"
+
+        # Verify correct action was passed
+        call_args = mock_get.call_args
+        assert call_args[1]["params"]["action"] == "get_series"
+        assert "category_id" not in call_args[1]["params"]
+
+    @patch("requests.get")
+    def test_get_series_with_category(self, mock_get):
+        """Test fetching series filtered by category"""
+        mock_response = Mock()
+        mock_response.json.return_value = [
+            {"series_id": 301, "name": "Breaking Bad", "category_id": "20"},
+        ]
+        mock_get.return_value = mock_response
+
+        service = IPTVService("example.com:8080", "testuser", "testpass")
+        series = service.get_series(category_id="20")
+
+        assert len(series) == 1
+        assert series[0]["category_id"] == "20"
+
+        # Check that category_id was passed in params
+        call_args = mock_get.call_args
+        assert call_args[1]["params"]["category_id"] == "20"
+        assert call_args[1]["params"]["action"] == "get_series"
+
+    @patch("requests.get")
+    def test_get_vod_streams_with_category(self, mock_get):
+        """Test fetching VOD streams filtered by category"""
+        mock_response = Mock()
+        mock_response.json.return_value = [
+            {"stream_id": 401, "name": "Inception", "category_id": "10"},
+        ]
+        mock_get.return_value = mock_response
+
+        service = IPTVService("example.com:8080", "testuser", "testpass")
+        streams = service.get_vod_streams(category_id="10")
+
+        assert len(streams) == 1
+        assert streams[0]["category_id"] == "10"
+
+        # Check that category_id was passed in params
+        call_args = mock_get.call_args
+        assert call_args[1]["params"]["category_id"] == "10"
+        assert call_args[1]["params"]["action"] == "get_vod_streams"
+
+    @patch("requests.get")
+    def test_get_xmltv_timeout(self, mock_get):
+        """Test that XMLTV requests have extended timeout"""
+        mock_response = Mock()
+        mock_response.content = b"<tv></tv>"
+        mock_get.return_value = mock_response
+
+        service = IPTVService("example.com:8080", "testuser", "testpass")
+        service.get_xmltv()
+
+        call_args = mock_get.call_args
+        # XMLTV has 120s timeout (longer than regular API calls)
+        assert call_args[1]["timeout"] == 120
+
+    @patch("requests.get")
+    def test_get_xmltv_user_agent(self, mock_get):
+        """Test that XMLTV requests use special user agent"""
+        mock_response = Mock()
+        mock_response.content = b"<tv></tv>"
+        mock_get.return_value = mock_response
+
+        service = IPTVService("example.com:8080", "testuser", "testpass")
+        service.get_xmltv()
+
+        call_args = mock_get.call_args
+        # XMLTV uses different user agent
+        assert call_args[1]["headers"]["User-Agent"] == "9XtreamPlayer"
+
+    @patch("requests.get")
+    def test_get_xmltv_correct_url(self, mock_get):
+        """Test that XMLTV requests use xmltv.php endpoint"""
+        mock_response = Mock()
+        mock_response.content = b"<tv></tv>"
+        mock_get.return_value = mock_response
+
+        service = IPTVService("example.com:8080", "testuser", "testpass")
+        service.get_xmltv()
+
+        call_args = mock_get.call_args
+        url = call_args[0][0]
+        assert "xmltv.php" in url
+        assert "player_api.php" not in url
+
+    @patch("requests.get")
+    def test_connection_error(self, mock_get):
+        """Test handling of connection errors"""
+        mock_get.side_effect = requests.exceptions.ConnectionError("Connection refused")
+
+        service = IPTVService("example.com:8080", "testuser", "testpass")
+
+        with pytest.raises(requests.exceptions.ConnectionError):
+            service.authenticate()
+
+    @patch("requests.get")
+    def test_json_decode_error(self, mock_get):
+        """Test handling of invalid JSON response"""
+        mock_response = Mock()
+        mock_response.json.side_effect = ValueError("Invalid JSON")
+        mock_get.return_value = mock_response
+
+        service = IPTVService("example.com:8080", "testuser", "testpass")
+
+        with pytest.raises(ValueError):
+            service.get_live_categories()
