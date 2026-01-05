@@ -189,33 +189,32 @@ function initPlayer() {
         hasAudio: true,
         hasVideo: true
     }, {
+        // Use worker thread for better performance
         enableWorker: true,
-        enableStashBuffer: true,
-        stashInitialSize: 384,  // Increased from 128KB for better buffering
         
-        // Disable aggressive latency chasing to prevent seeking/skipping
+        // Disable stash buffer for minimal latency (recommended for live streams)
+        enableStashBuffer: false,
+        
+        // Disable latency chasing to prevent backward seeks during ffmpeg reconnects
         liveBufferLatencyChasing: false,
         
-        // More relaxed buffer settings for stability
-        liveBufferLatencyMaxLatency: 10,  // Increased from 3s
-        liveBufferLatencyMinRemain: 1.5,  // Increased from 0.5s
+        // Use playback rate adjustment for smoother latency control (v1.8.0+)
+        liveSync: true,
+        liveSyncMaxLatency: 3.0,
+        liveSyncTargetLatency: 1.5,
+        liveSyncPlaybackRate: 1.1,
         
-        // Fix audio timestamp gaps automatically
+        // Disable auto cleanup to prevent backward seeking
+        autoCleanupSourceBuffer: false,
+        
+        // Fix audio timestamp gaps from ffmpeg reconnects
         fixAudioTimestampGap: true,
         
-        // Auto cleanup but with larger threshold
-        autoCleanupSourceBuffer: true,
-        autoCleanupMaxBackwardDuration: 10,
-        autoCleanupMinBackwardDuration: 5,
-        
-        // Increase segment fetch retry
+        // Disable lazy loading for live streams
         lazyLoad: false,
-        lazyLoadMaxDuration: 3 * 60,
-        lazyLoadRecoverDuration: 30,
         
-        // Disable stuck detection that causes unwanted seeks
-        enableStashBuffer: true,
-        stashInitialSize: 384
+        // Use range-based seeking
+        seekType: 'range'
     });
     
     player.attachMediaElement(videoElement);
@@ -250,12 +249,10 @@ function initPlayer() {
         document.getElementById("loadingMessage").style.display = "none";
         videoElement.style.display = "block";
         
-        // Try to unmute after a short delay if playback started successfully
-        setTimeout(() => {
-            if (!videoElement.paused) {
-                videoElement.muted = false;
-            }
-        }, 1000);
+        // Ensure playback starts (browsers require muted autoplay)
+        videoElement.play().catch(err => {
+            console.warn("Play on loadedmetadata prevented:", err);
+        });
     });
     
     videoElement.addEventListener('error', (e) => {
