@@ -3,6 +3,9 @@ EPG Source Synchronization Service
 
 Decomposes complex EPG sync logic from routes to enable unit testing.
 Handles syncing from different EPG sources: providers, URLs, Schedules Direct, XMLTV grabbers.
+
+When syncing EPG sources, the raw XMLTV XML is cached to filesystem for use
+during EPG generation (avoiding re-fetches from external sources).
 """
 import json
 import logging
@@ -10,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Dict, Tuple
 
 from models import EpgSource, db
+from services.epg.cache import save_to_cache
 from services.epg_service import EpgService
 from services.iptv_service import IPTVService
 from services.schedules_direct import SchedulesDirectClient, SchedulesDirectError
@@ -51,6 +55,9 @@ class EpgSyncService:
             xml_content = service.get_xmltv()
             stats = EpgService.sync_epg_source(source, xml_content)
 
+            # Cache the raw XMLTV for EPG generation
+            save_to_cache(source.id, xml_content)
+
             channels_synced = stats["channels_added"] + stats["channels_updated"]
             return (True, f"Synced {channels_synced} channels", stats)
 
@@ -87,6 +94,9 @@ class EpgSyncService:
             response.raise_for_status()
 
             stats = EpgService.sync_epg_source(source, response.content)
+
+            # Cache the raw XMLTV for EPG generation
+            save_to_cache(source.id, response.content)
 
             channels_synced = stats["channels_added"] + stats["channels_updated"]
             return (True, f"Synced {channels_synced} channels", stats)
@@ -174,11 +184,54 @@ class EpgSyncService:
 
             stats = EpgService.sync_epg_source(source, xml_content)
 
+            # Cache the raw XMLTV for EPG generation
+            save_to_cache(source.id, xml_content)
+
             channels_synced = stats["channels_added"] + stats["channels_updated"]
             return (True, f"Synced {channels_synced} channels", stats)
 
         except Exception as e:
             logger.error(f"Error syncing XMLTV grabber source {source.id}: {e}", exc_info=True)
+            return False, str(e), {}
+
+    @staticmethod
+    def sync_ppv_events_source(source: EpgSource) -> Tuple[bool, str, Dict]:
+        """
+        Sync EPG from PPV Event records.
+
+        Converts Event records (linked to PPV channels) into EpgChannel entries,
+        then generates XMLTV EPG data from those events.
+
+        Args:
+            source: EpgSource with type='ppv_events'
+
+        Returns:
+            Tuple of (success, message, stats)
+        """
+        try:
+            from services.ppv_epg_service import PPVEpgService
+
+            # First, sync Event records to EpgChannel entries
+            created, updated = PPVEpgService.sync_ppv_events_to_epg_channels(source.id)
+
+            # Then generate XMLTV EPG data from those events
+            xml_content = PPVEpgService.generate_ppv_epg_xmltv()
+
+            # Cache the generated XMLTV for EPG generation
+            save_to_cache(source.id, xml_content)
+
+            stats = {
+                "channels_added": created,
+                "channels_updated": updated,
+                "channels_removed": 0,
+                "total_programs": created + updated,
+            }
+
+            channels_synced = created + updated
+            return (True, f"Synced {channels_synced} PPV events", stats)
+
+        except Exception as e:
+            logger.error(f"Error syncing PPV events source {source.id}: {e}", exc_info=True)
             return False, str(e), {}
 
     @staticmethod
@@ -220,5 +273,7 @@ class EpgSyncService:
             return EpgSyncService.sync_schedules_direct_source(source)
         elif source.source_type == "xmltv_grabber":
             return EpgSyncService.sync_xmltv_grabber_source(source)
+        elif source.source_type == "ppv_events":
+            return EpgSyncService.sync_ppv_events_source(source)
         else:
             return False, f"Unknown source type: {source.source_type}", {}

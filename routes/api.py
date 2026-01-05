@@ -249,6 +249,57 @@ def clear_account_cache(account_id):
 
 
 # ============================================================================
+# API Routes - EPG Cache Management
+# ============================================================================
+
+
+@api_bp.route("/api/epg-cache/status", methods=["GET"])
+def get_epg_cache_status():
+    """Get EPG XML cache statistics"""
+    from services.epg.cache import get_cache_stats
+
+    stats = get_cache_stats()
+    return jsonify(stats)
+
+
+@api_bp.route("/api/epg-cache/clear", methods=["POST"])
+def clear_all_epg_cache():
+    """Clear all EPG XML caches"""
+    from services.epg.cache import clear_all_cache
+
+    deleted = clear_all_cache()
+    return jsonify({"success": True, "message": f"Cleared {deleted} EPG cache files"})
+
+
+@api_bp.route("/api/epg-cache/source/<int:source_id>", methods=["GET"])
+def get_epg_source_cache_info(source_id):
+    """Get cache info for a specific EPG source"""
+    from models import EpgSource
+    from services.epg.cache import get_cache_info, is_cache_valid
+
+    source = db.get_or_404(EpgSource, source_id)
+    info = get_cache_info(source_id)
+
+    if info:
+        info["source_name"] = source.name
+        info["source_type"] = source.source_type
+        info["is_valid"] = is_cache_valid(source_id)
+
+    return jsonify({"source_id": source_id, "cached": info is not None, "info": info})
+
+
+@api_bp.route("/api/epg-cache/source/<int:source_id>", methods=["DELETE"])
+def delete_epg_source_cache(source_id):
+    """Delete cache for a specific EPG source"""
+    from models import EpgSource
+    from services.epg.cache import delete_cache
+
+    db.get_or_404(EpgSource, source_id)  # Validate source exists
+    success = delete_cache(source_id)
+    return jsonify({"success": success, "message": f"EPG cache deleted for source {source_id}"})
+
+
+# ============================================================================
 # API Routes - Channel Preview
 # ============================================================================
 

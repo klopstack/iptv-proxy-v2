@@ -75,9 +75,55 @@ def group_channels_by_epg_source(
     return groups
 
 
-def fetch_epg_from_source(source: EpgSource, account: Optional[Account] = None) -> Optional[bytes]:
+def get_epg_from_cache(source_id: int) -> Optional[bytes]:
     """
-    Fetch EPG data from a specific source.
+    Get EPG data from cache.
+
+    Args:
+        source_id: EpgSource ID
+
+    Returns:
+        Cached XMLTV XML as bytes, or None if not cached
+    """
+    from services.epg.cache import load_from_cache
+
+    return load_from_cache(source_id)
+
+
+def fetch_epg_from_source(
+    source: EpgSource, account: Optional[Account] = None, use_cache: bool = True
+) -> Optional[bytes]:
+    """
+    Get EPG data from a specific source, preferring cache.
+
+    First tries to load from cache. If cache miss or use_cache=False,
+    fetches from the external source.
+
+    Args:
+        source: EpgSource to fetch from
+        account: Account (needed for provider/upstream sources)
+        use_cache: Whether to try cache first (default True)
+
+    Returns:
+        Raw XMLTV XML as bytes, or None if fetch fails
+    """
+    # Try cache first
+    if use_cache:
+        cached = get_epg_from_cache(source.id)
+        if cached:
+            logger.debug(f"Using cached EPG for source {source.id} ({source.name})")
+            return cached
+
+    # Cache miss or disabled - fetch from source
+    return _fetch_epg_from_external_source(source, account)
+
+
+def _fetch_epg_from_external_source(source: EpgSource, account: Optional[Account] = None) -> Optional[bytes]:
+    """
+    Fetch EPG data directly from an external source (no cache).
+
+    This is a fallback when cache is not available. Ideally, EPG data
+    should be cached during periodic sync operations.
 
     Args:
         source: EpgSource to fetch from
@@ -89,6 +135,11 @@ def fetch_epg_from_source(source: EpgSource, account: Optional[Account] = None) 
     import requests
 
     from services.iptv_service import IPTVService
+
+    logger.warning(
+        f"EPG cache miss for source {source.id} ({source.name}) - "
+        f"fetching from external source. Consider running EPG sync."
+    )
 
     try:
         if source.source_type == "provider" or source.source_type == "upstream":
@@ -115,22 +166,32 @@ def fetch_epg_from_source(source: EpgSource, account: Optional[Account] = None) 
             return service.get_xmltv()
 
         elif source.source_type == "schedules_direct":
-            # TODO: Implement SD EPG fetch via SchedulesDirectClient
-            logger.warning(f"Schedules Direct EPG fetch not yet implemented for source {source.name}")
+            # SD EPG should be fetched during sync, not on-demand
+            logger.warning(f"Schedules Direct EPG not cached for source {source.name} - run EPG sync")
             return None
 
         elif source.source_type == "xmltv_grabber":
-            # TODO: Run XMLTV grabber
-            logger.warning(f"XMLTV grabber execution not yet implemented for source {source.name}")
+            # XMLTV grabbers should be run during sync, not on-demand (they can be slow)
+            logger.warning(f"XMLTV grabber EPG not cached for source {source.name} - run EPG sync")
             return None
 
-        elif source.source_type == "url":
-            # Fetch from external URL
+        elif source.source_type == "ppv_events":
+            # PPV events are generated during sync from Event records
+            from services.ppv_epg_service import PPVEpgService
+
+            logger.warning(f"PPV events EPG not cached for source {source.name} - run EPG sync")
+            # Could optionally generate on-demand, but this defeats the caching purpose
+            return None
+
+        elif source.source_type == "url" or source.source_type == "xmltv_url":
+            # Fetch from external URL (both 'url' and 'xmltv_url' types use the same mechanism)
             if not source.url:
-                logger.warning(f"EPG source {source.name} has type 'url' but no URL configured")
+                logger.warning(f"EPG source {source.name} has type '{source.source_type}' but no URL configured")
                 return None
-            response = requests.get(source.url, timeout=60)
+            logger.info(f"Fetching EPG from URL source {source.name}: {source.url}")
+            response = requests.get(source.url, timeout=120)
             response.raise_for_status()
+            logger.info(f"Successfully fetched EPG from {source.name} ({len(response.content)} bytes)")
             return response.content
 
         else:
