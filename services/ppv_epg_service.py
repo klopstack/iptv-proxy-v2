@@ -375,6 +375,9 @@ class PPVEpgService:
             source_type="ppv_events",
             enabled=True,
             priority=50,  # Medium priority
+            last_sync_status="success",
+            last_sync_message="PPV Events source created",
+            channel_count=0,
         )
 
         db.session.add(epg_source)
@@ -455,6 +458,17 @@ class PPVEpgService:
                 created += 1
 
         db.session.commit()
+
+        # Update the source's channel count and sync status
+        from models import EpgSource
+
+        epg_source = db.session.get(EpgSource, epg_source_id)
+        if epg_source:
+            epg_source.channel_count = created + updated
+            epg_source.last_sync = datetime.now(timezone.utc).replace(tzinfo=None)
+            epg_source.last_sync_status = "success"
+            epg_source.last_sync_message = f"Synced {created + updated} PPV events"
+            db.session.commit()
 
         logger.info(f"Synced PPV events to EPG channels: {created} created, {updated} updated")
         return (created, updated)

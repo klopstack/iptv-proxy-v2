@@ -110,7 +110,9 @@ function renderSources() {
             ? '<span class="badge bg-success">Success</span>'
             : source.last_sync_status === 'error'
             ? '<span class="badge bg-danger">Error</span>'
-            : '<span class="badge bg-secondary">Never synced</span>';
+            : source.last_sync_status === null || source.last_sync_status === undefined
+            ? '<span class="badge bg-secondary">Never synced</span>'
+            : '<span class="badge bg-secondary">' + source.last_sync_status + '</span>';
             
         const sourceInfo = source.source_type === 'provider' 
             ? (source.account_name || 'Account ' + source.account_id)
@@ -147,7 +149,7 @@ function renderSources() {
                         ${source.source_type === 'schedules_direct' 
                             ? '<button class="btn btn-outline-info" onclick="showSdLineups(' + source.id + ')" title="Manage Lineups"><i class="bi bi-list-ul"></i></button>'
                             : source.source_type === 'ppv_events'
-                            ? '<button class="btn btn-outline-secondary" disabled title="PPV Events source - synced automatically during PPV enrichment"><i class="bi bi-info-circle"></i></button>'
+                            ? '<a href="/ppv" class="btn btn-outline-info" title="Manage PPV events and enrichment - auto-synced during enrichment"><i class="bi bi-info-circle"></i></a>'
                             : '<button class="btn btn-outline-primary" onclick="syncSource(' + source.id + ')" title="Sync"><i class="bi bi-arrow-repeat"></i></button>'}
                         <button class="btn btn-outline-secondary" onclick="editSource(${source.id})" title="Edit">
                             <i class="bi bi-pencil"></i>

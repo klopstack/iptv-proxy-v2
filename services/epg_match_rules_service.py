@@ -795,14 +795,49 @@ class EpgMatchRulesService:
                 except (json.JSONDecodeError, TypeError):
                     pass
 
+            # Filter EPG channels by epg_source_ids if specified in rule
+            rule_epg_channels = epg_channels
+            rule_epg_by_id = epg_by_id
+            rule_epg_by_name = epg_by_name
+            rule_epg_by_callsign = epg_by_callsign
+
+            if rule.epg_source_ids:
+                try:
+                    allowed_source_ids = set(json.loads(rule.epg_source_ids))
+                    # Filter EPG channels to only those from allowed sources
+                    rule_epg_channels = [ec for ec in epg_channels if ec.source_id in allowed_source_ids]
+
+                    # Rebuild indices with filtered channels
+                    rule_epg_by_id = {ec.channel_id.lower(): ec for ec in rule_epg_channels}
+                    rule_epg_by_name = {}
+                    rule_epg_by_callsign = {}
+
+                    for ec in rule_epg_channels:
+                        if ec.display_name:
+                            normalized = EpgMatchRulesService._normalize_name(ec.display_name)
+                            if normalized:
+                                rule_epg_by_name[normalized] = ec
+
+                        callsign = EpgMatchRulesService._extract_callsign(ec.channel_id)
+                        if callsign:
+                            callsign_upper = callsign.upper()
+                            rule_epg_by_callsign[callsign_upper] = ec
+                            base_callsign = EpgMatchRulesService._normalize_callsign(callsign_upper)
+                            if base_callsign and base_callsign != callsign_upper:
+                                if base_callsign not in rule_epg_by_callsign:
+                                    rule_epg_by_callsign[base_callsign] = ec
+                except (json.JSONDecodeError, TypeError):
+                    # If parsing fails, use all EPG channels
+                    pass
+
             # Apply the match type
             result = EpgMatchRulesService._apply_match_rule(
                 channel=channel,
                 rule=rule,
-                epg_channels=epg_channels,
-                epg_by_id=epg_by_id,
-                epg_by_name=epg_by_name,
-                epg_by_callsign=epg_by_callsign,
+                epg_channels=rule_epg_channels,
+                epg_by_id=rule_epg_by_id,
+                epg_by_name=rule_epg_by_name,
+                epg_by_callsign=rule_epg_by_callsign,
                 channel_tags=channel_tags,
                 country_tags=country_tags,
                 name_mappings=name_mappings,
@@ -1729,10 +1764,18 @@ class EpgMatchRulesService:
         total_channels = len(channels)
         logger.info(f"EPG matching: Found {len(channels)} channels for account {account_id}")
 
-        # Get EPG channels
+        # Get EPG channels (exclude ppv_events sources unless explicitly requested)
         epg_query = EpgChannel.query
         if source_id:
             epg_query = epg_query.filter_by(source_id=source_id)
+        else:
+            # Exclude ppv_events sources from automatic matching
+            # PPV channels should only match to ppv_events via dedicated logic
+            from models import EpgSource
+
+            ppv_source_ids = [s.id for s in EpgSource.query.filter_by(source_type="ppv_events").all()]
+            if ppv_source_ids:
+                epg_query = epg_query.filter(~EpgChannel.source_id.in_(ppv_source_ids))
         epg_channels = epg_query.all()
         logger.info(f"EPG matching: Found {len(epg_channels)} EPG channels")
 
@@ -1801,7 +1844,70 @@ class EpgMatchRulesService:
             channel_tags = all_tags_by_stream.get(stream_id, set())
             country_tags = country_tags_by_stream.get(stream_id, set())
 
-            # Check exclusion patterns
+            # Special handling for PPV channels: automatically match to ppv_events source
+            # This bypasses exclusion patterns to enable automatic PPV EPG mapping
+            if channel.is_ppv:
+                # Check if already has mapping
+                if channel.id in existing_mappings:
+                    mapping = existing_mappings[channel.id]
+                    if mapping.is_override or mapping.confidence >= 0.85:
+                        skipped_existing_count += 1
+                        continue
+
+                # Try to match to ppv_events source via EventChannelLink
+                from models import EpgSource, Event, EventChannelLink
+
+                event_link = (
+                    db.session.query(EventChannelLink, Event)
+                    .join(Event, EventChannelLink.event_id == Event.id)
+                    .filter(EventChannelLink.channel_id == channel.id)
+                    .first()
+                )
+
+                if event_link:
+                    link, event = event_link
+                    # Find ppv_events source
+                    ppv_source = EpgSource.query.filter_by(source_type="ppv_events", enabled=True).first()
+                    if ppv_source:
+                        # Look for EPG channel with format: ppv-event-{external_id}
+                        epg_channel_id_str = f"ppv-event-{event.external_id}"
+                        ppv_epg_channel = EpgChannel.query.filter_by(
+                            source_id=ppv_source.id, channel_id=epg_channel_id_str
+                        ).first()
+
+                        if ppv_epg_channel:
+                            # Create or update mapping
+                            if channel.id in existing_mappings:
+                                mapping = existing_mappings[channel.id]
+                                if not mapping.is_override:
+                                    mapping.epg_channel_id = ppv_epg_channel.id
+                                    mapping.mapping_type = "ppv_auto"
+                                    mapping.confidence = 1.0
+                                    mapping.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                            else:
+                                mapping = ChannelEpgMapping(
+                                    channel_id=channel.id,
+                                    epg_channel_id=ppv_epg_channel.id,
+                                    mapping_type="ppv_auto",
+                                    confidence=1.0,
+                                )
+                                db.session.add(mapping)
+
+                            matched_count += 1
+                            matches_by_type["ppv_auto"] = matches_by_type.get("ppv_auto", 0) + 1
+
+                            channels_processed += 1
+                            if channels_processed >= batch_size:
+                                db.session.commit()
+                                channels_processed = 0
+
+                            continue  # Skip normal matching for this PPV channel
+
+                # PPV channel but no event link yet - skip for now
+                excluded_count += 1
+                continue
+
+            # Check exclusion patterns (only for non-PPV channels)
             should_exclude, pattern_name, _ = EpgMatchRulesService.should_exclude_channel(
                 channel, exclusion_patterns, channel_tags
             )
