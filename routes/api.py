@@ -59,88 +59,73 @@ def get_all_categories():
     - include_epg (optional): Include EPG coverage stats (default: false)
     - include_ppv (optional): Include PPV categories (default: true)
     """
+    from services.filter_service import FilterService
+
     account_id = request.args.get("account_id", type=int)
     include_empty = request.args.get("include_empty", "false").lower() == "true"
     include_epg = request.args.get("include_epg", "false").lower() == "true"
     include_ppv = request.args.get("include_ppv", "true").lower() == "true"
 
-    # Build query for categories with visible/hidden channel counts
-    # Also count channels with provider EPG IDs
+    # Get all categories for the account
     query = (
-        db.session.query(
-            Category.id,
-            Category.category_id,
-            Category.category_name,
-            Category.cleaned_name,
-            Category.account_id,
-            Category.is_ppv,
-            Account.name.label("account_name"),
-            # Note: is_visible used for stats only. Actual filtering done via FilterService
-            db.func.sum(
-                db.case((db.and_(Channel.is_visible == True, Channel.is_active == True), 1), else_=0)  # noqa: E712
-            ).label("visible_count"),
-            db.func.sum(
-                db.case((db.and_(Channel.is_visible == False, Channel.is_active == True), 1), else_=0)  # noqa: E712
-            ).label("hidden_count"),
-            db.func.sum(
-                db.case(
-                    (
-                        db.and_(
-                            Channel.is_active == True,  # noqa: E712
-                            Channel.epg_channel_id.isnot(None),
-                            Channel.epg_channel_id != "",
-                        ),
-                        1,
-                    ),
-                    else_=0,
-                )
-            ).label("with_epg_id_count"),
-        )
+        db.session.query(Category, Account.name.label("account_name"))
         .join(Account, Category.account_id == Account.id)
-        .outerjoin(
-            Channel,
-            db.and_(
-                Channel.category_id == Category.id,
-                Channel.account_id == Category.account_id,
-            ),
-        )
-        .group_by(
-            Category.id,
-            Category.category_id,
-            Category.category_name,
-            Category.cleaned_name,
-            Category.account_id,
-            Category.is_ppv,
-            Account.name,
-        )
     )
 
     if account_id:
         db.get_or_404(Account, account_id)  # Validate account exists
         query = query.filter(Category.account_id == account_id)
 
-    if not include_empty:
-        # Filter to categories that have at least one visible channel
-        # Note: is_visible used for stats filtering only
-        query = query.having(
-            db.func.sum(
-                db.case(
-                    (db.and_(Channel.is_visible == True, Channel.is_active == True), 1),  # noqa: E712
-                    else_=0,
-                )
-            )
-            > 0  # noqa: W503
-        )
-
     categories = query.order_by(Category.category_name).all()
 
+    # Get all active channels for this account to apply filters
+    channel_query = db.session.query(Channel).filter(Channel.is_active == True)  # noqa: E712
+    if account_id:
+        channel_query = channel_query.filter(Channel.account_id == account_id)
+    all_channels = channel_query.all()
+
+    # Apply filters dynamically using FilterService
+    if account_id:
+        filtered_channels = FilterService.apply_filters_to_channels(all_channels, account_id)
+    else:
+        # For multi-account view, apply filters per account
+        filtered_channels = []
+        channels_by_account = {}
+        for ch in all_channels:
+            if ch.account_id not in channels_by_account:
+                channels_by_account[ch.account_id] = []
+            channels_by_account[ch.account_id].append(ch)
+
+        for acc_id, channels in channels_by_account.items():
+            filtered_channels.extend(FilterService.apply_filters_to_channels(channels, acc_id))
+
+    # Build channel counts per category
+    filtered_stream_ids = set((ch.account_id, ch.stream_id) for ch in filtered_channels)
+    category_visible_counts = {}
+    category_total_counts = {}
+    category_epg_counts = {}
+
+    for ch in all_channels:
+        cat_id = ch.category_id
+        if cat_id:
+            # Count total channels
+            category_total_counts[cat_id] = category_total_counts.get(cat_id, 0) + 1
+
+            # Count filtered (visible) channels
+            if (ch.account_id, ch.stream_id) in filtered_stream_ids:
+                category_visible_counts[cat_id] = category_visible_counts.get(cat_id, 0) + 1
+
+            # Count channels with EPG IDs
+            if ch.epg_channel_id:
+                category_epg_counts[cat_id] = category_epg_counts.get(cat_id, 0) + 1
+
     # If include_epg is requested, also get EPG mapping counts
-    epg_coverage_by_category = {}
+    epg_mapping_counts = {}
     if include_epg:
         from models import ChannelEpgMapping
 
         # Get all category IDs we're returning
-        category_ids = [cat.id for cat in categories]
+        category_ids = [cat.Category.id for cat in categories]
 
         if category_ids:
             # Count channels with EPG mappings per category
@@ -153,12 +138,23 @@ def get_all_categories():
                 .group_by(Channel.category_id)
                 .all()
             )
-            epg_coverage_by_category = {row.category_id: row.mapped_count for row in epg_counts}
+            epg_mapping_counts = {row.category_id: row.mapped_count for row in epg_counts}
 
     result = []
-    for cat in categories:
+    for cat_row in categories:
+        cat = cat_row.Category
+        account_name = cat_row.account_name
+
         # Skip PPV categories if not requested (use database column)
         if not include_ppv and cat.is_ppv:
+            continue
+
+        visible_count = category_visible_counts.get(cat.id, 0)
+        total_count = category_total_counts.get(cat.id, 0)
+        hidden_count = total_count - visible_count
+
+        # Skip empty categories if requested
+        if not include_empty and visible_count == 0:
             continue
 
         cat_data = {
@@ -167,19 +163,18 @@ def get_all_categories():
             "category_name": cat.category_name,
             "cleaned_name": cat.cleaned_name,
             "account_id": cat.account_id,
-            "account_name": cat.account_name,
-            "visible_count": int(cat.visible_count or 0),
-            "hidden_count": int(cat.hidden_count or 0),
-            "total_count": int(cat.visible_count or 0) + int(cat.hidden_count or 0),
-            "with_epg_id_count": int(cat.with_epg_id_count or 0),
+            "account_name": account_name,
+            "visible_count": visible_count,
+            "hidden_count": hidden_count,
+            "total_count": total_count,
+            "with_epg_id_count": category_epg_counts.get(cat.id, 0),
             "is_ppv": cat.is_ppv or False,
         }
 
         if include_epg:
-            total_active = int(cat.visible_count or 0) + int(cat.hidden_count or 0)
-            mapped_count = epg_coverage_by_category.get(cat.id, 0)
+            mapped_count = epg_mapping_counts.get(cat.id, 0)
             cat_data["epg_mapped_count"] = mapped_count
-            cat_data["epg_coverage_percent"] = round((mapped_count / total_active * 100), 1) if total_active > 0 else 0
+            cat_data["epg_coverage_percent"] = round((mapped_count / total_count * 100), 1) if total_count > 0 else 0
 
         result.append(cat_data)
 
