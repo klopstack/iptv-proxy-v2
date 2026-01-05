@@ -138,12 +138,10 @@ stations_bp, channel_health_bp, ppv_enrichment_bp, ppv_epg_bp, settings_bp
 | `TheSportsDBService` | `thesportsdb_service.py` | TheSportsDB API | ✅ Active |
 | `TheSportsDBCalendarScraper` | `thesportsdb_calendar_scraper.py` | Calendar HTML scraping | ✅ Active |
 | `SdMatchingService` | `sd_matching_service.py` | SD callsign matching | ⚠️ **NOT INTEGRATED** |
-| `SyncDateService` | `sync_date_service.py` | PPV date inference | ⚠️ **NOT INTEGRATED** |
 | `ChannelSyncService` | `sync_service.py` | Channel synchronization from providers | ✅ Active |
 | `StreamProxyService` | `stream_proxy_service.py` | Stream proxying | ✅ Active |
-| `StreamMultiplexer` | `stream_multiplexer.py` | Multi-credential streams | ✅ Active |
 | `ConnectionManager` | `connection_manager.py` | Credential pool management | ✅ Active |
-| `FfmpegStreamService` | `ffmpeg_stream_service.py` | Stream analysis | ✅ Active |
+| `FfmpegStreamService` | `ffmpeg_stream_service.py` | Stream analysis and multiplexing | ✅ Active |
 | `PPVEventExtractor` | `ppv_event_extractor.py` | Event info extraction | ✅ Active |
 | `PPVVisibilityService` | `ppv_visibility_service.py` | PPV visibility logic (uses Event records) | ✅ Active |
 
@@ -302,9 +300,8 @@ PPV placeholder detection patterns exist in:
 | Service | File | Issue |
 |---------|------|-------|
 | `SdMatchingService` | `sd_matching_service.py` | 384 lines, fully implemented, not imported by any route |
-| `SyncDateService` | `sync_date_service.py` | 79 lines, created for PPV, not wired to routes |
 
-**Note**: `PPVFilterService` (`ppv_filter_service.py`) has been removed from the codebase.
+**Note**: `PPVFilterService` (`ppv_filter_service.py`) and `SyncDateService` (`sync_date_service.py`) have been removed from the codebase.
 
 ### Unused Models
 

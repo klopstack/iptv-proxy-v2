@@ -99,7 +99,7 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
     Internal function to proxy stream with credential multiplexing and stream sharing.
 
     When multiple clients request the same stream, they share a single upstream
-    connection via the StreamMultiplexer. This reduces load on the upstream server
+    connection via the FFmpegStreamService. This reduces load on the upstream server
     and conserves credential connection slots.
 
     Args:

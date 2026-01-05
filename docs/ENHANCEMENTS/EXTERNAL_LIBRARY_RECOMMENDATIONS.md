@@ -294,12 +294,11 @@ def migrate(db_path):
 ## 4. Stream Queue Management: Use `queue` stdlib + `threading` patterns from `asyncio`
 
 ### Current Implementation
-- **File**: [services/stream_multiplexer.py](../services/stream_multiplexer.py) (585 lines)
+- **Replaced by**: [services/ffmpeg_stream_service.py](../services/ffmpeg_stream_service.py)
 - **Key Patterns**:
-  - Hand-rolled `SharedStream` with custom subscriber queue management
-  - Manual `threading.Lock()` usage throughout
-  - Custom `StreamSubscriber` dataclass with manual lifecycle tracking
-  - Ring buffer simulation with `Queue[Optional[bytes]]` (works but complex)
+  - FFmpeg-based stream proxying with proper remuxing
+  - Thread-safe subprocess management
+  - Ring buffer simulation with `Queue[Optional[bytes]]` per subscriber
 
 **Issues**:
 - ⚠️ **Complex synchronization**: 15+ lock operations in critical sections
@@ -727,7 +726,6 @@ retries = HTTPXRetry(max_retries=3, backoff_factor=0.5)
 ### Don't Change (Well-Implemented)
 | Item | Reason |
 |------|--------|
-| `stream_multiplexer.py` | Specialized, complex, working well |
 | Current error handling | Good patterns already in place |
 | Marshmallow validation | Working well, don't rip-and-replace |
 
