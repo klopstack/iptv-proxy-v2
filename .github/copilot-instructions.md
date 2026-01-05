@@ -4,10 +4,6 @@
 
 ## Quick Reference
 
-📋 **Read First**: See [docs/ARCHITECTURE_OVERVIEW.md](../docs/ARCHITECTURE_OVERVIEW.md) for complete system design
-
-💡 **Library Opportunities**: See [docs/EXTERNAL_LIBRARY_RECOMMENDATIONS.md](../docs/EXTERNAL_LIBRARY_RECOMMENDATIONS.md) for ways to reduce code complexity and testing burden
-
 ## Architecture Overview
 
 Flask-based IPTV proxy that sits between Xtream Codes API services and clients, adding tag extraction, advanced filtering, EPG management, and channel health monitoring.
@@ -39,7 +35,6 @@ Flask-based IPTV proxy that sits between Xtream Codes API services and clients, 
 - `Event` ↔ many channels via `EventChannelLink` (PPV event tracking from TheSportsDB)
 
 **⚠️ IMPORTANT - JSON Field Handling:** Several models store arrays as JSON text fields.
-- **Status**: See recommendation in [docs/EXTERNAL_LIBRARY_RECOMMENDATIONS.md#3-json-field-serialization](../docs/EXTERNAL_LIBRARY_RECOMMENDATIONS.md#3-json-field-serialization-use-sqlalchemy-json-or-pydantic)
 - **Current pattern**: Always use `json.loads()` when reading and `json.dumps()` when writing:
   - `PlaylistConfig`: include_accounts, exclude_accounts, include_tags, exclude_tags
   - `EpgMatchRule`: required_tags, excluded_tags, country_codes, epg_source_ids
@@ -207,7 +202,6 @@ docker exec -it iptv-proxy-v2 pytest tests/  # Run tests in container
 - `routes/web.py` - HTML page rendering
 - `routes/accounts.py` - Account CRUD and credentials
 - `routes/epg/` - EPG management (decomposed into sources, channels, match_rules, etc.)
-- See `docs/ARCHITECTURE_OVERVIEW.md` for full blueprint listing
 
 **Database:** Models use `updated_at` with `onupdate=datetime.now(timezone.utc).replace(tzinfo=None)`. Changes committed with `db.session.commit()`. SQLite configured with 30s timeout for background scheduler compatibility.
 
@@ -270,21 +264,3 @@ Since patterns are still emerging, feel free to propose refactorings or architec
 - Are there tests to prevent regressions?
 - Does it maintain backward compatibility with existing data?
 - **Have you run `make lint` and `make test`?** (Required!)
-
-## External Library Opportunities
-
-**NEW**: A comprehensive analysis has been completed identifying 11 opportunities to reduce code complexity and testing burden using external libraries. See [docs/EXTERNAL_LIBRARY_RECOMMENDATIONS.md](../docs/EXTERNAL_LIBRARY_RECOMMENDATIONS.md) for:
-
-- **High-impact, low-effort** recommendations (1-2 hours each):
-  - `cachetools` - Replace custom TTL cache service (60 lines saved)
-  - `sqlalchemy-json` - Eliminate JSON serialization boilerplate (120-160 lines saved)
-  - `tenacity` - Consolidate retry logic patterns (40-50 lines saved)
-
-- **High-impact, medium-effort** recommendations (4-6 hours each):
-  - `APScheduler` - Replace custom scheduler (300-400 lines saved)
-  - `dynaconf` - Centralize configuration management (~200 lines saved)
-
-- **Well-designed, keep as-is**:
-  - `stream_multiplexer.py` - Specialized implementation, no suitable general library
-
-When proposing library changes, reference the analysis document and evaluate against the decision framework provided there.

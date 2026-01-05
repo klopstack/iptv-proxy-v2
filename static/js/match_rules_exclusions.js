@@ -60,7 +60,7 @@ function showCreateExclusionModal() {
     document.getElementById('exclusionModalTitle').textContent = 'New Exclusion Pattern';
     document.getElementById('exclusionForm').reset();
     document.getElementById('exclusion-id').value = '';
-    document.getElementById('exclusion-is-regex').checked = true;
+    document.getElementById('exclusion-case-sensitive').checked = false;
     document.getElementById('exclusion-enabled').checked = true;
     
     populateExclusionAccountDropdown();
@@ -79,8 +79,7 @@ async function editExclusion(exclusionId) {
     document.getElementById('exclusion-description').value = exclusion.description || '';
     document.getElementById('exclusion-pattern-type').value = exclusion.pattern_type;
     document.getElementById('exclusion-pattern').value = exclusion.pattern;
-    document.getElementById('exclusion-is-regex').checked = exclusion.is_regex;
-    document.getElementById('exclusion-hide-channel').checked = exclusion.hide_channel;
+    document.getElementById('exclusion-case-sensitive').checked = !exclusion.is_regex;
     document.getElementById('exclusion-enabled').checked = exclusion.enabled;
     document.getElementById('exclusion-priority').value = exclusion.priority;
     
@@ -97,8 +96,7 @@ async function saveExclusion() {
         description: document.getElementById('exclusion-description').value,
         pattern_type: document.getElementById('exclusion-pattern-type').value,
         pattern: document.getElementById('exclusion-pattern').value,
-        is_regex: document.getElementById('exclusion-is-regex').checked,
-        hide_channel: document.getElementById('exclusion-hide-channel').checked,
+        is_regex: !document.getElementById('exclusion-case-sensitive').checked,
         enabled: document.getElementById('exclusion-enabled').checked,
         priority: parseInt(document.getElementById('exclusion-priority').value)
     };

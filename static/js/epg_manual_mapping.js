@@ -5,6 +5,28 @@
 let epgSearchState = { search: '', offset: 0, hasMore: true, loading: false };
 const EPG_CHANNELS_PER_PAGE = 20;
 
+async function populateEpgSourcesForManualMapping() {
+    const sourceSelect = document.getElementById('manualMappingEpgSource');
+    if (!sourceSelect) return;
+    
+    try {
+        const response = await fetch('/api/epg/sources');
+        const sourcesData = await response.json();
+        const sourcesList = Array.isArray(sourcesData) ? sourcesData : (sourcesData.sources || []);
+        
+        sourceSelect.innerHTML = '<option value="">Select an EPG source...</option>';
+        for (const source of sourcesList) {
+            const option = document.createElement('option');
+            option.value = source.id;
+            option.textContent = `${source.name} (${source.type})`;
+            sourceSelect.appendChild(option);
+        }
+    } catch (error) {
+        console.error('Error loading EPG sources:', error);
+        sourceSelect.innerHTML = '<option value="">Error loading sources</option>';
+    }
+}
+
 function showManualMappingModal(channelId, channelName) {
     document.getElementById('manualMappingChannelId').value = channelId;
     document.getElementById('manualMappingChannel').textContent = channelName;
@@ -14,6 +36,10 @@ function showManualMappingModal(channelId, channelName) {
     document.getElementById('manualMappingTimeOffset').value = '0';
     document.getElementById('selectedEpgChannel').style.display = 'none';
     epgSearchState = { search: '', offset: 0, hasMore: true, loading: false };
+    
+    // Populate EPG sources if not already done
+    populateEpgSourcesForManualMapping();
+    
     if (manualMappingModal) manualMappingModal.show();
 }
 

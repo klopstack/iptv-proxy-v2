@@ -382,6 +382,73 @@
     </div>
 </div>
 
+<!-- Manual EPG Mapping Modal -->
+<div class="modal fade" id="manualMappingModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    Create Manual EPG Mapping for <span id="manualMappingChannel"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="manualMappingChannelId">
+                
+                <!-- EPG Source Selection -->
+                <div class="mb-3">
+                    <label for="manualMappingEpgSource" class="form-label">EPG Source</label>
+                    <select class="form-select" id="manualMappingEpgSource" required>
+                        <option value="">Select an EPG source...</option>
+                    </select>
+                </div>
+                
+                <!-- Search EPG Channels -->
+                <div class="mb-3">
+                    <label for="manualMappingEpgSearch" class="form-label">Search EPG Channels</label>
+                    <input type="text" class="form-control" id="manualMappingEpgSearch" placeholder="Type to search channels...">
+                    <small class="form-text text-muted">Search by channel name or ID</small>
+                </div>
+                
+                <!-- EPG Channels List -->
+                <div class="mb-3">
+                    <label class="form-label">Available Channels</label>
+                    <div id="epgChannelListContainer" class="list-group" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px;">
+                        <div id="epgChannelList" class="list-group-item text-muted">
+                            Type to search EPG channels...
+                        </div>
+                        <div id="epgChannelLoader" class="text-center py-3" style="display: none;">
+                            <div class="spinner-border spinner-border-sm"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Selected Channel Display -->
+                <div id="selectedEpgChannel" style="display: none; margin-bottom: 15px;">
+                    <div class="alert alert-info mb-0">
+                        <strong>Selected:</strong> <span id="selectedEpgChannelName"></span>
+                        <button type="button" class="btn btn-sm btn-link float-end" onclick="clearSelectedEpgChannel()">Change</button>
+                    </div>
+                </div>
+                
+                <!-- Time Offset -->
+                <div class="mb-3">
+                    <label for="manualMappingTimeOffset" class="form-label">Time Offset (hours)</label>
+                    <input type="number" class="form-control" id="manualMappingTimeOffset" value="0" step="1">
+                    <small class="form-text text-muted">Adjust program guide time by this many hours</small>
+                </div>
+                
+                <!-- Hidden field for EPG channel selection -->
+                <input type="hidden" id="manualMappingEpgChannel" value="">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveManualMappingBtn">Create Mapping</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ============================================================================ -->
 <!-- Modals for EPG Match Rules -->
 <!-- ============================================================================ -->
