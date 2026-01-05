@@ -242,6 +242,12 @@ class TagRule(db.Model):  # type: ignore[name-defined]
 
     __tablename__ = "tag_rules"
 
+    # PPV control options
+    PPV_KEEP = "keep"  # Don't modify is_ppv field (default)
+    PPV_SET_TRUE = "set_true"  # Set is_ppv = True for matching channels
+    PPV_SET_FALSE = "set_false"  # Set is_ppv = False for matching channels
+    PPV_OPTIONS = [PPV_KEEP, PPV_SET_TRUE, PPV_SET_FALSE]
+
     id = db.Column(db.Integer, primary_key=True)
     ruleset_id = db.Column(db.Integer, db.ForeignKey("rulesets.id"), nullable=False)
     name = db.Column(db.String(100), nullable=False)
@@ -251,6 +257,9 @@ class TagRule(db.Model):  # type: ignore[name-defined]
     source = db.Column(db.String(20), nullable=False)  # Where to look: channel_name, category_name, both
     remove_from_name = db.Column(db.Boolean, default=True)  # Whether to remove the matched pattern from channel name
     replacement = db.Column(db.String(255), nullable=True)  # Text to replace matched pattern with (None = just remove)
+    set_is_ppv = db.Column(
+        db.String(20), default=PPV_KEEP, nullable=False
+    )  # Control is_ppv field: keep, set_true, set_false
     priority = db.Column(db.Integer, default=100)  # Processing order (lower first)
     enabled = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))

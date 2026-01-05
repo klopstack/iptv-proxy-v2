@@ -96,7 +96,7 @@ class TestTagExtraction:
             channel_name = "US| CNN News"
             category_name = "News"
 
-            tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, rules)
+            tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, rules)
 
             assert "US" in tags
             assert cleaned_name == "CNN News"
@@ -109,7 +109,7 @@ class TestTagExtraction:
             channel_name = "US| ESPN 4K ᴿᴬᵂ"
             category_name = "Sports"
 
-            tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, rules)
+            tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, rules)
 
             assert "US" in tags
             assert "RAW" in tags
@@ -124,7 +124,7 @@ class TestTagExtraction:
             channel_name = "Discovery 4K UHD"
             category_name = "Documentary"
 
-            tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, rules)
+            tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, rules)
 
             assert "4K" in tags
 
@@ -312,7 +312,7 @@ class TestSpecialTagTypes:
             channel_name = "ESPN [US]"
             category_name = "Sports"
 
-            tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, rules)
+            tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, rules)
 
             assert "US" in tags
             assert "[" not in cleaned_name
@@ -342,7 +342,7 @@ class TestSpecialTagTypes:
             channel_name = "US| ESPN"
             category_name = "Sports"
 
-            tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, rules)
+            tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, rules)
 
             # Should not create a tag
             assert "__CLEANUP__" not in tags
@@ -375,7 +375,7 @@ class TestTagRuleReplacement:
             channel_name = "ABC 7 DISCTRICT OF COLUMBIA"
             category_name = "US Local"
 
-            tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, rules)
+            tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, rules)
 
             assert "DISTRICT" in cleaned_name
             assert "DISCTRICT" not in cleaned_name
@@ -402,7 +402,7 @@ class TestTagRuleReplacement:
             channel_name = "ABC 7 DISCTRICT OF COLUMBIA"
             category_name = "US Local"
 
-            tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, rules)
+            tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, rules)
 
             assert "DISTRICT" in cleaned_name
             assert "DISCTRICT" not in cleaned_name
@@ -428,7 +428,7 @@ class TestTagRuleReplacement:
             channel_name = "ESPN HQ"
             category_name = "Sports"
 
-            tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, rules)
+            tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, rules)
 
             assert "HD" in tags
             assert "ESPN HD" == cleaned_name.strip()
@@ -454,7 +454,7 @@ class TestTagRuleReplacement:
             channel_name = "ABC  7   News"
             category_name = "US Local"
 
-            tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, rules)
+            tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, rules)
 
             # Multiple spaces should be reduced
             assert "  " not in cleaned_name
@@ -480,7 +480,7 @@ class TestTagRuleReplacement:
             channel_name = "ESPN 4K"
             category_name = "Sports"
 
-            tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, rules)
+            tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, rules)
 
             # Tag should be added
             assert "ESPN" in tags
@@ -508,7 +508,7 @@ class TestTagRuleReplacement:
             channel_name = "US| CNN"
             category_name = "News"
 
-            tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, rules)
+            tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, rules)
 
             assert "US" in tags
             assert "US|" not in cleaned_name
@@ -787,7 +787,7 @@ class TestCaptureTags:
             channel_name = "US| ESPN"
             category_name = "Sports"
 
-            tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, rules)
+            tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, rules)
 
             assert "US" in tags
             assert "ESPN" in cleaned_name
@@ -817,7 +817,7 @@ class TestCaptureTags:
             channel_name = "US| ESPN"
             category_name = "Sports"
 
-            tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, rules)
+            tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, rules)
 
             assert "US" in tags
             # Replacement with empty string removes the matched text
@@ -848,7 +848,7 @@ class TestCaptureTags:
             category_name = "Sports"
 
             # Should handle gracefully
-            tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, rules)
+            tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, rules)
 
             # Should not add a tag (no capture group)
             assert len(tags) == 0
@@ -877,7 +877,7 @@ class TestEdgeCases:
             db.session.add(rule)
             db.session.commit()
 
-            tags, cleaned_name, _ = TagService.extract_tags("", "Sports", [rule])
+            tags, cleaned_name, _, _ = TagService.extract_tags("", "Sports", [rule])
             assert len(tags) == 0
             assert cleaned_name == ""
 
@@ -901,14 +901,14 @@ class TestEdgeCases:
             db.session.add(rule)
             db.session.commit()
 
-            tags, cleaned_name, _ = TagService.extract_tags("ESPN", "", [rule])
+            tags, cleaned_name, _, _ = TagService.extract_tags("ESPN", "", [rule])
             # Should not find tag from category
             assert "SPORTS" not in tags
 
     def test_extract_tags_no_rules(self, app):
         """Test extraction with no rules"""
         with app.app_context():
-            tags, cleaned_name, _ = TagService.extract_tags("US| ESPN 4K", "Sports", [])
+            tags, cleaned_name, _, _ = TagService.extract_tags("US| ESPN 4K", "Sports", [])
             assert len(tags) == 0
             assert cleaned_name == "US| ESPN 4K"
 
@@ -933,7 +933,7 @@ class TestEdgeCases:
             db.session.commit()
 
             # Should handle gracefully and not crash
-            tags, cleaned_name, _ = TagService.extract_tags("ESPN", "Sports", [rule])
+            tags, cleaned_name, _, _ = TagService.extract_tags("ESPN", "Sports", [rule])
             assert len(tags) == 0
 
     def test_normalize_tag_name_empty_after_normalization(self, app):
@@ -988,7 +988,7 @@ class TestEdgeCases:
             db.session.add(rule_low)
             db.session.commit()
 
-            tags, cleaned_name, _ = TagService.extract_tags("ESPN 4K", "Sports", [rule_high, rule_low])
+            tags, cleaned_name, _, _ = TagService.extract_tags("ESPN 4K", "Sports", [rule_high, rule_low])
 
             # Both rules should match their patterns
             assert "4K" in tags
@@ -1030,7 +1030,7 @@ class TestEdgeCases:
             db.session.commit()
 
             channel_name = "US| ESPN ᴿᴬᵂ"
-            tags, cleaned_name, _ = TagService.extract_tags(channel_name, "Sports", [rule])
+            tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, "Sports", [rule])
 
             assert "RAW" in tags
             assert "ᴿᴬᵂ" not in cleaned_name
@@ -1056,7 +1056,7 @@ class TestEdgeCases:
             db.session.commit()
 
             channel_name = "US ESPN US Network"
-            tags, cleaned_name, _ = TagService.extract_tags(channel_name, "Sports", [rule])
+            tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, "Sports", [rule])
 
             # Tag created once even though US appears twice
             assert "US" in tags
@@ -1323,7 +1323,7 @@ class TestExtractTagsIntegration:
             ]
 
             for channel_name, category_name, expected_tags in test_cases:
-                tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, rules)
+                tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, rules)
                 assert tags == expected_tags, f"Expected {expected_tags} but got {tags} for channel {channel_name}"
 
     def test_extract_tags_with_location_and_callsign(self, app):
@@ -1366,7 +1366,7 @@ class TestExtractTagsIntegration:
 
             # Test with location and callsign
             channel_name = "WGBH Boston [MA] (WGBH)"
-            tags, cleaned_name, _ = TagService.extract_tags(channel_name, "News", rules)
+            tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, "News", rules)
 
             assert "MA" in tags
             assert "WGBH" in tags

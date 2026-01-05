@@ -202,6 +202,15 @@
                         <input type="text" class="form-control" id="rule-replacement" placeholder="Leave blank to just remove">
                         <small class="form-text text-muted">Text to replace the matched pattern with (e.g., fix "DISCTRICT" → "DISTRICT")</small>
                     </div>
+                    <div class="mb-3">
+                        <label for="rule-set-is-ppv" class="form-label">PPV Flag Control</label>
+                        <select class="form-select" id="rule-set-is-ppv">
+                            <option value="keep">Keep (don't change is_ppv)</option>
+                            <option value="set_true">Set True (mark as PPV)</option>
+                            <option value="set_false">Set False (not PPV)</option>
+                        </select>
+                        <small class="form-text text-muted">Override category-based PPV detection. Use "Set False" for Bally Sports/FanDuel channels in PPV categories that aren't actually PPV events.</small>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -852,6 +861,7 @@ function showCreateRuleModal(rulesetId) {
     document.getElementById('ruleForm').reset();
     document.getElementById('rule-id').value = '';
     document.getElementById('rule-ruleset-id').value = rulesetId;
+    document.getElementById('rule-set-is-ppv').value = 'keep'; // Default value
     new bootstrap.Modal(document.getElementById('ruleModal')).show();
 }
 
@@ -874,6 +884,7 @@ async function editRule(ruleId) {
     document.getElementById('rule-remove-from-name').checked = rule.remove_from_name;
     document.getElementById('rule-replacement').value = rule.replacement || '';
     document.getElementById('rule-enabled').checked = rule.enabled;
+    document.getElementById('rule-set-is-ppv').value = rule.set_is_ppv || 'keep';
     
     new bootstrap.Modal(document.getElementById('ruleModal')).show();
 }
@@ -890,7 +901,8 @@ async function saveRule() {
         priority: parseInt(document.getElementById('rule-priority').value),
         remove_from_name: document.getElementById('rule-remove-from-name').checked,
         replacement: document.getElementById('rule-replacement').value || null,
-        enabled: document.getElementById('rule-enabled').checked
+        enabled: document.getElementById('rule-enabled').checked,
+        set_is_ppv: document.getElementById('rule-set-is-ppv').value
     };
     
     try {

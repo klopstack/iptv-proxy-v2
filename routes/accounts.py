@@ -386,7 +386,7 @@ def _process_tags_for_account(account_id, streams, categories):
         category_name = category_map.get(category_id, "")
 
         # Extract tags
-        tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, tag_rules)
+        tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, tag_rules)
 
         # Store tags
         for tag_name in tags:

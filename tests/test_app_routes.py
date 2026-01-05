@@ -225,7 +225,7 @@ class TestProcessTagsHelper:
         from routes.accounts import _process_tags_for_account
 
         mock_tag_service.get_rules_for_account.return_value = []
-        mock_tag_service.extract_tags.return_value = ({"US", "HD"}, "ESPN", "Sports")
+        mock_tag_service.extract_tags.return_value = ({"US", "HD"}, "ESPN", "Sports", "keep")
         mock_tag_service.normalize_tag_name.side_effect = lambda x: x.upper()
 
         streams = [{"stream_id": "101", "name": "US| ESPN HD", "category_id": "1"}]

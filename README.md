@@ -140,6 +140,86 @@ Replace `<account_id>` with your account ID (shown in the UI).
 - **Action**: Blacklist
 - **Value**: 24/7|24-7
 
+## Tag Rules and Rulesets
+
+The proxy includes a powerful tag extraction system that parses channel and category names to extract metadata tags. These tags can be used for advanced filtering and playlist generation.
+
+### Tag Rule Features
+
+**Pattern Types:**
+- **Prefix**: Match text at the start (e.g., "US|")
+- **Suffix**: Match text at the end (e.g., "HD")
+- **Contains**: Match text anywhere (e.g., "Sports")
+- **Regex**: Advanced pattern matching (e.g., "^(US|CA)\|")
+
+**Special Tag Names:**
+- `__CLEANUP__`: Remove pattern without creating a tag
+- `__LOCATION__`: Extract `[bracketed]` content as tag
+- `__CALLSIGN__`: Extract `(parenthesized)` content as tag
+- `__CAPTURE__`: Extract first regex capture group as tag
+
+**PPV Control (NEW):**
+Each tag rule can now control the PPV (pay-per-view) flag on matching channels:
+- **Keep**: Don't modify the channel's is_ppv value (default)
+- **Set True**: Force channels to be marked as PPV
+- **Set False**: Force channels to NOT be marked as PPV
+
+This is useful for cases like **Bally Sports/FanDuel Sports Network** channels that are in "PPV" categories but aren't actually pay-per-view events.
+
+### Tag Rule Examples
+
+**Example 1: Extract Country Codes**
+```json
+{
+  "name": "Country Code",
+  "pattern": "^([A-Z]{2})\\|",
+  "pattern_type": "regex",
+  "tag_name": "__CAPTURE__",
+  "source": "channel_name",
+  "remove_from_name": true
+}
+```
+Matches: "US| ESPN" → Tag: "US", Clean name: "ESPN"
+
+**Example 2: Fix Bally Sports PPV Mislabeling**
+```json
+{
+  "name": "Bally Sports Not PPV",
+  "pattern": "Bally Sports|FanDuel Sports",
+  "pattern_type": "regex",
+  "source": "category_name",
+  "tag_name": "REGIONAL",
+  "set_is_ppv": "set_false"
+}
+```
+Marks Bally Sports channels as NOT PPV, even if they're in a "PPV" category.
+
+**Example 3: Mark Actual PPV Events**
+```json
+{
+  "name": "PPV Events",
+  "pattern": "UFC|Boxing Match|WWE PPV",
+  "pattern_type": "regex",
+  "source": "channel_name",
+  "tag_name": "PPV_EVENT",
+  "set_is_ppv": "set_true"
+}
+```
+Forces specific event channels to be marked as PPV.
+
+### Creating Rulesets
+
+1. Navigate to **Tags & Rulesets** page
+2. Click **New Ruleset**
+3. Give it a name and description
+4. Add tag rules to the ruleset
+5. Assign the ruleset to accounts
+6. Click **Discover Tags** to process channels
+
+For detailed documentation, see:
+- [Tag Rule PPV Implementation](docs/TAG_RULE_IS_PPV_IMPLEMENTATION.md)
+- [Tag Rule PPV Quick Start](docs/TAG_RULE_IS_PPV_QUICK_START.md)
+
 ## API Reference
 
 ### Accounts

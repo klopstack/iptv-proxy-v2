@@ -218,7 +218,7 @@ def preview_playlist_config(config_id):
                 category_name = category_map.get(category_id, "")
 
                 # Extract tags for this channel
-                tags, cleaned_name, _ = TagService.extract_tags(channel_name, category_name, tag_rules)
+                tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, tag_rules)
 
                 # Check if channel matches filter criteria
                 if _matches_tag_filter(tags, include_tags, exclude_tags, config.tag_match_mode):

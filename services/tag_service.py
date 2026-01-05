@@ -13,10 +13,10 @@ class TagService:
     """Service for extracting tags from channel and category names"""
 
     @staticmethod
-    def extract_tags(channel_name: str, category_name: str, tag_rules: List) -> Tuple[Set[str], str, str]:
+    def extract_tags(channel_name: str, category_name: str, tag_rules: List) -> Tuple[Set[str], str, str, str]:
         """
         Extract tags from channel and category names based on rules.
-        Returns tuple of (set of tag names, cleaned channel name, cleaned category name)
+        Returns tuple of (set of tag names, cleaned channel name, cleaned category name, is_ppv directive)
 
         Args:
             channel_name: The original channel name
@@ -24,11 +24,13 @@ class TagService:
             tag_rules: List of TagRule objects sorted by priority
 
         Returns:
-            Tuple of (set of extracted tag names, cleaned channel name, cleaned category name)
+            Tuple of (set of extracted tag names, cleaned channel name, cleaned category name, is_ppv directive)
+            is_ppv directive is one of: 'keep', 'set_true', 'set_false'
         """
         tags = set()
         cleaned_channel_name = channel_name
         cleaned_category_name = category_name
+        is_ppv_directive = "keep"  # Default: don't change is_ppv
 
         # Sort rules by priority (should already be sorted, but ensure it)
         sorted_rules = sorted(tag_rules, key=lambda r: r.priority)
@@ -53,6 +55,12 @@ class TagService:
                 if matched:
                     # For regex patterns, match_result is a match object; for others, it's a string
                     match_text = match_result.group(0) if hasattr(match_result, "group") else match_result
+
+                    # Apply is_ppv directive if rule specifies one
+                    # Priority: first matching rule with set_true/set_false wins
+                    rule_set_is_ppv = getattr(rule, "set_is_ppv", "keep")
+                    if is_ppv_directive == "keep" and rule_set_is_ppv in ("set_true", "set_false"):
+                        is_ppv_directive = rule_set_is_ppv
 
                     # Handle special tag types
                     if rule.tag_name == "__CAPTURE__":
@@ -172,7 +180,7 @@ class TagService:
         cleaned_channel_name = TagService._cleanup_name(cleaned_channel_name)
         cleaned_category_name = TagService._cleanup_name(cleaned_category_name)
 
-        return tags, cleaned_channel_name, cleaned_category_name
+        return tags, cleaned_channel_name, cleaned_category_name, is_ppv_directive
 
     @staticmethod
     def _match_pattern(text: str, pattern: str, pattern_type: str):
@@ -748,12 +756,13 @@ class TagService:
         tags_created = 0
         tags_updated = 0
         channels_updated = 0
+        is_ppv_changed = 0
 
         for channel in db_channels:
             category_name = channel.category.category_name if channel.category else ""
 
-            # Extract tags and cleaned names
-            tags, cleaned_channel_name, cleaned_category_name = TagService.extract_tags(
+            # Extract tags, cleaned names, and is_ppv directive
+            tags, cleaned_channel_name, cleaned_category_name, is_ppv_directive = TagService.extract_tags(
                 channel.name, category_name, tag_rules
             )
 
@@ -762,6 +771,16 @@ class TagService:
                 channel.cleaned_name = cleaned_channel_name
                 channel.updated_at = processing_start
                 channels_updated += 1
+
+            # Apply is_ppv directive
+            if is_ppv_directive == "set_true" and not channel.is_ppv:
+                channel.is_ppv = True
+                channel.updated_at = processing_start
+                is_ppv_changed += 1
+            elif is_ppv_directive == "set_false" and channel.is_ppv:
+                channel.is_ppv = False
+                channel.updated_at = processing_start
+                is_ppv_changed += 1
 
             # Note: We do NOT update category.cleaned_name here because categories
             # are updated during sync. Tag reprocessing should only update channels.
@@ -822,7 +841,7 @@ class TagService:
         logger.info(
             f"Processed tags for {processed_count} channels in account {account_id}: "
             f"{tags_created} created, {tags_updated} updated, {tags_removed} removed, "
-            f"{channels_updated} channels updated"
+            f"{channels_updated} channels updated, {is_ppv_changed} is_ppv changed"
         )
 
         return {
@@ -834,4 +853,5 @@ class TagService:
             "tags_updated": tags_updated,
             "tags_removed": tags_removed,
             "channels_updated": channels_updated,
+            "is_ppv_changed": is_ppv_changed,
         }

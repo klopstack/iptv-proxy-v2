@@ -152,6 +152,7 @@ class TagRuleCreateSchema(Schema):
     source = fields.Str(required=True, validate=lambda x: x in ["channel_name", "category_name", "both"])
     remove_from_name = fields.Bool(load_default=True)
     replacement = fields.Str(load_default=None, allow_none=True, validate=lambda x: x is None or len(x) <= 255)
+    set_is_ppv = fields.Str(load_default="keep", validate=lambda x: x in ["keep", "set_true", "set_false"])
     priority = fields.Int(load_default=100, validate=lambda x: 1 <= x <= 1000)
     enabled = fields.Bool(load_default=True)
 
@@ -181,6 +182,7 @@ class TagRuleUpdateSchema(Schema):
     source = fields.Str(validate=lambda x: x in ["channel_name", "category_name", "both"])
     remove_from_name = fields.Bool()
     replacement = fields.Str(allow_none=True, validate=lambda x: x is None or len(x) <= 255)
+    set_is_ppv = fields.Str(validate=lambda x: x in ["keep", "set_true", "set_false"])
     priority = fields.Int(validate=lambda x: 1 <= x <= 1000)
     enabled = fields.Bool()
 

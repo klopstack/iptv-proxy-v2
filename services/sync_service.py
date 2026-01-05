@@ -213,7 +213,7 @@ class ChannelSyncService:
 
             # Compute cleaned name using tag rules
             # We pass empty string for channel_name since we're only processing the category
-            _, _, cleaned_category_name = TagService.extract_tags("", category_name, tag_rules)
+            _, _, cleaned_category_name, _ = TagService.extract_tags("", category_name, tag_rules)
 
             if category_id in existing:
                 # Update existing
@@ -292,7 +292,7 @@ class ChannelSyncService:
             is_ppv = is_ppv_category(category_name) if category_name else False
 
             # Compute cleaned name using tag rules
-            _, cleaned_name, _ = TagService.extract_tags(name, category_name, tag_rules)
+            _, cleaned_name, _, _ = TagService.extract_tags(name, category_name, tag_rules)
 
             if stream_id in existing:
                 # Update existing

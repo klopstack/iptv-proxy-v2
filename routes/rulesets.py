@@ -252,6 +252,7 @@ def get_tag_rules():
                 "replacement": r.replacement,
                 "priority": r.priority,
                 "enabled": r.enabled,
+                "set_is_ppv": r.set_is_ppv,
             }
             for r in rules
         ]
@@ -288,6 +289,7 @@ def create_tag_rule():
         replacement=data.get("replacement"),
         priority=data.get("priority", 100),
         enabled=data.get("enabled", True),
+        set_is_ppv=data.get("set_is_ppv", "keep"),
     )
 
     db.session.add(rule)
@@ -309,6 +311,7 @@ def create_tag_rule():
                 "replacement": rule.replacement,
                 "priority": rule.priority,
                 "enabled": rule.enabled,
+                "set_is_ppv": rule.set_is_ppv,
             }
         ),
         201,
@@ -341,6 +344,8 @@ def update_tag_rule(rule_id):
         rule.replacement = data["replacement"]
     rule.priority = data.get("priority", rule.priority)
     rule.enabled = data.get("enabled", rule.enabled)
+    if "set_is_ppv" in data:
+        rule.set_is_ppv = data["set_is_ppv"]
 
     db.session.commit()
     cache_service.clear_all()
@@ -357,6 +362,7 @@ def update_tag_rule(rule_id):
             "replacement": rule.replacement,
             "priority": rule.priority,
             "enabled": rule.enabled,
+            "set_is_ppv": rule.set_is_ppv,
         }
     )
 
