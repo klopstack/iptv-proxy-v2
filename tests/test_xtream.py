@@ -15,7 +15,6 @@ import pytest
 
 from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Tag, XtreamCredential, db
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================
@@ -692,9 +691,7 @@ class TestXtreamChannelFiltering:
             db.session.flush()
 
             # Link tag to first channel
-            channel_tag = ChannelTag(
-                account_id=test_account.id, stream_id=test_channels[0].stream_id, tag_id=tag.id
-            )
+            channel_tag = ChannelTag(account_id=test_account.id, stream_id=test_channels[0].stream_id, tag_id=tag.id)
             db.session.add(channel_tag)
 
             # Update playlist config to include only HD tag
@@ -801,7 +798,6 @@ class TestXtreamHelpers:
         """Test getting proxy base URL with custom hostname"""
         with app.app_context():
             from models import Settings
-
             from routes.xtream import get_proxy_base_url
 
             # Set custom proxy hostname
