@@ -299,6 +299,8 @@ function renderMappingRow(item, viewMode) {
             ? '<span class="badge bg-info">Callsign</span>'
             : mapping.mapping_type === 'fcc_lookup'
             ? '<span class="badge bg-info">FCC</span>'
+            : mapping.mapping_type === 'ppv_event'
+            ? '<span class="badge bg-warning">PPV Event</span>'
             : mapping.mapping_type?.includes('auto')
             ? '<span class="badge bg-info">Auto</span>'
             : `<span class="badge bg-secondary">${mapping.mapping_type || 'Unknown'}</span>`;
@@ -315,7 +317,12 @@ function renderMappingRow(item, viewMode) {
     let actions = `<a class="btn btn-outline-success btn-sm" href="/player/${accountId}/${streamId}" target="_blank" title="Play stream"><i class="bi bi-play-fill"></i></a>`;
     
     if (mapping) {
-        actions += ` <button class="btn btn-outline-danger btn-sm" onclick="deleteMapping(${mapping.id}, ${channelId})" title="Delete mapping"><i class="bi bi-trash"></i></button>`;
+        // PPV event mappings use EventChannelLink (can't be deleted via normal mapping API)
+        if (mapping.mapping_type === 'ppv_event') {
+            actions += ` <button class="btn btn-outline-secondary btn-sm" disabled title="PPV event links cannot be deleted"><i class="bi bi-lock"></i></button>`;
+        } else {
+            actions += ` <button class="btn btn-outline-danger btn-sm" onclick="deleteMapping(${mapping.id}, ${channelId})" title="Delete mapping"><i class="bi bi-trash"></i></button>`;
+        }
     } else {
         actions += ` <button class="btn btn-outline-primary btn-sm" onclick="showManualMappingModal(${channelId}, '${escapeHtml(channelName)}')" title="Create mapping"><i class="bi bi-link"></i></button>`;
     }

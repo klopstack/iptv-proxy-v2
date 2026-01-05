@@ -6,7 +6,7 @@ import logging
 from flask import Blueprint, jsonify, request
 
 from error_handling import handle_errors
-from models import Account, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
+from models import Account, Channel, ChannelEpgMapping, EpgChannel, EpgSource, Event, EventChannelLink, db
 from services.epg_match_rules_service import EpgMatchRulesService
 from services.epg_service import EpgService
 from services.filter_service import FilterService
@@ -230,23 +230,75 @@ def get_epg_mappings():
             }
         )
     elif view_mode == "mapped":
-        # Get mappings (existing behavior)
-        query = db.session.query(ChannelEpgMapping).join(Channel, ChannelEpgMapping.channel_id == Channel.id)
-
-        # Filter by EPG source if specified
+        # Check if filtering by a PPV events source
+        is_ppv_source = False
         if epg_source_id:
-            query = query.join(EpgChannel, ChannelEpgMapping.epg_channel_id == EpgChannel.id).filter(
-                EpgChannel.source_id == epg_source_id
+            epg_source = db.session.get(EpgSource, epg_source_id)
+            is_ppv_source = epg_source and epg_source.source_type == "ppv_events"
+
+        all_mappings = []
+
+        if is_ppv_source:
+            # For PPV events, get channels linked via EventChannelLink
+            query = (
+                db.session.query(EventChannelLink)
+                .join(Channel, EventChannelLink.channel_id == Channel.id)
+                .join(Event, EventChannelLink.event_id == Event.id)
+                .filter(Event.is_ppv == True)  # noqa: E712
             )
 
-        if account_id:
-            query = query.filter(Channel.account_id == account_id)
+            if account_id:
+                query = query.filter(Channel.account_id == account_id)
 
-        if category_id:
-            query = query.filter(Channel.category_id == category_id)
+            if category_id:
+                query = query.filter(Channel.category_id == category_id)
 
-        # Get all mappings, then apply FilterService if needed
-        all_mappings = query.all()
+            event_links = query.all()
+
+            # Build mapping-like objects from event links for consistency with frontend
+            for link in event_links:
+                if link.channel and link.event:
+                    # Create a pseudo-mapping object
+                    class PseudoMapping:
+                        def __init__(self, link):
+                            self.id = f"ppv_{link.id}"
+                            self.channel_id = link.channel_id
+                            self.channel = link.channel
+                            self.epg_channel_id = f"ppv-event-{link.event.external_id}"
+                            self.mapping_type = "ppv_event"
+                            self.confidence = link.match_confidence or 1.0
+                            self.time_offset_hours = 0
+                            self.is_override = False
+                            # Store event info for display
+                            self.event = link.event
+                            self.epg_channel = type(
+                                "EpgChannel",
+                                (),
+                                {
+                                    "display_name": f"{link.event.home_team_name} vs {link.event.away_team_name}",
+                                    "id": None,
+                                },
+                            )()
+
+                    all_mappings.append(PseudoMapping(link))
+        else:
+            # Regular EPG mappings
+            query = db.session.query(ChannelEpgMapping).join(Channel, ChannelEpgMapping.channel_id == Channel.id)
+
+            # Filter by EPG source if specified
+            if epg_source_id:
+                query = query.join(EpgChannel, ChannelEpgMapping.epg_channel_id == EpgChannel.id).filter(
+                    EpgChannel.source_id == epg_source_id
+                )
+
+            if account_id:
+                query = query.filter(Channel.account_id == account_id)
+
+            if category_id:
+                query = query.filter(Channel.category_id == category_id)
+
+            # Get all mappings, then apply FilterService if needed
+            all_mappings = query.all()
 
         # Apply FilterService to determine visibility
         if not show_filtered and account_id:
@@ -291,6 +343,12 @@ def get_epg_mappings():
         )
     else:
         # view_mode == "all" - return all channels with mapping info if available
+        # Check if filtering by a PPV events source
+        is_ppv_source = False
+        if epg_source_id:
+            epg_source = db.session.get(EpgSource, epg_source_id)
+            is_ppv_source = epg_source and epg_source.source_type == "ppv_events"
+
         query = Channel.query.filter(Channel.is_active == True)  # noqa: E712
 
         if account_id:
@@ -298,6 +356,16 @@ def get_epg_mappings():
 
         if category_id:
             query = query.filter_by(category_id=category_id)
+
+        # If filtering by PPV source, only show channels with PPV event links
+        if is_ppv_source:
+            ppv_channel_ids = (
+                db.session.query(EventChannelLink.channel_id)
+                .join(Event, EventChannelLink.event_id == Event.id)
+                .filter(Event.is_ppv == True)  # noqa: E712
+                .distinct()
+            )
+            query = query.filter(Channel.id.in_(ppv_channel_ids))
 
         # Get all channels, then apply FilterService if needed
         all_channels = query.order_by(Channel.name).all()
@@ -312,13 +380,43 @@ def get_epg_mappings():
         total = len(channels)
         channels = channels[offset : offset + limit]
 
-        # Get mappings for these channels in one query
+        # Get mappings for these channels
         channel_ids = [c.id for c in channels]
         mappings_by_channel = {}
+        ppv_mappings_by_channel = {}
+
         if channel_ids:
-            mappings = db.session.query(ChannelEpgMapping).filter(ChannelEpgMapping.channel_id.in_(channel_ids)).all()
-            for m in mappings:
-                mappings_by_channel[m.channel_id] = m
+            # Get regular EPG mappings
+            if not is_ppv_source or epg_source_id is None:
+                # If not filtering by EPG source or not PPV, get regular mappings
+                mappings = (
+                    db.session.query(ChannelEpgMapping).filter(ChannelEpgMapping.channel_id.in_(channel_ids)).all()
+                )
+                for m in mappings:
+                    # If filtering by specific EPG source, only include matching mappings
+                    if epg_source_id and m.epg_channel and m.epg_channel.source_id != epg_source_id:
+                        continue
+                    mappings_by_channel[m.channel_id] = m
+
+            # Get PPV event links if filtering by PPV source or if no EPG source filter
+            if is_ppv_source or epg_source_id is None:
+                event_links = (
+                    db.session.query(EventChannelLink)
+                    .join(Event, EventChannelLink.event_id == Event.id)
+                    .filter(EventChannelLink.channel_id.in_(channel_ids), Event.is_ppv == True)  # noqa: E712
+                    .all()
+                )
+                for link in event_links:
+                    if link.event:
+                        ppv_mappings_by_channel[link.channel_id] = {
+                            "id": f"ppv_{link.id}",
+                            "epg_channel_id": f"ppv-event-{link.event.external_id}",
+                            "epg_display_name": f"{link.event.home_team_name} vs {link.event.away_team_name}",
+                            "mapping_type": "ppv_event",
+                            "confidence": link.match_confidence or 1.0,
+                            "time_offset_hours": 0,
+                            "is_override": False,
+                        }
 
         return jsonify(
             {
@@ -338,21 +436,28 @@ def get_epg_mappings():
                         "category_id": c.category_id,
                         "category_name": c.category.category_name if c.category else None,
                         "is_visible": c.is_visible,
-                        "mapping": {
-                            "id": mappings_by_channel[c.id].id,
-                            "epg_channel_id": mappings_by_channel[c.id].epg_channel_id,
-                            "epg_display_name": (
-                                mappings_by_channel[c.id].epg_channel.display_name
-                                if mappings_by_channel[c.id].epg_channel
-                                else None
-                            ),
-                            "mapping_type": mappings_by_channel[c.id].mapping_type,
-                            "confidence": mappings_by_channel[c.id].confidence,
-                            "time_offset_hours": mappings_by_channel[c.id].time_offset_hours or 0,
-                            "is_override": mappings_by_channel[c.id].is_override,
-                        }
-                        if c.id in mappings_by_channel
-                        else None,
+                        "mapping": (
+                            # Prefer PPV mapping if filtering by PPV source, otherwise prefer regular mapping
+                            ppv_mappings_by_channel.get(c.id)
+                            if is_ppv_source and c.id in ppv_mappings_by_channel
+                            else (
+                                {
+                                    "id": mappings_by_channel[c.id].id,
+                                    "epg_channel_id": mappings_by_channel[c.id].epg_channel_id,
+                                    "epg_display_name": (
+                                        mappings_by_channel[c.id].epg_channel.display_name
+                                        if mappings_by_channel[c.id].epg_channel
+                                        else None
+                                    ),
+                                    "mapping_type": mappings_by_channel[c.id].mapping_type,
+                                    "confidence": mappings_by_channel[c.id].confidence,
+                                    "time_offset_hours": mappings_by_channel[c.id].time_offset_hours or 0,
+                                    "is_override": mappings_by_channel[c.id].is_override,
+                                }
+                                if c.id in mappings_by_channel
+                                else ppv_mappings_by_channel.get(c.id)
+                            )
+                        ),
                     }
                     for c in channels
                 ],

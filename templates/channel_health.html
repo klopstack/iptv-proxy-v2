@@ -263,12 +263,6 @@
                 <span id="showing-count" class="text-muted"></span>
             </div>
             <div class="col-auto">
-                <nav aria-label="Channel pagination">
-                    <ul class="pagination pagination-sm mb-0" id="pagination">
-                    </ul>
-                </nav>
-            </div>
-            <div class="col-auto">
                 <div class="btn-group btn-group-sm">
                     <button type="button" class="btn btn-outline-success" id="bulk-reenable-btn" disabled>
                         <i class="bi bi-arrow-repeat"></i> Re-enable Selected
@@ -347,6 +341,7 @@ let currentPage = 1;
 let totalPages = 1;
 let totalChannels = 0;
 let isLoading = false;
+let hasMorePages = true;
 const perPage = 100;
 
 // Current filter state
@@ -367,11 +362,15 @@ document.addEventListener('DOMContentLoaded', function() {
     loadSummary();
     loadChannels();
     
+    // Setup infinite scroll
+    const channelsContainer = document.getElementById('channels-container');
+    channelsContainer.addEventListener('scroll', handleScroll);
+    
     // Event listeners
     document.getElementById('refresh-btn').addEventListener('click', () => {
         loadScanStatus();
         loadSummary();
-        loadChannels();
+        resetAndLoadChannels();
     });
     
     document.getElementById('config-form').addEventListener('submit', saveConfig);
@@ -391,52 +390,65 @@ document.addEventListener('DOMContentLoaded', function() {
         filters.category_id = ''; // Reset category when account changes
         document.getElementById('filter-category').value = '';
         loadCategories(); // Reload categories for the selected account
-        currentPage = 1;
         loadSummary();
-        loadChannels();
+        resetAndLoadChannels();
     });
     
     document.getElementById('filter-category').addEventListener('change', (e) => {
         filters.category_id = e.target.value;
-        currentPage = 1;
         loadSummary();
-        loadChannels();
+        resetAndLoadChannels();
     });
     
     document.getElementById('filter-status').addEventListener('change', (e) => {
         filters.status = e.target.value;
-        currentPage = 1;
-        loadChannels();
+        resetAndLoadChannels();
     });
     
     document.getElementById('filter-visibility').addEventListener('change', (e) => {
         filters.visibility = e.target.value;
-        currentPage = 1;
-        loadChannels();
+        resetAndLoadChannels();
     });
     
     document.getElementById('filter-ppv').addEventListener('change', (e) => {
         filters.ppv = e.target.value;
-        currentPage = 1;
-        loadChannels();
+        resetAndLoadChannels();
     });
     
     document.getElementById('filter-epg').addEventListener('change', (e) => {
         filters.epg = e.target.value;
-        currentPage = 1;
-        loadChannels();
+        resetAndLoadChannels();
     });
     
     document.getElementById('filter-search').addEventListener('input', debounce((e) => {
         filters.search = e.target.value;
-        currentPage = 1;
-        loadChannels();
+        resetAndLoadChannels();
     }, 300));
     
     document.getElementById('select-all').addEventListener('change', toggleSelectAll);
     document.getElementById('bulk-reenable-btn').addEventListener('click', bulkReenable);
     document.getElementById('bulk-ignore-btn').addEventListener('click', bulkIgnore);
 });
+
+// Handle infinite scroll
+function handleScroll() {
+    const container = document.getElementById('channels-container');
+    const scrollPosition = container.scrollTop + container.clientHeight;
+    const scrollHeight = container.scrollHeight;
+    
+    // Load more when user is within 200px of bottom
+    if (scrollPosition >= scrollHeight - 200 && !isLoading && hasMorePages) {
+        currentPage++;
+        loadChannels(true); // Pass true to append instead of replace
+    }
+}
+
+// Reset pagination and reload from first page
+function resetAndLoadChannels() {
+    currentPage = 1;
+    hasMorePages = true;
+    loadChannels(false);
+}
 
 async function loadAccounts() {
     try {
@@ -683,20 +695,24 @@ async function loadSummary() {
     }
 }
 
-async function loadChannels() {
+async function loadChannels(append = false) {
     if (isLoading) return;
     isLoading = true;
     
     const tbody = document.getElementById('channels-table');
-    tbody.innerHTML = `
-        <tr>
-            <td colspan="8" class="text-center py-4">
-                <div class="spinner-border" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-            </td>
-        </tr>
-    `;
+    
+    // Only show loading spinner if not appending
+    if (!append) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center py-4">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
     
     try {
         const params = new URLSearchParams();
@@ -718,8 +734,8 @@ async function loadChannels() {
         if (data.success) {
             totalChannels = data.pagination.total;
             totalPages = data.pagination.total_pages;
-            renderChannels(data.channels);
-            renderPagination();
+            hasMorePages = currentPage < totalPages;
+            renderChannels(data.channels, append);
         }
     } catch (error) {
         console.error('Error loading channels:', error);
@@ -729,17 +745,19 @@ async function loadChannels() {
     }
 }
 
-function renderChannels(channels) {
+function renderChannels(channels, append = false) {
     const tbody = document.getElementById('channels-table');
     const showingCount = document.getElementById('showing-count');
     
-    const start = (currentPage - 1) * perPage + 1;
-    const end = Math.min(currentPage * perPage, totalChannels);
+    // Calculate showing range
+    const loadedCount = append ? tbody.querySelectorAll('tr[data-channel]').length + channels.length : channels.length;
+    const end = Math.min(loadedCount, totalChannels);
+    
     showingCount.textContent = totalChannels > 0 
-        ? `Showing ${start.toLocaleString()}-${end.toLocaleString()} of ${totalChannels.toLocaleString()} channels`
+        ? `Showing ${loadedCount.toLocaleString()} of ${totalChannels.toLocaleString()} channels${hasMorePages ? ' (scroll for more)' : ''}`
         : 'No channels found';
     
-    if (channels.length === 0) {
+    if (channels.length === 0 && !append) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="8" class="text-center py-4 text-muted">
@@ -751,7 +769,7 @@ function renderChannels(channels) {
         return;
     }
     
-    tbody.innerHTML = channels.map(channel => {
+    const channelRows = channels.map(channel => {
         const statusBadge = getStatusBadge(channel.status);
         const resultBadge = channel.last_result ? getResultBadge(channel.last_result) : '-';
         const lastCheck = channel.last_check_at ? formatRelativeTime(channel.last_check_at) : 'Never';
@@ -759,10 +777,10 @@ function renderChannels(channels) {
             ? `<span class="badge bg-success" title="${escapeHtml(channel.epg_info.display_name || '')}"><i class="bi bi-calendar-check"></i> ${channel.epg_info.program_count || 0}</span>`
             : '<span class="badge bg-secondary"><i class="bi bi-calendar-x"></i> None</span>';
         const categoryName = channel.category ? escapeHtml(channel.category.cleaned_name || channel.category.category_name) : '-';
-        const channelNameEscaped = escapeHtml(channel.name).replace(/'/g, "\\'");
+        const channelNameEscaped = escapeHtml(channel.cleaned_name || channel.name).replace(/'/g, "\\'");
         
         return `
-            <tr>
+            <tr data-channel="${channel.id}">
                 <td>
                     <input type="checkbox" class="form-check-input channel-select" data-id="${channel.id}">
                 </td>
@@ -802,79 +820,22 @@ function renderChannels(channels) {
         `;
     }).join('');
     
+    // Either replace or append content
+    if (append) {
+        tbody.insertAdjacentHTML('beforeend', channelRows);
+    } else {
+        tbody.innerHTML = channelRows;
+    }
+    
     // Update checkbox listeners
     document.querySelectorAll('.channel-select').forEach(cb => {
         cb.addEventListener('change', updateBulkButtons);
     });
     
-    // Reset select all checkbox
-    document.getElementById('select-all').checked = false;
-}
-
-function renderPagination() {
-    const pagination = document.getElementById('pagination');
-    
-    if (totalPages <= 1) {
-        pagination.innerHTML = '';
-        return;
+    // Reset select all checkbox when not appending
+    if (!append) {
+        document.getElementById('select-all').checked = false;
     }
-    
-    let html = '';
-    
-    // Previous button
-    html += `
-        <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
-            <a class="page-link" href="#" onclick="goToPage(${currentPage - 1}); return false;">«</a>
-        </li>
-    `;
-    
-    // Page numbers
-    const maxPages = 5;
-    let startPage = Math.max(1, currentPage - Math.floor(maxPages / 2));
-    const endPage = Math.min(totalPages, startPage + maxPages - 1);
-    
-    if (endPage - startPage < maxPages - 1) {
-        startPage = Math.max(1, endPage - maxPages + 1);
-    }
-    
-    if (startPage > 1) {
-        html += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(1); return false;">1</a></li>`;
-        if (startPage > 2) {
-            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
-        }
-    }
-    
-    for (let i = startPage; i <= endPage; i++) {
-        html += `
-            <li class="page-item ${i === currentPage ? 'active' : ''}">
-                <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>
-            </li>
-        `;
-    }
-    
-    if (endPage < totalPages) {
-        if (endPage < totalPages - 1) {
-            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
-        }
-        html += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(${totalPages}); return false;">${totalPages}</a></li>`;
-    }
-    
-    // Next button
-    html += `
-        <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
-            <a class="page-link" href="#" onclick="goToPage(${currentPage + 1}); return false;">»</a>
-        </li>
-    `;
-    
-    pagination.innerHTML = html;
-}
-
-function goToPage(page) {
-    if (page < 1 || page > totalPages || page === currentPage) return;
-    currentPage = page;
-    loadChannels();
-    // Scroll to top of table
-    document.getElementById('channels-container').scrollTop = 0;
 }
 
 function getStatusBadge(status) {

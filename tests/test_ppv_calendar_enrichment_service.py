@@ -330,6 +330,104 @@ class TestMatchChannelToCalendar:
             assert result.matched is False
             assert result.match_method == "no_match_found"
 
+    def test_ambiguous_medium_confidence_match_rejected(self, app):
+        """Test that ambiguous low-confidence matches are rejected."""
+        with app.app_context():
+            service = PPVCalendarEnrichmentService(app)
+
+            # Create two calendar events with similar names
+            mock_event1 = CalendarEvent(
+                event_id="12345",
+                event_name="Fighter A vs Fighter B",
+                league_name="UFC",
+                time_utc="22:00",
+                date="2026-01-05",
+                home_team="Fighter A",
+                away_team="Fighter B",
+            )
+
+            mock_event2 = CalendarEvent(
+                event_id="67890",
+                event_name="Fighter A vs Fighter C",
+                league_name="UFC",
+                time_utc="23:00",
+                date="2026-01-05",
+                home_team="Fighter A",
+                away_team="Fighter C",
+            )
+
+            # Mock ReverseEventMatcher to return two close matches
+            # (both low confidence, gap < 0.2)
+            mock_match1 = Mock()
+            mock_match1.event = mock_event1
+            mock_match1.confidence = 0.45  # Low confidence
+
+            mock_match2 = Mock()
+            mock_match2.event = mock_event2
+            mock_match2.confidence = 0.40  # Close to first match (gap = 0.05 < 0.2)
+
+            service.reverse_matcher = Mock()
+            service.reverse_matcher.load_events_for_date_range = Mock()
+            service.reverse_matcher.find_matches = Mock(return_value=[mock_match1, mock_match2])
+
+            channel = Mock()
+            channel.name = "UFC: Fighter vs Someone"
+            extraction = {"competitors": ("Fighter", "Someone"), "time_only": None}
+
+            result = service._match_channel_to_calendar(channel, extraction, [mock_event1, mock_event2], "2026-01-05")
+
+            # Should reject ambiguous match
+            assert result.matched is False
+            assert result.match_method == "ambiguous_match"
+
+    def test_clear_winner_medium_confidence_accepted(self, app):
+        """Test that low-confidence matches with clear winner are accepted."""
+        with app.app_context():
+            service = PPVCalendarEnrichmentService(app)
+
+            mock_event1 = CalendarEvent(
+                event_id="12345",
+                event_name="Fighter A vs Fighter B",
+                league_name="UFC",
+                time_utc="22:00",
+                date="2026-01-05",
+                home_team="Fighter A",
+                away_team="Fighter B",
+            )
+
+            mock_event2 = CalendarEvent(
+                event_id="67890",
+                event_name="Different Event",
+                league_name="Boxing",
+                time_utc="23:00",
+                date="2026-01-05",
+            )
+
+            # Mock ReverseEventMatcher with clear winner (gap >= 0.2 for low confidence)
+            mock_match1 = Mock()
+            mock_match1.event = mock_event1
+            mock_match1.confidence = 0.45  # Low confidence
+
+            mock_match2 = Mock()
+            mock_match2.event = mock_event2
+            mock_match2.confidence = 0.20  # Much lower (gap = 0.25 >= 0.2)
+
+            service.reverse_matcher = Mock()
+            service.reverse_matcher.load_events_for_date_range = Mock()
+            service.reverse_matcher.find_matches = Mock(return_value=[mock_match1, mock_match2])
+
+            channel = Mock()
+            channel.name = "UFC: Fighter A vs Fighter B"
+            extraction = {"competitors": ("Fighter A", "Fighter B"), "time_only": None}
+
+            result = service._match_channel_to_calendar(channel, extraction, [mock_event1, mock_event2], "2026-01-05")
+
+            # Should accept the clear winner
+            assert result.matched is True
+            assert result.confidence == 0.45
+            assert result.calendar_event == mock_event1
+            assert result.match_method == "calendar_low_confidence"
+
 
 class TestCreateOrUpdateEvent:
     """Tests for _create_or_update_event method."""

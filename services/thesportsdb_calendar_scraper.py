@@ -68,22 +68,34 @@ class CalendarEvent:
         self.event_url = event_url
         self.league_icon_url = league_icon_url
         self.country_flag_url = country_flag_url
+        # Cache the scheduled_at value to avoid recomputing and logging multiple times
+        self._scheduled_at_cached: Optional[datetime] = None
+        self._scheduled_at_computed: bool = False
 
     @property
     def scheduled_at(self) -> Optional[datetime]:
-        """Parse the scheduled datetime from date and time_utc."""
+        """Parse the scheduled datetime from date and time_utc (cached)."""
+        # Return cached value if already computed
+        if self._scheduled_at_computed:
+            return self._scheduled_at_cached
+
+        # Mark as computed to avoid repeated warnings
+        self._scheduled_at_computed = True
+
         try:
             # Validate inputs are not empty
             if not self.time_utc or not self.date:
                 logger.warning(
                     f"Empty time or date for event {self.event_id}: " f"time_utc='{self.time_utc}', date='{self.date}'"
                 )
+                self._scheduled_at_cached = None
                 return None
 
             # Parse time like "00:00" or "14:30"
             time_parts = self.time_utc.replace(" UTC", "").strip().split(":")
             if not time_parts[0]:  # Empty hour part
                 logger.warning(f"Empty hour in time_utc for event {self.event_id}: '{self.time_utc}'")
+                self._scheduled_at_cached = None
                 return None
 
             hour = int(time_parts[0])
@@ -93,15 +105,18 @@ class CalendarEvent:
             date_parts = self.date.split("-")
             if len(date_parts) != 3 or not all(date_parts):
                 logger.warning(f"Invalid date format for event {self.event_id}: '{self.date}'")
+                self._scheduled_at_cached = None
                 return None
 
             year = int(date_parts[0])
             month = int(date_parts[1])
             day = int(date_parts[2])
 
-            return datetime(year, month, day, hour, minute, tzinfo=timezone.utc)
+            self._scheduled_at_cached = datetime(year, month, day, hour, minute, tzinfo=timezone.utc)
+            return self._scheduled_at_cached
         except (ValueError, IndexError) as e:
             logger.warning(f"Failed to parse datetime for event {self.event_id}: {e}")
+            self._scheduled_at_cached = None
             return None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -386,6 +401,12 @@ class TheSportsDBCalendarScraper:
         time_utc = time_text.replace("UTC", "").strip()
         # Handle times with leading zeros and spaces
         time_utc = re.sub(r"^\s*", "", time_utc)
+
+        # If time is empty after cleaning, log a warning with more context
+        if not time_utc:
+            logger.debug(f"Empty time after parsing for row. Raw time_text: '{time_text}', " f"Cell HTML: {time_cell}")
+            # Skip this event if we can't determine the time
+            return None
 
         # Cell 2: League info (icon + name)
         league_cell = cells[2]

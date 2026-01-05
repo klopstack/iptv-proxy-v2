@@ -60,8 +60,9 @@ DETAIL_FETCH_BATCH_SIZE = 25  # Events to fetch details for per minute
 MAX_RETRY_ATTEMPTS = 3
 
 # Match confidence thresholds
-MIN_MATCH_CONFIDENCE = 0.3  # Minimum confidence to consider a match
-HIGH_CONFIDENCE_THRESHOLD = 0.7  # Above this, we're confident in the match
+MIN_MATCH_CONFIDENCE = 0.35  # Minimum confidence to consider a match (lowered to accept partial team name matches)
+MEDIUM_CONFIDENCE_THRESHOLD = 0.6  # Above this, accept without ambiguity check
+HIGH_CONFIDENCE_THRESHOLD = 0.7  # Above this, we're highly confident in the match
 
 # Generic channel name patterns that indicate inactive/placeholder channels
 # These channels typically don't have actual events broadcasting
@@ -495,9 +496,36 @@ class PPVCalendarEnrichmentService:
                 match_method="confidence_too_low",
             )
 
+        # For low-to-medium confidence matches (below 0.6), require a clear winner
+        # to avoid accepting ambiguous matches where multiple events are equally plausible
+        if confidence < MEDIUM_CONFIDENCE_THRESHOLD:
+            # If there's a second match that's very close in confidence, reject
+            # (ambiguous match - not confident enough to choose)
+            if len(matches) > 1:
+                second_confidence = matches[1][1]
+                confidence_gap = confidence - second_confidence
+
+                # For low confidence (0.35-0.5): require 0.2 gap to ensure it's the right match
+                # For medium confidence (0.5-0.6): require 0.15 gap
+                required_gap = 0.2 if confidence < 0.5 else 0.15
+
+                if confidence_gap < required_gap:
+                    logger.debug(
+                        f"Rejecting ambiguous match for '{channel.name[:60]}': "
+                        f"best={confidence:.2f}, second={second_confidence:.2f}, gap={confidence_gap:.2f} (required={required_gap:.2f})"
+                    )
+                    return EnrichmentResult(
+                        channel=channel,
+                        matched=False,
+                        extraction_result=extraction,
+                        match_method="ambiguous_match",
+                    )
+
         # Determine match method based on confidence
         if confidence >= HIGH_CONFIDENCE_THRESHOLD:
             match_method = "calendar_high_confidence"
+        elif confidence >= MEDIUM_CONFIDENCE_THRESHOLD:
+            match_method = "calendar_medium_confidence"
         else:
             match_method = "calendar_low_confidence"
 
