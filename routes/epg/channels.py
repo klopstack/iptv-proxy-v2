@@ -9,6 +9,7 @@ from error_handling import handle_errors
 from models import Account, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
 from services.epg_match_rules_service import EpgMatchRulesService
 from services.epg_service import EpgService
+from services.filter_service import FilterService
 from services.iptv_service import IPTVService
 
 logger = logging.getLogger(__name__)
@@ -186,18 +187,24 @@ def get_epg_mappings():
 
         query = Channel.query.filter(Channel.is_active == True, ~Channel.id.in_(mapped_ids))  # noqa: E712
 
-        # By default, only show visible (non-filtered) channels
-        if not show_filtered:
-            query = query.filter(Channel.is_visible == True)  # noqa: E712
-
         if account_id:
             query = query.filter_by(account_id=account_id)
 
         if category_id:
             query = query.filter_by(category_id=category_id)
 
-        total = query.count()
-        channels = query.order_by(Channel.name).offset(offset).limit(limit).all()
+        # Get all channels, then apply FilterService if needed
+        all_channels = query.order_by(Channel.name).all()
+
+        # Apply FilterService to determine visibility
+        if not show_filtered and account_id:
+            FilterService.apply_filters_to_channels(account_id, all_channels)
+            channels = [ch for ch in all_channels if ch.is_visible]
+        else:
+            channels = all_channels
+
+        total = len(channels)
+        channels = channels[offset : offset + limit]
 
         return jsonify(
             {
@@ -238,12 +245,22 @@ def get_epg_mappings():
         if category_id:
             query = query.filter(Channel.category_id == category_id)
 
-        # By default, only show visible (non-filtered) channels
-        if not show_filtered:
-            query = query.filter(Channel.is_visible == True)  # noqa: E712
+        # Get all mappings, then apply FilterService if needed
+        all_mappings = query.all()
 
-        total = query.count()
-        mappings = query.offset(offset).limit(limit).all()
+        # Apply FilterService to determine visibility
+        if not show_filtered and account_id:
+            # Extract channels from mappings
+            channels = [m.channel for m in all_mappings if m.channel]
+            FilterService.apply_filters_to_channels(account_id, channels)
+            # Filter mappings to only visible channels
+            visible_ids = {ch.id for ch in channels if ch.is_visible}
+            mappings = [m for m in all_mappings if m.channel and m.channel.id in visible_ids]
+        else:
+            mappings = all_mappings
+
+        total = len(mappings)
+        mappings = mappings[offset : offset + limit]
 
         return jsonify(
             {
@@ -276,17 +293,24 @@ def get_epg_mappings():
         # view_mode == "all" - return all channels with mapping info if available
         query = Channel.query.filter(Channel.is_active == True)  # noqa: E712
 
-        if not show_filtered:
-            query = query.filter(Channel.is_visible == True)  # noqa: E712
-
         if account_id:
             query = query.filter_by(account_id=account_id)
 
         if category_id:
             query = query.filter_by(category_id=category_id)
 
-        total = query.count()
-        channels = query.order_by(Channel.name).offset(offset).limit(limit).all()
+        # Get all channels, then apply FilterService if needed
+        all_channels = query.order_by(Channel.name).all()
+
+        # Apply FilterService to determine visibility
+        if not show_filtered and account_id:
+            FilterService.apply_filters_to_channels(account_id, all_channels)
+            channels = [ch for ch in all_channels if ch.is_visible]
+        else:
+            channels = all_channels
+
+        total = len(channels)
+        channels = channels[offset : offset + limit]
 
         # Get mappings for these channels in one query
         channel_ids = [c.id for c in channels]

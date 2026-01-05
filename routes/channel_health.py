@@ -15,6 +15,7 @@ from flask import Blueprint, jsonify, request
 from error_handling import handle_errors
 from models import Category, Channel, ChannelHealthConfig, ChannelHealthStatus
 from services.channel_health_service import ChannelHealthService
+from services.filter_service import FilterService
 
 logger = logging.getLogger(__name__)
 
@@ -164,14 +165,29 @@ def get_categories():
     """
     account_id = request.args.get("account_id", type=int)
 
-    # Only get categories that have visible channels
-    # Note: is_visible used for category filtering. Actual channel filtering done via FilterService
-    query = Category.query.join(Channel).filter(Channel.is_visible == True).distinct()  # noqa: E712
+    # Get all categories with channels
+    query = Category.query.join(Channel).filter(Channel.is_active == True)  # noqa: E712
 
     if account_id:
         query = query.filter(Category.account_id == account_id)
 
-    query = query.order_by(Category.category_name)
+    categories_with_channels = query.distinct().all()
+
+    # Apply FilterService to determine which categories have visible channels
+    visible_category_ids = set()
+    for category in categories_with_channels:
+        # Get channels for this category
+        channels = Channel.query.filter_by(category_id=category.id, is_active=True).all()
+        if channels:
+            # Apply filters
+            FilterService.apply_filters_to_channels(category.account_id, channels)
+            # Check if any are visible
+            if any(ch.is_visible for ch in channels):
+                visible_category_ids.add(category.id)
+
+    # Filter to only visible categories
+    visible_categories = [cat for cat in categories_with_channels if cat.id in visible_category_ids]
+    visible_categories.sort(key=lambda c: c.category_name)
 
     categories = [
         {
@@ -180,7 +196,7 @@ def get_categories():
             "name": cat.cleaned_name or cat.category_name,
             "account_id": cat.account_id,
         }
-        for cat in query.all()
+        for cat in visible_categories
     ]
 
     return jsonify({"success": True, "categories": categories})

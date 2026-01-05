@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Set, Tuple
 
 from models import Channel, Event, EventChannelLink, db
+from services.filter_service import FilterService
 
 logger = logging.getLogger(__name__)
 
@@ -47,13 +48,13 @@ class PPVEpgService:
         root.set("generator-info-name", "iptv-proxy-v2/ppv-epg-service")
 
         # Get PPV channels with event links
+        # Note: We load all channels first, then apply FilterService for visibility
         query = (
             db.session.query(Channel, EventChannelLink, Event)
             .join(EventChannelLink, Channel.id == EventChannelLink.channel_id)
             .join(Event, EventChannelLink.event_id == Event.id)
             .filter(
                 Channel.is_active == True,  # noqa: E712
-                Channel.is_visible == True,  # noqa: E712
             )
         )
 
@@ -67,11 +68,33 @@ class PPVEpgService:
             logger.info("No PPV channels with matched events found")
             return ET.tostring(root, encoding="unicode", xml_declaration=True).encode("utf-8")
 
+        # Apply FilterService to determine which channels should be visible
+        # Group by account_id to apply filters correctly
+        channels_by_account = {}
+        for channel, link, event in matched_channels:
+            if channel.account_id not in channels_by_account:
+                channels_by_account[channel.account_id] = []
+            channels_by_account[channel.account_id].append((channel, link, event))
+
+        filtered_channels = []
+        for acc_id, channels in channels_by_account.items():
+            # Extract just the Channel objects for filtering
+            channel_objs = [ch for ch, _, _ in channels]
+            # Apply FilterService
+            FilterService.apply_filters_to_channels(acc_id, channel_objs)
+            # Keep only visible channels
+            visible_ids = {ch.id for ch in channel_objs if ch.is_visible}
+            filtered_channels.extend((ch, link, evt) for ch, link, evt in channels if ch.id in visible_ids)
+
+        if not filtered_channels:
+            logger.info("No visible PPV channels after filtering")
+            return ET.tostring(root, encoding="unicode", xml_declaration=True).encode("utf-8")
+
         # Track channels we've added to avoid duplicates
         added_channels: Set[str] = set()
 
         # Add channel definitions
-        for channel, link, event in matched_channels:
+        for channel, link, event in filtered_channels:
             channel_id = f"ppv-{channel.account_id}-{channel.stream_id}"
 
             if channel_id in added_channels:

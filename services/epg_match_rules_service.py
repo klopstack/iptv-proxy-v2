@@ -46,6 +46,7 @@ from models import (
     db,
 )
 from services.fcc_facility_service import FccFacilityService
+from services.filter_service import FilterService
 
 logger = logging.getLogger(__name__)
 
@@ -1714,11 +1715,16 @@ class EpgMatchRulesService:
 
         # Get channels
         query = Channel.query.filter_by(account_id=account_id, is_active=True)
-        if not include_filtered:
-            query = query.filter_by(is_visible=True)
         if category_id:
             query = query.filter_by(category_id=category_id)
-        channels = query.all()
+        all_channels = query.all()
+
+        # Apply FilterService to determine visibility if needed
+        if not include_filtered:
+            FilterService.apply_filters_to_channels(account_id, all_channels)
+            channels = [ch for ch in all_channels if ch.is_visible]
+        else:
+            channels = all_channels
 
         total_channels = len(channels)
         logger.info(f"EPG matching: Found {len(channels)} channels for account {account_id}")

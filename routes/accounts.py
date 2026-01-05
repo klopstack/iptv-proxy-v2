@@ -11,6 +11,7 @@ from models import Account, Category, Channel, ChannelTag, Credential, Filter, T
 from schemas import AccountCreateSchema, AccountUpdateSchema, validate_request_data
 from services.cache_service import CacheService
 from services.connection_manager import ConnectionManager
+from services.filter_service import FilterService
 from services.iptv_service import IPTVService
 from services.tag_service import TagService
 
@@ -430,9 +431,11 @@ def get_account_stats(account_id):
         # Use database stats (fast!)
         category_count = db.session.query(Category.id).filter_by(account_id=account_id).count()
 
-        # Get visible/hidden counts (raw pre-computed stats)
-        # Note: is_visible is used here for stats only. Actual filtering is done dynamically via FilterService
-        visible_count = Channel.query.filter_by(account_id=account_id, is_active=True, is_visible=True).count()
+        # Get visible/hidden counts using FilterService for accurate stats
+        # Load all active channels and apply filters
+        all_channels = Channel.query.filter_by(account_id=account_id, is_active=True).all()
+        FilterService.apply_filters_to_channels(account_id, all_channels)
+        visible_count = sum(1 for ch in all_channels if ch.is_visible)
         hidden_count = channel_count - visible_count
 
         # Get category distribution
