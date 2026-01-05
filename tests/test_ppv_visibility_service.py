@@ -20,7 +20,7 @@ class TestPPVVisibilityService:
         with app.app_context():
             account = Account(name="Test", server="http://test.com", ppv_visibility="hide_inactive")
             service = PPVVisibilityService(account)
-            
+
             assert service.account == account
             assert service.ppv_visibility == "hide_inactive"
 
@@ -29,7 +29,7 @@ class TestPPVVisibilityService:
         with app.app_context():
             account = Account(name="Test", server="http://test.com")
             service = PPVVisibilityService(account)
-            
+
             # Default is HIDE_INACTIVE, but getattr returns None if not set
             assert service.ppv_visibility in [None, "hide_inactive"]
 
@@ -39,7 +39,7 @@ class TestPPVVisibilityService:
             account = Account(name="Test", server="http://test.com", ppv_visibility="hide_all")
             db.session.add(account)
             db.session.commit()
-            
+
             channel = Channel(
                 account_id=account.id,
                 stream_id="1001",
@@ -49,7 +49,7 @@ class TestPPVVisibilityService:
             )
             db.session.add(channel)
             db.session.commit()
-            
+
             service = PPVVisibilityService(account)
             assert service.should_show_channel(channel) is True
 
@@ -59,7 +59,7 @@ class TestPPVVisibilityService:
             account = Account(name="Test", server="http://test.com", ppv_visibility="hide_all")
             db.session.add(account)
             db.session.commit()
-            
+
             channel = Channel(
                 account_id=account.id,
                 stream_id="1001",
@@ -69,7 +69,7 @@ class TestPPVVisibilityService:
             )
             db.session.add(channel)
             db.session.commit()
-            
+
             service = PPVVisibilityService(account)
             assert service.should_show_channel(channel) is False
 
@@ -79,7 +79,7 @@ class TestPPVVisibilityService:
             account = Account(name="Test", server="http://test.com", ppv_visibility="show_all")
             db.session.add(account)
             db.session.commit()
-            
+
             channel = Channel(
                 account_id=account.id,
                 stream_id="1001",
@@ -89,7 +89,7 @@ class TestPPVVisibilityService:
             )
             db.session.add(channel)
             db.session.commit()
-            
+
             service = PPVVisibilityService(account)
             assert service.should_show_channel(channel) is True
 
@@ -99,7 +99,7 @@ class TestPPVVisibilityService:
             account = Account(name="Test", server="http://test.com", ppv_visibility="hide_inactive")
             db.session.add(account)
             db.session.commit()
-            
+
             # Create event in the future
             future_date = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=7)
             event = Event(
@@ -114,7 +114,7 @@ class TestPPVVisibilityService:
             )
             db.session.add(event)
             db.session.commit()
-            
+
             # Create channel
             channel = Channel(
                 account_id=account.id,
@@ -125,12 +125,12 @@ class TestPPVVisibilityService:
             )
             db.session.add(channel)
             db.session.commit()
-            
+
             # Link event to channel
             link = EventChannelLink(event_id=event.id, channel_id=channel.id)
             db.session.add(link)
             db.session.commit()
-            
+
             service = PPVVisibilityService(account)
             assert service.should_show_channel(channel) is True
 
@@ -140,7 +140,7 @@ class TestPPVVisibilityService:
             account = Account(name="Test", server="http://test.com", ppv_visibility="hide_inactive")
             db.session.add(account)
             db.session.commit()
-            
+
             # Create event in the past
             past_date = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7)
             event = Event(
@@ -155,7 +155,7 @@ class TestPPVVisibilityService:
             )
             db.session.add(event)
             db.session.commit()
-            
+
             # Create channel
             channel = Channel(
                 account_id=account.id,
@@ -166,12 +166,12 @@ class TestPPVVisibilityService:
             )
             db.session.add(channel)
             db.session.commit()
-            
+
             # Link event to channel
             link = EventChannelLink(event_id=event.id, channel_id=channel.id)
             db.session.add(link)
             db.session.commit()
-            
+
             service = PPVVisibilityService(account)
             assert service.should_show_channel(channel) is False
 
@@ -181,7 +181,7 @@ class TestPPVVisibilityService:
             account = Account(name="Test", server="http://test.com", ppv_visibility="hide_inactive")
             db.session.add(account)
             db.session.commit()
-            
+
             # Create future event that is cancelled
             future_date = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=7)
             event = Event(
@@ -196,7 +196,7 @@ class TestPPVVisibilityService:
             )
             db.session.add(event)
             db.session.commit()
-            
+
             # Create channel
             channel = Channel(
                 account_id=account.id,
@@ -207,12 +207,12 @@ class TestPPVVisibilityService:
             )
             db.session.add(channel)
             db.session.commit()
-            
+
             # Link event to channel
             link = EventChannelLink(event_id=event.id, channel_id=channel.id)
             db.session.add(link)
             db.session.commit()
-            
+
             service = PPVVisibilityService(account)
             assert service.should_show_channel(channel) is False
 
@@ -222,7 +222,7 @@ class TestPPVVisibilityService:
             account = Account(name="Test", server="http://test.com", ppv_visibility="hide_inactive")
             db.session.add(account)
             db.session.commit()
-            
+
             # Create past event that is finished
             past_date = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=3)
             event = Event(
@@ -237,7 +237,7 @@ class TestPPVVisibilityService:
             )
             db.session.add(event)
             db.session.commit()
-            
+
             # Create channel
             channel = Channel(
                 account_id=account.id,
@@ -248,12 +248,12 @@ class TestPPVVisibilityService:
             )
             db.session.add(channel)
             db.session.commit()
-            
+
             # Link event to channel
             link = EventChannelLink(event_id=event.id, channel_id=channel.id)
             db.session.add(link)
             db.session.commit()
-            
+
             service = PPVVisibilityService(account)
             assert service.should_show_channel(channel) is False
 
@@ -263,7 +263,7 @@ class TestPPVVisibilityService:
             account = Account(name="Test", server="http://test.com", ppv_visibility="hide_inactive")
             db.session.add(account)
             db.session.commit()
-            
+
             channel = Channel(
                 account_id=account.id,
                 stream_id="1005",
@@ -274,7 +274,7 @@ class TestPPVVisibilityService:
             )
             db.session.add(channel)
             db.session.commit()
-            
+
             service = PPVVisibilityService(account)
             assert service.should_show_channel(channel) is False
 
@@ -284,7 +284,7 @@ class TestPPVVisibilityService:
             account = Account(name="Test", server="http://test.com", ppv_visibility="hide_inactive")
             db.session.add(account)
             db.session.commit()
-            
+
             channel = Channel(
                 account_id=account.id,
                 stream_id="1006",
@@ -295,7 +295,7 @@ class TestPPVVisibilityService:
             )
             db.session.add(channel)
             db.session.commit()
-            
+
             service = PPVVisibilityService(account)
             assert service.should_show_channel(channel) is True
 
@@ -305,7 +305,7 @@ class TestPPVVisibilityService:
             account = Account(name="Test", server="http://test.com", ppv_visibility="hide_inactive")
             db.session.add(account)
             db.session.commit()
-            
+
             channel = Channel(
                 account_id=account.id,
                 stream_id="1007",
@@ -316,7 +316,7 @@ class TestPPVVisibilityService:
             )
             db.session.add(channel)
             db.session.commit()
-            
+
             service = PPVVisibilityService(account)
             assert service.should_show_channel(channel) is True
 
@@ -326,7 +326,7 @@ class TestPPVVisibilityService:
             account = Account(name="Test", server="http://test.com", ppv_visibility="hide_inactive")
             db.session.add(account)
             db.session.commit()
-            
+
             channel = Channel(
                 account_id=account.id,
                 stream_id="1008",
@@ -337,7 +337,7 @@ class TestPPVVisibilityService:
             )
             db.session.add(channel)
             db.session.commit()
-            
+
             service = PPVVisibilityService(account)
             assert service.should_show_channel(channel) is True
 
@@ -347,7 +347,7 @@ class TestPPVVisibilityService:
             account = Account(name="Test", server="http://test.com", ppv_visibility="hide_inactive")
             db.session.add(account)
             db.session.commit()
-            
+
             channel = Channel(
                 account_id=account.id,
                 stream_id="1009",
@@ -357,7 +357,7 @@ class TestPPVVisibilityService:
             )
             db.session.add(channel)
             db.session.commit()
-            
+
             service = PPVVisibilityService(account)
             assert service.should_show_channel(channel) is False
 
@@ -367,7 +367,7 @@ class TestPPVVisibilityService:
             account = Account(name="Test", server="http://test.com", ppv_visibility="hide_inactive")
             db.session.add(account)
             db.session.commit()
-            
+
             # Create channel without committing (simulate DB error)
             channel = Channel(
                 account_id=account.id,
@@ -377,7 +377,7 @@ class TestPPVVisibilityService:
                 is_active=True,
             )
             # Don't add to session or commit
-            
+
             service = PPVVisibilityService(account)
             # Should not crash, should default to hiding (no event, no status)
             result = service.should_show_channel(channel)
@@ -389,7 +389,7 @@ class TestPPVVisibilityService:
             account = Account(name="Test", server="http://test.com", ppv_visibility="hide_inactive")
             db.session.add(account)
             db.session.commit()
-            
+
             future_date = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=7)
             event = Event(
                 external_id="test-event-cache",
@@ -403,7 +403,7 @@ class TestPPVVisibilityService:
             )
             db.session.add(event)
             db.session.commit()
-            
+
             channel = Channel(
                 account_id=account.id,
                 stream_id="1011",
@@ -413,21 +413,21 @@ class TestPPVVisibilityService:
             )
             db.session.add(channel)
             db.session.commit()
-            
+
             link = EventChannelLink(event_id=event.id, channel_id=channel.id)
             db.session.add(link)
             db.session.commit()
-            
+
             service = PPVVisibilityService(account)
-            
+
             # First call - should query DB and cache
             result1 = service.should_show_channel(channel)
             assert result1 is True
-            
+
             # Second call - should use cache
             result2 = service.should_show_channel(channel)
             assert result2 is True
-            
+
             # Cache should have entry
             assert channel.id in service._event_cache
 
@@ -437,7 +437,7 @@ class TestPPVVisibilityService:
             account = Account(name="Test", server="http://test.com", ppv_visibility="invalid_mode")
             db.session.add(account)
             db.session.commit()
-            
+
             # Create channel with no event (should be hidden in hide_inactive mode)
             channel = Channel(
                 account_id=account.id,
@@ -448,19 +448,19 @@ class TestPPVVisibilityService:
             )
             db.session.add(channel)
             db.session.commit()
-            
+
             service = PPVVisibilityService(account)
             assert service.should_show_channel(channel) is False
 
     def test_get_visibility_options(self):
         """Test that visibility options are returned correctly"""
         options = PPVVisibilityService.get_visibility_options()
-        
+
         assert len(options) == 3
         assert "hide_all" in options
         assert "hide_inactive" in options
         assert "show_all" in options
-        
+
         # Check structure
         assert options["hide_all"]["value"] == "hide_all"
         assert "label" in options["hide_all"]
