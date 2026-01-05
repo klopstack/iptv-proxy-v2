@@ -198,7 +198,7 @@ def get_epg_mappings():
 
         # Apply FilterService to determine visibility
         if not show_filtered and account_id:
-            FilterService.apply_filters_to_channels(account_id, all_channels)
+            FilterService.apply_filters_to_channels(all_channels, account_id)
             channels = [ch for ch in all_channels if ch.is_visible]
         else:
             channels = all_channels
@@ -304,7 +304,7 @@ def get_epg_mappings():
 
         # Apply FilterService to determine visibility
         if not show_filtered and account_id:
-            FilterService.apply_filters_to_channels(account_id, all_channels)
+            FilterService.apply_filters_to_channels(all_channels, account_id)
             channels = [ch for ch in all_channels if ch.is_visible]
         else:
             channels = all_channels

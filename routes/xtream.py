@@ -541,7 +541,7 @@ def xtream_live_stream(username, password, stream_id, ext="ts"):
     This endpoint authenticates and proxies to the internal stream handler.
     """
     logger.info(f"Xtream stream request: username={username}, password={password}, stream_id={stream_id}, ext={ext}")
-    
+
     # Authenticate using path credentials
     xtream_cred = XtreamCredential.query.filter_by(username=username, password=password, enabled=True).first()
 
@@ -565,9 +565,15 @@ def xtream_live_stream(username, password, stream_id, ext="ts"):
 
     # Verify stream exists and is accessible for this credential
     channels = get_channels_for_credential(xtream_cred, account, playlist_config)
+    logger.info(f"Found {len(channels)} accessible channels for credential {xtream_cred.username}")
     channel = next((ch for ch in channels if ch.stream_id == stream_id), None)
 
     if not channel:
+        logger.warning(f"Stream {stream_id} not found in {len(channels)} accessible channels")
+        # Log first few channel IDs for debugging
+        if channels:
+            sample_ids = [ch.stream_id for ch in channels[:10]]
+            logger.info(f"Sample channel IDs: {sample_ids}")
         return jsonify({"error": "Stream not found or not accessible"}), 404
 
     # Redirect to internal stream proxy
