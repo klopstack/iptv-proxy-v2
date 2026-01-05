@@ -252,7 +252,7 @@ def get_epg_mappings():
         if not show_filtered and account_id:
             # Extract channels from mappings
             channels = [m.channel for m in all_mappings if m.channel]
-            FilterService.apply_filters_to_channels(account_id, channels)
+            FilterService.apply_filters_to_channels(channels, account_id)
             # Filter mappings to only visible channels
             visible_ids = {ch.id for ch in channels if ch.is_visible}
             mappings = [m for m in all_mappings if m.channel and m.channel.id in visible_ids]

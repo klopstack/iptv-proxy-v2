@@ -70,18 +70,18 @@ class PPVEpgService:
 
         # Apply FilterService to determine which channels should be visible
         # Group by account_id to apply filters correctly
-        channels_by_account = {}
+        channels_by_account: Dict[int, List[Tuple[Channel, EventChannelLink, Event]]] = {}
         for channel, link, event in matched_channels:
             if channel.account_id not in channels_by_account:
                 channels_by_account[channel.account_id] = []
             channels_by_account[channel.account_id].append((channel, link, event))
 
-        filtered_channels = []
+        filtered_channels: List[Tuple[Channel, EventChannelLink, Event]] = []
         for acc_id, channels in channels_by_account.items():
             # Extract just the Channel objects for filtering
             channel_objs = [ch for ch, _, _ in channels]
             # Apply FilterService
-            FilterService.apply_filters_to_channels(acc_id, channel_objs)
+            FilterService.apply_filters_to_channels(channel_objs, acc_id)
             # Keep only visible channels
             visible_ids = {ch.id for ch in channel_objs if ch.is_visible}
             filtered_channels.extend((ch, link, evt) for ch, link, evt in channels if ch.id in visible_ids)

@@ -180,7 +180,7 @@ def get_categories():
         channels = Channel.query.filter_by(category_id=category.id, is_active=True).all()
         if channels:
             # Apply filters
-            FilterService.apply_filters_to_channels(category.account_id, channels)
+            FilterService.apply_filters_to_channels(channels, category.account_id)
             # Check if any are visible
             if any(ch.is_visible for ch in channels):
                 visible_category_ids.add(category.id)

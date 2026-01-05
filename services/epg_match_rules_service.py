@@ -1721,7 +1721,7 @@ class EpgMatchRulesService:
 
         # Apply FilterService to determine visibility if needed
         if not include_filtered:
-            FilterService.apply_filters_to_channels(account_id, all_channels)
+            FilterService.apply_filters_to_channels(all_channels, account_id)
             channels = [ch for ch in all_channels if ch.is_visible]
         else:
             channels = all_channels
