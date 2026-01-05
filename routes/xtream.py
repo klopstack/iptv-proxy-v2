@@ -540,6 +540,8 @@ def xtream_live_stream(username, password, stream_id, ext="ts"):
 
     This endpoint authenticates and proxies to the internal stream handler.
     """
+    logger.info(f"Xtream stream request: username={username}, password={password}, stream_id={stream_id}, ext={ext}")
+    
     # Authenticate using path credentials
     xtream_cred = XtreamCredential.query.filter_by(username=username, password=password, enabled=True).first()
 
@@ -583,6 +585,7 @@ def xtream_movie_stream(username, password, stream_id, ext="mp4"):
     VOD/Movie stream URL for Xtream clients.
     VOD not implemented - return not found.
     """
+    logger.info(f"Xtream movie request: username={username}, password={password}, stream_id={stream_id}")
     return jsonify({"error": "VOD not available"}), 404
 
 
@@ -593,6 +596,7 @@ def xtream_series_stream(username, password, stream_id, ext="mp4"):
     Series stream URL for Xtream clients.
     Series not implemented - return not found.
     """
+    logger.info(f"Xtream series request: username={username}, password={password}, stream_id={stream_id}")
     return jsonify({"error": "Series not available"}), 404
 
 
