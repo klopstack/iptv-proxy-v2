@@ -295,13 +295,19 @@
 
                         <!-- Source and Channel Selection -->
                         <div class="row mb-3">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label for="preview-source-select" class="form-label">EPG Source</label>
                                 <select class="form-select" id="preview-source-select">
                                     <option value="">Select an EPG source...</option>
                                 </select>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4" id="preview-lineup-container" style="display: none;">
+                                <label for="preview-lineup-select" class="form-label">Lineup (Optional)</label>
+                                <select class="form-select" id="preview-lineup-select" disabled>
+                                    <option value="">All lineups</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4" id="preview-channel-container">
                                 <label for="preview-channel-select" class="form-label">EPG Channel (Optional)</label>
                                 <select class="form-select" id="preview-channel-select" disabled>
                                     <option value="">All channels</option>
@@ -331,7 +337,14 @@
 
                         <div id="preview-empty" style="display: none;">
                             <div class="alert alert-info">
-                                <i class="bi bi-info-circle"></i> No program data available for the selected source/channel.
+                                <i class="bi bi-info-circle"></i> <strong>No program data available</strong>
+                                <p class="mb-0 mt-2 small">This could mean:</p>
+                                <ul class="mb-0 small">
+                                    <li>The EPG source hasn't been synced yet (check Sources tab)</li>
+                                    <li>No channels have been added to this source/lineup</li>
+                                    <li>Programs haven't been synced for these channels yet</li>
+                                    <li>There are no currently airing programs (check individual channel view)</li>
+                                </ul>
                             </div>
                         </div>
 

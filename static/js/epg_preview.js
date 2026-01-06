@@ -7,6 +7,8 @@
 // State management
 let previewState = {
     selectedSourceId: null,
+    selectedSourceType: null,
+    selectedLineupId: null,
     selectedChannelId: null,
     loading: false
 };
@@ -31,6 +33,7 @@ async function loadPreviewSources() {
         sources.forEach(source => {
             const option = document.createElement('option');
             option.value = source.id;
+            option.dataset.sourceType = source.source_type;
             option.textContent = `${source.name} (${source.source_type})`;
             if (!source.enabled) {
                 option.textContent += ' [Disabled]';
@@ -45,11 +48,52 @@ async function loadPreviewSources() {
 }
 
 /**
- * Load channels for the selected source
+ * Load lineups for a Schedules Direct source
+ */
+async function loadPreviewLineups() {
+    const lineupSelect = document.getElementById('preview-lineup-select');
+    const sourceId = previewState.selectedSourceId;
+    
+    if (!lineupSelect || !sourceId) return;
+    
+    lineupSelect.disabled = true;
+    lineupSelect.innerHTML = '<option value="">Loading...</option>';
+    
+    try {
+        const response = await fetch(`/api/epg/sd/lineups?source_id=${sourceId}`);
+        if (!response.ok) throw new Error('Failed to load lineups');
+        
+        const data = await response.json();
+        
+        // Clear and populate
+        lineupSelect.innerHTML = '<option value="">All lineups</option>';
+        
+        if (data.lineups && data.lineups.length > 0) {
+            data.lineups.forEach(lineup => {
+                const option = document.createElement('option');
+                option.value = lineup.id;
+                option.textContent = `${lineup.name || lineup.lineup_id} (${lineup.channel_count || 0} channels)`;
+                lineupSelect.appendChild(option);
+            });
+            lineupSelect.disabled = false;
+        } else {
+            lineupSelect.innerHTML = '<option value="">No lineups configured</option>';
+        }
+    } catch (error) {
+        console.error('Error loading preview lineups:', error);
+        showToast('Error loading lineups', 'danger');
+        lineupSelect.innerHTML = '<option value="">All lineups</option>';
+        lineupSelect.disabled = false;
+    }
+}
+
+/**
+ * Load channels for the selected source and optionally lineup
  */
 async function loadPreviewChannels() {
     const channelSelect = document.getElementById('preview-channel-select');
     const sourceId = previewState.selectedSourceId;
+    const lineupId = previewState.selectedLineupId;
     
     if (!channelSelect || !sourceId) return;
     
@@ -57,7 +101,12 @@ async function loadPreviewChannels() {
     channelSelect.innerHTML = '<option value="">Loading...</option>';
     
     try {
-        const response = await fetch(`/api/epg/channels?source_id=${sourceId}&limit=1000`);
+        let url = `/api/epg/channels?source_id=${sourceId}&limit=1000`;
+        if (lineupId) {
+            url += `&lineup_id=${lineupId}`;
+        }
+        
+        const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to load channels');
         
         const data = await response.json();
@@ -65,14 +114,17 @@ async function loadPreviewChannels() {
         // Clear and populate
         channelSelect.innerHTML = '<option value="">All channels</option>';
         
-        data.channels.forEach(channel => {
-            const option = document.createElement('option');
-            option.value = channel.id;
-            option.textContent = channel.display_name;
-            channelSelect.appendChild(option);
-        });
-        
-        channelSelect.disabled = false;
+        if (data.channels && data.channels.length > 0) {
+            data.channels.forEach(channel => {
+                const option = document.createElement('option');
+                option.value = channel.id;
+                option.textContent = channel.display_name;
+                channelSelect.appendChild(option);
+            });
+            channelSelect.disabled = false;
+        } else {
+            channelSelect.innerHTML = '<option value="">No channels found</option>';
+        }
     } catch (error) {
         console.error('Error loading preview channels:', error);
         showToast('Error loading channels', 'danger');
@@ -140,7 +192,7 @@ async function loadPreviewData() {
 function displaySingleChannelPrograms(data) {
     const container = document.getElementById('preview-programs-container');
     
-    if (!data.current_program && data.upcoming_programs.length === 0) {
+    if (!data.current_program && (!data.upcoming_programs || data.upcoming_programs.length === 0)) {
         document.getElementById('preview-empty').style.display = 'block';
         return;
     }
@@ -307,24 +359,58 @@ async function initializePreviewTab() {
         sourceSelect.addEventListener('change', async (e) => {
             previewState.selectedSourceId = e.target.value ? parseInt(e.target.value) : null;
             previewState.selectedChannelId = null;
+            previewState.selectedLineupId = null;
+            
+            // Get source type from selected option
+            const selectedOption = e.target.options[e.target.selectedIndex];
+            previewState.selectedSourceType = selectedOption ? selectedOption.dataset.sourceType : null;
             
             const loadBtn = document.getElementById('preview-load-btn');
             const refreshBtn = document.getElementById('preview-refresh-btn');
             const channelSelect = document.getElementById('preview-channel-select');
+            const lineupContainer = document.getElementById('preview-lineup-container');
+            const lineupSelect = document.getElementById('preview-lineup-select');
+            const channelContainer = document.getElementById('preview-channel-container');
             
             if (previewState.selectedSourceId) {
                 loadBtn.disabled = false;
+                
+                // Show/hide lineup selector based on source type
+                if (previewState.selectedSourceType === 'schedules_direct') {
+                    lineupContainer.style.display = 'block';
+                    channelContainer.className = 'col-md-4';
+                    await loadPreviewLineups();
+                } else {
+                    lineupContainer.style.display = 'none';
+                    channelContainer.className = 'col-md-8';
+                    lineupSelect.innerHTML = '<option value="">All lineups</option>';
+                    lineupSelect.disabled = true;
+                }
+                
                 await loadPreviewChannels();
             } else {
                 loadBtn.disabled = true;
                 refreshBtn.disabled = true;
                 channelSelect.disabled = true;
                 channelSelect.innerHTML = '<option value="">All channels</option>';
+                lineupContainer.style.display = 'none';
+                lineupSelect.innerHTML = '<option value="">All lineups</option>';
+                lineupSelect.disabled = true;
             }
             
             // Hide results
             document.getElementById('preview-results').style.display = 'none';
             document.getElementById('preview-empty').style.display = 'none';
+        });
+    }
+    
+    // Lineup selection change handler
+    const lineupSelect = document.getElementById('preview-lineup-select');
+    if (lineupSelect) {
+        lineupSelect.addEventListener('change', async (e) => {
+            previewState.selectedLineupId = e.target.value ? parseInt(e.target.value) : null;
+            previewState.selectedChannelId = null;
+            await loadPreviewChannels();
         });
     }
     

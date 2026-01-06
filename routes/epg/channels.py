@@ -30,11 +30,15 @@ def get_epg_channels():
 
     Query parameters:
     - source_id: Optional - EPG source to get channels from (if not provided, returns all channels)
+    - lineup_id: Optional - Filter by SD lineup (only for Schedules Direct sources)
     - search: Optional text search
     - limit: Max results (default 100)
     - offset: Pagination offset
     """
+    from models import SdStation
+
     source_id = request.args.get("source_id", type=int)
+    lineup_id = request.args.get("lineup_id", type=int)
     search = request.args.get("search", "")
     limit = request.args.get("limit", 100, type=int)
     offset = request.args.get("offset", 0, type=int)
@@ -44,6 +48,14 @@ def get_epg_channels():
         query = EpgChannel.query.filter_by(source_id=source_id)
     else:
         query = EpgChannel.query
+
+    # Filter by lineup if specified (for Schedules Direct sources)
+    if lineup_id:
+        # Join with SdStation to filter by lineup
+        # For SD sources, EpgChannel.channel_id == SdStation.station_id
+        query = query.join(
+            SdStation, db.and_(SdStation.station_id == EpgChannel.channel_id, SdStation.lineup_id == lineup_id)
+        )
 
     # Apply search if provided
     if search:
