@@ -51,6 +51,7 @@ omit = [
     "*/.venv/*",
     "*/instance/*",
     "*/data/*",
+    "scripts/*",
     "migrate_tags.py",
     "add_indexes.py",
     "run_migrations.py",

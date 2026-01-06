@@ -404,6 +404,7 @@ class Event(db.Model):  # type: ignore[name-defined]
     source = db.Column(db.String(20), default=SOURCE_THESPORTSDB, nullable=False)  # Where this event came from
 
     # Event basics
+    title = db.Column(db.String(500), index=True)  # Event title (for non-vs events or display override)
     sport = db.Column(db.String(100), index=True)  # Soccer, Ice Hockey, Basketball, etc.
     league_id = db.Column(db.String(50), index=True)  # League ID from source
     league_name = db.Column(db.String(200), index=True)  # League name
@@ -465,10 +466,18 @@ class Event(db.Model):  # type: ignore[name-defined]
         db.Index("idx_event_scheduled", "scheduled_at"),
         db.Index("idx_event_teams", "home_team_id", "away_team_id"),
         db.Index("idx_event_league", "league_id"),
+        db.Index("idx_event_title", "title"),
     )
 
+    @property
+    def display_title(self) -> str:
+        """Return the event title for display, using explicit title or constructing from teams."""
+        if self.title:
+            return self.title
+        return f"{self.home_team_name} vs {self.away_team_name}"
+
     def __repr__(self):
-        return f"<Event {self.home_team_name} vs {self.away_team_name} @ {self.scheduled_at}>"
+        return f"<Event {self.display_title} @ {self.scheduled_at}>"
 
 
 class EventChannelLink(db.Model):  # type: ignore[name-defined]

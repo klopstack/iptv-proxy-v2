@@ -599,6 +599,7 @@ class PPVCalendarEnrichmentService:
             event = Event(
                 external_id=calendar_event.event_id,
                 source=Event.SOURCE_THESPORTSDB,
+                title=calendar_event.event_name,  # Store original event name for non-vs events
                 home_team_id="",  # Will be populated by detail fetch
                 home_team_name=calendar_event.home_team or "Unknown",
                 away_team_id="",  # Will be populated by detail fetch
