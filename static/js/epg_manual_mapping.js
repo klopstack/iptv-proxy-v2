@@ -2,13 +2,13 @@
 // Manual EPG Mapping - Enhanced with Program Search and Preview
 // ============================================================================
 
-/* global showToast, escapeHtml, manualMappingModal, Hls */
+/* global showToast, escapeHtml, manualMappingModal, mpegts */
 
 let epgSearchState = { search: '', offset: 0, hasMore: true, loading: false };
 let currentSearchMode = 'channel'; // 'channel' or 'program'
 let currentOnlyFilter = false;
 let channelPreviewActive = false;
-let channelPreviewHls = null;
+let channelPreviewPlayer = null;
 
 const EPG_CHANNELS_PER_PAGE = 20;
 
@@ -556,37 +556,83 @@ async function toggleChannelPreview() {
         btn.disabled = true;
         
         try {
-            // Build stream URL
-            const streamUrl = `/stream/${accountId}/${streamId}.m3u8`;
+            // Build stream URL - mpegts.js requires absolute URLs
+            const streamUrl = `${window.location.protocol}//${window.location.host}/stream/${accountId}/${streamId}.ts`;
             
-            // Try HLS.js if available
-            if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-                channelPreviewHls = new Hls({
-                    enableWorker: true,
-                    lowLatencyMode: true,
-                });
-                channelPreviewHls.loadSource(streamUrl);
-                channelPreviewHls.attachMedia(video);
-                channelPreviewHls.on(Hls.Events.MANIFEST_PARSED, () => {
-                    video.play();
-                });
-                channelPreviewHls.on(Hls.Events.ERROR, (event, data) => {
-                    if (data.fatal) {
-                        console.error('HLS error:', data);
-                        stopChannelPreview();
-                        showToast('Failed to load stream', 'error');
-                    }
-                });
-            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                // Native HLS support (Safari)
-                video.src = streamUrl;
-                await video.play();
-            } else {
-                showToast('HLS playback not supported in this browser', 'error');
+            // Check if mpegts.js is supported
+            if (typeof mpegts === 'undefined' || !mpegts.getFeatureList().mseLivePlayback) {
+                showToast('Your browser doesn\'t support MSE for live playback. Please use Chrome, Firefox, or Edge.', 'error');
                 btn.innerHTML = '<i class="bi bi-play-fill"></i> Start Preview';
                 btn.disabled = false;
                 return;
             }
+            
+            // Initialize mpegts.js player with same settings as player.html
+            channelPreviewPlayer = mpegts.createPlayer({
+                type: 'mpegts',
+                isLive: true,
+                url: streamUrl,
+                hasAudio: true,
+                hasVideo: true
+            }, {
+                enableWorker: true,
+                enableStashBuffer: false,
+                liveBufferLatencyChasing: false,
+                liveSync: true,
+                liveSyncMaxLatency: 3.0,
+                liveSyncTargetLatency: 1.5,
+                liveSyncPlaybackRate: 1.1,
+                autoCleanupSourceBuffer: false,
+                fixAudioTimestampGap: true,
+                lazyLoad: false,
+                seekType: 'range'
+            });
+            
+            channelPreviewPlayer.attachMediaElement(video);
+            
+            // Error handling
+            channelPreviewPlayer.on(mpegts.Events.ERROR, (errType, errDetail) => {
+                console.error('mpegts.js error:', errType, errDetail);
+                const errorDiv = document.getElementById('channelPreviewError');
+                const errorMsg = document.getElementById('channelPreviewErrorMessage');
+                errorMsg.textContent = `Playback error: ${errDetail}`;
+                errorDiv.style.display = 'block';
+                setTimeout(() => {
+                    errorDiv.style.display = 'none';
+                }, 5000);
+            });
+            
+            // Loading complete
+            channelPreviewPlayer.on(mpegts.Events.LOADING_COMPLETE, () => {
+                console.log('Stream loading complete');
+            });
+            
+            // Media info received
+            channelPreviewPlayer.on(mpegts.Events.MEDIA_INFO, (mediaInfo) => {
+                console.log('Media info:', mediaInfo);
+            });
+            
+            // Handle video element events
+            video.addEventListener('loadedmetadata', () => {
+                console.log('Video metadata loaded');
+                video.play().catch(err => {
+                    console.warn('Play prevented:', err);
+                });
+            });
+            
+            video.addEventListener('error', (e) => {
+                console.error('Video element error:', e);
+                const errorDiv = document.getElementById('channelPreviewError');
+                const errorMsg = document.getElementById('channelPreviewErrorMessage');
+                errorMsg.textContent = 'Video playback error. The stream may be offline.';
+                errorDiv.style.display = 'block';
+            });
+            
+            // Load and start playback
+            channelPreviewPlayer.load();
+            channelPreviewPlayer.play().catch(err => {
+                console.warn('Autoplay prevented:', err);
+            });
             
             channelPreviewActive = true;
             placeholder.style.display = 'none';
@@ -606,14 +652,18 @@ async function toggleChannelPreview() {
 function stopChannelPreview() {
     const video = document.getElementById('channelPreviewVideo');
     
-    if (channelPreviewHls) {
-        channelPreviewHls.destroy();
-        channelPreviewHls = null;
+    if (channelPreviewPlayer) {
+        channelPreviewPlayer.pause();
+        channelPreviewPlayer.unload();
+        channelPreviewPlayer.detachMediaElement();
+        channelPreviewPlayer.destroy();
+        channelPreviewPlayer = null;
     }
     
     if (video) {
         video.pause();
         video.src = '';
+        video.load();
     }
     
     channelPreviewActive = false;

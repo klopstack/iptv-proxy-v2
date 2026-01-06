@@ -492,12 +492,15 @@
                                 <i class="bi bi-tv"></i> Channel Preview
                             </div>
                             <div class="card-body p-0">
-                                <div id="channelPreviewContainer" class="ratio ratio-16x9 bg-dark d-flex align-items-center justify-content-center" style="min-height: 180px;">
-                                    <div id="channelPreviewPlaceholder" class="text-center text-muted">
+                                <div id="channelPreviewContainer" class="ratio ratio-16x9 bg-dark position-relative" style="min-height: 180px;">
+                                    <div id="channelPreviewPlaceholder" class="text-center text-muted d-flex flex-column align-items-center justify-content-center h-100">
                                         <i class="bi bi-play-circle" style="font-size: 2rem;"></i>
                                         <p class="mb-0 mt-2 small">Click to preview channel</p>
                                     </div>
-                                    <video id="channelPreviewVideo" class="w-100 h-100" style="display: none;" muted autoplay></video>
+                                    <video id="channelPreviewVideo" class="w-100 h-100" controls muted style="display: none;"></video>
+                                    <div id="channelPreviewError" class="alert alert-danger m-2 position-absolute" style="display: none; top: 0; right: 0; left: 0;">
+                                        <small id="channelPreviewErrorMessage"></small>
+                                    </div>
                                 </div>
                                 <div class="p-2 border-top">
                                     <button type="button" class="btn btn-sm btn-outline-primary w-100" id="toggleChannelPreviewBtn">
@@ -1067,6 +1070,7 @@
 </div>
 
 <!-- EPG Management Scripts -->
+<script src="{{ url_for('static', filename='js/mpegts.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/epg_common.js') }}"></script>
 <script src="{{ url_for('static', filename='js/epg_sources.js') }}"></script>
 <script src="{{ url_for('static', filename='js/epg_channels.js') }}"></script>
