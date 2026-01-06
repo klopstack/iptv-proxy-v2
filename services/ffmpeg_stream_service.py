@@ -574,7 +574,7 @@ _ffmpeg_service: Optional[FFmpegStreamService] = None
 
 def get_ffmpeg_service(app: Optional["Flask"] = None) -> FFmpegStreamService:
     """Get the global FFmpegStreamService instance.
-    
+
     Args:
         app: Flask app instance (optional, but required for database operations in callbacks)
     """
