@@ -268,6 +268,9 @@ class TestSyncSdProgramsIntegration:
         with app.app_context():
             # Create mock SD client
             mock_client = MagicMock()
+            mock_client.get_schedule_md5s.return_value = {
+                "12345": {"2026-01-06": {"md5": "abc123", "lastModified": "2026-01-06T12:00:00Z"}}
+            }
             mock_client.get_schedules.return_value = [
                 {
                     "stationID": "12345",
@@ -327,6 +330,14 @@ class TestSyncSdProgramsIntegration:
 
             # Mock SD client returns updated title
             mock_client = MagicMock()
+            mock_client.get_schedule_md5s.return_value = {
+                "12345": {
+                    start.strftime("%Y-%m-%d"): {
+                        "md5": "def456",
+                        "lastModified": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    }
+                }
+            }
             mock_client.get_schedules.return_value = [
                 {
                     "stationID": "12345",
@@ -361,3 +372,75 @@ class TestSyncSdProgramsIntegration:
                 start_time=start,
             ).first()
             assert updated.title == "New Title"
+
+    def test_md5_caching_skips_unchanged_schedules(self, app, db, sample_sd_source, sample_sd_channels):
+        """Test that MD5 caching skips fetching schedules that haven't changed."""
+        from services.epg.sd_programs import sync_sd_programs_for_source
+
+        with app.app_context():
+            ch = sample_sd_channels[0]
+
+            # Set cached MD5 on the channel
+            ch.schedule_md5 = "cached_md5"
+            ch.schedule_last_modified = datetime.now()
+            db.session.commit()
+
+            # Mock SD client returns same MD5
+            mock_client = MagicMock()
+            mock_client.get_schedule_md5s.return_value = {
+                "12345": {"2026-01-06": {"md5": "cached_md5", "lastModified": "2026-01-06T12:00:00Z"}}
+            }
+            # get_schedules should NOT be called for this station
+            mock_client.get_schedules.return_value = []
+            mock_client.get_programs.return_value = []
+
+            stats = sync_sd_programs_for_source(
+                sample_sd_source,
+                mock_client,
+                days_ahead=1,
+                use_md5_cache=True,
+            )
+
+            # Verify caching stats
+            assert stats["schedules_skipped_cached"] >= 1
+            assert stats["schedules_fetched"] == 0  # Should not fetch any schedules
+            assert stats["md5_checks_performed"] >= 1
+
+    def test_md5_caching_disabled(self, app, db, sample_sd_source, sample_sd_channels):
+        """Test that MD5 caching can be disabled."""
+        from services.epg.sd_programs import sync_sd_programs_for_source
+
+        with app.app_context():
+            ch = sample_sd_channels[0]
+
+            # Set cached MD5 on the channel
+            ch.schedule_md5 = "cached_md5"
+            db.session.commit()
+
+            # Mock SD client
+            mock_client = MagicMock()
+            mock_client.get_schedules.return_value = [
+                {
+                    "stationID": "12345",
+                    "programs": [
+                        {
+                            "airDateTime": "2026-01-06T12:00:00Z",
+                            "duration": 60,
+                            "programID": "EP001",
+                        }
+                    ],
+                }
+            ]
+            mock_client.get_programs.return_value = [{"programID": "EP001", "titles": [{"title120": "Test"}]}]
+
+            stats = sync_sd_programs_for_source(
+                sample_sd_source,
+                mock_client,
+                days_ahead=1,
+                use_md5_cache=False,
+            )
+
+            # Verify caching was bypassed
+            assert stats["md5_checks_performed"] == 0
+            assert stats["schedules_skipped_cached"] == 0
+            assert stats["schedules_fetched"] >= 1

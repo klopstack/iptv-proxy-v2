@@ -108,6 +108,9 @@
                                 </div>
                             </div>
                             <div id="account-sync-status" class="small text-muted mb-2"></div>
+                            <button type="button" id="sync-accounts-btn" class="btn btn-sm btn-info">
+                                <i class="bi bi-arrow-clockwise"></i> Sync All Accounts Now
+                            </button>
                         </div>
                         
                         <!-- EPG Sources Sync Settings -->
@@ -127,6 +130,9 @@
                                 </div>
                             </div>
                             <div id="epg-sync-status" class="small text-muted mb-2"></div>
+                            <button type="button" id="sync-epg-btn" class="btn btn-sm btn-info">
+                                <i class="bi bi-arrow-clockwise"></i> Sync All EPG Sources Now
+                            </button>
                         </div>
                         
                         <!-- FCC Data Sync Settings -->
@@ -146,6 +152,9 @@
                                 </div>
                             </div>
                             <div id="fcc-sync-status" class="small text-muted mb-2"></div>
+                            <button type="button" id="sync-fcc-btn" class="btn btn-sm btn-info">
+                                <i class="bi bi-arrow-clockwise"></i> Sync FCC Data Now
+                            </button>
                         </div>
                     </div>
                     
@@ -160,9 +169,6 @@
                         </button>
                         <button type="button" id="start-scheduler-btn" class="btn btn-success" style="display: none;">
                             <i class="bi bi-play-circle"></i> Start Scheduler
-                        </button>
-                        <button type="button" id="sync-now-btn" class="btn btn-info">
-                            <i class="bi bi-arrow-clockwise"></i> Sync All Now
                         </button>
                     </div>
                 </form>
@@ -534,8 +540,9 @@ document.getElementById('start-scheduler-btn').addEventListener('click', async (
     }
 });
 
-document.getElementById('sync-now-btn').addEventListener('click', async function() {
-    if (!confirm('Sync all enabled accounts now? This may take a few minutes.')) {
+// Per-tab sync buttons
+document.getElementById('sync-accounts-btn').addEventListener('click', async function() {
+    if (!confirm('Sync all enabled IPTV accounts now? This may take a few minutes.')) {
         return;
     }
     
@@ -556,6 +563,62 @@ document.getElementById('sync-now-btn').addEventListener('click', async function
         }
     } catch (error) {
         alert('Error syncing accounts: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+});
+
+document.getElementById('sync-epg-btn').addEventListener('click', async function() {
+    if (!confirm('Sync all enabled EPG sources now? This may take several minutes.')) {
+        return;
+    }
+    
+    const btn = this;
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Syncing...';
+    
+    try {
+        const response = await fetch('/api/sync/epg', { method: 'POST' });
+        
+        if (response.ok) {
+            const result = await response.json();
+            alert(`✓ Synced ${result.sources_synced} of ${result.total_sources} EPG source(s) successfully!`);
+        } else {
+            const error = await response.json();
+            alert('Error: ' + (error.error || 'Failed to sync EPG sources'));
+        }
+    } catch (error) {
+        alert('Error syncing EPG sources: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+});
+
+document.getElementById('sync-fcc-btn').addEventListener('click', async function() {
+    if (!confirm('Sync FCC facility data now? This may take a few minutes.')) {
+        return;
+    }
+    
+    const btn = this;
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Syncing...';
+    
+    try {
+        const response = await fetch('/api/sync/fcc', { method: 'POST' });
+        
+        if (response.ok) {
+            const result = await response.json();
+            alert(`✓ FCC data synced successfully!\n${result.message}`);
+        } else {
+            const error = await response.json();
+            alert('Error: ' + (error.error || 'Failed to sync FCC data'));
+        }
+    } catch (error) {
+        alert('Error syncing FCC data: ' + error.message);
     } finally {
         btn.disabled = false;
         btn.innerHTML = originalText;

@@ -532,6 +532,7 @@ class SyncScheduler:
                     sd_client,
                     days_ahead=14,
                     fetch_program_details=True,
+                    use_md5_cache=True,
                 )
 
                 # Create stats compatible with other source types

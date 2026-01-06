@@ -62,12 +62,156 @@ function formatRelativeTime(date) {
     return date.toLocaleDateString();
 }
 
+async function loadOverviewStats() {
+    try {
+        const response = await fetch('/api/overview/stats');
+        const stats = await response.json();
+        
+        let html = `
+            <div class="row mb-4">
+                <!-- Accounts Card -->
+                <div class="col-md-3 mb-3">
+                    <div class="card bg-primary text-white h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="card-subtitle mb-2 opacity-75">Accounts</h6>
+                                    <h2 class="card-title mb-0">${stats.accounts.enabled} / ${stats.accounts.total}</h2>
+                                    <small class="opacity-75">${stats.accounts.synced} synced</small>
+                                </div>
+                                <div class="fs-1 opacity-50">
+                                    <i class="bi bi-server"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Channels Card -->
+                <div class="col-md-3 mb-3">
+                    <div class="card bg-success text-white h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="card-subtitle mb-2 opacity-75">Channels</h6>
+                                    <h2 class="card-title mb-0">${stats.channels.visible.toLocaleString()}</h2>
+                                    <small class="opacity-75">${stats.channels.total.toLocaleString()} total, ${stats.channels.ppv} PPV</small>
+                                </div>
+                                <div class="fs-1 opacity-50">
+                                    <i class="bi bi-broadcast"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- EPG Card -->
+                <div class="col-md-3 mb-3">
+                    <div class="card bg-info text-white h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="card-subtitle mb-2 opacity-75">EPG Data</h6>
+                                    <h2 class="card-title mb-0">${stats.epg.programs.toLocaleString()}</h2>
+                                    <small class="opacity-75">${stats.epg.coverage.percentage}% coverage, ${stats.epg.sources.enabled} sources</small>
+                                </div>
+                                <div class="fs-1 opacity-50">
+                                    <i class="bi bi-calendar3"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tags Card -->
+                <div class="col-md-3 mb-3">
+                    <div class="card bg-warning text-dark h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="card-subtitle mb-2">Tags</h6>
+                                    <h2 class="card-title mb-0">${stats.tags.total}</h2>
+                                    <small>${stats.tags.tagged_channels.toLocaleString()} tagged channels</small>
+                                </div>
+                                <div class="fs-1 opacity-50">
+                                    <i class="bi bi-tags"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add scheduler status if available
+        if (stats.scheduler && stats.scheduler.running) {
+            const lastAccountSync = stats.scheduler.last_syncs?.accounts 
+                ? formatRelativeTime(new Date(stats.scheduler.last_syncs.accounts))
+                : 'Never';
+            const lastEpgSync = stats.scheduler.last_syncs?.epg 
+                ? formatRelativeTime(new Date(stats.scheduler.last_syncs.epg))
+                : 'Never';
+            
+            html += `
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <div class="card border-success">
+                            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0"><i class="bi bi-arrow-repeat"></i> Scheduler Status</h6>
+                                <span class="badge bg-light text-success">
+                                    <i class="bi bi-check-circle"></i> Running
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <strong>Accounts Sync:</strong> Every ${stats.scheduler.intervals.accounts}h
+                                        <br><small class="text-muted">Last: ${lastAccountSync}</small>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>EPG Sync:</strong> Every ${stats.scheduler.intervals.epg}h
+                                        <br><small class="text-muted">Last: ${lastEpgSync}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (stats.scheduler) {
+            html += `
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i> 
+                            <strong>Scheduler Not Running</strong> - 
+                            Automatic syncs are disabled. Go to <a href="/settings">Settings</a> to enable.
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        return html;
+        
+    } catch (error) {
+        console.error('Error loading overview stats:', error);
+        return ''; // Return empty string on error
+    }
+}
+
 async function loadDashboard() {
     try {
+        // Load overview stats first
+        const statsHtml = await loadOverviewStats();
+        
         const response = await fetch('/api/accounts');
         const accounts = await response.json();
         
-        let html = '<div class="row">';
+        // Start with stats HTML
+        let html = statsHtml;
+        
+        html += '<div class="row">';
         
         if (accounts.length === 0) {
             html += `

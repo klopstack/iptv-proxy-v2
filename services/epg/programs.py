@@ -280,6 +280,7 @@ def sync_programs_for_source(
         "programs_added": 0,
         "programs_updated": 0,
         "programs_deleted": 0,
+        "programs_unchanged": 0,
         "channels_processed": 0,
         "matched_channels": 0,
         "preview_channels": 0,
@@ -361,17 +362,27 @@ def sync_programs_for_source(
             ).delete(synchronize_session=False)
         stats["programs_deleted"] += deleted
 
+        # Flush to ensure deletes are processed before querying existing programs
+        # This prevents UNIQUE constraint violations on (epg_channel_id, start_time)
+        db.session.flush()
+
         # Get existing programs for this channel (by start time)
         existing = {p.start_time: p for p in EpgProgram.query.filter_by(epg_channel_id=db_channel_id).all()}
 
-        for prog_data in programs:
+        # De-duplicate programs by start_time (keep last occurrence)
+        # This prevents UNIQUE constraint violations from duplicate entries in source XML
+        unique_programs = {prog_data["start_time"]: prog_data for prog_data in programs}
+
+        for prog_data in unique_programs.values():
             start_time = prog_data["start_time"]
             existing_prog = existing.get(start_time)
 
             if existing_prog:
-                # Update existing program
-                _update_program(existing_prog, prog_data)
-                stats["programs_updated"] += 1
+                # Update existing program only if data changed
+                if _update_program(existing_prog, prog_data):
+                    stats["programs_updated"] += 1
+                else:
+                    stats["programs_unchanged"] += 1
             else:
                 # Create new program
                 new_prog = _create_program(db_channel_id, prog_data)
@@ -387,7 +398,8 @@ def sync_programs_for_source(
     logger.info(
         f"Program sync complete for source {source.id}: "
         f"added={stats['programs_added']}, updated={stats['programs_updated']}, "
-        f"deleted={stats['programs_deleted']}, channels={stats['channels_processed']}"
+        f"unchanged={stats['programs_unchanged']}, deleted={stats['programs_deleted']}, "
+        f"channels={stats['channels_processed']}"
     )
 
     return stats
@@ -424,27 +436,82 @@ def _create_program(epg_channel_id: int, data: Dict[str, Any]) -> EpgProgram:
     return prog
 
 
-def _update_program(prog: EpgProgram, data: Dict[str, Any]):
-    """Update an existing EpgProgram with new data."""
-    prog.stop_time = data["stop_time"]
-    prog.title = data["title"]
-    prog.sub_title = data.get("sub_title")
-    prog.description = data.get("description")
-    prog.categories = json.dumps(data["categories"]) if data.get("categories") else None
-    prog.season = data.get("season")
-    prog.episode = data.get("episode")
-    prog.episode_id = data.get("episode_id")
-    prog.rating = data.get("rating")
-    prog.rating_system = data.get("rating_system")
-    prog.original_air_date = data.get("original_air_date")
-    prog.is_new = data.get("is_new", False)
-    prog.is_live = data.get("is_live", False)
-    prog.is_premiere = data.get("is_premiere", False)
-    prog.sport = data.get("sport")
-    prog.team_home = data.get("team_home")
-    prog.team_away = data.get("team_away")
-    prog.icon_url = data.get("icon_url")
-    prog.last_updated = datetime.now(timezone.utc).replace(tzinfo=None)
+def _update_program(prog: EpgProgram, data: Dict[str, Any]) -> bool:
+    """
+    Update an existing EpgProgram with new data.
+
+    Returns:
+        True if any field was modified, False if no changes
+    """
+    import json
+
+    # Track if anything changed
+    changed = False
+
+    # Prepare categories JSON for comparison
+    new_categories = json.dumps(data["categories"]) if data.get("categories") else None
+
+    # Check each field and only update if different
+    if prog.stop_time != data["stop_time"]:
+        prog.stop_time = data["stop_time"]
+        changed = True
+    if prog.title != data["title"]:
+        prog.title = data["title"]
+        changed = True
+    if prog.sub_title != data.get("sub_title"):
+        prog.sub_title = data.get("sub_title")
+        changed = True
+    if prog.description != data.get("description"):
+        prog.description = data.get("description")
+        changed = True
+    if prog.categories != new_categories:
+        prog.categories = new_categories
+        changed = True
+    if prog.season != data.get("season"):
+        prog.season = data.get("season")
+        changed = True
+    if prog.episode != data.get("episode"):
+        prog.episode = data.get("episode")
+        changed = True
+    if prog.episode_id != data.get("episode_id"):
+        prog.episode_id = data.get("episode_id")
+        changed = True
+    if prog.rating != data.get("rating"):
+        prog.rating = data.get("rating")
+        changed = True
+    if prog.rating_system != data.get("rating_system"):
+        prog.rating_system = data.get("rating_system")
+        changed = True
+    if prog.original_air_date != data.get("original_air_date"):
+        prog.original_air_date = data.get("original_air_date")
+        changed = True
+    if prog.is_new != data.get("is_new", False):
+        prog.is_new = data.get("is_new", False)
+        changed = True
+    if prog.is_live != data.get("is_live", False):
+        prog.is_live = data.get("is_live", False)
+        changed = True
+    if prog.is_premiere != data.get("is_premiere", False):
+        prog.is_premiere = data.get("is_premiere", False)
+        changed = True
+    if prog.sport != data.get("sport"):
+        prog.sport = data.get("sport")
+        changed = True
+    if prog.team_home != data.get("team_home"):
+        prog.team_home = data.get("team_home")
+        changed = True
+    if prog.team_away != data.get("team_away"):
+        prog.team_away = data.get("team_away")
+        changed = True
+    if prog.icon_url != data.get("icon_url"):
+        prog.icon_url = data.get("icon_url")
+        changed = True
+
+    # Only update timestamp if something actually changed
+    if changed:
+        prog.last_updated = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    return changed
 
 
 def get_current_program(epg_channel_id: int) -> Optional[EpgProgram]:

@@ -10,6 +10,7 @@ Tests the EPG generation module including:
 """
 import gzip
 import xml.etree.ElementTree as ET
+from datetime import timezone
 from unittest.mock import patch
 
 import pytest
@@ -630,8 +631,9 @@ class TestGenerateEpgFromDatabaseForMappings:
             db.session.add(mapping)
             db.session.commit()
 
-            # Create a program
-            start = datetime(2026, 1, 6, 15, 0, 0)  # 3pm
+            # Create a program (use current time + 2 hours to ensure it's in the query range)
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            start = now + timedelta(hours=2)
             prog = EpgProgram(
                 epg_channel_id=sample_epg_channels[0].id,
                 start_time=start,
@@ -642,14 +644,25 @@ class TestGenerateEpgFromDatabaseForMappings:
             db.session.commit()
 
             mappings = {sample_channels[0].id: mapping}
+
             channel_elems, prog_elems, processed = generate_epg_from_database_for_mappings(
                 [sample_channels[0]], mappings
             )
 
             assert len(processed) == 1
             assert len(prog_elems) == 1
-            # Check the time is offset by -3 hours (15:00 -> 12:00)
-            assert "20260106120000" in prog_elems[0].get("start")
+
+            # Check the time is offset by -3 hours
+            # Parse the start time from the program element (format: "20260106120000 +0000")
+            from datetime import datetime
+
+            start_str = prog_elems[0].get("start")
+            # Strip timezone info and parse
+            parsed_start = datetime.strptime(start_str.split()[0], "%Y%m%d%H%M%S")
+            expected_start = start + timedelta(hours=-3)  # Apply the -3 hour offset
+
+            # Compare the times (allowing for slight variations in seconds)
+            assert abs((parsed_start - expected_start).total_seconds()) < 5
 
 
 class TestGenerateEpgForChannelsWithDatabase:

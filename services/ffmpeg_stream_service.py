@@ -21,7 +21,10 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from queue import Empty, Queue
-from typing import Callable, Dict, Generator, Optional
+from typing import TYPE_CHECKING, Callable, Dict, Generator, Optional
+
+if TYPE_CHECKING:
+    from flask import Flask
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +92,7 @@ class FFmpegStreamService:
     Manages streams using ffmpeg for proper MPEG-TS handling.
 
     Usage:
-        service = FFmpegStreamService()
+        service = FFmpegStreamService(app=app)
         service.start()
 
         stream, subscriber = service.subscribe(...)
@@ -98,11 +101,12 @@ class FFmpegStreamService:
         service.unsubscribe(stream, subscriber)
     """
 
-    def __init__(self):
+    def __init__(self, app: Optional["Flask"] = None):
         self._streams: Dict[str, FFmpegStream] = {}
         self._lock = threading.RLock()
         self._cleanup_thread: Optional[threading.Thread] = None
         self._shutdown = False
+        self._app = app
 
     def start(self):
         """Start the background cleanup thread."""
@@ -474,7 +478,12 @@ class FFmpegStreamService:
         # Trigger cleanup callback (e.g., to release connection)
         if stream.on_stream_closed:
             try:
-                stream.on_stream_closed(stream)
+                # Wrap in app context if available (needed for database access)
+                if self._app:
+                    with self._app.app_context():
+                        stream.on_stream_closed(stream)
+                else:
+                    stream.on_stream_closed(stream)
             except Exception as e:
                 logger.error(f"Error in stream close callback: {e}")
 
@@ -563,10 +572,14 @@ class FFmpegStreamService:
 _ffmpeg_service: Optional[FFmpegStreamService] = None
 
 
-def get_ffmpeg_service() -> FFmpegStreamService:
-    """Get the global FFmpegStreamService instance."""
+def get_ffmpeg_service(app: Optional["Flask"] = None) -> FFmpegStreamService:
+    """Get the global FFmpegStreamService instance.
+    
+    Args:
+        app: Flask app instance (optional, but required for database operations in callbacks)
+    """
     global _ffmpeg_service
     if _ffmpeg_service is None:
-        _ffmpeg_service = FFmpegStreamService()
+        _ffmpeg_service = FFmpegStreamService(app=app)
         _ffmpeg_service.start()
     return _ffmpeg_service

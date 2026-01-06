@@ -21,6 +21,22 @@ from services.xmltv_grabber_service import XmltvGrabberService
 
 logger = logging.getLogger(__name__)
 
+# Default EPG sync interval (fallback if not configured)
+DEFAULT_EPG_INTERVAL_HOURS = 12
+
+
+def get_epg_sync_interval() -> int:
+    """Get the configured EPG sync interval in hours."""
+    from models import SyncMetadata
+
+    try:
+        value = SyncMetadata.get("epg_sync_interval_hours")
+        if value:
+            return int(value)
+    except Exception:
+        pass
+    return DEFAULT_EPG_INTERVAL_HOURS
+
 
 class EpgSyncService:
     """Handles EPG synchronization from various sources"""
@@ -53,10 +69,39 @@ class EpgSyncService:
                 )
 
             xml_content = service.get_xmltv()
+            logger.info(f"Fetched {len(xml_content)} bytes of XMLTV from provider for source {source.id}")
+
             stats = EpgService.sync_epg_source(source, xml_content)
+            logger.info(f"Synced EPG channels for source {source.id}: {stats}")
 
             # Cache the raw XMLTV for EPG generation
             save_to_cache(source.id, xml_content)
+
+            # Sync program data to database
+            try:
+                from services.epg.programs import sync_programs_for_source
+
+                # Use EPG sync interval for preview hours on unmatched channels
+                preview_hours = get_epg_sync_interval()
+                program_stats = sync_programs_for_source(
+                    source,
+                    xml_content,
+                    preview_hours=preview_hours,
+                    load_all_for_matched=True,
+                )
+                logger.info(
+                    f"Synced EPG programs for source {source.id}: "
+                    f"added={program_stats.get('programs_added', 0)}, "
+                    f"updated={program_stats.get('programs_updated', 0)}, "
+                    f"deleted={program_stats.get('programs_deleted', 0)}, "
+                    f"channels={program_stats.get('channels_processed', 0)}"
+                )
+                stats["programs_added"] = program_stats.get("programs_added", 0)
+                stats["programs_updated"] = program_stats.get("programs_updated", 0)
+                stats["programs_deleted"] = program_stats.get("programs_deleted", 0)
+            except Exception as e:
+                logger.error(f"Failed to sync EPG programs for source {source.id}: {e}", exc_info=True)
+                # Don't fail the entire sync if program sync fails
 
             channels_synced = stats["channels_added"] + stats["channels_updated"]
             return (True, f"Synced {channels_synced} channels", stats)
@@ -92,11 +137,39 @@ class EpgSyncService:
             # Use 10 minute timeout for large XMLTV files from rate-limited servers
             response = requests.get(url, timeout=600)
             response.raise_for_status()
+            logger.info(f"Fetched {len(response.content)} bytes of XMLTV from URL for source {source.id}")
 
             stats = EpgService.sync_epg_source(source, response.content)
+            logger.info(f"Synced EPG channels for source {source.id}: {stats}")
 
             # Cache the raw XMLTV for EPG generation
             save_to_cache(source.id, response.content)
+
+            # Sync program data to database
+            try:
+                from services.epg.programs import sync_programs_for_source
+
+                # Use EPG sync interval for preview hours on unmatched channels
+                preview_hours = get_epg_sync_interval()
+                program_stats = sync_programs_for_source(
+                    source,
+                    response.content,
+                    preview_hours=preview_hours,
+                    load_all_for_matched=True,
+                )
+                logger.info(
+                    f"Synced EPG programs for source {source.id}: "
+                    f"added={program_stats.get('programs_added', 0)}, "
+                    f"updated={program_stats.get('programs_updated', 0)}, "
+                    f"deleted={program_stats.get('programs_deleted', 0)}, "
+                    f"channels={program_stats.get('channels_processed', 0)}"
+                )
+                stats["programs_added"] = program_stats.get("programs_added", 0)
+                stats["programs_updated"] = program_stats.get("programs_updated", 0)
+                stats["programs_deleted"] = program_stats.get("programs_deleted", 0)
+            except Exception as e:
+                logger.error(f"Failed to sync EPG programs for source {source.id}: {e}", exc_info=True)
+                # Don't fail the entire sync if program sync fails
 
             channels_synced = stats["channels_added"] + stats["channels_updated"]
             return (True, f"Synced {channels_synced} channels", stats)
@@ -137,6 +210,30 @@ class EpgSyncService:
 
             # Sync channels to EpgChannel records
             stats = _sync_sd_channels_to_epg(source, channels)
+            logger.info(f"Synced SD EPG channels for source {source.id}: {stats}")
+
+            # Sync program data from SD to database
+            try:
+                from services.epg.sd_programs import sync_sd_programs_for_source
+
+                program_stats = sync_sd_programs_for_source(
+                    source,
+                    sd_client,
+                    days_ahead=14,
+                    fetch_program_details=True,
+                    use_md5_cache=True,
+                )
+                logger.info(
+                    f"Synced SD programs for source {source.id}: "
+                    f"added={program_stats.get('programs_added', 0)}, "
+                    f"updated={program_stats.get('programs_updated', 0)}, "
+                    f"channels={program_stats.get('channels_processed', 0)}"
+                )
+                stats["programs_added"] = program_stats.get("programs_added", 0)
+                stats["programs_updated"] = program_stats.get("programs_updated", 0)
+            except Exception as e:
+                logger.error(f"Failed to sync SD programs for source {source.id}: {e}", exc_info=True)
+                # Don't fail the entire sync if program sync fails
 
             channels_synced = stats["channels_added"] + stats["channels_updated"]
             return (True, f"Synced {channels_synced} channels from Schedules Direct", stats)
@@ -183,9 +280,36 @@ class EpgSyncService:
                 return False, f"XMLTV grabber failed: {error}", {}
 
             stats = EpgService.sync_epg_source(source, xml_content)
+            logger.info(f"Synced EPG channels for source {source.id}: {stats}")
 
             # Cache the raw XMLTV for EPG generation
             save_to_cache(source.id, xml_content)
+
+            # Sync program data to database
+            try:
+                from services.epg.programs import sync_programs_for_source
+
+                # Use EPG sync interval for preview hours on unmatched channels
+                preview_hours = get_epg_sync_interval()
+                program_stats = sync_programs_for_source(
+                    source,
+                    xml_content,
+                    preview_hours=preview_hours,
+                    load_all_for_matched=True,
+                )
+                logger.info(
+                    f"Synced EPG programs for source {source.id}: "
+                    f"added={program_stats.get('programs_added', 0)}, "
+                    f"updated={program_stats.get('programs_updated', 0)}, "
+                    f"deleted={program_stats.get('programs_deleted', 0)}, "
+                    f"channels={program_stats.get('channels_processed', 0)}"
+                )
+                stats["programs_added"] = program_stats.get("programs_added", 0)
+                stats["programs_updated"] = program_stats.get("programs_updated", 0)
+                stats["programs_deleted"] = program_stats.get("programs_deleted", 0)
+            except Exception as e:
+                logger.error(f"Failed to sync EPG programs for source {source.id}: {e}", exc_info=True)
+                # Don't fail the entire sync if program sync fails
 
             channels_synced = stats["channels_added"] + stats["channels_updated"]
             return (True, f"Synced {channels_synced} channels", stats)

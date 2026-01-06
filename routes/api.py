@@ -43,6 +43,71 @@ def sync_all_accounts():
     return jsonify({"success": True, "accounts_synced": len(results), "results": results})
 
 
+@api_bp.route("/api/sync/epg", methods=["POST"])
+@handle_errors(return_json=True, default_message="Error syncing EPG sources")
+def sync_all_epg_sources():
+    """Sync all enabled EPG sources"""
+    from models import EpgSource
+    from services.epg_sync_service import EpgSyncService
+
+    sources = EpgSource.query.filter_by(enabled=True).all()
+    synced_count = 0
+    results = []
+
+    for source in sources:
+        # Capture source details before sync to avoid accessing expired objects
+        source_id = source.id
+        source_name = source.name
+
+        try:
+            success, message, stats = EpgSyncService.sync_source(source)
+            EpgSyncService.update_source_sync_status(source, success, message, stats)
+
+            if success:
+                synced_count += 1
+
+            results.append(
+                {
+                    "source_id": source_id,
+                    "source_name": source_name,
+                    "success": success,
+                    "message": message,
+                    "stats": stats,
+                }
+            )
+        except Exception as e:
+            # Rollback the session if there was a database error
+            db.session.rollback()
+
+            logger.error(f"Error syncing EPG source {source_name} (ID: {source_id}): {e}")
+            results.append(
+                {"source_id": source_id, "source_name": source_name, "success": False, "message": str(e), "stats": {}}
+            )
+
+    return jsonify({"success": True, "sources_synced": synced_count, "total_sources": len(sources), "results": results})
+
+
+@api_bp.route("/api/sync/fcc", methods=["POST"])
+@handle_errors(return_json=True, default_message="Error syncing FCC data")
+def sync_fcc_data():
+    """Sync FCC facility data"""
+    from services.fcc_facility_service import FccFacilityService
+
+    result = FccFacilityService.full_sync()
+
+    if result.get("success"):
+        stats = result.get("stats", {})
+        return jsonify(
+            {
+                "success": True,
+                "stats": stats,
+                "message": f"{stats.get('added', 0)} added, {stats.get('updated', 0)} updated, {stats.get('total', 0)} total facilities",
+            }
+        )
+    else:
+        return jsonify({"success": False, "error": result.get("message", "Unknown error")}), 500
+
+
 # ============================================================================
 # API Routes - Categories (Global)
 # ============================================================================
@@ -555,3 +620,129 @@ def start_scheduler():
     _scheduler.start()
     logger.info("Scheduler started via API")
     return jsonify({"success": True, "message": "Scheduler started"})
+
+
+# ============================================================================
+# API Routes - Dashboard Overview Stats
+# ============================================================================
+
+
+@api_bp.route("/api/overview/stats", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error fetching overview stats")
+def get_overview_stats():
+    """
+    Get comprehensive system statistics for dashboard overview.
+
+    Returns stats about:
+    - Accounts (total, enabled, synced)
+    - Channels (total, visible, hidden, PPV)
+    - EPG (sources, programs, coverage)
+    - Tags (total, usage)
+    - Scheduler (sync status and intervals)
+    """
+    from models import EpgChannel, EpgProgram, EpgSource, SyncMetadata
+    from services.epg_service import EpgService
+
+    stats = {}
+
+    # Account stats
+    total_accounts = Account.query.count()
+    enabled_accounts = Account.query.filter_by(enabled=True).count()
+    synced_accounts = Account.query.filter(Account.last_sync.isnot(None), Account.last_sync_status == "success").count()
+
+    stats["accounts"] = {
+        "total": total_accounts,
+        "enabled": enabled_accounts,
+        "synced": synced_accounts,
+        "disabled": total_accounts - enabled_accounts,
+    }
+
+    # Channel stats
+    total_channels = Channel.query.filter_by(is_active=True).count()
+    visible_channels = Channel.query.filter_by(is_active=True, is_visible=True).count()
+    ppv_channels = Channel.query.filter_by(is_active=True, is_ppv=True).count()
+
+    stats["channels"] = {
+        "total": total_channels,
+        "visible": visible_channels,
+        "hidden": total_channels - visible_channels,
+        "ppv": ppv_channels,
+    }
+
+    # Category stats
+    total_categories = Category.query.count()
+    stats["categories"] = {
+        "total": total_categories,
+    }
+
+    # Tag stats
+    total_tags = Tag.query.count()
+    tagged_channels = db.session.query(ChannelTag.stream_id).distinct().count()
+
+    stats["tags"] = {
+        "total": total_tags,
+        "tagged_channels": tagged_channels,
+    }
+
+    # EPG stats
+    total_epg_sources = EpgSource.query.count()
+    enabled_epg_sources = EpgSource.query.filter_by(enabled=True).count()
+    total_epg_channels = EpgChannel.query.count()
+    total_epg_programs = EpgProgram.query.count()
+
+    # EPG coverage
+    try:
+        coverage_stats = EpgService.get_epg_coverage_stats()
+        epg_coverage_pct = coverage_stats.get("coverage_percentage", 0)
+        mapped_channels = coverage_stats.get("channels_with_epg", 0)
+    except Exception:
+        epg_coverage_pct = 0
+        mapped_channels = 0
+
+    stats["epg"] = {
+        "sources": {
+            "total": total_epg_sources,
+            "enabled": enabled_epg_sources,
+        },
+        "channels": total_epg_channels,
+        "programs": total_epg_programs,
+        "coverage": {
+            "percentage": round(epg_coverage_pct, 1),
+            "mapped_channels": mapped_channels,
+        },
+    }
+
+    # Scheduler stats
+    if _scheduler:
+        scheduler_status = _scheduler.get_status()
+        stats["scheduler"] = {
+            "running": scheduler_status.get("running", False),
+            "intervals": {
+                "accounts": scheduler_status.get("syncs", {}).get("accounts", {}).get("interval_hours"),
+                "epg": scheduler_status.get("syncs", {}).get("epg", {}).get("interval_hours"),
+                "fcc": scheduler_status.get("syncs", {}).get("fcc", {}).get("interval_hours"),
+            },
+            "next_syncs": {
+                "accounts": scheduler_status.get("syncs", {}).get("accounts", {}).get("next_sync"),
+                "epg": scheduler_status.get("syncs", {}).get("epg", {}).get("next_sync"),
+            },
+            "last_syncs": {
+                "accounts": scheduler_status.get("syncs", {}).get("accounts", {}).get("last_sync"),
+                "epg": scheduler_status.get("syncs", {}).get("epg", {}).get("last_sync"),
+            },
+        }
+    else:
+        stats["scheduler"] = {"running": False}
+
+    # Sync metadata (additional context)
+    try:
+        last_account_sync = SyncMetadata.get("last_account_sync")
+        last_epg_sync = SyncMetadata.get("last_epg_sync")
+        stats["last_full_sync"] = {
+            "accounts": last_account_sync,
+            "epg": last_epg_sync,
+        }
+    except Exception:
+        pass
+
+    return jsonify(stats)

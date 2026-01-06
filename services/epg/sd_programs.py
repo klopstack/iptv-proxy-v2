@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_DAYS_AHEAD = 14
 DEFAULT_BATCH_SIZE = 500
 
+# Schedules Direct supports up to 5000 stations per schedule request
+SD_SCHEDULE_BATCH_SIZE = 5000
+
 
 def get_sd_station_ids_for_source(source_id: int) -> Dict[str, int]:
     """
@@ -215,17 +218,20 @@ def sync_sd_programs_for_source(
     sd_client: Any,  # SchedulesDirectClient
     days_ahead: int = DEFAULT_DAYS_AHEAD,
     fetch_program_details: bool = True,
+    use_md5_cache: bool = True,
 ) -> Dict[str, int]:
     """
     Sync program data from Schedules Direct to the database.
 
-    This is the main entry point for SD program syncing.
+    This is the main entry point for SD program syncing. Uses MD5 hashing
+    to only fetch schedules that have changed since last sync.
 
     Args:
         source: The EpgSource with type='schedules_direct'
         sd_client: Authenticated SchedulesDirectClient instance
         days_ahead: Number of days of schedule data to fetch
         fetch_program_details: Whether to fetch detailed program info
+        use_md5_cache: Whether to use MD5 caching to skip unchanged schedules
 
     Returns:
         Dict with sync statistics
@@ -239,6 +245,8 @@ def sync_sd_programs_for_source(
         "channels_processed": 0,
         "schedules_fetched": 0,
         "programs_fetched": 0,
+        "schedules_skipped_cached": 0,
+        "md5_checks_performed": 0,
     }
 
     # Get station ID -> epg_channel.id mapping
@@ -254,17 +262,52 @@ def sync_sd_programs_for_source(
     today = datetime.now(timezone.utc).replace(tzinfo=None)
     dates = [(today + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days_ahead)]
 
-    # Fetch schedules in batches (SD recommends not too many stations at once)
-    batch_size = 500
+    # Check MD5 hashes if caching is enabled
+    md5_map: Dict[str, Dict[str, Dict]] = {}  # station_id -> date -> {md5, lastModified}
+    stations_to_fetch: List[str] = station_ids
+
+    if use_md5_cache:
+        logger.info("Checking MD5 hashes for schedules...")
+        try:
+            # Fetch MD5s in batches (max 5000 per request)
+            for i in range(0, len(station_ids), SD_SCHEDULE_BATCH_SIZE):
+                batch = station_ids[i : i + SD_SCHEDULE_BATCH_SIZE]
+                md5_result = sd_client.get_schedule_md5s(batch, dates)
+                stats["md5_checks_performed"] += len(batch)
+
+                # Build MD5 map for comparison
+                for station_id, date_data in md5_result.items():
+                    if station_id not in md5_map:
+                        md5_map[station_id] = {}
+                    for date_str, date_info in date_data.items():
+                        if isinstance(date_info, dict):
+                            md5_map[station_id][date_str] = date_info
+
+            # Compare with cached MD5s and filter out unchanged schedules
+            stations_to_fetch = _filter_stations_by_md5(station_ids, station_map, md5_map, dates, stats)
+            logger.info(
+                f"MD5 check complete: {len(station_ids)} total, "
+                f"{len(stations_to_fetch)} need updates, "
+                f"{stats['schedules_skipped_cached']} cached"
+            )
+        except Exception as e:
+            logger.warning(f"MD5 check failed, fetching all schedules: {e}")
+            stations_to_fetch = station_ids
+
+    # Fetch schedules in batches (SD supports up to 5000 stations per request)
     all_schedule_entries: List[Tuple[int, Dict]] = []  # (epg_channel_id, schedule_entry)
     program_ids_to_fetch: Set[str] = set()
 
-    for i in range(0, len(station_ids), batch_size):
-        batch = station_ids[i : i + batch_size]
+    for i in range(0, len(stations_to_fetch), SD_SCHEDULE_BATCH_SIZE):
+        batch = stations_to_fetch[i : i + SD_SCHEDULE_BATCH_SIZE]
 
         try:
             schedules = sd_client.get_schedules(batch, dates)
             stats["schedules_fetched"] += len(schedules)
+
+            # Update MD5 cache for fetched schedules
+            if use_md5_cache:
+                _update_md5_cache(schedules, station_map, md5_map)
 
             for schedule in schedules:
                 station_id = schedule.get("stationID")
@@ -362,10 +405,132 @@ def sync_sd_programs_for_source(
     logger.info(
         f"SD program sync complete for source {source.id}: "
         f"added={stats['programs_added']}, updated={stats['programs_updated']}, "
-        f"deleted={stats['programs_deleted']}, channels={stats['channels_processed']}"
+        f"deleted={stats['programs_deleted']}, channels={stats['channels_processed']}, "
+        f"cached={stats['schedules_skipped_cached']}"
     )
 
     return stats
+
+
+def _filter_stations_by_md5(
+    station_ids: List[str],
+    station_map: Dict[str, int],
+    md5_map: Dict[str, Dict[str, Dict]],
+    dates: List[str],
+    stats: Dict[str, int],
+) -> List[str]:
+    """
+    Filter stations to only those with changed MD5s.
+
+    Args:
+        station_ids: All station IDs to check
+        station_map: Mapping of station_id -> epg_channel.id
+        md5_map: MD5 data from SD API: station_id -> date -> {md5, lastModified}
+        dates: Date strings to check
+        stats: Stats dict to update
+
+    Returns:
+        List of station IDs that need to be fetched
+    """
+    stations_to_fetch = []
+
+    for station_id in station_ids:
+        epg_channel_id = station_map.get(station_id)
+        if not epg_channel_id:
+            continue
+
+        # Get cached MD5 from database
+        epg_channel = EpgChannel.query.get(epg_channel_id)
+        if not epg_channel:
+            stations_to_fetch.append(station_id)
+            continue
+
+        cached_md5 = epg_channel.schedule_md5
+        if not cached_md5:
+            # No cache, need to fetch
+            stations_to_fetch.append(station_id)
+            continue
+
+        # Check if any date has a different MD5
+        station_md5_data = md5_map.get(station_id, {})
+        needs_update = False
+
+        for date_str in dates:
+            date_info = station_md5_data.get(date_str, {})
+            current_md5 = date_info.get("md5")
+
+            if not current_md5:
+                # No MD5 from SD, assume needs update
+                needs_update = True
+                break
+
+            if current_md5 != cached_md5:
+                # MD5 changed
+                needs_update = True
+                break
+
+        if needs_update:
+            stations_to_fetch.append(station_id)
+        else:
+            stats["schedules_skipped_cached"] += 1
+
+    return stations_to_fetch
+
+
+def _update_md5_cache(
+    schedules: List[Dict],
+    station_map: Dict[str, int],
+    md5_map: Dict[str, Dict[str, Dict]],
+) -> None:
+    """
+    Update the MD5 cache in the database for fetched schedules.
+
+    Args:
+        schedules: Schedule data from SD API
+        station_map: Mapping of station_id -> epg_channel.id
+        md5_map: MD5 data from SD API
+    """
+    for schedule in schedules:
+        station_id = schedule.get("stationID")
+        if not station_id:
+            continue
+
+        epg_channel_id = station_map.get(station_id)
+        if not epg_channel_id:
+            continue
+
+        epg_channel = EpgChannel.query.get(epg_channel_id)
+        if not epg_channel:
+            continue
+
+        # Get the most recent MD5 for this station
+        station_md5_data = md5_map.get(station_id, {})
+        if not station_md5_data:
+            continue
+
+        # Use the MD5 from the first date as the cache value
+        # (all dates should have same MD5 if schedule hasn't changed)
+        for date_info in station_md5_data.values():
+            if isinstance(date_info, dict):
+                new_md5 = date_info.get("md5")
+                last_modified_str = date_info.get("lastModified")
+
+                if new_md5:
+                    epg_channel.schedule_md5 = new_md5
+
+                if last_modified_str:
+                    try:
+                        # Parse ISO format: "2026-01-06T12:00:00Z"
+                        last_modified = datetime.fromisoformat(last_modified_str.replace("Z", "+00:00"))
+                        epg_channel.schedule_last_modified = last_modified.replace(tzinfo=None)
+                    except (ValueError, TypeError):
+                        pass
+
+                # Only need to update once per station
+                break
+
+    # Commit MD5 updates
+    db.session.commit()
 
 
 def _create_epg_program(epg_channel_id: int, data: Dict[str, Any]) -> EpgProgram:

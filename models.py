@@ -789,6 +789,10 @@ class EpgChannel(db.Model):  # type: ignore[name-defined]
     first_program = db.Column(db.DateTime)  # Earliest program start time
     last_program = db.Column(db.DateTime)  # Latest program end time
 
+    # Schedules Direct MD5 caching (for efficient updates)
+    schedule_md5 = db.Column(db.String(32))  # MD5 hash of schedule data
+    schedule_last_modified = db.Column(db.DateTime)  # When schedule was last modified per SD
+
     last_seen = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at = db.Column(

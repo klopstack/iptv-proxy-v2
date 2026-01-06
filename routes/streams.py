@@ -12,7 +12,7 @@ This module provides endpoints that:
 import logging
 from typing import Any, Dict, Generator, Tuple, Union
 
-from flask import Blueprint, Response, abort, render_template, request, stream_with_context
+from flask import Blueprint, Response, abort, current_app, render_template, request, stream_with_context
 from werkzeug.exceptions import HTTPException
 
 from models import Account, db
@@ -128,7 +128,7 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
     logger.debug(f"Account {account_id}: server={account.server}, user_agent={account.user_agent}")
 
     # Get stream service (ffmpeg or multiplexer based on STREAM_BACKEND env var)
-    stream_service = get_stream_service()
+    stream_service = get_stream_service(app=current_app._get_current_object())  # type: ignore[attr-defined]
 
     # Check if stream is already active (can join without needing a new credential)
     existing_stream = stream_service.get_active_stream(account_id, stream_id, format)
@@ -448,7 +448,7 @@ def multiplexer_stats():
     Shows active shared streams and subscriber counts.
     This is useful for monitoring how many upstream connections are being shared.
     """
-    stream_service = get_stream_service()
+    stream_service = get_stream_service(app=current_app._get_current_object())  # type: ignore[attr-defined]
     stats = stream_service.get_stats()
     return stats
 
@@ -460,7 +460,7 @@ def shared_streams():
 
     Returns details about each stream including subscriber count.
     """
-    stream_service = get_stream_service()
+    stream_service = get_stream_service(app=current_app._get_current_object())  # type: ignore[attr-defined]
     stats = stream_service.get_stats()
     return {
         "shared_streams": stats["streams"],
