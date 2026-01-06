@@ -7,8 +7,6 @@ work together correctly.
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
-
 from services.reverse_event_matcher.orchestrator import ReverseEventMatcher
 from services.thesportsdb_calendar_scraper import CalendarEvent
 

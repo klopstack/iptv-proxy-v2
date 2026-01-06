@@ -6,8 +6,6 @@ This service uses Event records created by ppv_calendar_enrichment_service.
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
-
 from models import Account, Channel, Event, EventChannelLink, db
 from services.ppv_visibility_service import PPVVisibilityService
 

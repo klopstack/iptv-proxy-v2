@@ -147,7 +147,7 @@ def analyze_match_patterns(account_id=None):
     # Sports with low average confidence
     low_avg_sports = [(s, st) for s, st in sorted_sports if st["avg_conf"] < 0.6]
     if low_avg_sports:
-        print(f"\n2. SPORTS WITH LOW AVERAGE CONFIDENCE")
+        print("\n2. SPORTS WITH LOW AVERAGE CONFIDENCE")
         print("   " + "-" * 116)
         for sport, stats in low_avg_sports:
             print(f"   • {sport}: avg {stats['avg_conf']:.3f} ({stats['count']} matches)")
@@ -156,7 +156,7 @@ def analyze_match_patterns(account_id=None):
     # High performers
     high_avg_sports = [(s, st) for s, st in sorted_sports if st["avg_conf"] >= 0.7 and st["count"] >= 10]
     if high_avg_sports:
-        print(f"\n3. HIGH PERFORMING SPORTS (Good Examples)")
+        print("\n3. HIGH PERFORMING SPORTS (Good Examples)")
         print("   " + "-" * 116)
         for sport, stats in high_avg_sports[:5]:
             print(f"   ✅ {sport}: avg {stats['avg_conf']:.3f} ({stats['count']} matches)")

@@ -2,8 +2,6 @@
 Tests for tag rule is_ppv field functionality
 """
 
-import pytest
-
 from models import Account, Category, Channel, RuleSet, TagRule, db
 from services.tag_service import TagService
 

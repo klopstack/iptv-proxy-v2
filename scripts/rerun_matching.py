@@ -38,7 +38,7 @@ def clear_existing_matches(account_id=None, dry_run=True):
 
     if dry_run:
         print("DRY RUN - No changes made")
-        print(f"Run with --clear-existing to delete these matches")
+        print("Run with --clear-existing to delete these matches")
         return 0
 
     for link in links:

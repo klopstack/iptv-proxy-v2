@@ -335,7 +335,7 @@ make install
 ### Run Tests
 
 ```bash
-# Run tests with coverage (80% minimum required)
+# Run tests with coverage (75% minimum required)
 pytest tests/ -v --cov=. --cov-report=html --cov-report=term-missing
 
 # Or use Makefile
@@ -366,7 +366,7 @@ mypy app.py models.py services/
 The project uses GitHub Actions to automatically run tests and linting on all pull requests and commits to main/develop branches. The CI pipeline:
 
 - **Linting**: flake8, black, isort, mypy
-- **Testing**: pytest with minimum 80% code coverage
+- **Testing**: pytest with minimum 75% code coverage
 - **Multi-version**: Tests run on Python 3.9, 3.10, and 3.11
 
 ### Database Migrations

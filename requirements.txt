@@ -8,3 +8,5 @@ marshmallow==3.20.1
 thesportsdb>=0.2.0
 beautifulsoup4>=4.12.0
 dateparser>=1.2.0
+# Sportsipy for North American sports data (maintained fork)
+sportsipy @ git+https://github.com/davidjkrause/sportsipy@master

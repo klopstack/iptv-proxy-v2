@@ -10,6 +10,7 @@ from flask import Blueprint, jsonify, redirect, request
 
 from error_handling import handle_errors
 from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Settings, Tag, XtreamCredential, db
+from services.epg.ppv import is_ppv_category
 from services.filter_service import FilterService
 from services.image_cache_service import ImageCacheService
 from services.ppv_visibility_service import PPVVisibilityService
@@ -43,11 +44,11 @@ def authenticate_xtream():
     playlist_config = None
 
     if xtream_cred.account_id:
-        account = Account.query.get(xtream_cred.account_id)
+        account = db.session.get(Account, xtream_cred.account_id)
         if not account or not account.enabled:
             return None, None, None
     elif xtream_cred.playlist_config_id:
-        playlist_config = PlaylistConfig.query.get(xtream_cred.playlist_config_id)
+        playlist_config = db.session.get(PlaylistConfig, xtream_cred.playlist_config_id)
         if not playlist_config or not playlist_config.enabled:
             return None, None, None
 
@@ -161,27 +162,47 @@ def get_live_categories(xtream_cred, account, playlist_config):
     """
     Return list of live stream categories
     Endpoint: /player_api.php?action=get_live_categories
+
+    PPV categories are nested under a virtual 'PPV Events' parent category.
+    Non-PPV categories have parent_id: 0
     """
     channels = get_channels_for_credential(xtream_cred, account, playlist_config)
 
     # Group channels by category
     category_ids = set()
     category_map = {}
+    ppv_category_ids = set()
     for ch in channels:
         if ch.category:
             category_ids.add(ch.category.id)
             if ch.category.id not in category_map:
                 category_map[ch.category.id] = ch.category
+                # Check if this is a PPV category
+                if is_ppv_category(ch.category.category_name):
+                    ppv_category_ids.add(ch.category.id)
 
     # Build category list
     categories = []
+
+    # Add virtual PPV Events parent category if there are PPV categories
+    if ppv_category_ids:
+        categories.append(
+            {
+                "category_id": "-1",
+                "category_name": "PPV Events",
+                "parent_id": 0,
+            }
+        )
+
+    # Add all categories (PPV categories will have parent_id: -1)
     for cat_id in sorted(category_ids):
         cat = category_map[cat_id]
+        parent_id = -1 if cat_id in ppv_category_ids else 0
         categories.append(
             {
                 "category_id": str(cat.id),
                 "category_name": cat.cleaned_name or cat.category_name,
-                "parent_id": 0,
+                "parent_id": parent_id,
             }
         )
 
@@ -194,13 +215,20 @@ def get_live_streams(xtream_cred, account, playlist_config):
     Return list of live streams
     Endpoint: /player_api.php?action=get_live_streams
     Query params: category_id (optional)
+
+    Special handling: category_id=-1 returns all PPV channels
     """
     category_id = request.args.get("category_id")
     channels = get_channels_for_credential(xtream_cred, account, playlist_config)
 
     # Filter by category if requested
     if category_id:
-        channels = [ch for ch in channels if ch.category and str(ch.category.id) == category_id]
+        if category_id == "-1":
+            # Virtual PPV Events category - return all PPV channels
+            channels = [ch for ch in channels if ch.category and is_ppv_category(ch.category.category_name)]
+        else:
+            # Regular category - return channels in that category
+            channels = [ch for ch in channels if ch.category and str(ch.category.id) == category_id]
 
     # Get proxy base URL
     proxy_base = get_proxy_base_url()
@@ -553,11 +581,11 @@ def xtream_live_stream(username, password, stream_id, ext="ts"):
     playlist_config = None
 
     if xtream_cred.account_id:
-        account = Account.query.get(xtream_cred.account_id)
+        account = db.session.get(Account, xtream_cred.account_id)
         if not account or not account.enabled:
             return jsonify({"error": "Account disabled"}), 403
     elif xtream_cred.playlist_config_id:
-        playlist_config = PlaylistConfig.query.get(xtream_cred.playlist_config_id)
+        playlist_config = db.session.get(PlaylistConfig, xtream_cred.playlist_config_id)
         if not playlist_config or not playlist_config.enabled:
             return jsonify({"error": "Playlist config disabled"}), 403
     else:

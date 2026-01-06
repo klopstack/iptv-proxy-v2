@@ -9,7 +9,7 @@ Covers:
 - Channel filtering and collapsing
 """
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -63,10 +63,10 @@ def test_channels(app, test_account, test_category):
             channel = Channel(
                 account_id=test_account.id,
                 stream_id=str(1000 + i),
-                name=f"Channel {i+1}",
-                cleaned_name=f"Channel {i+1}",
+                name=f"Channel {i + 1}",
+                cleaned_name=f"Channel {i + 1}",
                 category_id=test_category.id,
-                stream_icon=f"http://example.com/icon{i+1}.png",
+                stream_icon=f"http://example.com/icon{i + 1}.png",
                 is_active=True,
                 is_visible=True,
             )
@@ -168,7 +168,7 @@ class TestXtreamAuthentication:
         """Test authentication with disabled credential"""
         with app.app_context():
             # Fetch and update within same session
-            cred = XtreamCredential.query.get(xtream_credential.id)
+            cred = db.session.get(XtreamCredential, xtream_credential.id)
             cred.enabled = False
             db.session.commit()
 
@@ -182,7 +182,7 @@ class TestXtreamAuthentication:
         """Test authentication with disabled account"""
         with app.app_context():
             # Fetch and update within same session
-            acc = Account.query.get(test_account.id)
+            acc = db.session.get(Account, test_account.id)
             acc.enabled = False
             db.session.commit()
 
@@ -207,7 +207,7 @@ class TestXtreamAuthentication:
         """Test authentication with disabled playlist config"""
         with app.app_context():
             # Fetch and update within same session
-            config = PlaylistConfig.query.get(playlist_config.id)
+            config = db.session.get(PlaylistConfig, playlist_config.id)
             config.enabled = False
             db.session.commit()
 
@@ -594,7 +594,7 @@ class TestXtreamCredentialManagement:
             assert data["username"] == "xtream_user"
 
             # Verify update
-            updated = XtreamCredential.query.get(xtream_credential.id)
+            updated = db.session.get(XtreamCredential, xtream_credential.id)
             assert updated.password == "new_password"
             assert updated.use_filters is True
 
@@ -611,7 +611,7 @@ class TestXtreamCredentialManagement:
             assert response.status_code == 204
 
             # Verify deletion
-            deleted = XtreamCredential.query.get(xtream_credential.id)
+            deleted = db.session.get(XtreamCredential, xtream_credential.id)
             assert deleted is None
 
     def test_delete_credential_not_found(self, app, client):
@@ -729,7 +729,7 @@ class TestXtreamChannelFiltering:
             for i, quality in enumerate(["SD", "HD", "4K"]):
                 channel = Channel(
                     account_id=test_account.id,
-                    stream_id=f"{2000+i}",
+                    stream_id=f"{2000 + i}",
                     name=f"Test Channel {quality}",
                     cleaned_name="Test Channel",
                     category_id=test_category.id,

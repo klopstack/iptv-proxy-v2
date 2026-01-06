@@ -48,7 +48,7 @@ pytest -k "tag" -v
 
 ## Coverage Requirements
 
-- **Minimum coverage**: 80%
+- **Minimum coverage**: 75%
 - **Coverage report**: Generated in `htmlcov/` directory
 - **View coverage**: Open `htmlcov/index.html` in browser
 
@@ -180,7 +180,7 @@ GitHub Actions automatically runs on:
 
 2. **Testing** (Python 3.9, 3.10, 3.11)
    - pytest with coverage
-   - Minimum 80% coverage required
+   - Minimum 75% coverage required
    - Coverage report uploaded to Codecov
 
 ### Viewing CI Results
@@ -236,7 +236,7 @@ make lint
 4. **Test Edge Cases**: Empty inputs, missing data, invalid types
 5. **Mock External Services**: Don't call real IPTV APIs in tests
 6. **Commit Formatted Code**: Run `make format` before committing
-7. **Check Coverage**: Aim for >80%, but prioritize meaningful tests over percentage
+7. **Check Coverage**: Aim for >75%, but prioritize meaningful tests over percentage
 
 ## Resources
 

@@ -4,10 +4,8 @@ Tests for PPV Calendar Enrichment Service
 Comprehensive test coverage for the calendar-based PPV event enrichment workflow.
 """
 
-import threading
 from datetime import datetime, timezone
-from queue import Queue
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -434,7 +432,6 @@ class TestCreateOrUpdateEvent:
 
     def test_creates_new_event(self, app, db):
         """Test creating a new event from calendar data."""
-        from models import Event
 
         with app.app_context():
             service = PPVCalendarEnrichmentService(app)

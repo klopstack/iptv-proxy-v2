@@ -177,8 +177,6 @@ def _fetch_epg_from_external_source(source: EpgSource, account: Optional[Account
 
         elif source.source_type == "ppv_events":
             # PPV events are generated during sync from Event records
-            from services.ppv_epg_service import PPVEpgService
-
             logger.warning(f"PPV events EPG not cached for source {source.name} - run EPG sync")
             # Could optionally generate on-demand, but this defeats the caching purpose
             return None

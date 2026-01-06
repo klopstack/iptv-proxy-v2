@@ -140,7 +140,7 @@ class PPVEventExtractor:
         max_future = self.current_date + timedelta(days=365)
         return event_date > max_future
 
-    def extract_sport(self, channel_name: str) -> Optional[Tuple[str, str]]:
+    def extract_sport(self, channel_name: str) -> Tuple[Optional[str], str]:
         """
         Extract sport/event type from channel name.
 
@@ -197,7 +197,7 @@ class PPVEventExtractor:
             return None
 
         # First extract sport type to clean up the name
-        sport, cleaned_name = self.extract_sport(channel_name)
+        _, cleaned_name = self.extract_sport(channel_name)
 
         # Remove tournament structure patterns (Round 4 - Game 1, etc.) to avoid false matches
         cleaned_name = self._clean_tournament_structure(cleaned_name)

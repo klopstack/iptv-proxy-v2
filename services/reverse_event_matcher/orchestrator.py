@@ -26,7 +26,7 @@ from services.reverse_event_matcher.match_strategy import (
     WordMatchStrategy,
 )
 from services.reverse_event_matcher.text_processor import TextProcessor
-from services.thesportsdb_calendar_scraper import CalendarEvent, TheSportsDBCalendarScraper
+from services.thesportsdb_calendar_scraper import TheSportsDBCalendarScraper
 
 logger = logging.getLogger(__name__)
 

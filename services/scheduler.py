@@ -35,7 +35,13 @@ SYNC_KEY_FCC_INTERVAL = "fcc_sync_interval_hours"
 
 # PPV enrichment settings
 SYNC_KEY_LAST_PPV_ENRICHMENT = "last_ppv_enrichment"
+SYNC_KEY_LAST_PPV_PREFETCH = "last_ppv_prefetch"
 DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS = 1  # Run hourly to respect rate limits
+DEFAULT_PPV_PREFETCH_INTERVAL_HOURS = 6  # Pre-fetch event data every 6 hours
+
+# Sportsipy team data refresh settings
+SYNC_KEY_LAST_SPORTSIPY_REFRESH = "last_sportsipy_refresh"
+DEFAULT_SPORTSIPY_REFRESH_INTERVAL_HOURS = 168  # Weekly (7 days)
 
 
 class SyncScheduler:
@@ -253,11 +259,24 @@ class SyncScheduler:
                 self._sync_fcc_data()
                 self._set_last_sync_time(SYNC_KEY_LAST_FCC_SYNC)
 
+            # Check if PPV event pre-fetch is needed (every 6 hours)
+            # This loads event data for dates found in channels + 30 days ahead
+            if self._needs_sync(SYNC_KEY_LAST_PPV_PREFETCH, DEFAULT_PPV_PREFETCH_INTERVAL_HOURS):
+                logger.info("PPV event pre-fetch due (6 hour schedule)")
+                self._prefetch_ppv_events()
+                self._set_last_sync_time(SYNC_KEY_LAST_PPV_PREFETCH)
+
             # Check if PPV enrichment is needed (hourly, respects API rate limits)
             if self._needs_sync(SYNC_KEY_LAST_PPV_ENRICHMENT, DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS):
                 logger.info("PPV enrichment due (hourly schedule)")
                 self._enrich_ppv_events()
                 self._set_last_sync_time(SYNC_KEY_LAST_PPV_ENRICHMENT)
+
+            # Check if sportsipy team data refresh is needed (weekly)
+            if self._needs_sync(SYNC_KEY_LAST_SPORTSIPY_REFRESH, DEFAULT_SPORTSIPY_REFRESH_INTERVAL_HOURS):
+                logger.info("Sportsipy team data refresh due (weekly schedule)")
+                self._refresh_sportsipy_teams()
+                self._set_last_sync_time(SYNC_KEY_LAST_SPORTSIPY_REFRESH)
 
             # Run channel health scanning (runs continuously when idle)
             self._scan_channel_health()
@@ -496,6 +515,35 @@ class SyncScheduler:
             logger.warning(f"Unknown EPG source type: {source.source_type}")
             return None
 
+    def _prefetch_ppv_events(self):
+        """
+        Pre-fetch event data for PPV matching.
+
+        Runs every 6 hours. Extracts dates from PPV channel names and
+        fetches event data for those dates plus 30 days ahead.
+        This ensures event data is available before matching is attempted.
+        """
+        try:
+            from services.enhanced_ppv_matcher import EnhancedPPVMatcher
+
+            logger.info("Starting PPV event data pre-fetch")
+
+            stats = EnhancedPPVMatcher.prefetch_all_accounts(
+                days_ahead=30,
+                days_back=7,
+            )
+
+            logger.info(
+                f"PPV pre-fetch complete: "
+                f"{stats.get('total_dates', 0)} dates checked, "
+                f"{stats.get('newly_fetched', 0)} newly fetched, "
+                f"{stats.get('already_cached', 0)} already cached, "
+                f"{stats.get('total_events', 0)} total events"
+            )
+
+        except Exception as e:
+            logger.error(f"Error pre-fetching PPV events: {e}", exc_info=True)
+
     def _enrich_ppv_events(self):
         """
         Enrich PPV events using calendar-based scraping.
@@ -558,5 +606,127 @@ class SyncScheduler:
             if total_stats["matched"] > 0:
                 service.start_detail_fetcher()
 
+            # Run enhanced matching for channels that failed standard enrichment
+            if total_stats["no_match"] > 0:
+                self._run_enhanced_ppv_matching()
+
         except Exception as e:
             logger.error(f"Error enriching PPV events: {e}", exc_info=True)
+
+    def _run_enhanced_ppv_matching(self):
+        """
+        Run enhanced PPV matching for channels that failed standard enrichment.
+
+        This uses additional strategies like direct API lookup, sportsipy,
+        and multi-format date extraction.
+        """
+        try:
+            from models import Account, Channel, db
+            from services.enhanced_ppv_matcher import get_enhanced_ppv_matcher
+
+            logger.info("Running enhanced PPV matching for unmatched channels")
+
+            matcher = get_enhanced_ppv_matcher()
+            matcher.reset_stats()
+
+            # Get accounts
+            accounts = Account.query.filter_by(enabled=True).all()
+            total_matched = 0
+
+            for account in accounts:
+                # Get PPV channels that failed normal matching but aren't placeholders
+                channels = (
+                    Channel.query.filter(
+                        Channel.account_id == account.id,
+                        Channel.is_ppv.is_(True),
+                        Channel.ppv_enrichment_status == "no_match",
+                        ~Channel.name.like("%NO EVENT STREAMING%"),
+                    )
+                    .limit(50)  # Smaller batch for enhanced matching (more expensive)
+                    .all()
+                )
+
+                if not channels:
+                    continue
+
+                logger.info(f"Enhanced matching for {len(channels)} channels in {account.name}")
+
+                # Try enhanced matching for each channel
+                for channel in channels:
+                    try:
+                        result = matcher.find_match(channel.name)
+                        if result:
+                            event, confidence, method = result
+                            logger.info(
+                                f"Enhanced match for '{channel.name}': "
+                                f"'{event.get('strEvent', 'Unknown')}' "
+                                f"(confidence: {confidence:.2f}, method: {method})"
+                            )
+                            # Update channel status
+                            channel.ppv_enrichment_status = "matched"
+                            channel.matched_event_id = event.get("idEvent")
+                            channel.matched_event_name = event.get("strEvent")
+                            total_matched += 1
+                    except Exception as e:
+                        logger.warning(f"Enhanced matching error for '{channel.name}': {e}")
+
+                db.session.commit()
+
+            stats = matcher.get_stats()
+            logger.info(
+                f"Enhanced PPV matching complete: "
+                f"{total_matched} newly matched, "
+                f"strategy breakdown - "
+                f"reverse: {stats.get('reverse_match', 0)}, "
+                f"calendar: {stats.get('calendar_search', 0)}, "
+                f"direct: {stats.get('direct_lookup', 0)}, "
+                f"sportsipy: {stats.get('sportsipy_match', 0)}"
+            )
+
+        except Exception as e:
+            logger.error(f"Error in enhanced PPV matching: {e}", exc_info=True)
+
+    def _refresh_sportsipy_teams(self):
+        """
+        Refresh sports team data from sportsipy.
+
+        Runs weekly. Updates team names and abbreviations in the database
+        for use in PPV channel matching. Includes delays to avoid
+        Sports Reference rate limiting.
+        """
+        try:
+            from services.sportsipy_service import (
+                get_sportsipy_service,
+                refresh_teams_from_sportsipy,
+                seed_initial_team_data,
+            )
+
+            logger.info("Starting sportsipy team data refresh")
+
+            # Seed initial data if empty
+            seed_result = seed_initial_team_data()
+            if seed_result.get("teams_added", 0) > 0:
+                logger.info(f"Seeded {seed_result['teams_added']} initial teams")
+
+            # Refresh from sportsipy with rate limiting delays
+            result = refresh_teams_from_sportsipy(
+                sports=["nfl", "nba", "nhl", "mlb"],
+                delay_seconds=3.0,  # 3 second delay between sports
+            )
+
+            if result.get("success"):
+                logger.info(
+                    f"Sportsipy refresh complete: "
+                    f"{result.get('teams_added', 0)} added, "
+                    f"{result.get('teams_updated', 0)} updated, "
+                    f"sports: {result.get('sports_processed', [])}"
+                )
+
+                # Reload team data in service
+                service = get_sportsipy_service()
+                service.reload_team_data()
+            else:
+                logger.warning(f"Sportsipy refresh had issues: {result.get('errors', [])}")
+
+        except Exception as e:
+            logger.error(f"Error refreshing sportsipy teams: {e}", exc_info=True)

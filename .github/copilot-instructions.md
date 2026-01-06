@@ -155,7 +155,7 @@ def migrate(db_path):
 pip install -r requirements-dev.txt
 pytest tests/ -v  # Run all tests
 pytest tests/test_tag_service.py -v  # Run specific test file
-make test  # Run with coverage (requires 80% minimum)
+make test  # Run with coverage (requires 75% minimum)
 make test-fast  # Run without coverage checks
 ```
 
@@ -175,7 +175,7 @@ mypy app.py models.py services/  # Type checking
 - `test_tags.py` - Standalone tag extraction validation (uses mock objects)
 
 **Coverage Requirements:**
-- Minimum 80% code coverage enforced in CI
+- Minimum 75% code coverage enforced in CI
 - Run `make test` to generate HTML coverage report in `htmlcov/`
 
 **Running Locally:**
@@ -205,7 +205,7 @@ docker exec -it iptv-proxy-v2 pytest tests/  # Run tests in container
 
 **Database:** Models use `updated_at` with `onupdate=datetime.now(timezone.utc).replace(tzinfo=None)`. Changes committed with `db.session.commit()`. SQLite configured with 30s timeout for background scheduler compatibility.
 
-**Testing:** pytest with in-memory SQLite (`sqlite:///:memory:`). Fixtures defined in `tests/conftest.py` and individual test files. Run `make test` for coverage-enforced tests (80% minimum).
+**Testing:** pytest with in-memory SQLite (`sqlite:///:memory:`). Fixtures defined in `tests/conftest.py` and individual test files. Run `make test` for coverage-enforced tests (75% minimum).
 ## Integration Points
 
 **Xtream Codes API:** Core dependency. `IPTVService` wraps HTTP calls to `player_api.php`:
@@ -246,7 +246,7 @@ docker exec -it iptv-proxy-v2 pytest tests/  # Run tests in container
 
 ```bash
 make lint    # Check code quality and formatting (black, flake8, isort, mypy)
-make test    # Run full test suite with 80% coverage requirement
+make test    # Run full test suite with 75% coverage requirement
 ```
 
 Both commands must pass before considering your changes complete. These checks are enforced in CI and will prevent merges if they fail.

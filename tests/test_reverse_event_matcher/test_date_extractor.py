@@ -2,8 +2,6 @@
 
 from datetime import datetime
 
-import pytest
-
 from services.reverse_event_matcher.date_extractor import DateExtractor
 
 

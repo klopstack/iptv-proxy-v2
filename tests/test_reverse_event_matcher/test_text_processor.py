@@ -1,7 +1,5 @@
 """Tests for TextProcessor component."""
 
-import pytest
-
 from services.reverse_event_matcher.text_processor import TextProcessor
 
 

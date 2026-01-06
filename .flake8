@@ -21,10 +21,11 @@ ignore = E203,E501,W503
 
 # Per-file ignores:
 # app.py E402: Flask application factory pattern requires imports after app initialization
-# test files/migrate_tags/conftest E402: Import after sys.path manipulation for test/migration setup
+# test files/scripts E402: Imports after sys.path manipulation for test/script setup
 per-file-ignores =
     app.py:E402
     migrate_tags.py:E402
     test_tags.py:E402
     tests/conftest.py:E402
     tests/test_*.py:E402
+    scripts/*.py:E402

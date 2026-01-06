@@ -31,7 +31,7 @@ def analyze_matching_stats(account_id=None, min_confidence=0.35):
     query = Channel.query
     if account_id:
         query = query.filter_by(account_id=account_id)
-        account = Account.query.get(account_id)
+        account = db.session.get(Account, account_id)
         print(f"Account: {account.name if account else 'Unknown'} (ID: {account_id})")
     else:
         print("Account: All accounts")
@@ -83,32 +83,34 @@ def analyze_matching_stats(account_id=None, min_confidence=0.35):
 
     print("MATCHING RESULTS")
     print("-" * 80)
-    print(f"Matched channels:   {matched_count:5d} ({matched_count/total_ppv*100:5.1f}%)")
-    print(f"Unmatched channels: {unmatched_count:5d} ({unmatched_count/total_ppv*100:5.1f}%)")
+    print(f"Matched channels:   {matched_count:5d} ({matched_count / total_ppv * 100:5.1f}%)")
+    print(f"Unmatched channels: {unmatched_count:5d} ({unmatched_count / total_ppv * 100:5.1f}%)")
     print()
 
     print("CONFIDENCE DISTRIBUTION (Matched Channels)")
     print("-" * 80)
     print(
-        f"High confidence   (≥0.70): {confidence_buckets['high']:5d} ({confidence_buckets['high']/total_ppv*100:5.1f}%)"
+        f"High confidence   (≥0.70): {confidence_buckets['high']:5d} ({confidence_buckets['high'] / total_ppv * 100:5.1f}%)"
     )
     print(
-        f"Medium confidence (≥0.60): {confidence_buckets['medium']:5d} ({confidence_buckets['medium']/total_ppv*100:5.1f}%)"
+        f"Medium confidence (≥0.60): {confidence_buckets['medium']:5d} ({confidence_buckets['medium'] / total_ppv * 100:5.1f}%)"
     )
     print(
-        f"Low confidence    (≥{min_confidence:.2f}): {confidence_buckets['low']:5d} ({confidence_buckets['low']/total_ppv*100:5.1f}%)"
+        f"Low confidence    (≥{min_confidence:.2f}): {confidence_buckets['low']:5d} ({confidence_buckets['low'] / total_ppv * 100:5.1f}%)"
     )
     print(
-        f"Very low          (<{min_confidence:.2f}): {confidence_buckets['very_low']:5d} ({confidence_buckets['very_low']/total_ppv*100:5.1f}%)"
+        f"Very low          (<{min_confidence:.2f}): {confidence_buckets['very_low']:5d} ({confidence_buckets['very_low'] / total_ppv * 100:5.1f}%)"
     )
     print()
 
     print("UNMATCHED BREAKDOWN")
     print("-" * 80)
     print(
-        f"With competitors (vs/v/@): {unmatched_with_competitors:5d} ({unmatched_with_competitors/total_ppv*100:5.1f}%)"
+        f"With competitors (vs/v/@): {unmatched_with_competitors:5d} ({unmatched_with_competitors / total_ppv * 100:5.1f}%)"
     )
-    print(f"No competitors detected:   {unmatched_no_competitors:5d} ({unmatched_no_competitors/total_ppv*100:5.1f}%)")
+    print(
+        f"No competitors detected:   {unmatched_no_competitors:5d} ({unmatched_no_competitors / total_ppv * 100:5.1f}%)"
+    )
     print()
 
     # Event statistics
@@ -130,10 +132,10 @@ def analyze_matching_stats(account_id=None, min_confidence=0.35):
     print("-" * 80)
     print(f"Total events in database:     {total_events:5d}")
     print(
-        f"Events with channel links:    {linked_events:5d} ({linked_events/total_events*100 if total_events else 0:5.1f}%)"
+        f"Events with channel links:    {linked_events:5d} ({linked_events / total_events * 100 if total_events else 0:5.1f}%)"
     )
     print(
-        f"Events with no channel links: {unlinked_events:5d} ({unlinked_events/total_events*100 if total_events else 0:5.1f}%)"
+        f"Events with no channel links: {unlinked_events:5d} ({unlinked_events / total_events * 100 if total_events else 0:5.1f}%)"
     )
     print(f"Upcoming events (future):     {recent_events:5d}")
     print()

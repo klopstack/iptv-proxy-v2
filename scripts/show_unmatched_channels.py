@@ -7,16 +7,14 @@ grouped by failure reason to help identify improvement opportunities.
 """
 
 import argparse
-import re
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 # Add parent directory to path to import app modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app import app
-from models import Channel, EventChannelLink, db
+from models import Channel
 from services.ppv_event_extractor import PPVEventExtractor
 from services.reverse_event_matcher.date_extractor import DateExtractor
 

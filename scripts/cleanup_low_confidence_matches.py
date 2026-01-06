@@ -102,7 +102,7 @@ def cleanup_low_confidence_matches(db_path: str, threshold: float = 0.35, dry_ru
                 """
             )
             stats = cursor.fetchone()
-            print(f"\nRemaining event-channel links:")
+            print("\nRemaining event-channel links:")
             print(f"  Total: {stats[0]}")
             print(f"  Avg confidence: {stats[1]:.2f}")
             print(f"  Range: {stats[2]:.2f} - {stats[3]:.2f}")

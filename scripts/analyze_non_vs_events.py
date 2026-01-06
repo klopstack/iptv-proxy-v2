@@ -27,7 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app import app
-from models import Channel, db
+from models import Channel
 
 # Patterns for identifying non-vs event types
 NON_VS_PATTERNS = {
@@ -204,12 +204,14 @@ def analyze_non_vs_events(account_id=None, show_examples=True):
     placeholder_count = len(categories.get("placeholder", []))
 
     print(
-        f"Placeholder channels (generic + numbered):  {placeholder_count:5d} ({placeholder_count/len(unmatched)*100:5.1f}%)"
+        f"Placeholder channels (generic + numbered):  {placeholder_count:5d} ({placeholder_count / len(unmatched) * 100:5.1f}%)"
     )
     print(
-        f"Likely vs events (no match found):          {likely_vs_events:5d} ({likely_vs_events/len(unmatched)*100:5.1f}%)"
+        f"Likely vs events (no match found):          {likely_vs_events:5d} ({likely_vs_events / len(unmatched) * 100:5.1f}%)"
     )
-    print(f"Likely non-vs content (identified):         {likely_non_vs:5d} ({likely_non_vs/len(unmatched)*100:5.1f}%)")
+    print(
+        f"Likely non-vs content (identified):         {likely_non_vs:5d} ({likely_non_vs / len(unmatched) * 100:5.1f}%)"
+    )
     print()
 
     # Breakdown of non-vs

@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app import app
-from models import Event, EventChannelLink, db
+from models import Event, EventChannelLink
 
 
 def show_unmatched_events(min_age_days=0, max_age_days=30):
@@ -100,8 +100,8 @@ def show_unmatched_events(min_age_days=0, max_age_days=30):
 
     print("\nTIME DISTRIBUTION")
     print("-" * 120)
-    print(f"Past events:   {past:5d} ({past/len(unmatched)*100:5.1f}%)")
-    print(f"Future events: {future:5d} ({future/len(unmatched)*100:5.1f}%)")
+    print(f"Past events:   {past:5d} ({past / len(unmatched) * 100:5.1f}%)")
+    print(f"Future events: {future:5d} ({future / len(unmatched) * 100:5.1f}%)")
 
     # Recommendations
     print("\nRECOMMENDATIONS")

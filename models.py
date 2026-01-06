@@ -3,6 +3,7 @@ Database models for IPTV Proxy
 """
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from flask_sqlalchemy import SQLAlchemy
 
@@ -35,9 +36,12 @@ class SyncMetadata(db.Model):  # type: ignore[name-defined]
 
         for attempt in range(max_retries):
             try:
-                record = SyncMetadata.query.filter_by(key=key).first()
+                record = db.session.execute(db.select(SyncMetadata).filter_by(key=key)).scalar_one_or_none()
                 return record.value if record else default
             except OperationalError as e:
+                # Handle "no such table" during tests or initial setup
+                if "no such table" in str(e):
+                    return default
                 if "database is locked" in str(e) and attempt < max_retries - 1:
                     time.sleep(retry_delay * (attempt + 1))  # Exponential backoff
                     continue
@@ -55,7 +59,7 @@ class SyncMetadata(db.Model):  # type: ignore[name-defined]
 
         for attempt in range(max_retries):
             try:
-                record = SyncMetadata.query.filter_by(key=key).first()
+                record = db.session.execute(db.select(SyncMetadata).filter_by(key=key)).scalar_one_or_none()
                 if record:
                     record.value = value
                     record.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -65,6 +69,9 @@ class SyncMetadata(db.Model):  # type: ignore[name-defined]
                 db.session.commit()
                 break  # Success, exit retry loop
             except OperationalError as e:
+                # Handle "no such table" during tests or initial setup
+                if "no such table" in str(e):
+                    return None
                 if "database is locked" in str(e) and attempt < max_retries - 1:
                     time.sleep(retry_delay * (attempt + 1))  # Exponential backoff
                     continue
@@ -2114,3 +2121,114 @@ class XtreamCredential(db.Model):  # type: ignore[name-defined]
     def __repr__(self):
         source = f"account={self.account_id}" if self.account_id else f"config={self.playlist_config_id}"
         return f"<XtreamCredential {self.username} ({source})>"
+
+
+class SportsTeam(db.Model):  # type: ignore[name-defined]
+    """
+    Sports team data for PPV channel matching.
+
+    Stores team names and abbreviations from sportsipy or manual entry.
+    Data can be refreshed from sportsipy on a schedule.
+    """
+
+    __tablename__ = "sports_teams"
+
+    # Supported sports/leagues
+    SPORT_NFL = "nfl"
+    SPORT_NBA = "nba"
+    SPORT_NHL = "nhl"
+    SPORT_MLB = "mlb"
+    SPORT_NCAAF = "ncaaf"
+    SPORT_NCAAB = "ncaab"
+
+    SPORTS = [SPORT_NFL, SPORT_NBA, SPORT_NHL, SPORT_MLB, SPORT_NCAAF, SPORT_NCAAB]
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Team identification
+    sport = db.Column(db.String(20), nullable=False, index=True)  # nfl, nba, nhl, mlb, ncaaf, ncaab
+    abbreviation = db.Column(db.String(50), nullable=False, index=True)  # Team abbreviation (sportsipy format)
+    name = db.Column(db.String(200), nullable=False, index=True)  # Full team name
+
+    # Aliases for matching (JSON array of lowercase strings)
+    # e.g., ["patriots", "new england patriots", "pats", "ne"]
+    aliases = db.Column(db.Text)  # JSON array
+
+    # Team metadata
+    city = db.Column(db.String(100))
+    conference = db.Column(db.String(100))
+    division = db.Column(db.String(100))
+
+    # Data source tracking
+    source = db.Column(db.String(50), default="sportsipy")  # sportsipy, manual, import
+    last_updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
+    __table_args__ = (
+        db.UniqueConstraint("sport", "abbreviation", name="uq_sports_team_sport_abbrev"),
+        db.Index("idx_sports_team_sport", "sport"),
+        db.Index("idx_sports_team_name", "name"),
+    )
+
+    def get_aliases(self) -> list:
+        """Get aliases as a list."""
+        import json
+
+        if not self.aliases:
+            return []
+        try:
+            return json.loads(self.aliases)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    def set_aliases(self, aliases: list):
+        """Set aliases from a list."""
+        import json
+
+        self.aliases = json.dumps(aliases) if aliases else None
+
+    def add_alias(self, alias: str):
+        """Add an alias if not already present."""
+        aliases = self.get_aliases()
+        alias_lower = alias.lower().strip()
+        if alias_lower and alias_lower not in aliases:
+            aliases.append(alias_lower)
+            self.set_aliases(aliases)
+
+    @classmethod
+    def get_team_mapping(cls, sport: str) -> dict:
+        """
+        Get a mapping of team aliases to abbreviations for a sport.
+
+        Returns: Dict[str, str] mapping lowercase alias -> abbreviation
+        """
+        teams = cls.query.filter_by(sport=sport.lower()).all()
+        mapping = {}
+        for team in teams:
+            # Add full name as key
+            mapping[team.name.lower()] = team.abbreviation
+            # Add all aliases
+            for alias in team.get_aliases():
+                mapping[alias] = team.abbreviation
+        return mapping
+
+    @classmethod
+    def get_all_team_names(cls, sport: Optional[str] = None) -> set:
+        """Get all team names and aliases for regex pattern building."""
+        if sport:
+            teams = cls.query.filter_by(sport=sport.lower()).all()
+        else:
+            teams = cls.query.all()
+
+        names = set()
+        for team in teams:
+            names.add(team.name)
+            names.update(team.get_aliases())
+        return names
+
+    def __repr__(self):
+        return f"<SportsTeam {self.sport.upper()}: {self.name} ({self.abbreviation})>"

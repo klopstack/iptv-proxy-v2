@@ -9,7 +9,7 @@ throughout the ReverseEventMatcher class.
 """
 
 from collections import defaultdict
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List
 
 from services.reverse_event_matcher.text_processor import TextProcessor
 from services.thesportsdb_calendar_scraper import CalendarEvent

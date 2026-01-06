@@ -15,7 +15,6 @@ from typing import List, Optional, Set
 from zoneinfo import ZoneInfo
 
 from services.reverse_event_matcher.match_strategy import MatchResult
-from services.thesportsdb_calendar_scraper import CalendarEvent
 
 logger = logging.getLogger(__name__)
 
