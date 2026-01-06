@@ -535,16 +535,9 @@ class TestStationsRoutes:
     """Tests for the stations blueprint routes"""
 
     @pytest.fixture
-    def client(self):
+    def client_with_facilities(self, app):
         """Create test client with database"""
-        from app import app
-
-        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-        app.config["TESTING"] = True
-
         with app.app_context():
-            db.create_all()
-
             # Add test facilities
             facilities = [
                 FccFacility(
@@ -572,22 +565,18 @@ class TestStationsRoutes:
                 db.session.add(f)
             db.session.commit()
 
-            with app.test_client() as client:
-                yield client
+            yield app.test_client()
 
-            db.session.remove()
-            db.drop_all()
-
-    def test_get_fcc_stats(self, client):
+    def test_get_fcc_stats(self, client_with_facilities):
         """Test FCC stats endpoint"""
-        response = client.get("/api/fcc/facilities/stats")
+        response = client_with_facilities.get("/api/fcc/facilities/stats")
         assert response.status_code == 200
         data = response.get_json()
         assert data["total_facilities"] == 2
 
-    def test_lookup_callsign(self, client):
+    def test_lookup_callsign(self, client_with_facilities):
         """Test callsign lookup endpoint"""
-        response = client.get("/api/fcc/facilities/lookup/callsign/KABC-TV")
+        response = client_with_facilities.get("/api/fcc/facilities/lookup/callsign/KABC-TV")
         assert response.status_code == 200
         data = response.get_json()
         assert data["callsign"] == "KABC-TV"
@@ -595,53 +584,53 @@ class TestStationsRoutes:
         assert data["state"] == "CA"
         assert data["network"] == "ABC"
 
-    def test_lookup_callsign_not_found(self, client):
+    def test_lookup_callsign_not_found(self, client_with_facilities):
         """Test callsign lookup for non-existent station"""
-        response = client.get("/api/fcc/facilities/lookup/callsign/XXXX")
+        response = client_with_facilities.get("/api/fcc/facilities/lookup/callsign/XXXX")
         assert response.status_code == 404
 
-    def test_lookup_city(self, client):
+    def test_lookup_city(self, client_with_facilities):
         """Test city lookup endpoint"""
-        response = client.get("/api/fcc/facilities/lookup/city?city=LOS%20ANGELES&state=CA")
+        response = client_with_facilities.get("/api/fcc/facilities/lookup/city?city=LOS%20ANGELES&state=CA")
         assert response.status_code == 200
         data = response.get_json()
         assert data["count"] == 1
         assert data["facilities"][0]["callsign"] == "KABC-TV"
 
-    def test_lookup_city_missing_params(self, client):
+    def test_lookup_city_missing_params(self, client_with_facilities):
         """Test city lookup with missing parameters"""
-        response = client.get("/api/fcc/facilities/lookup/city?city=LOS%20ANGELES")
+        response = client_with_facilities.get("/api/fcc/facilities/lookup/city?city=LOS%20ANGELES")
         assert response.status_code == 400
 
-    def test_lookup_dma(self, client):
+    def test_lookup_dma(self, client_with_facilities):
         """Test DMA lookup endpoint"""
-        response = client.get("/api/fcc/facilities/lookup/dma?dma=Los%20Angeles")
+        response = client_with_facilities.get("/api/fcc/facilities/lookup/dma?dma=Los%20Angeles")
         assert response.status_code == 200
         data = response.get_json()
         assert data["count"] == 1
 
-    def test_lookup_dma_missing_param(self, client):
+    def test_lookup_dma_missing_param(self, client_with_facilities):
         """Test DMA lookup with missing parameter"""
-        response = client.get("/api/fcc/facilities/lookup/dma")
+        response = client_with_facilities.get("/api/fcc/facilities/lookup/dma")
         assert response.status_code == 400
 
-    def test_get_dma_list(self, client):
+    def test_get_dma_list(self, client_with_facilities):
         """Test DMA list endpoint"""
-        response = client.get("/api/fcc/facilities/dmas")
+        response = client_with_facilities.get("/api/fcc/facilities/dmas")
         assert response.status_code == 200
         data = response.get_json()
         assert data["count"] == 2
 
-    def test_get_network_list(self, client):
+    def test_get_network_list(self, client_with_facilities):
         """Test network list endpoint"""
-        response = client.get("/api/fcc/networks")
+        response = client_with_facilities.get("/api/fcc/networks")
         assert response.status_code == 200
         data = response.get_json()
         assert data["count"] == 2
 
-    def test_get_channels_by_callsign_no_matches(self, client):
+    def test_get_channels_by_callsign_no_matches(self, client_with_facilities):
         """Test channels by callsign with no matching channels"""
-        response = client.get("/api/fcc/channels/by-callsign/KABC")
+        response = client_with_facilities.get("/api/fcc/channels/by-callsign/KABC")
         assert response.status_code == 200
         data = response.get_json()
         assert data["callsign"] == "KABC"
