@@ -75,6 +75,10 @@ class FFmpegStream:
 
     # Subscribers
     subscribers: Dict[str, StreamSubscriber] = field(default_factory=dict)
+    last_subscriber_left_at: Optional[datetime] = None
+
+    # Cleanup callback
+    on_stream_closed: Optional[Callable[["FFmpegStream"], None]] = None
 
     def __hash__(self):
         return hash(self.stream_key)
@@ -144,6 +148,7 @@ class FFmpegStreamService:
         client_ip: Optional[str] = None,
         user_agent: str = "okhttp/3.14.9",
         on_stream_started: Optional[Callable[[FFmpegStream], None]] = None,
+        on_stream_closed: Optional[Callable[[FFmpegStream], None]] = None,
     ) -> tuple[FFmpegStream, StreamSubscriber]:
         """Subscribe to a stream, creating it if needed."""
         stream_key = self._get_stream_key(account_id, stream_id, format)
@@ -167,6 +172,7 @@ class FFmpegStreamService:
                     credential_id=credential_id,
                     session_token=session_token,
                     user_agent=user_agent,
+                    on_stream_closed=on_stream_closed,
                 )
                 self._streams[stream_key] = stream
 
@@ -201,6 +207,10 @@ class FFmpegStreamService:
             subscriber.active = False
             if subscriber.subscriber_id in stream.subscribers:
                 del stream.subscribers[subscriber.subscriber_id]
+
+            # Track when last subscriber left for idle detection
+            if not stream.subscribers:
+                stream.last_subscriber_left_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
         logger.info(
             f"Subscriber {subscriber.subscriber_id[:8]}... left ffmpeg stream {stream.stream_key} "
@@ -461,6 +471,13 @@ class FFmpegStreamService:
             if stream.stream_key in self._streams:
                 del self._streams[stream.stream_key]
 
+        # Trigger cleanup callback (e.g., to release connection)
+        if stream.on_stream_closed:
+            try:
+                stream.on_stream_closed(stream)
+            except Exception as e:
+                logger.error(f"Error in stream close callback: {e}")
+
     def _cleanup_loop(self) -> None:
         """Background loop to clean up idle streams."""
         while not self._shutdown:
@@ -483,7 +500,10 @@ class FFmpegStreamService:
 
             for stream_key, stream in self._streams.items():
                 if not stream.subscribers:
-                    idle_seconds = (now - stream.last_activity).total_seconds()
+                    # Use last_subscriber_left_at if available, otherwise fall back to last_activity
+                    # This ensures streams close even if ffmpeg is still trying to reconnect
+                    idle_time = stream.last_subscriber_left_at or stream.last_activity
+                    idle_seconds = (now - idle_time).total_seconds()
                     if idle_seconds > STREAM_IDLE_TIMEOUT:
                         logger.info(f"FFmpeg stream {stream_key} idle for {idle_seconds:.1f}s, closing")
                         streams_to_close.append(stream)

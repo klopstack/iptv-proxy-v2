@@ -211,6 +211,11 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
         if not connection_released:
             ConnectionManager.release_connection(session_token)
             connection_released = True
+            logger.info(f"Released connection for session {session_token[:8]}...")
+
+    def on_stream_closed_callback(stream):
+        """Called when the FFmpeg stream is closed (no more subscribers)."""
+        release_connection_once()
 
     try:
         # Subscribe to create a new shared stream
@@ -223,6 +228,7 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
             session_token=session_token,
             client_ip=client_ip,
             user_agent=user_agent,
+            on_stream_closed=on_stream_closed_callback,
         )
 
         logger.info(
@@ -244,14 +250,12 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
             finally:
                 stream_service.unsubscribe(shared_stream, subscriber)
 
-                # Release connection only if this was the last subscriber
-                # and stream is no longer active
-                if not shared_stream.subscribers and not shared_stream.is_active:
-                    release_connection_once()
-
                 logger.info(
                     f"Client {client_ip} disconnected from stream {stream_id} " f"({subscriber.bytes_sent} bytes sent)"
                 )
+
+                # Note: Connection will be released via on_stream_closed_callback
+                # when the FFmpeg stream is actually closed (after idle timeout)
 
         # Check if upstream failed to connect
         if not shared_stream.is_active and shared_stream.error:
