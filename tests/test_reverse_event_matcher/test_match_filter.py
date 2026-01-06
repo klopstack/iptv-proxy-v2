@@ -403,6 +403,108 @@ class TestChannelDateBoosting:
         assert filtered[0].confidence == 1.0
 
 
+class TestEventAgeValidation:
+    """Test event age validation to reject historical events."""
+
+    def test_recent_event_valid(self, match_filter, now):
+        """Test that recent events (within 30 days ago) are valid."""
+        # Event 7 days ago
+        event_date = now - timedelta(days=7)
+        assert match_filter.is_event_valid_age(event_date, now) is True
+
+    def test_old_event_invalid(self, match_filter, now):
+        """Test that old events (more than 30 days ago) are invalid."""
+        # Event 45 days ago (beyond MAX_EVENT_AGE_DAYS)
+        event_date = now - timedelta(days=45)
+        assert match_filter.is_event_valid_age(event_date, now) is False
+
+    def test_very_old_event_invalid(self, match_filter, now):
+        """Test that very old events (like 2014) are definitely invalid."""
+        # Event from 2014 (like the Liverpool vs Swansea bug)
+        event_date = datetime(2014, 12, 29, 20, 0, 0, tzinfo=timezone.utc)
+        assert match_filter.is_event_valid_age(event_date, now) is False
+
+    def test_future_event_valid(self, match_filter, now):
+        """Test that near-future events are valid."""
+        # Event 30 days from now
+        event_date = now + timedelta(days=30)
+        assert match_filter.is_event_valid_age(event_date, now) is True
+
+    def test_far_future_event_invalid(self, match_filter, now):
+        """Test that far-future events are invalid."""
+        # Event 400 days from now (beyond MAX_EVENT_FUTURE_DAYS)
+        event_date = now + timedelta(days=400)
+        assert match_filter.is_event_valid_age(event_date, now) is False
+
+    def test_none_event_date_valid(self, match_filter, now):
+        """Test that None event date is treated as valid (can't validate)."""
+        assert match_filter.is_event_valid_age(None, now) is True
+
+    def test_custom_max_age(self, now):
+        """Test custom max event age parameter."""
+        # Use very short max age (7 days)
+        filter_strict = MatchFilter(max_event_age_days=7)
+
+        event_10_days_ago = now - timedelta(days=10)
+        event_5_days_ago = now - timedelta(days=5)
+
+        assert filter_strict.is_event_valid_age(event_10_days_ago, now) is False
+        assert filter_strict.is_event_valid_age(event_5_days_ago, now) is True
+
+    def test_strict_validation_filters_old_events(self, match_filter, now):
+        """Test that strict date validation filters out old events in filter_matches."""
+        # Create event from 45 days ago
+        old_time = now - timedelta(days=45)
+        old_date_str = old_time.strftime("%Y-%m-%d")
+        old_time_str = old_time.strftime("%H:%M") + " UTC"
+
+        # Create event from 3 days ago
+        recent_time = now - timedelta(days=3)
+        recent_date_str = recent_time.strftime("%Y-%m-%d")
+        recent_time_str = recent_time.strftime("%H:%M") + " UTC"
+
+        matches = [
+            make_match_result("old_event", confidence=0.95, date=old_date_str, time_utc=old_time_str),
+            make_match_result("recent_event", confidence=0.85, date=recent_date_str, time_utc=recent_time_str),
+        ]
+
+        filtered = match_filter.filter_matches(
+            matches,
+            date_filter=DateFilter.ALL,  # No date range filter
+            min_confidence=0.45,
+            current_time=now,
+        )
+
+        # Only the recent event should pass
+        assert len(filtered) == 1
+        assert filtered[0].event.event_id == "recent_event"
+
+    def test_disable_strict_validation(self, now):
+        """Test that strict validation can be disabled."""
+        filter_non_strict = MatchFilter(strict_date_validation=False)
+
+        # Create very old event
+        old_time = now - timedelta(days=365 * 10)  # 10 years ago
+        old_date_str = old_time.strftime("%Y-%m-%d")
+        old_time_str = old_time.strftime("%H:%M") + " UTC"
+
+        matches = [
+            make_match_result("ancient_event", confidence=0.90, date=old_date_str, time_utc=old_time_str),
+        ]
+
+        # With strict validation disabled, old events should pass through
+        # (assuming the date range filter allows it)
+        filtered = filter_non_strict.filter_matches(
+            matches,
+            date_filter=DateFilter.ALL,
+            current_time=now,
+        )
+
+        # Ancient event should pass since strict validation is disabled
+        assert len(filtered) == 1
+        assert filtered[0].event.event_id == "ancient_event"
+
+
 class TestEmptyInput:
     """Test handling of empty input."""
 

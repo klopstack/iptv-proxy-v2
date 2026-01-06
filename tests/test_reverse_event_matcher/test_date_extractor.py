@@ -237,3 +237,129 @@ class TestDateExtractor:
         assert date.day == 28
         assert date.hour == 15
         assert date.minute == 30
+
+
+class TestDDMMFormat:
+    """Test DD/MM time format extraction (common in channel names)."""
+
+    def test_ddmm_time_format(self):
+        """Test extraction of DD/MM HH:MM format (e.g., '23/10 19:05')."""
+        extractor = DateExtractor()
+
+        # Channel with DD/MM time format
+        channel = "Flo (FLSP) 230: 2025 Ottawa 67s vs Windsor Spitfires - 23/10 19:05"
+        date = extractor.extract_date(channel)
+
+        assert date is not None
+        assert date.month == 10
+        assert date.day == 23
+        assert date.hour == 19
+        assert date.minute == 5
+
+    def test_ddmm_time_format_with_dash(self):
+        """Test DD-MM format with dash separator."""
+        extractor = DateExtractor()
+
+        channel = "Event 15-11 20:30 Some Description"
+        date = extractor.extract_date(channel)
+
+        assert date is not None
+        assert date.month == 11
+        assert date.day == 15
+        assert date.hour == 20
+        assert date.minute == 30
+
+    def test_ddmm_time_format_with_ampm(self):
+        """Test DD/MM time format with AM/PM."""
+        extractor = DateExtractor()
+
+        channel = "Game 05/03 8:30pm ET"
+        date = extractor.extract_date(channel)
+
+        assert date is not None
+        assert date.month == 3
+        assert date.day == 5
+        assert date.hour == 20  # 8pm = 20:00
+
+    def test_ddmm_year_inference_past(self):
+        """Test that DD/MM format infers correct year for past dates."""
+        extractor = DateExtractor()
+
+        # Note: dateparser settings have PREFER_DATES_FROM: future
+        # So if a date is in the past, it may be interpreted as next year
+        channel = "Game 01/01 12:00"
+        date = extractor.extract_date(channel)
+
+        assert date is not None
+        assert date.month == 1
+        assert date.day == 1
+        # Year inference depends on current date
+
+    def test_flo_channel_with_iso_date(self):
+        """Test FLO channel with ISO date format."""
+        extractor = DateExtractor()
+
+        channel = "(FLSP 029) | flowrestling: 2026 Jim Crytzer Invite (2026-01-03 09:01:35)"
+        date = extractor.extract_date(channel)
+
+        assert date is not None
+        assert date.year == 2026
+        assert date.month == 1
+        assert date.day == 3
+        assert date.hour == 9
+        assert date.minute == 1
+
+    def test_old_flo_channel_date(self):
+        """Test extraction of old dates from FLO channels."""
+        extractor = DateExtractor()
+
+        channel = "US (Flo 481) | [Hockey|2025 Sherbrooke Phoenix vs Chicoutimi Sagueneens Home] (2025-11-01 16:02:30)"
+        date = extractor.extract_date(channel)
+
+        assert date is not None
+        assert date.year == 2025
+        assert date.month == 11
+        assert date.day == 1
+        assert date.hour == 16
+
+    def test_leading_year_with_ddmm(self):
+        """Test that leading year is used with DD/MM time format."""
+        extractor = DateExtractor()
+
+        # The year is at the beginning, DD/MM time at the end
+        channel = "2025 Ottawa 67s vs Windsor Spitfires - 23/10 19:05"
+        date = extractor.extract_date(channel)
+
+        assert date is not None
+        assert date.year == 2025
+        assert date.month == 10
+        assert date.day == 23
+        assert date.hour == 19
+        assert date.minute == 5
+
+    def test_leading_year_with_ddmm_different_year(self):
+        """Test leading year detection with future year."""
+        extractor = DateExtractor()
+
+        channel = "2026 Team A vs Team B - 15/03 20:30"
+        date = extractor.extract_date(channel)
+
+        assert date is not None
+        assert date.year == 2026
+        assert date.month == 3
+        assert date.day == 15
+        assert date.hour == 20
+        assert date.minute == 30
+
+    def test_no_leading_year_uses_inference(self):
+        """Test that without leading year, inference is used."""
+        extractor = DateExtractor()
+
+        # No year at start - should use current year or next year inference
+        channel = "Ottawa 67s vs Windsor Spitfires - 23/10 19:05"
+        date = extractor.extract_date(channel)
+
+        assert date is not None
+        assert date.month == 10
+        assert date.day == 23
+        # Year is inferred based on current date

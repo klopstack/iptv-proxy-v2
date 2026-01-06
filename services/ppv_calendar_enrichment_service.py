@@ -64,6 +64,10 @@ MIN_MATCH_CONFIDENCE = 0.35  # Minimum confidence to consider a match (lowered t
 MEDIUM_CONFIDENCE_THRESHOLD = 0.6  # Above this, accept without ambiguity check
 HIGH_CONFIDENCE_THRESHOLD = 0.7  # Above this, we're highly confident in the match
 
+# Event age validation
+MAX_EVENT_AGE_DAYS = 30  # Reject events older than this
+MAX_EVENT_FUTURE_DAYS = 365  # Reject events further in future than this
+
 # Generic channel name patterns that indicate inactive/placeholder channels
 # These channels typically don't have actual events broadcasting
 GENERIC_CHANNEL_PATTERNS = [
@@ -464,13 +468,15 @@ class PPVCalendarEnrichmentService:
             days_back=0,
         )
 
-        # Use ReverseEventMatcher's find_matches method
-        # This is the new, well-tested matching approach
+        # Use ReverseEventMatcher's find_matches method with date validation
+        # IMPORTANT: use_channel_date=True enables extraction and validation of
+        # the date from the channel name against event dates. This helps reject
+        # mismatches like old replays (2025 events) being matched to new events.
         match_results = self.reverse_matcher.find_matches(
             channel_name=channel.name,
             max_results=5,
             min_confidence=MIN_MATCH_CONFIDENCE,
-            use_channel_date=False,  # We already have the date
+            use_channel_date=True,  # Enable date extraction and validation
         )
 
         # Convert MatchResult objects to (CalendarEvent, confidence) tuples
@@ -546,9 +552,35 @@ class PPVCalendarEnrichmentService:
             calendar_event: CalendarEvent from scraper
 
         Returns:
-            Event model instance
+            Event model instance, or None if event is invalid (e.g., too old)
         """
         try:
+            # First, validate the event age before doing anything
+            # This prevents storing old historical events (like 2014 Liverpool vs Swansea)
+            if calendar_event.scheduled_at:
+                now = datetime.now(timezone.utc)
+                event_date = calendar_event.scheduled_at
+                if event_date.tzinfo is None:
+                    event_date = event_date.replace(tzinfo=timezone.utc)
+
+                days_diff = (event_date - now).days
+
+                # Check if event is too old
+                if days_diff < -MAX_EVENT_AGE_DAYS:
+                    logger.warning(
+                        f"Rejecting old event: {calendar_event.event_name} @ {event_date} "
+                        f"is {abs(days_diff)} days old (max: {MAX_EVENT_AGE_DAYS})"
+                    )
+                    return None
+
+                # Check if event is too far in the future
+                if days_diff > MAX_EVENT_FUTURE_DAYS:
+                    logger.warning(
+                        f"Rejecting future event: {calendar_event.event_name} @ {event_date} "
+                        f"is {days_diff} days in the future (max: {MAX_EVENT_FUTURE_DAYS})"
+                    )
+                    return None
+
             # Check if event already exists
             event = Event.query.filter_by(
                 external_id=calendar_event.event_id,
