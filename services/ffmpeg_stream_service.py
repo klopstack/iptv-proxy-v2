@@ -264,10 +264,10 @@ class FFmpegStreamService:
         #   mark initial packets as discontinuous so players know to reset
         # -avoid_negative_ts make_zero: Ensure timestamps start at 0 and stay positive
         #
-        # NOTE: We DON'T use -reconnect options because reconnection causes timestamp
-        # jumps that make players skip backward. Instead, we let ffmpeg exit on
-        # disconnection and start a fresh stream. Clients will reconnect and get
-        # clean timestamps from 0.
+        # Reconnect handling: We use reconnect options with short delays to handle
+        # temporary network issues while keeping the stream alive. The -rw_timeout
+        # controls individual read/write operations, while -reconnect_* handle
+        # connection drops.
 
         cmd = [
             "ffmpeg",
@@ -279,10 +279,25 @@ class FFmpegStreamService:
             stream.user_agent,
             "-headers",
             "Accept: */*\r\nConnection: keep-alive\r\n",
+            # Network timeout options
+            "-rw_timeout",
+            "30000000",  # 30 seconds for read/write operations (microseconds)
             "-timeout",
-            "10000000",  # 10 seconds in microseconds
-            # No reconnect options - we want ffmpeg to exit cleanly on disconnect
-            # so clients reconnect and get fresh timestamps
+            "30000000",  # 30 seconds connection timeout (microseconds)
+            # Reconnection options for robustness
+            "-reconnect",
+            "1",  # Enable reconnection
+            "-reconnect_streamed",
+            "1",  # Reconnect even for streamed content
+            "-reconnect_delay_max",
+            "5",  # Max 5 seconds between reconnect attempts
+            "-reconnect_on_network_error",
+            "1",  # Reconnect on network errors
+            "-reconnect_on_http_error",
+            "5xx",  # Reconnect on 5xx server errors
+            # TCP options for better network handling
+            "-tcp_nodelay",
+            "1",  # Disable Nagle's algorithm for lower latency
             "-i",
             stream.upstream_url,
             # Input processing options (after -i)
@@ -437,12 +452,28 @@ class FFmpegStreamService:
         if not stream.process or not stream.process.stderr:
             return
 
+        # Patterns for non-critical errors that are normal for live streams
+        # These occur when joining mid-stream before decoder has full context
+        non_critical_patterns = [
+            "decode_slice_header error",  # Normal when joining mid-GOP
+            "non-existing pps",  # Missing parameter sets (will be sent at next keyframe)
+            "no frame!",  # Decoder waiting for keyframe
+            "concealing errors",  # FFmpeg auto-recovering from errors
+            "missing picture",  # Gap in stream (common with IPTV)
+        ]
+
         try:
             for line in stream.process.stderr:
                 line = line.decode("utf-8", errors="replace").strip()
                 if line:
-                    # Log ffmpeg messages
-                    if "error" in line.lower():
+                    # Check if this is a non-critical error
+                    is_non_critical = any(pattern in line.lower() for pattern in non_critical_patterns)
+
+                    # Log ffmpeg messages at appropriate levels
+                    if is_non_critical:
+                        # Log non-critical errors at DEBUG level to reduce noise
+                        logger.debug(f"FFmpeg {stream.stream_key}: {line}")
+                    elif "error" in line.lower():
                         logger.error(f"FFmpeg {stream.stream_key}: {line}")
                     elif "warning" in line.lower():
                         logger.warning(f"FFmpeg {stream.stream_key}: {line}")
