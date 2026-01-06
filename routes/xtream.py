@@ -310,6 +310,7 @@ def get_short_epg(xtream_cred, account, playlist_config):
     Endpoint: /player_api.php?action=get_short_epg
     Query params: stream_id, limit (optional)
     """
+    # TODO: Implement EPG integration
     # This would require EPG integration - for now return empty
     # Note: stream_id parameter available in request.args if needed
     return jsonify({"epg_listings": []})
