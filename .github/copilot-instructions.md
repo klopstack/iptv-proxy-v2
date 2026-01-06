@@ -20,8 +20,9 @@ Flask-based IPTV proxy that sits between Xtream Codes API services and clients, 
 1. Users add IPTV accounts and configure filters via web UI
 2. Background scheduler syncs channels from Xtream Codes API
 3. Tag extraction rules parse channel/category names (e.g., "US|", "ᴿᴬᵂ", "⁶⁰ᶠᵖˢ")
-4. EPG match rules map channels to EPG data (provider, Schedules Direct, XMLTV)
-5. Filtered playlists served at `/playlist/<id>.m3u` and EPG at `/epg/<id>.xml`
+4. EPG match rules map channels to EPG data sources (Schedules Direct, XMLTV)
+5. Background scheduler syncs EPG program data from external sources to EpgProgram database
+6. Filtered playlists served at `/playlist/<id>.m3u` and EPG at `/epg/<id>.xml` (generated from database)
 
 **Key Model Relationships:**
 - `Account` → many `Filter`, `Credential`, `EpgSource` (cascade delete)
@@ -40,6 +41,26 @@ Flask-based IPTV proxy that sits between Xtream Codes API services and clients, 
   - `EpgMatchRule`: required_tags, excluded_tags, country_codes, epg_source_ids
   - `EpgChannel`: display_names_json, matched_channels_json
 - **Future**: Converting to native SQLAlchemy JSON type will eliminate all json.loads()/json.dumps() calls
+
+## EPG Generation Architecture
+
+EPG generation is now **database-first** - all EPG data is synced to the `EpgProgram` table before generation.
+
+**EPG Data Sync (Background Scheduler):**
+- XMLTV sources: Parsed and synced by `services/epg_sync_service.py`
+- Schedules Direct: Synced by `services/epg/sd_programs.py` (fetches schedules + program details)
+- Provider EPG: Legacy - not recommended, use mapped sources instead
+
+**EPG Generation Flow:**
+1. `generate_epg_for_channels()` queries `EpgProgram` records via `ChannelEpgMapping`
+2. For channels with `ChannelLink`, inherits programs from linked source channel
+3. Synthetic channel elements created for unmapped channels (no programmes)
+4. **No external API calls during generation** - all data comes from database
+
+**Key Functions:**
+- `services/epg/programs.py:generate_xmltv_from_database()` - Core DB-to-XMLTV conversion
+- `services/epg/generation.py:generate_epg_for_channels()` - Main entry point (database-only)
+- `services/epg/sd_programs.py:sync_sd_programs_for_source()` - SD data sync
 
 ## Tag Extraction System (Core Feature)
 
@@ -219,6 +240,7 @@ docker exec -it iptv-proxy-v2 pytest tests/  # Run tests in container
 - `get_lineups()` - list subscribed lineups
 - `get_lineup_channels()` - channels in lineup
 - `get_schedules()` / `get_programs()` - program data
+- Data synced to `EpgProgram` database by `services/epg/sd_programs.py`
 
 **TheSportsDB:** PPV event enrichment (free tier has rate limits). Used by `PPVEnrichmentService`.
 

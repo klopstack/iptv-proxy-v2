@@ -1,11 +1,24 @@
 """
 EPG Generation Module
 
-Handles generation of EPG XML data for channels.
+Handles generation of EPG XML data for channels using a database-first architecture.
 
-IMPORTANT: This module fixes a critical bug in the original implementation where
-EPG generation only fetched from the upstream IPTV provider and ignored the
-ChannelEpgMapping system. Now properly queries mapped EPG sources.
+ARCHITECTURE:
+All EPG program data is synced to the EpgProgram database table by background jobs
+before being served to clients. This provides better performance, consistency, and
+reliability compared to fetching from external sources during generation.
+
+EPG RESOLUTION ORDER:
+1. ChannelEpgMapping → EpgProgram records (database)
+2. ChannelLink → inherit programs from source channel (database)
+3. Synthetic channel elements (no programmes)
+
+No external API calls are made during EPG generation. All data comes from the database.
+
+KEY FUNCTIONS:
+- generate_epg_for_channels(): Main entry point for EPG generation
+- generate_epg_from_database_for_mappings(): Core DB-to-XMLTV conversion
+- _generate_epg_from_channel_links(): Handle channel link inheritance
 """
 import logging
 import xml.etree.ElementTree as ET

@@ -1,14 +1,28 @@
 """
-EPG Program Sync Service
+EPG Program Sync and Generation Service
 
-Handles syncing EPG program data to the database from XMLTV sources.
+Handles syncing EPG program data to the database and generating XMLTV from stored programs.
+
+DATABASE-FIRST ARCHITECTURE:
+All EPG program data is synced to the EpgProgram table before being served to clients.
+This module provides both sync (from XMLTV) and generation (to XMLTV) functionality.
+
+SYNC FUNCTIONS:
+- parse_xmltv_programs_streaming(): Parse XMLTV files and yield program data
+- sync_programs_to_database(): Sync parsed programs to EpgProgram table
+- get_programs_for_channels(): Batch fetch programs from database
+
+GENERATION FUNCTIONS:
+- generate_xmltv_from_database(): Convert EpgProgram records to XMLTV
+- program_to_xmltv_element(): Convert single program to <programme> element
+- format_xmltv_time(): Format datetime to XMLTV time string
 
 Data Loading Strategy:
 - For unmatched EPG channels: Load only the next X hours (configurable, default = EPG sync interval)
 - For matched EPG channels: Load all available program data
 
 This enables:
-1. Efficient EPG generation without re-parsing large XML files
+1. Fast EPG generation without re-parsing large XML files
 2. Display of current/upcoming programs in the UI for EPG matching verification
 3. Search by program title when creating manual EPG mappings
 """

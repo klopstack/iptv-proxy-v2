@@ -353,6 +353,231 @@ except Exception as e:
     raise
 ```
 
+## EPG Development
+
+### EPG Architecture Overview
+
+EPG generation uses a **database-first architecture**. All EPG program data is synced to the `EpgProgram` table by background jobs before being served to clients.
+
+**Key Benefits:**
+- No external API calls during playlist/EPG generation
+- Consistent EPG data for all clients
+- Works even if external sources are temporarily down
+- Simpler code with single generation path
+
+### EPG Data Flow
+
+```
+External Sources          Background Sync           Generation
+─────────────────         ───────────────           ──────────
+                                                    
+Schedules Direct  ──┐                              
+                    ├──> sync_sd_programs()   ──┐  
+XMLTV Sources    ──┘     sync_xmltv()         ├──> EpgProgram ──> generate_epg_for_channels()
+                         (Scheduler)          ─┘     (Database)        (No external calls)
+```
+
+### Working with EPG Sources
+
+**Add a new Schedules Direct lineup:**
+```python
+from services.schedules_direct import SchedulesDirectClient
+
+# Authenticate and get lineups
+client = SchedulesDirectClient(username, password)
+lineups = client.get_lineups()
+
+# Create EPG source
+source = EpgSource(
+    account_id=account.id,
+    name="My SD Lineup",
+    source_type="schedules_direct",
+    url="",  # Not used for SD
+    username=username,
+    password=password
+)
+db.session.add(source)
+db.session.commit()
+
+# Scheduler will automatically sync programs
+```
+
+**Add an XMLTV source:**
+```python
+source = EpgSource(
+    account_id=account.id,
+    name="My XMLTV Source",
+    source_type="xmltv",
+    url="http://example.com/epg.xml.gz"
+)
+db.session.add(source)
+db.session.commit()
+
+# Scheduler will fetch and parse XMLTV
+```
+
+### EPG Program Sync
+
+Program sync happens in background scheduler (`services/scheduler.py`):
+
+**Schedules Direct Sync** (`services/epg/sd_programs.py`):
+```python
+def sync_sd_programs_for_source(source, sd_client, days_ahead=14):
+    """
+    Sync programs from Schedules Direct API to database.
+    
+    1. Get station IDs from EPG channels
+    2. Fetch schedules for next N days
+    3. Fetch detailed program metadata
+    4. Create/update EpgProgram records
+    5. Delete old programs
+    """
+    # Returns stats: added, updated, deleted, channels_processed
+```
+
+**XMLTV Sync** (`services/epg_sync_service.py`):
+```python
+def sync_xmltv_to_database(source):
+    """
+    Parse XMLTV file and sync programs to database.
+    
+    1. Download XMLTV (supports gzip)
+    2. Parse XML with streaming parser
+    3. Match channels to EpgChannel records
+    4. Create/update EpgProgram records
+    """
+```
+
+### EPG Generation
+
+Generation is handled by `services/epg/generation.py`:
+
+```python
+def generate_epg_for_channels(
+    channels: List[Channel],
+    account_xml_cache: Optional[Dict[int, bytes]] = None,  # Deprecated
+    use_channel_links: bool = True,
+) -> bytes:
+    """
+    Generate XMLTV from database-stored programs.
+    
+    Resolution order:
+    1. ChannelEpgMapping -> EpgProgram (database)
+    2. ChannelLink -> inherit from source channel
+    3. Synthetic channel (no programmes)
+    """
+```
+
+**Key helper functions:**
+```python
+# services/epg/programs.py
+get_programs_for_channels(epg_channel_ids, start_time, end_time)
+  # Batch fetch programs from database
+
+program_to_xmltv_element(program, channel_id, time_offset)
+  # Convert EpgProgram to XMLTV <programme> element
+
+generate_xmltv_from_database(channels, epg_channel_ids, start, end)
+  # Core DB-to-XMLTV conversion
+```
+
+### Testing EPG Features
+
+**Test program sync:**
+```python
+def test_sd_program_sync(app, db):
+    """Test Schedules Direct program sync."""
+    from services.epg.sd_programs import sync_sd_programs_for_source
+    
+    # Create mock SD source and channels
+    source = EpgSource(...)
+    db.session.add(source)
+    
+    # Create mock SD client
+    mock_client = MagicMock()
+    mock_client.get_schedules.return_value = [...]
+    mock_client.get_programs.return_value = [...]
+    
+    # Run sync
+    stats = sync_sd_programs_for_source(source, mock_client)
+    
+    assert stats["programs_added"] > 0
+    assert EpgProgram.query.count() > 0
+```
+
+**Test EPG generation:**
+```python
+def test_epg_generation(app, db):
+    """Test database-based EPG generation."""
+    from services.epg.generation import generate_epg_for_channels
+    
+    # Create channel with EPG mapping
+    channel = Channel(...)
+    epg_channel = EpgChannel(...)
+    mapping = ChannelEpgMapping(
+        channel_id=channel.id,
+        epg_channel_id=epg_channel.id
+    )
+    
+    # Create program in database
+    program = EpgProgram(
+        epg_channel_id=epg_channel.id,
+        start_time=datetime.now(),
+        stop_time=datetime.now() + timedelta(hours=1),
+        title="Test Program"
+    )
+    db.session.add_all([channel, epg_channel, mapping, program])
+    db.session.commit()
+    
+    # Generate EPG
+    result = generate_epg_for_channels([channel])
+    
+    # Parse and verify
+    root = ET.fromstring(result)
+    programmes = root.findall("programme")
+    assert len(programmes) == 1
+    assert programmes[0].find("title").text == "Test Program"
+```
+
+### EPG Debugging
+
+**Check program sync status:**
+```python
+# Count programs per source
+from models import EpgProgram, EpgChannel, EpgSource
+
+stats = db.session.query(
+    EpgSource.name,
+    db.func.count(EpgProgram.id)
+).join(EpgChannel).join(EpgProgram).group_by(EpgSource.id).all()
+
+for source_name, count in stats:
+    print(f"{source_name}: {count} programs")
+```
+
+**View recent programs:**
+```python
+from datetime import datetime, timezone
+from models import EpgProgram
+
+now = datetime.now(timezone.utc).replace(tzinfo=None)
+recent = EpgProgram.query.filter(
+    EpgProgram.start_time >= now
+).order_by(EpgProgram.start_time).limit(10).all()
+
+for p in recent:
+    print(f"{p.start_time} - {p.title}")
+```
+
+**Force EPG sync:**
+```python
+from services.scheduler import run_epg_sync
+
+# Sync specific source
+source = EpgSource.query.filter_by(name="My Source").first()
+run_epg_sync(source.id)
+```
+
 ## Contributing Guidelines
 
 ### Code Review Checklist

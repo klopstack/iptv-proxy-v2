@@ -10,6 +10,8 @@ A modern web-based IPTV proxy with advanced filtering, tag-based playlist genera
 ✅ **Tag Extraction** - Automatically extract and normalize tags from channel names  
 ✅ **Custom Rulesets** - Create provider-specific tag extraction rules  
 ✅ **Tag-Based Playlists** - Generate playlists filtered by tags  
+✅ **Database-First EPG** - EPG data synced to database for fast, reliable program guides  
+✅ **Multi-Source EPG** - Supports Schedules Direct and XMLTV sources  
 ✅ **Xtream Codes API** - Connect IPTV clients (TiviMate, IPTV Smarters) using standard API format  
 
 Using the pre-built image from GitHub Container Registry:

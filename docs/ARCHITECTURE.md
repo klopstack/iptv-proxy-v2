@@ -70,8 +70,9 @@ IPTV Proxy v2 is a Flask-based IPTV proxy that sits between Xtream Codes API ser
 1. **Account Setup**: Users add IPTV accounts and configure filters via web UI
 2. **Channel Sync**: Background scheduler syncs channels from Xtream Codes API
 3. **Tag Extraction**: Tag extraction rules parse channel/category names (e.g., "US|", "ᴿᴬᵂ", "⁶⁰ᶠᵖˢ")
-4. **EPG Mapping**: EPG match rules map channels to EPG data (provider, Schedules Direct, XMLTV)
-5. **Playlist Generation**: Filtered playlists served at `/playlist/<id>.m3u` and EPG at `/epg/<id>.xml`
+4. **EPG Mapping**: EPG match rules map channels to EPG data sources (Schedules Direct, XMLTV)
+5. **EPG Sync**: Background scheduler syncs program data from external sources to `EpgProgram` database
+6. **Playlist Generation**: Filtered playlists served at `/playlist/<id>.m3u` and EPG at `/epg/<id>.xml` (generated from database)
 
 ## Key Model Relationships
 
@@ -152,6 +153,93 @@ PPV event enrichment (free tier has rate limits). Used by `PPVEnrichmentService`
 
 ### FCC Database
 `FccFacilityService` lookups for callsign → city/market mapping.
+
+## EPG Generation Architecture
+
+### Database-First Approach
+EPG generation in v2 uses a **database-first architecture** - all EPG program data is synced to the `EpgProgram` table before being served to clients. This provides:
+- **Better performance**: No external API calls during playlist/EPG generation
+- **Consistency**: All clients see the same EPG data
+- **Reliability**: EPG works even if external sources are temporarily unavailable
+- **Simplicity**: Single code path for all EPG generation
+
+### EPG Data Sync
+Background scheduler (`services/scheduler.py`) syncs EPG data:
+
+**XMLTV Sources:**
+- Parsed by `services/epg_sync_service.py`
+- Programs extracted and stored in `EpgProgram` table
+- Supports gzip-compressed XMLTV files
+
+**Schedules Direct:**
+- Synced by `services/epg/sd_programs.py`
+- Fetches schedules for all stations in lineup
+- Fetches detailed program metadata (title, description, episode info, ratings)
+- Updates existing programs, adds new ones, deletes old ones
+
+**Provider EPG (Legacy):**
+- Direct passthrough from IPTV provider (deprecated)
+- Recommendation: Use EPG mappings to Schedules Direct or XMLTV sources instead
+
+### EPG Generation Flow
+
+```
+Client Request
+      ↓
+generate_epg_for_channels()
+      ↓
+  ┌───────────────────────────────────────┐
+  │ 1. Query EpgProgram via Mappings     │
+  │    - Join ChannelEpgMapping           │
+  │    - Filter by time range (now ± 7d)  │
+  │    - Apply time_offset_hours          │
+  └───────────────────────────────────────┘
+      ↓
+  ┌───────────────────────────────────────┐
+  │ 2. Handle ChannelLink Inheritance     │
+  │    - Find source channel's programs   │
+  │    - Copy with time offset applied    │
+  └───────────────────────────────────────┘
+      ↓
+  ┌───────────────────────────────────────┐
+  │ 3. Generate Synthetic Channels        │
+  │    - Create <channel> elements        │
+  │    - No <programme> elements          │
+  └───────────────────────────────────────┘
+      ↓
+  XMLTV XML Response
+```
+
+**Key Points:**
+- **No external API calls** during generation
+- **Single database query** per EPG source (batch loading)
+- **Time offsets** applied at generation time (not stored in DB)
+- **Synthetic channels** for unmapped channels (valid XMLTV without programs)
+
+### EPG Database Models
+
+```python
+EpgProgram:
+  - epg_channel_id (FK to EpgChannel)
+  - start_time, stop_time (naive UTC)
+  - title, description
+  - season_number, episode_number
+  - categories (JSON array)
+  - rating (JSON object)
+  - external_id (program ID from source)
+
+EpgChannel:
+  - source_id (FK to EpgSource)
+  - channel_id (unique per source)
+  - display_name, icon_url
+  - Programs synced from external sources
+
+ChannelEpgMapping:
+  - channel_id (FK to Channel)
+  - epg_channel_id (FK to EpgChannel)
+  - time_offset_hours (timezone adjustment)
+  - mapping_type, confidence
+```
 
 ## JSON Field Handling
 

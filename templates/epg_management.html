@@ -27,6 +27,12 @@
             <i class="bi bi-diagram-3"></i> Match Rules
         </button>
     </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="preview-tab" data-bs-toggle="tab" data-bs-target="#preview-section"
+                type="button" role="tab">
+            <i class="bi bi-eye"></i> Data Preview
+        </button>
+    </li>
 </ul>
 
 <div class="tab-content" id="epgTabsContent">
@@ -269,6 +275,84 @@
                         <li><strong>Exact/Fuzzy Name:</strong> Match on channel names</li>
                         <li><strong>Network Fallback:</strong> Use generic network EPG</li>
                     </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Preview Section -->
+    <div class="tab-pane fade" id="preview-section" role="tabpanel">
+        <div class="row">
+            <div class="col-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <span><i class="bi bi-eye"></i> EPG Data Preview</span>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">
+                            Preview program guide data from your EPG sources. Select a source and optionally a channel to view current and upcoming programs.
+                        </p>
+
+                        <!-- Source and Channel Selection -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="preview-source-select" class="form-label">EPG Source</label>
+                                <select class="form-select" id="preview-source-select">
+                                    <option value="">Select an EPG source...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="preview-channel-select" class="form-label">EPG Channel (Optional)</label>
+                                <select class="form-select" id="preview-channel-select" disabled>
+                                    <option value="">All channels</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <button class="btn btn-primary" id="preview-load-btn" disabled>
+                                    <i class="bi bi-search"></i> Load EPG Data
+                                </button>
+                                <button class="btn btn-outline-secondary" id="preview-refresh-btn" disabled>
+                                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Preview Results -->
+                        <div id="preview-results" style="display: none;">
+                            <hr>
+                            <h6 class="mb-3">Programs</h6>
+                            <div id="preview-programs-container">
+                                <!-- Programs will be loaded here -->
+                            </div>
+                        </div>
+
+                        <div id="preview-empty" style="display: none;">
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i> No program data available for the selected source/channel.
+                            </div>
+                        </div>
+
+                        <div id="preview-loading" style="display: none;">
+                            <div class="text-center py-4">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <p class="mt-2 text-muted">Loading EPG data...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info">
+                    <h6><i class="bi bi-info-circle"></i> About EPG Data Preview</h6>
+                    <p class="mb-0 small">
+                        This preview shows program guide data stored in the database from your configured EPG sources. 
+                        If you don't see data, make sure the source has been synced successfully. 
+                        The preview displays current and upcoming programs (up to 24 hours ahead).
+                    </p>
                 </div>
             </div>
         </div>
@@ -990,6 +1074,7 @@
 <script src="{{ url_for('static', filename='js/epg_schedules_direct.js') }}"></script>
 <script src="{{ url_for('static', filename='js/epg_manual_mapping.js') }}"></script>
 <script src="{{ url_for('static', filename='js/epg_xmltv.js') }}"></script>
+<script src="{{ url_for('static', filename='js/epg_preview.js') }}"></script>
 
 <!-- Match Rules Scripts -->
 <script src="{{ url_for('static', filename='js/match_rules_common.js') }}"></script>
