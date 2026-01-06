@@ -807,6 +807,152 @@ class EpgChannel(db.Model):  # type: ignore[name-defined]
         return f"<EpgChannel {self.channel_id} ({self.display_name})>"
 
 
+class EpgProgram(db.Model):  # type: ignore[name-defined]
+    """
+    EPG program/show data stored in the database.
+
+    This model stores program information from XMLTV sources to enable:
+    1. Efficient EPG generation without re-parsing large XML files
+    2. Display of current/upcoming programs in the UI for EPG matching verification
+    3. Search by program title when creating manual EPG mappings
+
+    Data Loading Strategy:
+    - For unmatched EPG channels: Load only the next X hours (X = EPG sync interval)
+    - For matched EPG channels: Load all available program data
+
+    Storage is optimized by:
+    - Storing only essential fields (title, description, times, categories)
+    - Using indexes for fast lookups by channel and time range
+    - Automatic cleanup of expired programs
+    """
+
+    __tablename__ = "epg_programs"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Link to EPG channel
+    epg_channel_id = db.Column(
+        db.Integer, db.ForeignKey("epg_channels.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    # Program timing (stored as UTC)
+    start_time = db.Column(db.DateTime, nullable=False, index=True)
+    stop_time = db.Column(db.DateTime, nullable=False, index=True)
+
+    # Program content
+    title = db.Column(db.String(500), nullable=False, index=True)
+    sub_title = db.Column(db.String(500))  # Episode title or subtitle
+    description = db.Column(db.Text)
+
+    # Category/genre information (JSON array of category strings)
+    categories = db.Column(db.Text)  # e.g., ["Sports", "Basketball", "College"]
+
+    # Episode info
+    season = db.Column(db.Integer)
+    episode = db.Column(db.Integer)
+    episode_id = db.Column(db.String(100))  # Series/episode ID (dd_progid, etc.)
+
+    # Rating information
+    rating = db.Column(db.String(20))  # e.g., "TV-14", "TV-MA", "PG"
+    rating_system = db.Column(db.String(50))  # e.g., "VCHIP", "MPAA"
+
+    # Additional metadata
+    original_air_date = db.Column(db.Date)
+    is_new = db.Column(db.Boolean, default=False)  # New episode
+    is_live = db.Column(db.Boolean, default=False)  # Live broadcast
+    is_premiere = db.Column(db.Boolean, default=False)  # Season/series premiere
+
+    # For sports events - team/event info
+    sport = db.Column(db.String(100))
+    team_home = db.Column(db.String(200))
+    team_away = db.Column(db.String(200))
+
+    # Image/poster URL if available
+    icon_url = db.Column(db.String(500))
+
+    # Sync metadata
+    last_updated = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
+    # Relationships
+    epg_channel = db.relationship(
+        "EpgChannel", backref=db.backref("programs", lazy="dynamic", cascade="all, delete-orphan")
+    )
+
+    # Unique constraint - one program per channel per start time
+    # (handles overlapping programs by using start_time as key)
+    __table_args__ = (
+        db.UniqueConstraint("epg_channel_id", "start_time", name="_epg_program_channel_start_uc"),
+        db.Index("idx_epg_program_channel_time", "epg_channel_id", "start_time", "stop_time"),
+        db.Index("idx_epg_program_title", "title"),
+        db.Index("idx_epg_program_start", "start_time"),
+        db.Index("idx_epg_program_stop", "stop_time"),
+    )
+
+    def get_categories_list(self) -> list:
+        """Get categories as a list."""
+        import json
+
+        if not self.categories:
+            return []
+        try:
+            return json.loads(self.categories)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    def set_categories_list(self, categories: list):
+        """Set categories from a list."""
+        import json
+
+        self.categories = json.dumps(categories) if categories else None
+
+    @property
+    def duration_minutes(self) -> int:
+        """Get program duration in minutes."""
+        if self.start_time and self.stop_time:
+            delta = self.stop_time - self.start_time
+            return int(delta.total_seconds() / 60)
+        return 0
+
+    @property
+    def is_currently_airing(self) -> bool:
+        """Check if this program is currently airing."""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        return self.start_time <= now < self.stop_time
+
+    def to_dict(self) -> dict:
+        """Serialize program to dictionary for API responses."""
+        return {
+            "id": self.id,
+            "epg_channel_id": self.epg_channel_id,
+            "start_time": self.start_time.isoformat() if self.start_time else None,
+            "stop_time": self.stop_time.isoformat() if self.stop_time else None,
+            "title": self.title,
+            "sub_title": self.sub_title,
+            "description": self.description,
+            "categories": self.get_categories_list(),
+            "season": self.season,
+            "episode": self.episode,
+            "rating": self.rating,
+            "is_new": self.is_new,
+            "is_live": self.is_live,
+            "is_premiere": self.is_premiere,
+            "sport": self.sport,
+            "team_home": self.team_home,
+            "team_away": self.team_away,
+            "icon_url": self.icon_url,
+            "duration_minutes": self.duration_minutes,
+            "is_currently_airing": self.is_currently_airing,
+        }
+
+    def __repr__(self):
+        return f"<EpgProgram {self.title} @ {self.start_time}>"
+
+
 class ChannelEpgMapping(db.Model):  # type: ignore[name-defined]
     """Manual or automatic mappings between our channels and EPG channels"""
 

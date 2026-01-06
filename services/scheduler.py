@@ -472,6 +472,8 @@ class SyncScheduler:
         Returns:
             Dict with sync stats or None if sync failed/skipped
         """
+        xml_content = None
+
         if source.source_type == "provider":
             if not source.account:
                 logger.warning(f"EPG source {source.name} has no associated account")
@@ -489,7 +491,7 @@ class SyncScheduler:
                 )
 
             xml_content = service.get_xmltv()
-            return EpgService.sync_epg_source(source, xml_content)
+            stats = EpgService.sync_epg_source(source, xml_content)
 
         elif source.source_type == "xmltv_url":
             if not source.url:
@@ -504,16 +506,83 @@ class SyncScheduler:
             # Use 10 minute timeout for large XMLTV files from rate-limited servers
             response = requests.get(url, timeout=600)
             response.raise_for_status()
-            return EpgService.sync_epg_source(source, response.content)
+            xml_content = response.content
+            stats = EpgService.sync_epg_source(source, xml_content)
 
         elif source.source_type == "schedules_direct":
-            # Schedules Direct sync is handled separately via the SD service
-            logger.debug(f"Skipping Schedules Direct source {source.name} - handled separately")
-            return None
+            # Schedules Direct - sync programs directly from SD API
+            if not source.sd_username or not source.sd_password:
+                logger.warning(f"Schedules Direct source {source.name} missing credentials")
+                return None
+
+            if not source.sd_lineup:
+                logger.warning(f"Schedules Direct source {source.name} has no lineup selected")
+                return None
+
+            try:
+                from services.epg.sd_programs import sync_sd_programs_for_source
+                from services.schedules_direct import SchedulesDirectClient
+
+                sd_client = SchedulesDirectClient(source.sd_username, source.sd_password)
+                sd_client.authenticate()
+
+                # Sync programs from SD to database
+                program_stats = sync_sd_programs_for_source(
+                    source,
+                    sd_client,
+                    days_ahead=14,
+                    fetch_program_details=True,
+                )
+
+                # Create stats compatible with other source types
+                stats = {
+                    "channels_added": 0,
+                    "channels_updated": program_stats.get("channels_processed", 0),
+                    "channels_removed": 0,
+                    "programs_added": program_stats.get("programs_added", 0),
+                    "programs_updated": program_stats.get("programs_updated", 0),
+                }
+                logger.info(
+                    f"SD programs synced for {source.name}: "
+                    f"added={program_stats.get('programs_added', 0)}, "
+                    f"updated={program_stats.get('programs_updated', 0)}, "
+                    f"channels={program_stats.get('channels_processed', 0)}"
+                )
+                return stats
+
+            except Exception as e:
+                logger.error(f"Failed to sync Schedules Direct source {source.name}: {e}", exc_info=True)
+                return None
 
         else:
             logger.warning(f"Unknown EPG source type: {source.source_type}")
             return None
+
+        # Sync program data to database (if we have XML content)
+        if xml_content and stats:
+            try:
+                from services.epg.programs import sync_programs_for_source
+
+                # Use EPG sync interval for preview hours
+                preview_hours = self._epg_interval_hours
+                program_stats = sync_programs_for_source(
+                    source,
+                    xml_content,
+                    preview_hours=preview_hours,
+                    load_all_for_matched=True,
+                )
+                logger.info(
+                    f"EPG programs synced for {source.name}: "
+                    f"added={program_stats.get('programs_added', 0)}, "
+                    f"updated={program_stats.get('programs_updated', 0)}, "
+                    f"deleted={program_stats.get('programs_deleted', 0)}"
+                )
+                stats["programs_added"] = program_stats.get("programs_added", 0)
+                stats["programs_updated"] = program_stats.get("programs_updated", 0)
+            except Exception as e:
+                logger.warning(f"Failed to sync EPG programs for {source.name}: {e}")
+
+        return stats
 
     def _prefetch_ppv_events(self):
         """

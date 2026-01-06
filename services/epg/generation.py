@@ -75,6 +75,102 @@ def group_channels_by_epg_source(
     return groups
 
 
+def generate_epg_from_database_for_mappings(
+    channels: List[Channel],
+    mappings: Dict[int, ChannelEpgMapping],
+) -> Tuple[List[ET.Element], List[ET.Element], Set[int]]:
+    """
+    Generate EPG elements from database program records for mapped channels.
+
+    This is a pure function that generates XMLTV elements from EpgProgram
+    records in the database. It does not access external services.
+
+    Args:
+        channels: List of channels to generate EPG for
+        mappings: Dict of channel_id -> ChannelEpgMapping
+
+    Returns:
+        Tuple of (channel_elements, programme_elements, processed_channel_ids)
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from services.epg.programs import get_programs_for_channels, program_to_xmltv_element
+
+    channel_elements: List[ET.Element] = []
+    programme_elements: List[ET.Element] = []
+    processed_channel_ids: Set[int] = set()
+
+    # Build list of (channel, mapping) pairs for channels with mappings
+    channel_mapping_pairs: List[Tuple[Channel, ChannelEpgMapping]] = []
+    for ch in channels:
+        mapping = mappings.get(ch.id)
+        if mapping:
+            channel_mapping_pairs.append((ch, mapping))
+
+    if not channel_mapping_pairs:
+        return channel_elements, programme_elements, processed_channel_ids
+
+    # Get unique EPG channel IDs
+    epg_channel_ids = list({m.epg_channel_id for _, m in channel_mapping_pairs})
+
+    # Preload EPG channels
+    epg_channels_by_id: Dict[int, EpgChannel] = {}
+    for epg_ch in EpgChannel.query.filter(EpgChannel.id.in_(epg_channel_ids)).all():
+        epg_channels_by_id[epg_ch.id] = epg_ch
+
+    # Get time range for programs
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    start_time = now - timedelta(hours=1)
+    end_time = now + timedelta(hours=168)  # 7 days
+
+    # Fetch programs from database
+    programs_by_channel = get_programs_for_channels(epg_channel_ids, start_time, end_time)
+
+    # Check which channels actually have programs
+    channels_with_db_programs: Set[int] = {
+        epg_channel_id for epg_channel_id, programs in programs_by_channel.items() if programs
+    }
+
+    # Generate elements for channels with programs in database
+    for ch, mapping in channel_mapping_pairs:
+        epg_channel_id = mapping.epg_channel_id
+        if epg_channel_id not in channels_with_db_programs:
+            continue
+
+        epg_channel = epg_channels_by_id.get(epg_channel_id)
+        if not epg_channel:
+            continue
+
+        standardized_id = f"ch-{ch.account_id}-{ch.stream_id}"
+        time_offset = mapping.time_offset_hours or 0
+
+        # Create channel element
+        channel_elem = ET.Element("channel")
+        channel_elem.set("id", standardized_id)
+
+        display_name = ET.SubElement(channel_elem, "display-name")
+        display_name.text = ch.cleaned_name or ch.name
+
+        if ch.stream_icon:
+            ET.SubElement(channel_elem, "icon", src=ch.stream_icon)
+
+        channel_elements.append(channel_elem)
+
+        # Create programme elements
+        for program in programs_by_channel[epg_channel_id]:
+            prog_elem = program_to_xmltv_element(program, standardized_id, time_offset)
+            programme_elements.append(prog_elem)
+
+        processed_channel_ids.add(ch.id)
+
+    logger.debug(
+        f"Generated {len(channel_elements)} channels and {len(programme_elements)} programmes from database "
+        f"({len(processed_channel_ids)} channels processed)"
+    )
+
+    return channel_elements, programme_elements, processed_channel_ids
+
+
 def get_epg_from_cache(source_id: int) -> Optional[bytes]:
     """
     Get EPG data from cache.
@@ -384,25 +480,23 @@ def generate_epg_for_channels(
     use_channel_links: bool = True,
 ) -> bytes:
     """
-    Generate EPG XML for a list of channels.
+    Generate EPG XML for a list of channels from database program records.
 
-    This function queries ChannelEpgMapping to determine which EPG source
-    each channel should use, fetches data from all unique sources, and
-    merges into single XMLTV output.
+    This function generates EPG data exclusively from EpgProgram records
+    stored in the database. External EPG sources should be synced to the
+    database by the scheduler before EPG generation.
 
-    The EPG resolution order for each channel is:
-    1. ChannelEpgMapping - explicit mapping to an EpgChannel in a configured source
-    2. ChannelLink - inherit EPG from linked source channel with time offset
-    3. Provider EPG - use epg_channel_id from upstream IPTV provider
-    4. Synthetic - create minimal channel entry with no programmes
+    The EPG resolution for each channel is:
+    1. Database - EpgProgram records via ChannelEpgMapping
+    2. ChannelLink - inherit EPG from linked source channel (also from DB)
+    3. Synthetic - create minimal channel entry with no programmes
 
-    IMPORTANT: This fixes the critical bug where the original implementation
-    only fetched from upstream provider and ignored EPG mappings to other sources.
+    Note: account_xml_cache is deprecated and ignored. Kept for API compatibility.
 
     Args:
         channels: List of Channel objects to generate EPG for
-        account_xml_cache: Optional pre-fetched XML content by account ID
-        use_channel_links: Whether to use ChannelLink for fallback EPG
+        account_xml_cache: DEPRECATED - ignored, kept for compatibility
+        use_channel_links: Whether to use ChannelLink for linked channel EPG
 
     Returns:
         XMLTV XML content as bytes
@@ -412,24 +506,8 @@ def generate_epg_for_channels(
 
     channel_ids = [ch.id for ch in channels]
 
-    # Build channel link map if enabled - maps channel_id -> (source_channel, time_offset)
-    channel_links: Dict[int, Tuple[Channel, int]] = {}
-    if use_channel_links:
-        channel_links = get_channel_links_for_fallback(channel_ids)
-
     # Get EPG mappings for all channels
     mappings = get_channel_epg_mappings(channel_ids)
-
-    # Group channels by EPG source
-    channels_by_source = group_channels_by_epg_source(channels, mappings)
-
-    # Build account map (for provider sources)
-    account_map: Dict[int, Account] = {}
-    for ch in channels:
-        if ch.account_id not in account_map:
-            account = db.session.get(Account, ch.account_id)
-            if account:
-                account_map[ch.account_id] = account
 
     # Build result XML
     root = ET.Element("tv")
@@ -439,211 +517,34 @@ def generate_epg_for_channels(
     all_programme_elements: List[ET.Element] = []
     processed_channel_ids: Set[int] = set()
 
-    # Process each EPG source
-    for source_id, channel_epg_pairs in channels_by_source.items():
-        source = db.session.get(EpgSource, source_id)
-        if not source:
-            logger.warning(f"EPG source {source_id} not found")
-            continue
+    # Step 1: Generate EPG from database for channels with mappings
+    db_channel_elems, db_prog_elems, db_processed = generate_epg_from_database_for_mappings(channels, mappings)
+    all_channel_elements.extend(db_channel_elems)
+    all_programme_elements.extend(db_prog_elems)
+    processed_channel_ids.update(db_processed)
 
-        # Determine account for provider sources
-        account = None
-        if source.source_type in ("provider", "upstream") and source.account_id:
-            account = account_map.get(source.account_id)
-        elif source.source_type in ("provider", "upstream"):
-            # Try to get account from channels
-            for ch, _, _ in channel_epg_pairs:
-                if ch.account_id in account_map:
-                    account = account_map[ch.account_id]
-                    break
+    if db_processed:
+        logger.info(
+            f"Generated EPG from database for {len(db_processed)} channels ({len(db_prog_elems)} programmes)"
+        )
 
-        # Check cache first
-        xml_content = None
-        if account and account_xml_cache and account.id in account_xml_cache:
-            xml_content = account_xml_cache[account.id]
-        else:
-            xml_content = fetch_epg_from_source(source, account)
+    # Step 2: Handle ChannelLink - channels that inherit EPG from linked source channels
+    if use_channel_links:
+        remaining_channels = [ch for ch in channels if ch.id not in processed_channel_ids]
+        link_channel_elems, link_prog_elems, link_processed = _generate_epg_from_channel_links(
+            remaining_channels, mappings, processed_channel_ids
+        )
+        all_channel_elements.extend(link_channel_elems)
+        all_programme_elements.extend(link_prog_elems)
+        processed_channel_ids.update(link_processed)
 
-        if not xml_content:
-            logger.warning(f"Failed to fetch EPG from source {source.name}")
-            continue
+        if link_processed:
+            logger.info(
+                f"Generated EPG from channel links for {len(link_processed)} channels "
+                f"({len(link_prog_elems)} programmes)"
+            )
 
-        # Build channel mappings: (epg_channel.channel_id, standardized_id, time_offset)
-        channel_mapping_list: List[Tuple[str, str, int]] = []
-        for ch, epg_channel, time_offset in channel_epg_pairs:
-            standardized_id = f"ch-{ch.account_id}-{ch.stream_id}"
-            epg_id = epg_channel.channel_id
-            if epg_id:
-                channel_mapping_list.append((epg_id, standardized_id, time_offset))
-                processed_channel_ids.add(ch.id)
-
-        if not channel_mapping_list:
-            continue
-
-        # Filter and remap EPG data
-        channel_elems, prog_elems = filter_epg_by_channels(xml_content, channel_mapping_list)
-        all_channel_elements.extend(channel_elems)
-        all_programme_elements.extend(prog_elems)
-
-    # Handle channels WITHOUT EPG mappings - try to get from upstream provider EPG
-    # using their epg_channel_id (original behavior as fallback)
-    unmapped_channels = [ch for ch in channels if ch.id not in processed_channel_ids]
-
-    if unmapped_channels:
-        # Group by account
-        unmapped_by_account: Dict[int, List[Channel]] = {}
-        for ch in unmapped_channels:
-            if ch.account_id not in unmapped_by_account:
-                unmapped_by_account[ch.account_id] = []
-            unmapped_by_account[ch.account_id].append(ch)
-
-        for account_id, account_channels in unmapped_by_account.items():
-            # Build mapping for channels with epg_channel_id
-            epg_id_mapping: Dict[str, List[Tuple[Channel, str]]] = {}
-
-            for ch in account_channels:
-                standardized_id = f"ch-{account_id}-{ch.stream_id}"
-                if ch.epg_channel_id:
-                    provider_id_lower = ch.epg_channel_id.lower()
-                    if provider_id_lower not in epg_id_mapping:
-                        epg_id_mapping[provider_id_lower] = []
-                    epg_id_mapping[provider_id_lower].append((ch, standardized_id))
-                    processed_channel_ids.add(ch.id)
-
-            if not epg_id_mapping:
-                continue
-
-            # Get XML content
-            xml_content = None
-            if account_xml_cache and account_id in account_xml_cache:
-                xml_content = account_xml_cache[account_id]
-            else:
-                account = account_map.get(account_id)
-                if account and account.enabled:
-                    from services.iptv_service import IPTVService
-
-                    try:
-                        cred = account.get_primary_credential()
-                        if cred:
-                            service = IPTVService(
-                                account.server,
-                                cred.username,
-                                cred.password,
-                                account.user_agent or "okhttp/3.14.9",
-                            )
-                        else:
-                            service = IPTVService(
-                                account.server,
-                                account.username,
-                                account.password,
-                                account.user_agent or "okhttp/3.14.9",
-                            )
-                        xml_content = service.get_xmltv()
-                    except Exception as e:
-                        logger.warning(f"Failed to fetch EPG for account {account_id}: {e}")
-                        continue
-
-            if not xml_content:
-                continue
-
-            # Build mapping list
-            mapping_list: List[Tuple[str, str, int]] = []
-            for provider_id, ch_list in epg_id_mapping.items():
-                for ch, standardized_id in ch_list:
-                    mapping_list.append((provider_id, standardized_id, 0))
-
-            # Filter and add
-            channel_elems, prog_elems = filter_epg_by_channels(xml_content, mapping_list)
-            all_channel_elements.extend(channel_elems)
-            all_programme_elements.extend(prog_elems)
-
-    # Handle channels with ChannelLink - inherit EPG from source channel with time offset
-    # This is the second fallback after ChannelEpgMapping and provider epg_channel_id
-    link_fallback_channels = [ch for ch in channels if ch.id not in processed_channel_ids and ch.id in channel_links]
-
-    if link_fallback_channels:
-        # Group linked channels by their source channel's EPG resolution
-        # We need to get the source channel's EPG (either from mapping or provider)
-
-        for ch in link_fallback_channels:
-            source_channel, time_offset = channel_links[ch.id]
-            standardized_id = f"ch-{ch.account_id}-{ch.stream_id}"
-
-            # Check if source channel has EPG mapping
-            source_mapping = mappings.get(source_channel.id)
-            if source_mapping:
-                # Get source's EPG channel
-                source_epg_channel = db.session.get(EpgChannel, source_mapping.epg_channel_id)
-                if source_epg_channel and source_epg_channel.channel_id:
-                    source = db.session.get(EpgSource, source_epg_channel.source_id)
-                    if source:
-                        account = None
-                        if source.source_type in ("provider", "upstream") and source.account_id:
-                            account = account_map.get(source.account_id)
-
-                        xml_content = None
-                        if account and account_xml_cache and account.id in account_xml_cache:
-                            xml_content = account_xml_cache[account.id]
-                        else:
-                            xml_content = fetch_epg_from_source(source, account)
-
-                        if xml_content:
-                            # Apply both source mapping offset and channel link offset
-                            total_offset = (source_mapping.time_offset_hours or 0) + time_offset
-                            mapping_list = [(source_epg_channel.channel_id, standardized_id, total_offset)]
-                            channel_elems, prog_elems = filter_epg_by_channels(xml_content, mapping_list)
-                            all_channel_elements.extend(channel_elems)
-                            all_programme_elements.extend(prog_elems)
-                            processed_channel_ids.add(ch.id)
-                            logger.debug(
-                                f"Channel link EPG: {ch.name} ({standardized_id}) inherits from "
-                                f"{source_channel.name} via mapping with offset {total_offset}h"
-                            )
-                            continue
-
-            # Fallback to source's provider EPG
-            if source_channel.epg_channel_id:
-                account = account_map.get(source_channel.account_id)
-                if account and account.enabled:
-                    xml_content = None
-                    if account_xml_cache and account.id in account_xml_cache:
-                        xml_content = account_xml_cache[account.id]
-                    else:
-                        from services.iptv_service import IPTVService
-
-                        try:
-                            cred = account.get_primary_credential()
-                            if cred:
-                                service = IPTVService(
-                                    account.server,
-                                    cred.username,
-                                    cred.password,
-                                    account.user_agent or "okhttp/3.14.9",
-                                )
-                            else:
-                                service = IPTVService(
-                                    account.server,
-                                    account.username,
-                                    account.password,
-                                    account.user_agent or "okhttp/3.14.9",
-                                )
-                            xml_content = service.get_xmltv()
-                        except Exception as e:
-                            logger.warning(f"Failed to fetch EPG for channel link: {e}")
-                            continue
-
-                    if xml_content:
-                        mapping_list = [(source_channel.epg_channel_id, standardized_id, time_offset)]
-                        channel_elems, prog_elems = filter_epg_by_channels(xml_content, mapping_list)
-                        all_channel_elements.extend(channel_elems)
-                        all_programme_elements.extend(prog_elems)
-                        processed_channel_ids.add(ch.id)
-                        logger.debug(
-                            f"Channel link EPG: {ch.name} ({standardized_id}) inherits from "
-                            f"{source_channel.name} via provider with offset {time_offset}h"
-                        )
-
-    # Add synthetic channel elements for channels without any EPG
+    # Step 3: Add synthetic channel elements for channels without any EPG data
     for ch in channels:
         if ch.id not in processed_channel_ids:
             fallback_id = f"ch-{ch.account_id}-{ch.stream_id}"
@@ -665,6 +566,117 @@ def generate_epg_for_channels(
         root.append(elem)
 
     return ET.tostring(root, encoding="unicode", xml_declaration=True).encode("utf-8")
+
+
+def _generate_epg_from_channel_links(
+    channels: List[Channel],
+    mappings: Dict[int, ChannelEpgMapping],
+    already_processed: Set[int],
+) -> Tuple[List[ET.Element], List[ET.Element], Set[int]]:
+    """
+    Generate EPG elements for channels via ChannelLink relationships.
+
+    When a channel links to a source channel, it inherits the source's EPG
+    data with an optional time offset applied.
+
+    Args:
+        channels: List of channels to process
+        mappings: Channel EPG mappings dict
+        already_processed: Set of channel IDs already processed
+
+    Returns:
+        Tuple of (channel_elements, programme_elements, processed_channel_ids)
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from services.epg.programs import get_programs_for_channels, program_to_xmltv_element
+
+    channel_elements: List[ET.Element] = []
+    programme_elements: List[ET.Element] = []
+    processed_channel_ids: Set[int] = set()
+
+    if not channels:
+        return channel_elements, programme_elements, processed_channel_ids
+
+    # Get channel links
+    channel_ids = [ch.id for ch in channels if ch.id not in already_processed]
+    if not channel_ids:
+        return channel_elements, programme_elements, processed_channel_ids
+
+    channel_links = get_channel_links_for_fallback(channel_ids)
+    if not channel_links:
+        return channel_elements, programme_elements, processed_channel_ids
+
+    # Get time range
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    start_time = now - timedelta(hours=1)
+    end_time = now + timedelta(hours=168)
+
+    # Collect source channel EPG channel IDs that need to be fetched
+    source_epg_channel_ids: Set[int] = set()
+    source_channel_to_epg_channel: Dict[int, Tuple[int, int]] = {}  # source_channel_id -> (epg_channel_id, offset)
+
+    for ch in channels:
+        if ch.id not in channel_links:
+            continue
+        source_channel, link_offset = channel_links[ch.id]
+
+        # Check if source channel has EPG mapping
+        source_mapping = mappings.get(source_channel.id)
+        if source_mapping:
+            epg_channel_id = source_mapping.epg_channel_id
+            mapping_offset = source_mapping.time_offset_hours or 0
+            total_offset = mapping_offset + link_offset
+            source_channel_to_epg_channel[source_channel.id] = (epg_channel_id, total_offset)
+            source_epg_channel_ids.add(epg_channel_id)
+
+    if not source_epg_channel_ids:
+        return channel_elements, programme_elements, processed_channel_ids
+
+    # Fetch programs for source channels
+    programs_by_channel = get_programs_for_channels(list(source_epg_channel_ids), start_time, end_time)
+
+    # Generate elements for linked channels
+    for ch in channels:
+        if ch.id not in channel_links:
+            continue
+        source_channel, link_offset = channel_links[ch.id]
+
+        if source_channel.id not in source_channel_to_epg_channel:
+            continue
+
+        epg_channel_id, total_offset = source_channel_to_epg_channel[source_channel.id]
+        programs = programs_by_channel.get(epg_channel_id, [])
+
+        if not programs:
+            continue
+
+        standardized_id = f"ch-{ch.account_id}-{ch.stream_id}"
+
+        # Create channel element
+        channel_elem = ET.Element("channel")
+        channel_elem.set("id", standardized_id)
+
+        display_name = ET.SubElement(channel_elem, "display-name")
+        display_name.text = ch.cleaned_name or ch.name
+
+        if ch.stream_icon:
+            ET.SubElement(channel_elem, "icon", src=ch.stream_icon)
+
+        channel_elements.append(channel_elem)
+
+        # Create programme elements with time offset
+        for program in programs:
+            prog_elem = program_to_xmltv_element(program, standardized_id, total_offset)
+            programme_elements.append(prog_elem)
+
+        processed_channel_ids.add(ch.id)
+        logger.debug(
+            f"Channel link EPG: {ch.name} ({standardized_id}) inherits from "
+            f"{source_channel.name} with offset {total_offset}h"
+        )
+
+    return channel_elements, programme_elements, processed_channel_ids
 
 
 def generate_filtered_epg(

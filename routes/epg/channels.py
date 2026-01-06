@@ -1,5 +1,5 @@
 """
-EPG channel management routes - channels, matching, and mappings
+EPG channel management routes - channels, matching, mappings, and programs
 """
 import logging
 
@@ -314,6 +314,23 @@ def get_epg_mappings():
         total = len(mappings)
         mappings = mappings[offset : offset + limit]
 
+        # Get current programs for mapped EPG channels
+        from services.epg.programs import get_current_programs_batch
+
+        epg_channel_ids = [
+            m.epg_channel_id
+            for m in mappings
+            if hasattr(m, "epg_channel_id") and m.epg_channel_id and not isinstance(m.epg_channel_id, str)
+        ]
+        current_programs = get_current_programs_batch(epg_channel_ids) if epg_channel_ids else {}
+
+        def get_current_program(mapping):
+            """Get current program info for a mapping."""
+            if not hasattr(mapping, "epg_channel_id") or isinstance(mapping.epg_channel_id, str):
+                return None
+            prog = current_programs.get(mapping.epg_channel_id)
+            return prog.to_dict() if prog and hasattr(prog, "to_dict") else prog
+
         return jsonify(
             {
                 "total": total,
@@ -331,11 +348,13 @@ def get_epg_mappings():
                         "cleaned_name": m.channel.cleaned_name if m.channel else None,
                         "epg_channel_id": m.epg_channel_id,
                         "epg_display_name": m.epg_channel.display_name if m.epg_channel else None,
+                        "source_name": m.epg_channel.source.name if m.epg_channel and m.epg_channel.source else None,
                         "mapping_type": m.mapping_type,
                         "confidence": m.confidence,
                         "time_offset_hours": m.time_offset_hours or 0,
                         "is_override": m.is_override,
                         "is_visible": m.channel.is_visible if m.channel else True,
+                        "current_program": get_current_program(m),
                     }
                     for m in mappings
                 ],
@@ -418,6 +437,23 @@ def get_epg_mappings():
                             "is_override": False,
                         }
 
+        # Get current programs for channels with mappings
+        from services.epg.programs import get_current_programs_batch
+
+        epg_channel_ids_for_programs = [m.epg_channel_id for m in mappings_by_channel.values() if m.epg_channel_id]
+        current_programs_map = (
+            get_current_programs_batch(epg_channel_ids_for_programs) if epg_channel_ids_for_programs else {}
+        )
+
+        def get_current_program_for_channel(channel_id):
+            """Get current program info for a channel's EPG mapping."""
+            if channel_id in mappings_by_channel:
+                mapping = mappings_by_channel[channel_id]
+                if mapping.epg_channel_id in current_programs_map:
+                    prog = current_programs_map[mapping.epg_channel_id]
+                    return prog.to_dict() if hasattr(prog, "to_dict") else prog
+            return None
+
         return jsonify(
             {
                 "total": total,
@@ -458,6 +494,7 @@ def get_epg_mappings():
                                 else ppv_mappings_by_channel.get(c.id)
                             )
                         ),
+                        "current_program": get_current_program_for_channel(c.id),
                     }
                     for c in channels
                 ],
@@ -530,6 +567,50 @@ def delete_epg_mapping(mapping_id):
     db.session.commit()
 
     return jsonify({"success": True, "message": "EPG mapping deleted"})
+
+
+@epg_channels_bp.route("/mappings/<int:mapping_id>", methods=["PUT"])
+@handle_errors(return_json=True, default_message="Error updating EPG mapping")
+def update_epg_mapping(mapping_id):
+    """Update an existing EPG mapping
+
+    Request body:
+    - epg_channel_id: Optional - new EPG channel ID
+    - time_offset_hours: Optional - time offset in hours
+    """
+    mapping = ChannelEpgMapping.query.get_or_404(mapping_id)
+    data = request.get_json()
+
+    if "epg_channel_id" in data:
+        new_epg_channel_id = data["epg_channel_id"]
+        # Verify the new EPG channel exists
+        epg_channel = EpgChannel.query.get(new_epg_channel_id)
+        if not epg_channel:
+            return jsonify({"error": "EPG channel not found"}), 404
+        mapping.epg_channel_id = new_epg_channel_id
+
+    if "time_offset_hours" in data:
+        mapping.time_offset_hours = data["time_offset_hours"]
+
+    # Update match type to manual since user is editing
+    mapping.match_type = "manual"
+    mapping.confidence_score = 100
+
+    db.session.commit()
+
+    # Get EPG channel details for response
+    epg_channel = EpgChannel.query.get(mapping.epg_channel_id)
+
+    return jsonify(
+        {
+            "success": True,
+            "message": "EPG mapping updated",
+            "mapping_id": mapping.id,
+            "epg_channel_id": mapping.epg_channel_id,
+            "epg_display_name": epg_channel.display_name if epg_channel else None,
+            "time_offset_hours": mapping.time_offset_hours,
+        }
+    )
 
 
 @epg_channels_bp.route("/mappings/bulk-delete", methods=["POST"])
@@ -609,5 +690,288 @@ def create_account_epg_source(account_id):
             "success": True,
             "source_id": source.id,
             "message": "EPG source created",
+        }
+    )
+
+
+# ============================================================================
+# API Routes - EPG Programs
+# ============================================================================
+
+
+@epg_channels_bp.route("/programs/current", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error getting current programs")
+def get_current_programs():
+    """Get currently airing programs for specified EPG channels.
+
+    Query parameters:
+    - epg_channel_ids: Comma-separated list of EPG channel IDs
+    - source_id: Optional EPG source ID to get all current programs from
+
+    Returns a mapping of epg_channel_id -> program info
+    """
+    from services.epg.programs import get_current_programs_batch
+
+    epg_channel_ids_param = request.args.get("epg_channel_ids", "")
+    source_id = request.args.get("source_id", type=int)
+
+    epg_channel_ids = []
+
+    if epg_channel_ids_param:
+        try:
+            epg_channel_ids = [int(x.strip()) for x in epg_channel_ids_param.split(",") if x.strip()]
+        except ValueError:
+            return jsonify({"error": "Invalid epg_channel_ids format"}), 400
+    elif source_id:
+        # Get all EPG channel IDs for this source
+        channels = EpgChannel.query.filter_by(source_id=source_id).all()
+        epg_channel_ids = [c.id for c in channels]
+
+    if not epg_channel_ids:
+        return jsonify({"programs": {}})
+
+    programs = get_current_programs_batch(epg_channel_ids)
+
+    return jsonify({"programs": {epg_id: prog.to_dict() for epg_id, prog in programs.items()}})
+
+
+@epg_channels_bp.route("/programs/search", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error searching programs")
+def search_programs():
+    """Search EPG programs by title.
+
+    Query parameters:
+    - q: Search query (required)
+    - source_id: Optional EPG source ID to limit search
+    - current_only: If 'true', only return currently airing programs
+    - limit: Max results (default 100)
+
+    Returns list of programs with their EPG channel info.
+    Used for matching channels by searching for what's currently playing.
+    """
+    from services.epg.programs import search_programs_by_title
+
+    query = request.args.get("q", "").strip()
+    source_id = request.args.get("source_id", type=int)
+    current_only = request.args.get("current_only", "false").lower() == "true"
+    limit = request.args.get("limit", 100, type=int)
+
+    if not query:
+        return jsonify({"error": "Search query 'q' is required"}), 400
+
+    if len(query) < 2:
+        return jsonify({"error": "Search query must be at least 2 characters"}), 400
+
+    results = search_programs_by_title(
+        title_query=query,
+        source_id=source_id,
+        include_current_only=current_only,
+        limit=limit,
+    )
+
+    return jsonify(
+        {
+            "query": query,
+            "count": len(results),
+            "results": [
+                {
+                    "program": prog.to_dict(),
+                    "epg_channel": {
+                        "id": epg_channel.id,
+                        "source_id": epg_channel.source_id,
+                        "channel_id": epg_channel.channel_id,
+                        "display_name": epg_channel.display_name,
+                        "icon_url": epg_channel.icon_url,
+                    },
+                }
+                for prog, epg_channel in results
+            ],
+        }
+    )
+
+
+@epg_channels_bp.route("/programs/<int:epg_channel_id>", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error getting programs")
+def get_epg_channel_programs(epg_channel_id):
+    """Get programs for a specific EPG channel.
+
+    Query parameters:
+    - hours: Number of hours to look ahead (default 24)
+    - limit: Max programs to return (default 20)
+    - include_current: Include currently airing program (default true)
+
+    Returns the current program (if any) and list of upcoming programs.
+    """
+    from services.epg.programs import get_current_program, get_upcoming_programs
+
+    # Validate EPG channel exists
+    EpgChannel.query.get_or_404(epg_channel_id)
+
+    hours = request.args.get("hours", 24, type=int)
+    limit = request.args.get("limit", 20, type=int)
+    include_current = request.args.get("include_current", "true").lower() == "true"
+
+    result = {
+        "epg_channel_id": epg_channel_id,
+        "current_program": None,
+        "upcoming_programs": [],
+    }
+
+    if include_current:
+        current = get_current_program(epg_channel_id)
+        if current:
+            result["current_program"] = current.to_dict()
+
+    upcoming = get_upcoming_programs(epg_channel_id, hours=hours, limit=limit)
+    result["upcoming_programs"] = [p.to_dict() for p in upcoming]
+
+    return jsonify(result)
+
+
+@epg_channels_bp.route("/programs/<int:epg_channel_id>/schedule", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error getting program schedule")
+def get_epg_channel_schedule(epg_channel_id):
+    """Get program schedule around a reference time with optional offset.
+
+    This endpoint is useful for displaying the schedule when adjusting
+    time offsets in the manual mapping modal, showing what's on before
+    and after the "current" program based on the offset.
+
+    Query parameters:
+    - offset_hours: Time offset in hours (default 0)
+    - hours_before: Hours of past programs to include (default 2)
+    - hours_after: Hours of future programs to include (default 4)
+
+    Returns current program, programs_before, and programs_after based on
+    the adjusted time (now + offset_hours).
+    """
+    from services.epg.programs import get_schedule_around_time
+
+    # Validate EPG channel exists
+    EpgChannel.query.get_or_404(epg_channel_id)
+
+    offset_hours = request.args.get("offset_hours", 0, type=int)
+    hours_before = request.args.get("hours_before", 2, type=int)
+    hours_after = request.args.get("hours_after", 4, type=int)
+
+    schedule = get_schedule_around_time(
+        epg_channel_id=epg_channel_id,
+        offset_hours=offset_hours,
+        hours_before=hours_before,
+        hours_after=hours_after,
+    )
+
+    return jsonify(schedule)
+
+
+@epg_channels_bp.route("/mappings-with-programs", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error getting mappings with programs")
+def get_mappings_with_current_programs():
+    """Get EPG mappings with current program information.
+
+    This endpoint combines channel EPG mappings with current program data
+    to show what's currently airing for verification purposes.
+
+    Query parameters:
+    - account_id: Filter by account (required)
+    - category_id: Filter by category
+    - view_mode: 'all', 'mapped', or 'unmapped' (default: 'all')
+    - show_filtered: Include filtered channels (default: false)
+    - limit: Max results (default 100)
+    - offset: Pagination offset
+    """
+    from services.epg.programs import get_current_programs_batch
+
+    account_id = request.args.get("account_id", type=int)
+    category_id = request.args.get("category_id", type=int)
+    view_mode = request.args.get("view_mode", "all")
+    show_filtered = request.args.get("show_filtered", "false").lower() == "true"
+    limit = request.args.get("limit", 100, type=int)
+    offset = request.args.get("offset", 0, type=int)
+
+    if not account_id:
+        return jsonify({"error": "account_id is required"}), 400
+
+    # Build base query for channels with mappings
+    query = (
+        db.session.query(Channel, ChannelEpgMapping, EpgChannel)
+        .outerjoin(ChannelEpgMapping, Channel.id == ChannelEpgMapping.channel_id)
+        .outerjoin(EpgChannel, ChannelEpgMapping.epg_channel_id == EpgChannel.id)
+        .filter(Channel.account_id == account_id, Channel.is_active == True)  # noqa: E712
+    )
+
+    if category_id:
+        query = query.filter(Channel.category_id == category_id)
+
+    if view_mode == "mapped":
+        query = query.filter(ChannelEpgMapping.id != None)  # noqa: E711
+    elif view_mode == "unmapped":
+        query = query.filter(ChannelEpgMapping.id == None)  # noqa: E711
+
+    results = query.order_by(Channel.name).all()
+
+    # Apply filter visibility
+    if not show_filtered:
+        channels = [r[0] for r in results]
+        FilterService.apply_filters_to_channels(channels, account_id)
+        results = [r for r in results if r[0].is_visible]
+
+    total = len(results)
+    results = results[offset : offset + limit]
+
+    # Get current programs for all mapped EPG channels
+    epg_channel_ids = [r[2].id for r in results if r[2] is not None]
+    current_programs = get_current_programs_batch(epg_channel_ids) if epg_channel_ids else {}
+
+    # Build response
+    response_data = []
+    for channel, mapping, epg_channel in results:
+        item = {
+            "channel": {
+                "id": channel.id,
+                "stream_id": channel.stream_id,
+                "name": channel.name,
+                "cleaned_name": channel.cleaned_name,
+                "category_id": channel.category_id,
+                "category_name": channel.category.category_name if channel.category else None,
+                "is_visible": channel.is_visible,
+                "stream_icon": channel.stream_icon,
+            },
+            "mapping": None,
+            "epg_channel": None,
+            "current_program": None,
+        }
+
+        if mapping and epg_channel:
+            item["mapping"] = {
+                "id": mapping.id,
+                "mapping_type": mapping.mapping_type,
+                "confidence": mapping.confidence,
+                "time_offset_hours": mapping.time_offset_hours or 0,
+                "is_override": mapping.is_override,
+            }
+            item["epg_channel"] = {
+                "id": epg_channel.id,
+                "channel_id": epg_channel.channel_id,
+                "display_name": epg_channel.display_name,
+                "icon_url": epg_channel.icon_url,
+                "source_id": epg_channel.source_id,
+            }
+
+            # Add current program if available
+            current_prog = current_programs.get(epg_channel.id)
+            if current_prog:
+                item["current_program"] = current_prog.to_dict()
+
+        response_data.append(item)
+
+    return jsonify(
+        {
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "has_more": offset + len(response_data) < total,
+            "view_mode": view_mode,
+            "data": response_data,
         }
     )

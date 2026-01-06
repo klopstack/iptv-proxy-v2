@@ -8,6 +8,7 @@ This package provides EPG (Electronic Program Guide) functionality:
 - PPV channel detection and handling
 - EPG coverage statistics
 - EPG XML caching
+- Program data storage and retrieval
 
 Submodules:
     - constants: EPG-related constants (PPV patterns, broadcast networks)
@@ -19,6 +20,7 @@ Submodules:
     - coverage: EPG coverage statistics
     - fcc: FCC database integration for US broadcast channels
     - cache: EPG XML filesystem cache
+    - programs: EPG program storage and retrieval
 
 Usage:
     # Import specific modules
@@ -28,12 +30,13 @@ Usage:
     from services.epg.fcc import preview_fcc_epg_matches
     from services.epg.ppv import is_ppv_channel
     from services.epg.cache import load_from_cache, save_to_cache
+    from services.epg.programs import get_current_program, search_programs_by_title
 
     # Import constants
     from services.epg.constants import PPV_CATEGORY_PATTERNS
 """
 # Import submodules for direct access
-from services.epg import cache, constants, coverage, fcc, generation, matching, parsing, ppv, utils
+from services.epg import cache, constants, coverage, fcc, generation, matching, parsing, ppv, programs, utils
 
 # Re-export commonly used constants for convenience
 from services.epg.constants import (
@@ -57,6 +60,7 @@ __all__ = [
     "ppv",
     "coverage",
     "fcc",
+    "programs",
     # Constants (re-exported for convenience)
     "MAJOR_BROADCAST_NETWORKS",
     "NETWORK_FALLBACK_EPG_IDS",

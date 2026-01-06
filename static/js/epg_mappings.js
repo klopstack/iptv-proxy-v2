@@ -253,7 +253,7 @@ async function loadMappings(reset = true) {
 function renderMappingRow(item, viewMode) {
     const filteredBadge = item.is_visible === false ? '<span class="badge bg-secondary ms-1">Filtered</span>' : '';
     
-    let channelId, channelName, originalName, streamId, accountId, categoryName, mapping;
+    let channelId, channelName, originalName, streamId, accountId, categoryName, mapping, currentProgram;
     
     if (viewMode === 'all') {
         channelId = item.id;
@@ -263,6 +263,7 @@ function renderMappingRow(item, viewMode) {
         accountId = item.account_id;
         categoryName = item.category_name || '-';
         mapping = item.mapping;
+        currentProgram = item.current_program;
     } else if (viewMode === 'unmapped') {
         channelId = item.id;
         originalName = item.name;
@@ -271,6 +272,7 @@ function renderMappingRow(item, viewMode) {
         accountId = item.account_id;
         categoryName = item.category_name || '-';
         mapping = null;
+        currentProgram = null;
     } else {
         channelId = item.channel_id;
         originalName = item.channel_name;
@@ -280,16 +282,24 @@ function renderMappingRow(item, viewMode) {
         categoryName = '-';
         mapping = {
             id: item.id,
+            epg_channel_id: item.epg_channel_id,
             epg_display_name: item.epg_display_name,
             mapping_type: item.mapping_type,
             confidence: item.confidence,
-            is_override: item.is_override
+            is_override: item.is_override,
+            source_name: item.source_name
         };
+        currentProgram = item.current_program;
     }
     
     let mappingCell, matchInfoCell;
     if (mapping) {
-        mappingCell = `<span class="text-success">${mapping.epg_display_name || 'EPG #' + mapping.epg_channel_id}</span>`;
+        let programInfo = '';
+        if (currentProgram) {
+            const liveTag = currentProgram.is_live ? '<span class="badge bg-danger ms-1">LIVE</span>' : '';
+            programInfo = `<div class="small text-primary mt-1"><i class="bi bi-play-circle"></i> ${escapeHtml(currentProgram.title)}${liveTag}</div>`;
+        }
+        mappingCell = `<span class="text-success">${mapping.epg_display_name || 'EPG #' + mapping.epg_channel_id}</span>${programInfo}`;
         
         const typeBadge = mapping.mapping_type === 'manual' 
             ? '<span class="badge bg-primary">Manual</span>'
@@ -317,14 +327,16 @@ function renderMappingRow(item, viewMode) {
     let actions = `<a class="btn btn-outline-success btn-sm" href="/player/${accountId}/${streamId}" target="_blank" title="Play stream"><i class="bi bi-play-fill"></i></a>`;
     
     if (mapping) {
-        // PPV event mappings use EventChannelLink (can't be deleted via normal mapping API)
+        // PPV event mappings use EventChannelLink (can't be deleted/edited via normal mapping API)
         if (mapping.mapping_type === 'ppv_event') {
-            actions += ` <button class="btn btn-outline-secondary btn-sm" disabled title="PPV event links cannot be deleted"><i class="bi bi-lock"></i></button>`;
+            actions += ` <button class="btn btn-outline-secondary btn-sm" disabled title="PPV event links cannot be edited"><i class="bi bi-lock"></i></button>`;
         } else {
-            actions += ` <button class="btn btn-outline-danger btn-sm" onclick="deleteMapping(${mapping.id}, ${channelId})" title="Delete mapping"><i class="bi bi-trash"></i></button>`;
+            // Edit mapping button - opens modal with existing mapping info
+            const existingMappingJson = JSON.stringify(mapping).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            actions += ` <button class="btn btn-outline-primary btn-sm" onclick='showManualMappingModal(${channelId}, "${escapeHtml(channelName).replace(/"/g, '&quot;')}", ${accountId}, ${streamId}, ${existingMappingJson})' title="Edit mapping"><i class="bi bi-pencil"></i></button>`;
         }
     } else {
-        actions += ` <button class="btn btn-outline-primary btn-sm" onclick="showManualMappingModal(${channelId}, '${escapeHtml(channelName)}')" title="Create mapping"><i class="bi bi-link"></i></button>`;
+        actions += ` <button class="btn btn-outline-primary btn-sm" onclick="showManualMappingModal(${channelId}, '${escapeHtml(channelName).replace(/'/g, "\\'")}', ${accountId}, ${streamId})" title="Create mapping"><i class="bi bi-link"></i></button>`;
     }
     
     const escapedChannelName = escapeHtml(channelName).replace(/'/g, "\\'");
