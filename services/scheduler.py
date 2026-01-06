@@ -710,7 +710,7 @@ class SyncScheduler:
 
             # Refresh from sportsipy with rate limiting delays
             result = refresh_teams_from_sportsipy(
-                sports=["nfl", "nba", "nhl", "mlb"],
+                sports=["fb", "mlb", "nba", "ncaab", "ncaaf", "nfl", "nhl"],
                 delay_seconds=3.0,  # 3 second delay between sports
             )
 

@@ -2134,14 +2134,15 @@ class SportsTeam(db.Model):  # type: ignore[name-defined]
     __tablename__ = "sports_teams"
 
     # Supported sports/leagues
-    SPORT_NFL = "nfl"
-    SPORT_NBA = "nba"
-    SPORT_NHL = "nhl"
+    SPORT_FB = "fb"
     SPORT_MLB = "mlb"
-    SPORT_NCAAF = "ncaaf"
+    SPORT_NBA = "nba"
     SPORT_NCAAB = "ncaab"
+    SPORT_NCAAF = "ncaaf"
+    SPORT_NFL = "nfl"
+    SPORT_NHL = "nhl"
 
-    SPORTS = [SPORT_NFL, SPORT_NBA, SPORT_NHL, SPORT_MLB, SPORT_NCAAF, SPORT_NCAAB]
+    SPORTS = [SPORT_FB, SPORT_MLB, SPORT_NBA, SPORT_NCAAB, SPORT_NCAAF, SPORT_NFL, SPORT_NHL]
 
     id = db.Column(db.Integer, primary_key=True)
 

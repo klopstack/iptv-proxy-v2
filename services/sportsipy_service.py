@@ -4,12 +4,13 @@ Sportsipy Integration Service
 Provides integration with the sportsipy library for matching PPV channels
 to sports events. Sportsipy scrapes Sports Reference websites and provides
 data for:
+- FB (Football/Soccer)
 - MLB (Baseball)
 - NBA (Basketball)
-- NFL (Football)
-- NHL (Hockey)
 - NCAAB (College Basketball)
 - NCAAF (College Football)
+- NFL (American Football)
+- NHL (Ice Hockey)
 
 Team data is stored in the database (SportsTeam model) and can be refreshed
 from sportsipy on a schedule. This avoids hardcoding team lists and allows
@@ -35,10 +36,13 @@ SPORTSIPY_AVAILABLE = False
 SPORTSIPY_INSTALL_INSTRUCTIONS = "pip install git+https://github.com/davidjkrause/sportsipy@master"
 
 try:
+    from sportsipy.fb.teams import Teams as FBTeams
     from sportsipy.mlb.schedule import Schedule as MLBSchedule
     from sportsipy.mlb.teams import Teams as MLBTeams
     from sportsipy.nba.schedule import Schedule as NBASchedule
     from sportsipy.nba.teams import Teams as NBATeams
+    from sportsipy.ncaab.teams import Teams as NCAABTeams
+    from sportsipy.ncaaf.teams import Teams as NCAAFTeams
     from sportsipy.nfl.schedule import Schedule as NFLSchedule
     from sportsipy.nfl.teams import Teams as NFLTeams
     from sportsipy.nhl.schedule import Schedule as NHLSchedule
@@ -58,6 +62,7 @@ FALLBACK_SPORT_PATTERNS = {
     "mlb": [r"\b(MLB|Baseball)\b"],
     "ncaaf": [r"\b(NCAA Football|College Football|CFB)\b"],
     "ncaab": [r"\b(NCAA Basketball|College Basketball|March Madness|Final Four)\b"],
+    "mls": [r"\b(MLS|Major League Soccer|Soccer)\b"],
 }
 
 
@@ -380,7 +385,7 @@ def refresh_teams_from_sportsipy(
     This function adds delays between requests to avoid rate limiting.
 
     Args:
-        sports: List of sports to refresh (default: all pro sports)
+        sports: List of sports to refresh (default: all supported sports)
         delay_seconds: Delay between API calls (default: 3.0 seconds)
 
     Returns: Dict with refresh statistics
@@ -394,8 +399,8 @@ def refresh_teams_from_sportsipy(
     from models import SportsTeam, db
 
     if sports is None:
-        # Default to pro sports only (college has issues with current year data)
-        sports = ["nfl", "nba", "nhl", "mlb"]
+        # Default to all available sports from sportsipy
+        sports = ["fb", "mlb", "nba", "ncaab", "ncaaf", "nfl", "nhl"]
 
     stats: Dict[str, Any] = {
         "success": True,
@@ -406,10 +411,13 @@ def refresh_teams_from_sportsipy(
     }
 
     sport_classes = {
-        "nfl": NFLTeams,
-        "nba": NBATeams,
-        "nhl": NHLTeams,
+        "fb": FBTeams,
         "mlb": MLBTeams,
+        "nba": NBATeams,
+        "ncaab": NCAABTeams,
+        "ncaaf": NCAAFTeams,
+        "nfl": NFLTeams,
+        "nhl": NHLTeams,
     }
 
     for sport in sports:
@@ -573,6 +581,13 @@ def seed_initial_team_data() -> Dict[str, Any]:
         ("mlb", "CHC", "Chicago Cubs", ["cubs", "chicago"]),
         ("mlb", "STL", "St. Louis Cardinals", ["cardinals", "cards", "st louis"]),
         ("mlb", "SFG", "San Francisco Giants", ["giants", "san francisco"]),
+        # FB (Football/Soccer) - Major teams
+        ("fb", "MUN", "Manchester United", ["manchester united", "man united", "united"]),
+        ("fb", "LIV", "Liverpool", ["liverpool", "reds"]),
+        ("fb", "MCI", "Manchester City", ["manchester city", "man city", "city"]),
+        ("fb", "ARS", "Arsenal", ["arsenal", "gunners"]),
+        ("fb", "CHE", "Chelsea", ["chelsea", "blues"]),
+        ("fb", "TOT", "Tottenham", ["tottenham", "spurs"]),
     ]
 
     teams_added = 0
