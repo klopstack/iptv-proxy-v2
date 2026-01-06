@@ -933,8 +933,8 @@ class EpgProgram(db.Model):  # type: ignore[name-defined]
         return {
             "id": self.id,
             "epg_channel_id": self.epg_channel_id,
-            "start_time": self.start_time.isoformat() if self.start_time else None,
-            "stop_time": self.stop_time.isoformat() if self.stop_time else None,
+            "start_time": (self.start_time.isoformat() + "Z") if self.start_time else None,
+            "stop_time": (self.stop_time.isoformat() + "Z") if self.stop_time else None,
             "title": self.title,
             "sub_title": self.sub_title,
             "description": self.description,

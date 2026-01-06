@@ -13,7 +13,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Set test database URI BEFORE importing app
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+# Use file-based database for testing to ensure proper connection handling
+# This avoids in-memory database connection issues with nested app contexts
+os.environ["DATABASE_URL"] = "sqlite:///test.db"
 
 # Import app and models AFTER setting environment
 import app as app_module
@@ -25,7 +27,7 @@ def app():
     """
     Create Flask app configured for testing
 
-    Uses in-memory SQLite database that's reset between tests.
+    Uses SQLite file-based database that's reset between tests.
     """
     # Get the Flask app instance
     flask_app = app_module.app
@@ -42,6 +44,13 @@ def app():
         _db.session.remove()
         _db.engine.dispose()
         _db.drop_all()
+
+    # Clean up test database file
+    import pathlib
+
+    test_db = pathlib.Path("test.db")
+    if test_db.exists():
+        test_db.unlink()
 
 
 @pytest.fixture(scope="function")

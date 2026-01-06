@@ -35,6 +35,8 @@ def test_account(app):
         )
         db.session.add(account)
         db.session.commit()
+        # Refresh to get the ID
+        db.session.refresh(account)
         yield account
 
 
@@ -51,6 +53,7 @@ def test_category(app, test_account):
         )
         db.session.add(category)
         db.session.commit()
+        db.session.refresh(category)
         yield category
 
 
@@ -73,6 +76,9 @@ def test_channels(app, test_account, test_category):
             db.session.add(channel)
             channels.append(channel)
         db.session.commit()
+        # Get IDs before yielding
+        for channel in channels:
+            db.session.refresh(channel)
         yield channels
 
 
@@ -90,6 +96,7 @@ def xtream_credential(app, test_account):
         )
         db.session.add(cred)
         db.session.commit()
+        db.session.refresh(cred)
         yield cred
 
 
@@ -108,6 +115,7 @@ def playlist_config(app, test_account):
         )
         db.session.add(config)
         db.session.commit()
+        db.session.refresh(config)
         yield config
 
 
@@ -125,6 +133,7 @@ def xtream_credential_playlist(app, playlist_config):
         )
         db.session.add(cred)
         db.session.commit()
+        db.session.refresh(cred)
         yield cred
 
 
@@ -708,9 +717,12 @@ class TestXtreamChannelFiltering:
             # Link tag to first channel
             channel_tag = ChannelTag(account_id=test_account.id, stream_id=test_channels[0].stream_id, tag_id=tag.id)
             db.session.add(channel_tag)
+            db.session.commit()
 
+            # Re-fetch playlist config from database to ensure it's attached to this session
+            config = db.session.get(PlaylistConfig, playlist_config.id)
             # Update playlist config to include only HD tag
-            playlist_config.include_tags = json.dumps([tag.id])
+            config.include_tags = json.dumps([tag.id])
             db.session.commit()
 
             # Create credential for playlist config

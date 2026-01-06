@@ -283,9 +283,9 @@ function createProgramCard(program, isCurrent, channelName = null) {
     // Program title
     const titleHtml = `<h5 class="card-title mb-2">${escapeHtml(program.title)}</h5>`;
     
-    // Time info
-    const startTime = new Date(program.start_time);
-    const stopTime = new Date(program.stop_time);
+    // Time info - use parseUTCDateTime for proper local time display
+    const startTime = parseUTCDateTime(program.start_time);
+    const stopTime = parseUTCDateTime(program.stop_time);
     const timeHtml = `
         <p class="card-text small mb-2">
             <i class="bi bi-clock"></i> 

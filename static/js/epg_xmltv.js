@@ -91,7 +91,7 @@ async function loadXmltvConfigs() {
                 <div class="list-group-item d-flex justify-content-between align-items-center">
                     <div>
                         <strong>${config.name}</strong>
-                        <br><small class="text-muted">Modified: ${new Date(config.modified).toLocaleString()}</small>
+                        <br><small class="text-muted">Modified: ${formatLocalDateTime(config.modified)}</small>
                     </div>
                     <button class="btn btn-outline-danger btn-sm" onclick="deleteXmltvConfig('${config.name}')">
                         <i class="bi bi-trash"></i>

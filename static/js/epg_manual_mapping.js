@@ -215,8 +215,8 @@ async function loadEpgSchedule(epgChannelId, offsetHours = 0) {
 }
 
 function renderScheduleProgram(program, position) {
-    const startTime = new Date(program.start_time);
-    const stopTime = new Date(program.stop_time);
+    const startTime = parseUTCDateTime(program.start_time);
+    const stopTime = parseUTCDateTime(program.stop_time);
     const timeStr = `${startTime.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})} - ${stopTime.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`;
     
     let bgClass = '';
@@ -511,8 +511,8 @@ function renderProgramSearchResults(data) {
 
 function formatProgramTime(startTime, stopTime) {
     try {
-        const start = new Date(startTime);
-        const stop = new Date(stopTime);
+        const start = parseUTCDateTime(startTime);
+        const stop = parseUTCDateTime(stopTime);
         const options = { hour: 'numeric', minute: '2-digit' };
         return `${start.toLocaleTimeString([], options)} - ${stop.toLocaleTimeString([], options)}`;
     } catch {

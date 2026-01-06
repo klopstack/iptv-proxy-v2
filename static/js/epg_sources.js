@@ -142,7 +142,7 @@ function renderSources() {
                 <td>${sourceInfo}</td>
                 <td>${source.channel_count || 0}</td>
                 <td>${inUseHtml}</td>
-                <td>${source.last_sync ? new Date(source.last_sync).toLocaleString() : 'Never'}</td>
+                <td>${source.last_sync ? formatLocalDateTime(source.last_sync) : 'Never'}</td>
                 <td>${statusBadge}</td>
                 <td>
                     <div class="btn-group btn-group-sm">
@@ -385,7 +385,7 @@ async function loadSdLineupsInline(sourceId) {
                         <strong>${lineup.name || lineup.lineup_id}</strong>
                         ${lineup.location ? '<br><small class="text-muted">' + lineup.location + '</small>' : ''}
                         <br><small class="text-muted">${lineup.channel_count || 0} channels</small>
-                        ${lineup.last_sync ? '<small class="text-muted"> | Last sync: ' + new Date(lineup.last_sync).toLocaleString() + '</small>' : ''}
+                        ${lineup.last_sync ? '<small class="text-muted"> | Last sync: ' + formatLocalDateTime(lineup.last_sync) + '</small>' : ''}
                     </div>
                     <div class="btn-group btn-group-sm">
                         <button class="btn btn-sm btn-outline-primary" onclick="syncSdLineupInline(${lineup.id}, ${sourceId})" title="Sync lineup">
