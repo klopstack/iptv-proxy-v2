@@ -524,9 +524,7 @@ def generate_epg_for_channels(
     processed_channel_ids.update(db_processed)
 
     if db_processed:
-        logger.info(
-            f"Generated EPG from database for {len(db_processed)} channels ({len(db_prog_elems)} programmes)"
-        )
+        logger.info(f"Generated EPG from database for {len(db_processed)} channels ({len(db_prog_elems)} programmes)")
 
     # Step 2: Handle ChannelLink - channels that inherit EPG from linked source channels
     if use_channel_links:
