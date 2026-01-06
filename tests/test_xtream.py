@@ -436,15 +436,30 @@ class TestXtreamStreamURLs:
     """Test Xtream stream URLs"""
 
     def test_live_stream_valid(self, app, client, xtream_credential, test_channels):
-        """Test valid live stream URL"""
+        """Test valid live stream URL - stream_id type conversion"""
         with app.app_context():
-            # Note: stream_id in URL is parsed as int, but compared to string in DB
-            # The route converts it properly
+            # Stream ID in URL is parsed as integer (1000) but must be compared
+            # to string stream IDs in database ("1000"). The route should handle conversion.
             response = client.get("/live/xtream_user/xtream_pass/1000.ts")
-            # This should work but there's a type mismatch in the route
-            # The route expects integer stream_id but channels have string stream_ids
-            # For now, just verify the authentication works
-            assert response.status_code in [302, 404]  # Either redirects or not found due to type issue
+            # Should redirect to internal stream proxy when found
+            assert response.status_code == 302
+
+    def test_live_stream_type_mismatch_fix(self, app, client, xtream_credential, test_channels):
+        """Test that stream_id integer from route matches string in database"""
+        with app.app_context():
+            # Create a channel with specific stream_id
+            channel = db.session.query(Channel).filter_by(stream_id="1000").first()
+            assert channel is not None, "Test channel with stream_id='1000' should exist"
+            assert isinstance(channel.stream_id, str), "Channel stream_id should be stored as string"
+
+            # Request using integer in URL
+            response = client.get("/live/xtream_user/xtream_pass/1000.ts")
+            assert response.status_code == 302, "Integer stream_id from URL should match string in database"
+
+            # Verify the redirect location contains the correct stream_id
+            location = response.headers.get("Location")
+            assert location is not None
+            assert "1000" in location
 
     def test_live_stream_invalid_credentials(self, app, client):
         """Test live stream with invalid credentials"""
@@ -462,8 +477,8 @@ class TestXtreamStreamURLs:
         """Test live stream URL without extension"""
         with app.app_context():
             response = client.get("/live/xtream_user/xtream_pass/1000")
-            # May fail due to int/string type mismatch
-            assert response.status_code in [302, 404]
+            # Should redirect same as with extension
+            assert response.status_code == 302
 
     def test_movie_stream(self, app, client, xtream_credential):
         """Test movie stream URL (not implemented)"""

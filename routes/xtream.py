@@ -594,7 +594,7 @@ def xtream_live_stream(username, password, stream_id, ext="ts"):
     # Verify stream exists and is accessible for this credential
     channels = get_channels_for_credential(xtream_cred, account, playlist_config)
     logger.info(f"Found {len(channels)} accessible channels for credential {xtream_cred.username}")
-    channel = next((ch for ch in channels if ch.stream_id == stream_id), None)
+    channel = next((ch for ch in channels if ch.stream_id == str(stream_id)), None)
 
     if not channel:
         logger.warning(f"Stream {stream_id} not found in {len(channels)} accessible channels")
