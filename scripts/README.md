@@ -52,6 +52,74 @@ Analyzes patterns in successful and failed matches to identify improvement oppor
 python scripts/analyze_match_patterns.py [--account-id ID]
 ```
 
+### `analyze_non_vs_events.py`
+Analyzes unmatched PPV channels to identify non-vs events and placeholders.
+
+Categorizes channels by type:
+- **Placeholder**: Generic numbered channels or section headers (e.g., "EVENT 1-10", "#####HEADER#####", "NO EVENT STREAMING")
+- **Tournament/League**: League matches and tournament series
+- **Highlight/Recap**: Post-match highlights and replays
+- **Documentary**: Documentaries and specials
+- **Show/Program**: Talk shows, news, commentary
+- **Training**: Practices, press conferences, friendlies
+- **Player**: Player profiles and interviews
+- **Other**: Likely vs events that didn't match
+
+**Placeholder detection:**
+- Channels starting with `#` (section headers)
+- Channels explicitly marked "NO EVENT STREAMING"
+- Channels with 2+ entries sharing same base name but different numbers (e.g., "DAZN PPV 1", "DAZN PPV 2")
+
+**Usage:**
+```bash
+# Show all categories with examples
+python scripts/analyze_non_vs_events.py
+
+# Filter by account
+python scripts/analyze_non_vs_events.py --account-id 5
+
+# Hide examples (just show counts)
+python scripts/analyze_non_vs_events.py --no-examples
+```
+
+**Output includes:**
+- Count and percentage of each category
+- Example channels for each category
+- Recommendations for improving matching or filtering
+
+**Example findings from database:**
+```
+Placeholder channels:  6,894 ( 58.3%)  ← Generic/numbered/empty
+Likely vs events:      4,549 ( 38.5%)  ← Should match but didn't
+Likely non-vs:           387 (  3.3%)  ← Real non-event content
+```
+
+### `rerun_matching.py`
+Re-runs PPV channel matching. Useful after:
+- Improving matching algorithms
+- Adding new events to the database
+- Fixing text extraction issues
+
+**Usage:**
+```bash
+# Dry run (shows what would happen)
+python scripts/rerun_matching.py [--account-id ID] [--clear-existing]
+
+# Actually run matching
+python scripts/rerun_matching.py --execute [--account-id ID] [--clear-existing]
+
+# Re-run for specific account, keeping existing matches
+python scripts/rerun_matching.py --account-id 5 --execute
+
+# Clear all existing matches and re-match from scratch
+python scripts/rerun_matching.py --clear-existing --execute
+```
+
+**Options:**
+- `--account-id ID` - Re-match only specific account (default: all accounts)
+- `--clear-existing` - Clear existing matches before re-matching (default: keeps and adds new)
+- `--execute` - Actually run matching (default is dry run)
+
 ### `cleanup_old_events.py`
 Removes old/stale events from the database to prevent incorrect matches to historical events.
 

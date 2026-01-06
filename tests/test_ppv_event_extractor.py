@@ -84,6 +84,27 @@ class TestPPVEventExtractor:
         assert result == ("Team A", "Team B")
 
     # ========================================================================
+    # Dash-Separated Team Names (e.g., Soccer/Rugby)
+    # ========================================================================
+
+    def test_extract_competitors_dash_separator(self):
+        """Test extraction with dash separator (common in rugby/soccer)"""
+        result = self.extractor.extract_competitors("NORTHAMPTON SAINTS - HARLEQUINS")
+        assert result == ("NORTHAMPTON SAINTS", "HARLEQUINS")
+
+    def test_extract_competitors_dash_with_provider_prefix(self):
+        """Test extraction ignoring provider prefix before dash separator"""
+        result = self.extractor.extract_competitors("UK: D+ PPV 1 - NORTHAMPTON SAINTS - HARLEQUINS | Sat 03 Jan 17:15")
+        assert result == ("NORTHAMPTON SAINTS", "HARLEQUINS")
+
+    def test_extract_competitors_dash_laliga(self):
+        """Test extraction of Spanish La Liga team match with dash separator"""
+        result = self.extractor.extract_competitors(
+            "ES: LALIGA+ PPV 3 - BARAKALDO CF - UNIONISTAS DE SALAMANCA CF | Sat 03 Jan 18:30"
+        )
+        assert result == ("BARAKALDO CF", "UNIONISTAS DE SALAMANCA CF")
+
+    # ========================================================================
     # Multi-word Team Names
     # ========================================================================
 
@@ -207,6 +228,29 @@ class TestPPVEventExtractor:
         result = self.extractor.extract_date("Event May 9th 9:00 PM")
         assert result is not None
         assert result.hour == 21  # 9 PM = 21:00
+
+    # ========================================================================
+    # Date Format Tests - DD/MM format (European, e.g., "24/10 16:00")
+    # ========================================================================
+
+    def test_extract_date_ddmm_format(self):
+        """Test extraction of DD/MM HH:MM format"""
+        result = self.extractor.extract_date("Event: 24/10 16:00")
+        assert result is not None
+        assert result.month == 10
+        assert result.day == 24
+        assert result.hour == 16
+        assert result.minute == 0
+
+    def test_extract_date_ddmm_with_year_in_channel(self):
+        """Test DD/MM format with year appearing earlier in channel name"""
+        result = self.extractor.extract_date("Flo (FLSP) 288: 2025 Davenport vs Purdue Northwest - Mens - 24/10 16:00")
+        assert result == datetime(2025, 10, 24, 16, 0, 0)
+
+    def test_extract_date_ddmm_with_different_year(self):
+        """Test DD/MM format correctly uses extracted year"""
+        result = self.extractor.extract_date("Event 2024 - 15/05 14:30")
+        assert result == datetime(2024, 5, 15, 14, 30, 0)
 
     # ========================================================================
     # Date Format Tests - Weekday inference

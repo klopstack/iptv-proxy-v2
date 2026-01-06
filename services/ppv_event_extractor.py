@@ -21,15 +21,29 @@ logger = logging.getLogger(__name__)
 class PPVEventExtractor:
     """Extracts event information from PPV channel names using regex patterns."""
 
-    # Competitor pattern: team names separated by vs/at/@ with optional periods
+    # Sport/event type patterns - extracted first to clean up channel names
+    # Common sports and event types
+    SPORT_PATTERN = r"\b(Field\s+Hockey|Ice\s+Hockey|NCAA\s+Football|College\s+Football|NFL|NBA|MLB|NHL|Soccer|Football|Basketball|Volleyball|Tennis|Golf|Cricket|Rugby|Lacrosse|Curling|Skating|Weightlifting|Boxing|MMA|UFC|Wrestling|Judo|Karate|Taekwondo|Gymnastics|Swimming|Track\s+and\s+Field|Cross\s+Country|Rowing|Sailing|Cycling|Triathlon|Badminton|Squash|Table\s+Tennis|Handball|Netball|Australian\s+Rules|American\s+Football|Australian\s+Football)\b"
+
+    # Tournament structure pattern - removes "Round 4 - Game 1" style patterns
+    # Matched BEFORE competitor extraction to prevent false matches
+    # Matches: Round/Semi/Final + number/letter + dash + Game/Final/etc
+    TOURNAMENT_STRUCTURE_PATTERN = r"\b(Round|Quarter|Semi|Final|Group|Stage|Match|Game|Heat|Leg|Lap)\s+(?:\d+[a-z]?|[A-Z])\s*-\s*(?:Final|Game|Match|Heat|Leg|Lap)\b"
+
+    # Competitor pattern: team names separated by vs/at/@/- with optional periods
     # Special handling for 'vs' to allow comma-separated player names (tennis, etc.)
     # Allows commas in team names for multi-player events, non-greedy second group for 'vs'
-    # For other separators (at/@/-), uses greedy matching with different lookahead
-    # Two-branch pattern:
-    # Branch 1 (groups 1,2): "vs" with optional commas (for tennis: "Federer, Roger vs Nadal, Rafael @ time")
-    # Branch 2 (groups 3,4): "at/@/versus/-" without commas (other sports)
-    # NOTE: The second group can capture trailing time which gets cleaned by _clean_team_name
-    COMPETITOR_PATTERN = r"([#A-Za-z0-9\s&\'\-,]+?)\s+(?:vs\.?)\s+([#A-Za-z0-9\s&\'\-,\.:]+?)(?=\s*[@|(\[]|$)|([#A-Za-z0-9\s&\'-]+?)\s+(?:at\.?|versus|@|-)\s+([#A-Za-z0-9\s&\'-\-\.]+?)(?=\s*[-|(\[]|$)"
+    # For other separators (at/@/versus/-), uses greedy matching with different lookahead
+    # Three-branch pattern:
+    # Branch 1 (groups 1,2): "vs" with optional commas (tennis: "Federer, Roger vs Nadal, Rafael")
+    # Branch 2 (groups 3,4): "at/@/versus" (most sports)
+    # Branch 3 (groups 5,6): "-" separator for teams like "NORTHAMPTON SAINTS - HARLEQUINS"
+    # NOTE: Tournament structure (Round 4 - Game 1) is removed via _clean_channel_name() BEFORE matching
+    # NOTE: The group capturing team names can include trailing time which gets cleaned by _clean_team_name
+    # Uses \w (unicode-aware) instead of [A-Za-z0-9] to support accented characters (Grêmio, São Paulo, etc.)
+    # Branch 3 (dash): Uses non-greedy first team and greedy second team to match rightmost pair
+    #   when multiple dashes exist (e.g., "PPV 1 - TEAM A - TEAM B" matches "TEAM A - TEAM B")
+    COMPETITOR_PATTERN = r"([#\w\s&\'\-,]+?)\s+(?:vs\.?)\s+([#\w\s&\'\-,\.:]+?)(?=\s*[|@()\[\]]|-\s+[A-Z]|-\s+\d|\s+\d|\s*$)|([#\w\s&\'-]+?)\s+(?:at\.?|versus|@)\s+([#\w\s&\'-\-\.]+?)(?=\s*[|@()\[\]]|-\s+[A-Z]|-\s+\d|\s+\d|\s*$)|([A-Z][A-Za-z\s&\'\-]+?)\s+-\s+([A-Z][A-Za-z\s&\'\-]+)(?=\s*[|@()\[\]]|\s*$)"
 
     # Pattern to strip trailing time from team names (e.g., "Sudan 16:00pm" -> "Sudan")
     TRAILING_TIME_PATTERN = r"\s+\d{1,2}:\d{2}\s*(?:am|pm)?$"
@@ -43,6 +57,11 @@ class PPVEventExtractor:
 
     # ISO date pattern: "YYYY-MM-DD HH:MM"
     ISO_DATE_PATTERN = r"(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})"
+
+    # DD/MM date pattern: "DD/MM HH:MM" (common in Europe, e.g., "24/10 16:00")
+    # Can optionally have year before it: "2025 24/10 16:00"
+    # Interprets as day/month, infers year from context or current year
+    DDMM_DATE_PATTERN = r"(?:(\d{4})\s+)?(\d{1,2})/(\d{1,2})\s+(\d{1,2}):(\d{2})"
 
     # Day of week pattern: "Mon", "Tue", "Wed", etc.
     WEEKDAY_PATTERN = r"\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b"
@@ -121,6 +140,46 @@ class PPVEventExtractor:
         max_future = self.current_date + timedelta(days=365)
         return event_date > max_future
 
+    def extract_sport(self, channel_name: str) -> Optional[Tuple[str, str]]:
+        """
+        Extract sport/event type from channel name.
+
+        Returns: (sport_name, cleaned_name) or (None, original_name) if no match
+
+        Examples:
+        - "Regis College vs Mount Holyoke - Field Hockey - 23/10" -> ("Field Hockey", "Regis College vs Mount Holyoke - 23/10")
+        - "NCAA Football: Ohio State vs Michigan" -> ("NCAA Football", "Ohio State vs Michigan")
+        """
+        match = re.search(self.SPORT_PATTERN, channel_name, re.IGNORECASE)
+        if not match:
+            return None, channel_name
+
+        sport = match.group(0)
+        # Remove the sport from the name, cleaning up extra dashes/spaces
+        cleaned = channel_name[: match.start()] + channel_name[match.end() :]
+        # Clean up extra dashes and spaces around the removal
+        cleaned = re.sub(r"\s*-\s*-\s*", " - ", cleaned)  # Replace multiple dashes
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()  # Normalize whitespace
+
+        return sport, cleaned
+
+    def _clean_tournament_structure(self, channel_name: str) -> str:
+        """
+        Remove tournament structure patterns like "Round 4 - Game 1" from channel name.
+
+        These patterns can be mistaken for competitor matches (e.g., "Round 4 - Game"
+        looks like "TEAM A - TEAM B" without proper context).
+
+        Examples:
+        - "Round 4 - Game 1: SPO @ MH" -> "SPO @ MH"
+        - "Semi - Final: Team A vs Team B" -> "Team A vs Team B"
+        """
+        cleaned = re.sub(self.TOURNAMENT_STRUCTURE_PATTERN, "", channel_name, flags=re.IGNORECASE)
+        # Clean up extra dashes and spaces
+        cleaned = re.sub(r"\s*-\s*-\s*", " - ", cleaned)  # Replace multiple dashes
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()  # Normalize whitespace
+        return cleaned
+
     def extract_competitors(self, channel_name: str) -> Optional[Tuple[str, str]]:
         """
         Extract competitor/team names from channel name.
@@ -131,26 +190,37 @@ class PPVEventExtractor:
         - "Arsenal vs Brighton @ Dec 27" -> ("Arsenal", "Brighton")
         - "Vegas Golden Knights @ Colorado Avalanche" -> ("Vegas Golden Knights", "Colorado Avalanche")
         - "Federer, Roger vs Nadal, Rafael" -> ("Federer, Roger", "Nadal, Rafael")
+        - "NORTHAMPTON SAINTS - HARLEQUINS" -> ("NORTHAMPTON SAINTS", "HARLEQUINS")
         """
         # Skip placeholders
         if self.is_placeholder(channel_name):
             return None
 
+        # First extract sport type to clean up the name
+        sport, cleaned_name = self.extract_sport(channel_name)
+
+        # Remove tournament structure patterns (Round 4 - Game 1, etc.) to avoid false matches
+        cleaned_name = self._clean_tournament_structure(cleaned_name)
+
         # Try to find competitor match
-        match = re.search(self.COMPETITOR_PATTERN, channel_name, re.IGNORECASE)
+        match = re.search(self.COMPETITOR_PATTERN, cleaned_name, re.IGNORECASE)
         if not match:
             return None
 
-        # Handle alternate patterns: (vs with comma) vs (other separators without comma)
-        # vs pattern has groups 1,2; other separators have groups 3,4
+        # Handle alternate patterns: (vs with comma) vs (other separators without comma) vs (dash separator)
+        # vs pattern has groups 1,2; other separators have groups 3,4; dash separator has groups 5,6
         if match.group(1) is not None:
             # 'vs' pattern matched (groups 1, 2)
             comp1 = match.group(1).strip()
             comp2 = match.group(2).strip()
-        else:
+        elif match.group(3) is not None:
             # Other separator pattern matched (groups 3, 4)
             comp1 = match.group(3).strip()
             comp2 = match.group(4).strip()
+        else:
+            # Dash separator pattern matched (groups 5, 6)
+            comp1 = match.group(5).strip()
+            comp2 = match.group(6).strip()
 
         # Clean up competitor names
         comp1 = self._clean_team_name(comp1)
@@ -170,6 +240,7 @@ class PPVEventExtractor:
         - "YYYY-MM-DD HH:MM" -> ISO format date
         - "Month DD HH:MM" -> This year, specified time
         - "Month DD HH:MM AM/PM" -> This year, specified time with AM/PM
+        - "DD/MM HH:MM" -> Day/Month format (European), infers year
         - Day of week + time -> Next occurrence of that day
 
         Returns datetime object.
@@ -185,6 +256,34 @@ class PPVEventExtractor:
                     return None
                 return dt
             except ValueError:
+                pass
+
+        # Try DD/MM format: "24/10 16:00" (with optional year anywhere before it)
+        ddmm_match = re.search(self.DDMM_DATE_PATTERN, channel_name, re.IGNORECASE)
+        if ddmm_match:
+            year_str, day, month, hour, minute = ddmm_match.groups()
+            try:
+                # Use extracted year if directly before date, otherwise look for any year before
+                if year_str:
+                    year = int(year_str)
+                else:
+                    # Look for most recent 4-digit year before the DD/MM pattern
+                    text_before_date = channel_name[: ddmm_match.start()]
+                    year_match = None
+                    for m in re.finditer(r"\b(\d{4})\b", text_before_date):
+                        year_match = m
+
+                    year = int(year_match.group(1)) if year_match else self.current_year
+
+                dt = datetime(year, int(month), int(day), int(hour), int(minute))
+
+                # Check if date is too far in future
+                if self.is_date_far_future(dt):
+                    return None
+
+                return dt
+            except ValueError:
+                # Invalid date (e.g., month > 12)
                 pass
 
         # Try month + day + time format
