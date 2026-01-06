@@ -259,8 +259,15 @@ class FFmpegStreamService:
         #   This ensures decoders can start at any keyframe without needing
         #   initialization data from the stream start
         # -f mpegts: Output format
-        # -fflags +genpts: Generate presentation timestamps
-        # -mpegts_flags +pat_pmt_at_frames: Insert PAT/PMT at keyframes
+        # -fflags +genpts+igndts: Generate presentation timestamps, ignore DTS from source
+        # -mpegts_flags +pat_pmt_at_frames+initial_discontinuity: Insert PAT/PMT at keyframes,
+        #   mark initial packets as discontinuous so players know to reset
+        # -avoid_negative_ts make_zero: Ensure timestamps start at 0 and stay positive
+        #
+        # NOTE: We DON'T use -reconnect options because reconnection causes timestamp
+        # jumps that make players skip backward. Instead, we let ffmpeg exit on
+        # disconnection and start a fresh stream. Clients will reconnect and get
+        # clean timestamps from 0.
 
         cmd = [
             "ffmpeg",
@@ -274,28 +281,29 @@ class FFmpegStreamService:
             "Accept: */*\r\nConnection: keep-alive\r\n",
             "-timeout",
             "10000000",  # 10 seconds in microseconds
-            "-reconnect",
-            "1",
-            "-reconnect_streamed",
-            "1",
-            "-reconnect_delay_max",
-            "5",
+            # No reconnect options - we want ffmpeg to exit cleanly on disconnect
+            # so clients reconnect and get fresh timestamps
             "-i",
             stream.upstream_url,
+            # Input processing options (after -i)
+            "-fflags",
+            "+genpts+igndts+discardcorrupt",  # Generate PTS, ignore incoming DTS, drop corrupt
             "-c",
             "copy",
             "-bsf:v",
             "dump_extra=freq=all",
             "-f",
             "mpegts",
-            "-fflags",
-            "+genpts+discardcorrupt",
+            "-avoid_negative_ts",
+            "make_zero",  # Ensure timestamps start at 0
+            "-mpegts_copyts",
+            "0",  # Don't copy timestamps, let ffmpeg normalize them
             "-avioflags",
             "direct",
             "-flush_packets",
             "1",
             "-mpegts_flags",
-            "+pat_pmt_at_frames",
+            "+pat_pmt_at_frames+initial_discontinuity",
             "pipe:1",
         ]
 
