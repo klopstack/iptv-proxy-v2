@@ -78,6 +78,32 @@ class SyncMetadata(db.Model):  # type: ignore[name-defined]
                 raise
         return record
 
+    @staticmethod
+    def delete(key):
+        """Delete a metadata value by key with retry logic for database locks."""
+        import time
+
+        from sqlalchemy.exc import OperationalError
+
+        max_retries = 3
+        retry_delay = 0.5  # seconds
+
+        for attempt in range(max_retries):
+            try:
+                record = db.session.execute(db.select(SyncMetadata).filter_by(key=key)).scalar_one_or_none()
+                if record:
+                    db.session.delete(record)
+                    db.session.commit()
+                break  # Success, exit retry loop
+            except OperationalError as e:
+                # Handle "no such table" during tests or initial setup
+                if "no such table" in str(e):
+                    return None
+                if "database is locked" in str(e) and attempt < max_retries - 1:
+                    time.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+                    continue
+                raise
+
 
 class Account(db.Model):  # type: ignore[name-defined]
     """IPTV service account - can have multiple credentials for stream multiplexing"""

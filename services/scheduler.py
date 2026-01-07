@@ -43,6 +43,10 @@ DEFAULT_PPV_PREFETCH_INTERVAL_HOURS = 6  # Pre-fetch event data every 6 hours
 SYNC_KEY_LAST_SPORTSIPY_REFRESH = "last_sportsipy_refresh"
 DEFAULT_SPORTSIPY_REFRESH_INTERVAL_HOURS = 168  # Weekly (7 days)
 
+# Scheduler heartbeat for multi-worker detection
+SYNC_KEY_SCHEDULER_HEARTBEAT = "scheduler_heartbeat"
+SCHEDULER_HEARTBEAT_TIMEOUT_SECONDS = 120  # Consider dead if no heartbeat for 2 minutes
+
 
 class SyncScheduler:
     """Scheduler for periodic channel sync with persistent timing and separate intervals"""
@@ -151,7 +155,7 @@ class SyncScheduler:
                 }
 
             return {
-                "running": self.running,
+                "running": self._is_scheduler_alive(),
                 # Legacy compatibility
                 "interval_hours": self.interval_hours,
                 "interval_seconds": self.interval_seconds,
@@ -173,6 +177,9 @@ class SyncScheduler:
             return
 
         self.running = True
+        # Set initial heartbeat
+        with self.app.app_context():
+            self._update_heartbeat()
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
         logger.info(f"Sync scheduler started (interval: {self.interval_hours} hours)")
@@ -182,7 +189,30 @@ class SyncScheduler:
         self.running = False
         if self.thread:
             self.thread.join(timeout=5)
+        # Clear heartbeat
+        with self.app.app_context():
+            SyncMetadata.delete(SYNC_KEY_SCHEDULER_HEARTBEAT)
         logger.info("Sync scheduler stopped")
+
+    def _update_heartbeat(self):
+        """Update the scheduler heartbeat timestamp"""
+        SyncMetadata.set(SYNC_KEY_SCHEDULER_HEARTBEAT, datetime.now(timezone.utc).isoformat())
+
+    def _is_scheduler_alive(self) -> bool:
+        """Check if scheduler is alive based on heartbeat (works across workers)"""
+        heartbeat_str = SyncMetadata.get(SYNC_KEY_SCHEDULER_HEARTBEAT)
+        if not heartbeat_str:
+            return False
+
+        try:
+            heartbeat = datetime.fromisoformat(heartbeat_str)
+            if heartbeat.tzinfo is None:
+                heartbeat = heartbeat.replace(tzinfo=timezone.utc)
+
+            age_seconds = (datetime.now(timezone.utc) - heartbeat).total_seconds()
+            return age_seconds < SCHEDULER_HEARTBEAT_TIMEOUT_SECONDS
+        except (ValueError, TypeError):
+            return False
 
     def _get_last_sync_time(self, key: str) -> Optional[datetime]:
         """Get the last sync time from persistent storage"""
@@ -231,6 +261,13 @@ class SyncScheduler:
                         db.session.rollback()
                 except Exception:
                     pass
+
+            # Update heartbeat to show we're alive
+            try:
+                with self.app.app_context():
+                    self._update_heartbeat()
+            except Exception as e:
+                logger.error(f"Error updating scheduler heartbeat: {e}")
 
             # Sleep in small intervals so we can stop quickly
             for _ in range(self._check_interval):
