@@ -158,9 +158,17 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
 
         def generate_shared() -> Generator[bytes, None, None]:
             """Generator function for shared streaming response."""
+            logger.info(
+                f"Stream {stream_id}: Shared generator starting for subscriber {subscriber.subscriber_id[:8]}..."
+            )
             try:
+                chunk_count = 0
                 for chunk in stream_service.stream_chunks(existing_stream, subscriber):  # type: ignore[arg-type]
+                    chunk_count += 1
+                    if chunk_count == 1:
+                        logger.info(f"Stream {stream_id}: First chunk yielded from shared service")
                     yield chunk
+                logger.info(f"Stream {stream_id}: Shared generator completed ({chunk_count} chunks)")
             finally:
                 stream_service.unsubscribe(existing_stream, subscriber)  # type: ignore[arg-type]
                 logger.info(
@@ -247,10 +255,15 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
             """Generator function for new shared stream."""
             logger.info(f"Stream {stream_id}: Generator starting for subscriber {subscriber.subscriber_id[:8]}...")
             try:
+                chunk_count = 0
                 for chunk in stream_service.stream_chunks(shared_stream, subscriber):  # type: ignore[arg-type]
+                    chunk_count += 1
+                    if chunk_count == 1:
+                        logger.info(f"Stream {stream_id}: First chunk yielded from service")
                     yield chunk
+                logger.info(f"Stream {stream_id}: Generator completed ({chunk_count} chunks)")
             except Exception as e:
-                logger.error(f"Error streaming {stream_id}: {e}")
+                logger.error(f"Error streaming {stream_id}: {e}", exc_info=True)
             finally:
                 stream_service.unsubscribe(shared_stream, subscriber)  # type: ignore[arg-type]
 

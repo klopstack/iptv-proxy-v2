@@ -69,7 +69,11 @@ class TagService:
                             try:
                                 captured = match_result.group(1)
                                 if captured is None:
-                                    logger.warning(f"Rule '{rule.name}' matched but capture group is empty")
+                                    logger.warning(
+                                        f"Rule '{rule.name}' matched but capture group is empty. "
+                                        f"Pattern: {rule.pattern!r}, Full match: {match_result.group(0)!r}, "
+                                        f"Search text: {search_text!r}"
+                                    )
                                     continue
                                 captured = captured.strip()
                                 normalized_capture = TagService.normalize_tag_name(captured)

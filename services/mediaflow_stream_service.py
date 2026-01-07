@@ -295,7 +295,7 @@ class MediaFlowStreamService:
         """
         url = stream.proxy_url or stream.upstream_url
 
-        logger.info(f"Starting MediaFlow stream for subscriber {subscriber.subscriber_id[:8]}...")
+        logger.info(f"Starting MediaFlow stream for subscriber {subscriber.subscriber_id[:8]}... URL: {url[:100]}...")
 
         try:
             # Make streaming request to MediaFlow (or direct upstream)
@@ -305,7 +305,10 @@ class MediaFlowStreamService:
                 "Connection": "keep-alive",
             }
 
-            with requests.get(url, headers=headers, stream=True, timeout=(30, 120)) as response:
+            logger.debug(f"Making request to MediaFlow proxy with headers: {headers}")
+            with requests.get(url, headers=headers, stream=True, timeout=(30, 120), allow_redirects=True) as response:
+                logger.info(f"MediaFlow response status: {response.status_code}, headers: {dict(response.headers)}")
+
                 if response.status_code != 200:
                     error_msg = f"Upstream returned {response.status_code}"
                     logger.error(f"MediaFlow stream error: {error_msg}")
@@ -316,17 +319,30 @@ class MediaFlowStreamService:
                 # Update content type from response if available
                 if "Content-Type" in response.headers:
                     stream.content_type = response.headers["Content-Type"]
+                    logger.debug(f"Updated content type to: {stream.content_type}")
 
+                chunk_count = 0
                 for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
                     if not subscriber.active or not stream.is_active:
-                        logger.debug(f"Subscriber {subscriber.subscriber_id[:8]}... stopped")
+                        logger.debug(
+                            f"Subscriber {subscriber.subscriber_id[:8]}... stopped (active={subscriber.active}, stream_active={stream.is_active})"
+                        )
                         break
 
                     if chunk:
+                        chunk_count += 1
                         subscriber.bytes_sent += len(chunk)
                         stream.bytes_received += len(chunk)
                         stream.last_activity = datetime.now(timezone.utc).replace(tzinfo=None)
+
+                        if chunk_count == 1:
+                            logger.info(f"First chunk received: {len(chunk)} bytes")
+                        elif chunk_count % 100 == 0:
+                            logger.debug(f"Streamed {chunk_count} chunks, {subscriber.bytes_sent} bytes total")
+
                         yield chunk
+
+                logger.info(f"Stream completed: {chunk_count} chunks, {subscriber.bytes_sent} bytes total")
 
         except requests.exceptions.Timeout as e:
             error_msg = f"Timeout: {e}"
