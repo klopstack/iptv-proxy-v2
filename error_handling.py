@@ -56,6 +56,29 @@ def text_error_response(message, status_code=400):
     return Response(message, status=status_code)
 
 
+def xml_error_response(message, status_code=500):
+    """
+    Create a valid XMLTV error response.
+
+    Returns minimal but valid XMLTV XML. Error details are NOT included in the
+    response to avoid exposing internal information to clients, but are logged
+    for debugging purposes.
+
+    This prevents XML parsers (like Jellyfin) from failing with
+    "Data at the root level is invalid" errors when the service experiences
+    issues.
+
+    Args:
+        message: Error message (logged but not returned)
+        status_code: HTTP status code
+
+    Returns:
+        Response object with valid empty XMLTV
+    """
+    xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n' '<tv generator-info-name="iptv-proxy-v2"></tv>'
+    return Response(xml_content, status=status_code, mimetype="application/xml")
+
+
 # ============================================================================
 # Error Handler Decorator
 # ============================================================================
@@ -185,6 +208,69 @@ def handle_errors(
                         return error_response(message, 500)
                     else:
                         return text_error_response(message, 500)
+
+        return wrapper
+
+    return decorator
+
+
+def handle_xml_errors(default_message="Error generating EPG"):
+    """
+    Decorator to handle exceptions in XML/XMLTV route handlers.
+
+    Similar to handle_errors but returns valid XMLTV XML on errors instead of
+    plain text. This prevents XML parsers (like Jellyfin) from failing with
+    "Data at the root level is invalid" errors.
+
+    Error details are logged for debugging but not included in the XML response.
+
+    Usage:
+        @app.route('/epg/<int:account_id>.xml')
+        @handle_xml_errors()
+        def epg_endpoint(account_id):
+            # Your code here
+            # Any exception will be caught and returned as valid empty XMLTV
+
+    Args:
+        default_message: Fallback message if exception has no message
+
+    Returns:
+        Decorated function that catches exceptions and returns valid XMLTV
+    """
+
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            try:
+                return f(*args, **kwargs)
+            except HTTPException:
+                # Let Flask handle HTTP exceptions
+                raise
+            except ServiceUnavailableError as e:
+                logger.warning(f"Service unavailable in {f.__name__}: {e}")
+                return xml_error_response(str(e), 503)
+            except ResourceNotFoundError as e:
+                logger.warning(f"Resource not found in {f.__name__}: {e}")
+                return xml_error_response(str(e), 404)
+            except ValidationError as e:
+                logger.warning(f"Validation error in {f.__name__}: {e}")
+                return xml_error_response(str(e), 400)
+            except AuthorizationError as e:
+                logger.warning(f"Authorization error in {f.__name__}: {e}")
+                return xml_error_response(str(e), 403)
+            except ValueError as e:
+                logger.warning(f"Value error in {f.__name__}: {e}")
+                return xml_error_response(str(e), 400)
+            except PermissionError as e:
+                logger.warning(f"Permission error in {f.__name__}: {e}")
+                return xml_error_response(str(e), 403)
+            except FileNotFoundError as e:
+                logger.warning(f"Not found in {f.__name__}: {e}")
+                return xml_error_response(str(e), 404)
+            except Exception as exc:
+                # Unexpected errors - always log with full traceback
+                logger.error(f"Unexpected error in {f.__name__}: {str(exc)}", exc_info=True)
+                return xml_error_response(default_message, 500)
 
         return wrapper
 

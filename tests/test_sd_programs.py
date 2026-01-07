@@ -385,10 +385,14 @@ class TestSyncSdProgramsIntegration:
             ch.schedule_last_modified = datetime.now()
             db.session.commit()
 
+            # Use UTC date to match implementation (sync_sd_programs_for_source uses timezone.utc)
+            from datetime import timezone
+            today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
             # Mock SD client returns same MD5
             mock_client = MagicMock()
             mock_client.get_schedule_md5s.return_value = {
-                "12345": {"2026-01-06": {"md5": "cached_md5", "lastModified": "2026-01-06T12:00:00Z"}}
+                "12345": {today_str: {"md5": "cached_md5", "lastModified": f"{today_str}T12:00:00Z"}}
             }
             # get_schedules should NOT be called for this station
             mock_client.get_schedules.return_value = []

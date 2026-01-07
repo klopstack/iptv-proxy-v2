@@ -7,7 +7,7 @@ import re
 
 from flask import Blueprint, Response, jsonify, request
 
-from error_handling import ServiceUnavailableError, handle_errors
+from error_handling import ServiceUnavailableError, handle_errors, handle_xml_errors
 from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Settings, Tag, db
 from schemas import PlaylistConfigCreateSchema, validate_request_data
 from services.cache_service import CacheService
@@ -706,7 +706,7 @@ def _generate_playlist_from_config(config):
 
 
 @playlists_bp.route("/epg/<int:account_id>.xml")
-@handle_errors(return_json=False, default_message="Error proxying EPG data")
+@handle_xml_errors(default_message="Error proxying EPG data")
 def proxy_epg(account_id):
     """Proxy EPG/XMLTV for account, filtered to only channels in the M3U playlist.
 
@@ -807,7 +807,7 @@ def proxy_epg(account_id):
 
 
 @playlists_bp.route("/epg/config/<int:config_id>.xml")
-@handle_errors(return_json=False, default_message="Error generating EPG from config")
+@handle_xml_errors(default_message="Error generating EPG from config")
 def generate_epg_from_config(config_id):
     """Generate XMLTV EPG for playlist configuration by ID.
 
@@ -822,7 +822,7 @@ def generate_epg_from_config(config_id):
 
 
 @playlists_bp.route("/epg/config/<slug>.xml")
-@handle_errors(return_json=False, default_message="Error generating EPG from config")
+@handle_xml_errors(default_message="Error generating EPG from config")
 def generate_epg_from_config_by_name(slug):
     """Generate XMLTV EPG for playlist configuration by name slug.
 

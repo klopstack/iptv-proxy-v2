@@ -2,13 +2,17 @@
 FFmpeg-based Stream Service - robust stream proxying with proper remuxing
 
 This service uses ffmpeg to handle MPEG-TS stream proxying, which automatically:
-- Regenerates PAT/PMT tables for clean stream starts
-- Handles timestamp discontinuities
+- Preserves original stream timestamps for smooth playback (no backward jumps)
 - Injects SPS/PPS at every frame via dump_extra=freq=all (enables mid-stream joins)
 - Supports multiple subscribers via shared output
+- Handles upstream reconnection gracefully
 
 The key insight is that ffmpeg with `-c copy` remuxes without re-encoding,
-so it's very fast while still fixing all the stream container issues.
+so it's very fast while still fixing stream container issues.
+
+IMPORTANT: We preserve original timestamps (-copyts, -mpegts_copyts 1) rather than
+regenerating them. The previous approach of using +genpts+igndts caused periodic
+backward jumps when ffmpeg's generated timestamps drifted from the original stream.
 
 No buffering is needed - ffmpeg's dump_extra ensures decoders can sync at any keyframe.
 """
@@ -259,10 +263,16 @@ class FFmpegStreamService:
         #   This ensures decoders can start at any keyframe without needing
         #   initialization data from the stream start
         # -f mpegts: Output format
-        # -fflags +genpts+igndts: Generate presentation timestamps, ignore DTS from source
-        # -mpegts_flags +pat_pmt_at_frames+initial_discontinuity: Insert PAT/PMT at keyframes,
-        #   mark initial packets as discontinuous so players know to reset
-        # -avoid_negative_ts make_zero: Ensure timestamps start at 0 and stay positive
+        #
+        # TIMESTAMP HANDLING (critical for avoiding backward jumps):
+        # We preserve original timestamps from the source stream. The previous
+        # approach of regenerating timestamps with +genpts+igndts caused periodic
+        # backward jumps when ffmpeg's generated timestamps drifted from the
+        # original stream timing.
+        #
+        # -mpegts_copyts 1: Copy timestamps from input to output
+        # -fflags +discardcorrupt: Only discard corrupt packets, don't mess with timestamps
+        # -copyts: Preserve timestamps during copy
         #
         # Reconnect handling: We use reconnect options with short delays to handle
         # temporary network issues while keeping the stream alive. The -rw_timeout
@@ -302,23 +312,22 @@ class FFmpegStreamService:
             stream.upstream_url,
             # Input processing options (after -i)
             "-fflags",
-            "+genpts+igndts+discardcorrupt",  # Generate PTS, ignore incoming DTS, drop corrupt
+            "+discardcorrupt",  # Only discard corrupt packets, preserve timestamps
+            "-copyts",  # Preserve timestamps during stream copy
             "-c",
             "copy",
             "-bsf:v",
             "dump_extra=freq=all",
             "-f",
             "mpegts",
-            "-avoid_negative_ts",
-            "make_zero",  # Ensure timestamps start at 0
             "-mpegts_copyts",
-            "0",  # Don't copy timestamps, let ffmpeg normalize them
+            "1",  # Copy timestamps from input (critical for live streams)
             "-avioflags",
             "direct",
             "-flush_packets",
             "1",
             "-mpegts_flags",
-            "+pat_pmt_at_frames+initial_discontinuity",
+            "+pat_pmt_at_frames",  # Still insert PAT/PMT at keyframes for mid-stream joins
             "pipe:1",
         ]
 
