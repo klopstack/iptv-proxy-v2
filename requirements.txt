@@ -10,3 +10,6 @@ beautifulsoup4>=4.12.0
 dateparser>=1.2.0
 # Sportsipy for North American sports data (maintained fork)
 sportsipy @ git+https://github.com/davidjkrause/sportsipy@master
+# MediaFlow Proxy client utilities (optional, for direct API integration)
+# The proxy itself runs as a separate container
+httpx>=0.25.0

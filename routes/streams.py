@@ -4,9 +4,13 @@ Stream proxy routes - handles proxied stream connections with credential multipl
 This module provides endpoints that:
 1. Accept stream requests from clients
 2. Select an available credential for the connection
-3. Proxy the stream data from the IPTV provider (using ffmpeg for proper remuxing)
+3. Proxy the stream data from the IPTV provider (using configurable backend)
 4. Track connection lifecycle
 5. Share upstream connections across multiple clients (stream multiplexing)
+
+Stream backends (configured via STREAM_BACKEND env var):
+- ffmpeg: Uses FFmpeg for MPEG-TS remuxing (default)
+- mediaflow: Uses MediaFlow Proxy for HLS/TS proxying with pre-buffering
 """
 
 import logging
@@ -17,7 +21,7 @@ from werkzeug.exceptions import HTTPException
 
 from models import Account, db
 from services.connection_manager import ConnectionManager
-from services.ffmpeg_stream_service import get_ffmpeg_service as get_stream_service
+from services.stream_service_factory import get_stream_service
 
 logger = logging.getLogger(__name__)
 

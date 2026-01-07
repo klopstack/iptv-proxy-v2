@@ -1,0 +1,45 @@
+# Development Override for docker-compose
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+# This override mounts source code directories as volumes for live development,
+# enabling real-time code updates without container restarts.
+
+services:
+  iptv-proxy-v2:
+    # Mount source code directories for live reloading
+    volumes:
+      - ./data:/app/data  # Persist database
+      - ./app.py:/app/app.py  # Main application
+      - ./models.py:/app/models.py  # Database models
+      - ./schemas.py:/app/schemas.py  # Pydantic schemas
+      - ./error_handling.py:/app/error_handling.py  # Error handling decorators
+      - ./routes:/app/routes  # API routes
+      - ./services:/app/services  # Business logic services
+      - ./templates:/app/templates  # Jinja2 templates
+      - ./static:/app/static  # Static assets (CSS, JS)
+      - ./migrations:/app/migrations  # Database migrations
+    
+    # Enable debug mode for development
+    environment:
+      DEBUG: "True"
+      FLASK_ENV: "development"
+      # Auto-reload on code changes (handled by Gunicorn in production,
+      # but Flask dev server enables this automatically)
+      WERKZEUG_RUN_MAIN: "true"
+    
+    # Run in foreground for easier debugging
+    stdin_open: true
+    tty: true
+
+  mediaflow-proxy:
+    # Also mount mediaflow volumes for development if needed
+    volumes:
+      - mediaflow-cache:/app/cache
+    
+    # Enable streaming progress logs for debugging
+    environment:
+      ENABLE_STREAMING_PROGRESS: "true"
+      DEBUG: "true"
+
+volumes:
+  mediaflow-cache:

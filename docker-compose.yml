@@ -12,6 +12,11 @@ services:
       PORT: "8000"
       SECRET_KEY: "${SECRET_KEY:-change-me-in-production}"
       DEBUG: "False"
+      # Stream backend configuration: "ffmpeg" (default) or "mediaflow"
+      STREAM_BACKEND: "${STREAM_BACKEND:-ffmpeg}"
+      # MediaFlow Proxy configuration (only used when STREAM_BACKEND=mediaflow)
+      MEDIAFLOW_PROXY_URL: "${MEDIAFLOW_PROXY_URL:-http://localhost:8888}"
+      MEDIAFLOW_API_PASSWORD: "${MEDIAFLOW_API_PASSWORD:-}"
     # Run as specific user (optional - defaults to root if not specified)
     # Ensure ./data directory is owned by this user: sudo chown -R 1000:1000 ./data
     user: "${PUID:-1000}:${PGID:-1000}"
@@ -21,5 +26,45 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    depends_on:
+      mediaflow-proxy:
+        condition: service_healthy
+        required: false  # Optional dependency - only if using mediaflow backend
+
+  # MediaFlow Proxy - high-performance HLS/MPEG-TS stream proxy
+  # Only needed when STREAM_BACKEND=mediaflow
+  # To use: STREAM_BACKEND=mediaflow docker-compose up -d
+  mediaflow-proxy:
+    image: mhdzumair/mediaflow-proxy:latest
+    container_name: mediaflow-proxy
+    restart: unless-stopped
+    network_mode: "host"  # Use host network like the main app
+    # ports: # Not needed in host mode
+    #   - "8888:8888"
+    environment:
+      # API password for security (should match MEDIAFLOW_API_PASSWORD above)
+      API_PASSWORD: "${MEDIAFLOW_API_PASSWORD:-}"
+      # Enable pre-buffering for smoother playback
+      ENABLE_HLS_PREBUFFER: "true"
+      HLS_PREBUFFER_SEGMENTS: "5"
+      HLS_PREBUFFER_CACHE_SIZE: "50"
+      HLS_PREBUFFER_MAX_MEMORY_PERCENT: "80"
+      # DASH pre-buffering
+      ENABLE_DASH_PREBUFFER: "true"
+      DASH_PREBUFFER_SEGMENTS: "5"
+      # Streaming progress logging (set to true for debugging)
+      ENABLE_STREAMING_PROGRESS: "false"
+      # Forwarded headers (trust localhost since we're on host network)
+      FORWARDED_ALLOW_IPS: "127.0.0.1"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8888/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # Profiles allow selective service startup
+    # Use: docker-compose --profile mediaflow up -d
+    profiles:
+      - mediaflow
 
 # networks section removed - not compatible with host networking

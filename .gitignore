@@ -10,6 +10,8 @@ build/
 .coverage
 htmlcov/
 *.db
+*.db-shm
+*.db-wal
 data/
 .env
 .venv

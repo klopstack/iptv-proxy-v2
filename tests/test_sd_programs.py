@@ -387,6 +387,7 @@ class TestSyncSdProgramsIntegration:
 
             # Use UTC date to match implementation (sync_sd_programs_for_source uses timezone.utc)
             from datetime import timezone
+
             today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
             # Mock SD client returns same MD5
