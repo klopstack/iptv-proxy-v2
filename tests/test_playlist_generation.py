@@ -232,7 +232,7 @@ class TestPlaylistGeneration:
         content = response.data.decode("utf-8")
 
         # Should contain direct URLs
-        assert "http://server1.example.com/live/" in content
+        assert "https://server1.example.com/live/" in content
         assert "/user1/pass1/" in content
 
     def test_generate_playlist_proxy_icons(self, app, client, test_account1):

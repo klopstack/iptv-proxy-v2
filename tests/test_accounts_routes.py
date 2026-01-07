@@ -97,7 +97,7 @@ class TestAccountTestConnection:
         """Test connection using legacy username/password"""
         mock_service = MagicMock()
         mock_service.authenticate.return_value = {
-            "server_info": {"url": "http://example.com", "time_now": "2024-01-01"},
+            "server_info": {"url": "https://example.com", "time_now": "2024-01-01"},
             "user_info": {"username": "test", "status": "Active", "exp_date": "2025-01-01", "max_connections": "2"},
         }
         mock_service.get_live_streams.return_value = [{"stream_id": 1}] * 10
@@ -127,7 +127,7 @@ class TestAccountTestConnection:
         """Test connection using credentials"""
         mock_service = MagicMock()
         mock_service.authenticate.return_value = {
-            "server_info": {"url": "http://example.com"},
+            "server_info": {"url": "https://example.com"},
             "user_info": {
                 "username": "cred_user",
                 "status": "Active",
