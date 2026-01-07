@@ -21,11 +21,11 @@ def test_epg_sync(source_id: int):
 
     if response.status_code == 200:
         result = response.json()
-        print(f"✅ Sync successful!")
+        print("✅ Sync successful!")
         print(f"   Message: {result.get('message', 'N/A')}")
         if "stats" in result:
             stats = result["stats"]
-            print(f"   Stats:")
+            print("   Stats:")
             print(f"     - Channels added: {stats.get('channels_added', 0)}")
             print(f"     - Channels updated: {stats.get('channels_updated', 0)}")
             print(f"     - Programs added: {stats.get('programs_added', 0)}")
@@ -40,7 +40,7 @@ def test_epg_sync(source_id: int):
     time.sleep(1)
 
     # Check program count
-    print(f"\nChecking program count in database...")
+    print("\nChecking program count in database...")
     response = requests.get(f"{base_url}/api/epg/sources/{source_id}")
     if response.status_code == 200:
         source = response.json()

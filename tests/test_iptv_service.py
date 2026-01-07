@@ -20,7 +20,7 @@ class TestIPTVService:
         assert service.server == "example.com:8080"
         assert service.username == "testuser"
         assert service.password == "testpass"
-        assert service.base_url == "http://example.com:8080"
+        assert service.base_url == "https://example.com:8080"
         assert service.user_agent == "okhttp/3.14.9"
 
     def test_init_custom_user_agent(self):

@@ -17,7 +17,7 @@ class IPTVService:
         self.username = username
         self.password = password
         self.user_agent = user_agent
-        self.base_url = f"http://{server}"
+        self.base_url = f"https://{server}"
 
     def _make_request(self, action, params=None):
         """Make API request to Xtream Codes server"""

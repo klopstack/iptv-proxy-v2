@@ -434,11 +434,11 @@ def generate_playlist(account_id):
             # Direct URL to IPTV provider
             cred = primary_cred
             if cred:
-                stream_url = f"http://{account.server}/live/{cred.username}/{cred.password}/{channel.stream_id}.ts"
+                stream_url = f"https://{account.server}/live/{cred.username}/{cred.password}/{channel.stream_id}.ts"
             else:
                 # Fallback for legacy accounts without credentials
                 stream_url = (
-                    f"http://{account.server}/live/{account.username}/{account.password}/{channel.stream_id}.ts"
+                    f"https://{account.server}/live/{account.username}/{account.password}/{channel.stream_id}.ts"
                 )
 
         m3u_lines.append(extinf)
@@ -693,7 +693,7 @@ def _generate_playlist_from_config(config):
             stream_url = f"{proxy_base}/stream/{account_data['id']}/{channel.stream_id}.ts"
         else:
             # Direct URL to IPTV provider
-            stream_url = f"http://{account_data['server']}/live/{account_data['primary_username']}/{account_data['primary_password']}/{channel.stream_id}.ts"
+            stream_url = f"https://{account_data['server']}/live/{account_data['primary_username']}/{account_data['primary_password']}/{channel.stream_id}.ts"
 
         m3u_lines.append(extinf)
         m3u_lines.append(stream_url)

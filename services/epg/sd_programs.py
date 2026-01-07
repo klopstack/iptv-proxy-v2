@@ -15,7 +15,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from models import ChannelEpgMapping, EpgChannel, EpgProgram, EpgSource, db
+from models import EpgChannel, EpgProgram, EpgSource, db
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,6 @@ Verifies that:
 
 import logging
 import xml.etree.ElementTree as ET
-from unittest.mock import patch
 
 import pytest
 from flask import Flask

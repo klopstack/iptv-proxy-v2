@@ -10,13 +10,11 @@ Tests the EPG program sync service including:
 """
 import gzip
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
 
 import pytest
 
-from models import Account, ChannelEpgMapping, EpgChannel, EpgProgram, EpgSource, db
+from models import Account, ChannelEpgMapping, EpgChannel, EpgProgram, EpgSource
 from services.epg.programs import (
-    DEFAULT_PREVIEW_HOURS,
     _create_program,
     _update_program,
     cleanup_expired_programs,
@@ -468,7 +466,7 @@ class TestGetCurrentProgramsBatch:
                     epg_channel_id=ch.id,
                     start_time=now - timedelta(minutes=30),
                     stop_time=now + timedelta(minutes=30),
-                    title=f"Current Show {i+1}",
+                    title=f"Current Show {i + 1}",
                 )
                 db.session.add(prog)
             db.session.commit()
@@ -496,7 +494,7 @@ class TestGetUpcomingPrograms:
                     epg_channel_id=ch.id,
                     start_time=now + timedelta(hours=i + 1),
                     stop_time=now + timedelta(hours=i + 2),
-                    title=f"Future Show {i+1}",
+                    title=f"Future Show {i + 1}",
                 )
                 db.session.add(prog)
             db.session.commit()

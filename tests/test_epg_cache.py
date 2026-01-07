@@ -91,7 +91,7 @@ class TestSaveToCache:
 
     def test_save_basic(self, mock_cache_dir):
         """Test basic cache save operation."""
-        from services.epg.cache import get_cache_meta_path, get_cache_path, save_to_cache
+        from services.epg.cache import get_cache_path, save_to_cache
 
         result = save_to_cache(1, SAMPLE_EPG_XML)
 

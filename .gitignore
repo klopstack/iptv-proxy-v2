@@ -20,3 +20,5 @@ node_modules/
 .DS_Store
 .idea/
 .vscode/
+instance/test.db-shm
+instance/test.db-wal

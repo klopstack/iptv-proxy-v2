@@ -159,10 +159,10 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
         def generate_shared() -> Generator[bytes, None, None]:
             """Generator function for shared streaming response."""
             try:
-                for chunk in stream_service.stream_chunks(existing_stream, subscriber):
+                for chunk in stream_service.stream_chunks(existing_stream, subscriber):  # type: ignore[arg-type]
                     yield chunk
             finally:
-                stream_service.unsubscribe(existing_stream, subscriber)
+                stream_service.unsubscribe(existing_stream, subscriber)  # type: ignore[arg-type]
                 logger.info(
                     f"Client {client_ip} disconnected from shared stream {stream_id} "
                     f"({subscriber.bytes_sent} bytes sent)"
@@ -201,8 +201,8 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
         abort(503, description=f"Could not acquire connection: {error}")
 
     # Build upstream URL
-    upstream_url = f"http://{account.server}/live/{credential.username}/{credential.password}/{stream_id}.{format}"
-    safe_url = f"http://{account.server}/live/{credential.username}/***/{stream_id}.{format}"
+    upstream_url = f"https://{account.server}/live/{credential.username}/{credential.password}/{stream_id}.{format}"
+    safe_url = f"https://{account.server}/live/{credential.username}/***/{stream_id}.{format}"
     logger.info(f"Creating new shared stream: {safe_url}")
 
     user_agent = account.user_agent or "okhttp/3.14.9"
@@ -247,12 +247,12 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
             """Generator function for new shared stream."""
             logger.info(f"Stream {stream_id}: Generator starting for subscriber {subscriber.subscriber_id[:8]}...")
             try:
-                for chunk in stream_service.stream_chunks(shared_stream, subscriber):
+                for chunk in stream_service.stream_chunks(shared_stream, subscriber):  # type: ignore[arg-type]
                     yield chunk
             except Exception as e:
                 logger.error(f"Error streaming {stream_id}: {e}")
             finally:
-                stream_service.unsubscribe(shared_stream, subscriber)
+                stream_service.unsubscribe(shared_stream, subscriber)  # type: ignore[arg-type]
 
                 logger.info(
                     f"Client {client_ip} disconnected from stream {stream_id} " f"({subscriber.bytes_sent} bytes sent)"
@@ -263,7 +263,7 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
 
         # Check if upstream failed to connect
         if not shared_stream.is_active and shared_stream.error:
-            stream_service.unsubscribe(shared_stream, subscriber)
+            stream_service.unsubscribe(shared_stream, subscriber)  # type: ignore[arg-type]
             release_connection_once()
 
             error_msg = shared_stream.error
@@ -403,8 +403,8 @@ def test_stream(account_id: int, stream_id: str) -> Union[Dict[str, Any], Tuple[
     checks["credential_id"] = credential_id
 
     # Check 3: Test upstream connectivity
-    upstream_url = f"http://{account.server}/live/{credential.username}/" f"{credential.password}/{stream_id}.ts"
-    safe_url = f"http://{account.server}/live/{credential.username}/***/{stream_id}.ts"
+    upstream_url = f"https://{account.server}/live/{credential.username}/" f"{credential.password}/{stream_id}.ts"
+    safe_url = f"https://{account.server}/live/{credential.username}/***/{stream_id}.ts"
     checks["upstream_url"] = safe_url
 
     user_agent = account.user_agent or "okhttp/3.14.9"

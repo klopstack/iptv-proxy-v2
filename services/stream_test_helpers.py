@@ -59,7 +59,7 @@ def build_upstream_url(server: str, username: str, password: str, stream_id: str
     Returns:
         Full upstream URL
     """
-    return f"http://{server}/live/{username}/{password}/{stream_id}.{format}"
+    return f"https://{server}/live/{username}/{password}/{stream_id}.{format}"
 
 
 def build_safe_url(server: str, username: str, stream_id: str, format: str) -> str:
@@ -75,7 +75,7 @@ def build_safe_url(server: str, username: str, stream_id: str, format: str) -> s
     Returns:
         URL with password masked as ***
     """
-    return f"http://{server}/live/{username}/***/{stream_id}.{format}"
+    return f"https://{server}/live/{username}/***/{stream_id}.{format}"
 
 
 def validate_account_prerequisites(account) -> Tuple[bool, str]:

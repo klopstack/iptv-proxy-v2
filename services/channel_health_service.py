@@ -94,7 +94,7 @@ class ChannelHealthService:
 
         # Build stream URL
         stream_url = (
-            f"http://{account.server}/live/{credential.username}/" f"{credential.password}/{channel.stream_id}.ts"
+            f"https://{account.server}/live/{credential.username}/" f"{credential.password}/{channel.stream_id}.ts"
         )
 
         start_time = time.time()
