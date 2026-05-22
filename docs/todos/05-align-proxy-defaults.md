@@ -1,7 +1,7 @@
 # TODO 05: Align M3U Proxy Defaults
 
 **Priority:** P1  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Small (behavior change + docs)
 
 ---
@@ -87,11 +87,11 @@ Keep auto-enable for multi-credential accounts as additional OR logic.
 
 ## Acceptance criteria
 
-- [ ] Config M3U defaults to proxied stream URLs (same as account M3U)
-- [ ] `?proxy=false` disables proxy on both route types
-- [ ] Multi-credential auto-proxy logic unchanged
-- [ ] Accounts page M3U links still work without query params
-- [ ] Tests updated to reflect new default
+- [x] Config M3U defaults to proxied stream URLs (same as account M3U)
+- [x] `?proxy=false` disables proxy on both route types
+- [x] Multi-credential auto-proxy logic unchanged
+- [x] Accounts page M3U links still work without query params
+- [x] Tests updated to reflect new default
 
 ---
 
@@ -109,6 +109,6 @@ Verify generated M3U contains `/stream/` URLs without explicit `?proxy=true` on 
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Option A: config M3U now defaults `proxy=true` to match single-account route |

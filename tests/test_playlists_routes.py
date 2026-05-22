@@ -523,6 +523,28 @@ class TestPlaylistConfigM3U:
         response = client.get(f"/playlist/config/{test_playlist_config}.m3u")
         assert response.status_code == 403
 
+    def test_generate_playlist_config_default_proxy(self, app, client, test_playlist_config, test_account, test_channel_with_tag):
+        """Test that config M3U defaults to proxied stream URLs"""
+        response = client.get(f"/playlist/config/{test_playlist_config}.m3u?proxy_icons=false")
+
+        assert response.status_code == 200
+        content = response.data.decode("utf-8")
+        assert "/stream/" in content
+        assert f"/{test_account}/" in content
+
+    def test_generate_playlist_config_direct_urls(self, app, client, test_playlist_config, test_account, test_channel_with_tag):
+        """Test that config M3U honors proxy=false"""
+        with app.app_context():
+            from models import Account
+
+            account = db.session.get(Account, test_account)
+
+        response = client.get(f"/playlist/config/{test_playlist_config}.m3u?proxy=false&proxy_icons=false")
+
+        assert response.status_code == 200
+        content = response.data.decode("utf-8")
+        assert f"https://{account.server}/live/" in content
+
 
 # ============================================================================
 # EPG Proxy Tests

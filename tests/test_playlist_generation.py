@@ -237,6 +237,16 @@ class TestPlaylistGeneration:
         assert "https://server1.example.com/live/" in content
         assert "/user1/pass1/" in content
 
+    def test_generate_playlist_default_proxy(self, app, client, test_account1):
+        """Test that single-account playlists default to proxied stream URLs"""
+        response = client.get(f"/playlist/{test_account1}.m3u")
+
+        assert response.status_code == 200
+        content = response.data.decode("utf-8")
+
+        assert "/stream/" in content
+        assert f"/{test_account1}/" in content
+
     def test_generate_playlist_proxy_icons(self, app, client, test_account1):
         """Test playlist generation with icon proxying"""
         with patch("routes.playlists.ImageCacheService") as mock_image_cache:
@@ -278,6 +288,26 @@ class TestMultiAccountPlaylists:
         # Should have channels from both accounts
         assert "ESPN" in content
         assert "FOX Sports" in content
+
+    def test_generate_config_playlist_default_proxy(self, app, client, tag_filter_config):
+        """Test that config playlists default to proxied stream URLs"""
+        response = client.get(f"/playlist/config/{tag_filter_config}.m3u")
+
+        assert response.status_code == 200
+        content = response.data.decode("utf-8")
+
+        assert "/stream/" in content
+        assert ".ts" in content
+
+    def test_generate_config_playlist_direct_urls(self, app, client, tag_filter_config):
+        """Test config playlist generation with direct provider URLs"""
+        response = client.get(f"/playlist/config/{tag_filter_config}.m3u?proxy=false")
+
+        assert response.status_code == 200
+        content = response.data.decode("utf-8")
+
+        assert "https://server1.example.com/live/" in content
+        assert "/user1/pass1/" in content
 
     def test_multi_account_with_duplicate_collapse(self, app, client, multi_account_config):
         """Test collapsing duplicates across accounts"""

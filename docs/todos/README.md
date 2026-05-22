@@ -29,7 +29,7 @@ Update the status column in this index as each item is completed.
 
 | # | Document | Status | Summary |
 |---|----------|--------|---------|
-| 05 | [05-align-proxy-defaults.md](./05-align-proxy-defaults.md) | ⬜ | Align default `proxy=` behavior between single-account and config M3U |
+| 05 | [05-align-proxy-defaults.md](./05-align-proxy-defaults.md) | ✅ | Align default `proxy=` behavior between single-account and config M3U |
 | 06 | [06-fix-thesportsdb-league-ids.md](./06-fix-thesportsdb-league-ids.md) | ⬜ | Replace placeholder US league IDs in TheSportsDB integration |
 | 07 | [07-fix-test-db-isolation.md](./07-fix-test-db-isolation.md) | ⬜ | Prevent corrupted/stale test DB from breaking the suite |
 | 08 | [08-add-epg-m3u-parity-tests.md](./08-add-epg-m3u-parity-tests.md) | ⬜ | Contract tests: same channel set for M3U, EPG, Xtream, previews |

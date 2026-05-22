@@ -260,9 +260,9 @@ def generate_playlist(account_id):
     Generates HLS-compatible playlist with .ts stream URLs for broad player compatibility.
 
     Query Parameters:
-    - proxy: "true" to use proxy URLs for streams
+    - proxy: "true" (default) to use proxy URLs for streams; "false" for direct provider URLs
     - collapse_duplicates: "true" to collapse duplicate channels keeping highest quality
-    - proxy_icons: "true" to proxy icon URLs through local cache (default: false)
+    - proxy_icons: "true" to proxy icon URLs through local cache (default: true)
     """
     account = Account.query.get_or_404(account_id)
 
@@ -422,15 +422,17 @@ def _generate_playlist_from_config(config):
     Generates HLS-compatible playlist with .ts stream URLs for broad player compatibility.
 
     Query Parameters:
-    - proxy: "true" to use proxy URLs for streams
+    - proxy: "true" (default) to use proxy URLs for streams; "false" for direct provider URLs
     - collapse_duplicates: "true" to collapse duplicate channels keeping highest quality
-    - proxy_icons: "true" to proxy icon URLs through local cache (default: false)
+    - proxy_icons: "true" to proxy icon URLs through local cache (default: true)
     """
     if not config.enabled:
         raise PermissionError("Playlist configuration is disabled")
 
     # Determine if we should use proxied URLs
-    use_proxy = request.args.get("proxy", "").lower() == "true"
+    # Proxy is used by default (same as single-account playlists).
+    # To disable proxying, user must explicitly set proxy=false.
+    use_proxy = request.args.get("proxy", "true").lower() == "true"
 
     # Check if we should collapse duplicates
     collapse_duplicates = request.args.get("collapse_duplicates", "").lower() == "true"
