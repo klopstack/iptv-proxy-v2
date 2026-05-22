@@ -619,10 +619,12 @@ refactor: simplify tag service logic
 
 **Tests failing with database errors**:
 ```bash
-# Clear any existing test databases
-rm -f test_*.db
+# Clear stale test databases (also run automatically before make test)
+make test-clean
 pytest tests/ -v
 ```
+
+If you see `malformed database schema`, leftover SQLite files (including `-wal`/`-shm` sidecars) from a prior run are the usual cause. `make test-clean` removes them.
 
 **Import errors in tests**:
 ```bash

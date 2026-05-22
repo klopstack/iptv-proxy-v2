@@ -1,4 +1,4 @@
-.PHONY: help install install-js test test-fast lint lint-js format clean run debug docker-build docker-run venv vulture vulture-all
+.PHONY: help install install-js test test-fast test-clean lint lint-js format clean run debug docker-build docker-run venv vulture vulture-all
 
 VENV = venv
 PYTHON = $(VENV)/bin/python
@@ -29,10 +29,13 @@ install-py: venv ## Install Python dependencies in venv
 install-js: ## Install JavaScript dependencies
 	npm install
 
-test: install ## Run tests with coverage in venv
+test-clean: ## Remove stale test database files
+	rm -f test.db test.db-* instance/test.db instance/test.db-* instance/pytest.db instance/pytest.db-*
+
+test: install test-clean ## Run tests with coverage in venv
 	$(PYTEST) tests/ -v --cov=. --cov-report=html --cov-report=term-missing
 
-test-fast: install ## Run tests without coverage in venv
+test-fast: install test-clean ## Run tests without coverage in venv
 	$(PYTEST) tests/ -v
 
 lint-py: install ## Run Python linting checks in venv

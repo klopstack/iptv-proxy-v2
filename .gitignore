@@ -12,6 +12,13 @@ htmlcov/
 *.db
 *.db-shm
 *.db-wal
+# Test databases (also covered by *.db above; listed for clarity)
+test.db
+test.db-*
+instance/pytest.db
+instance/pytest.db-*
+instance/test.db
+instance/test.db-*
 data/
 .env
 .venv
@@ -20,8 +27,6 @@ node_modules/
 .DS_Store
 .idea/
 .vscode/
-instance/test.db-shm
-instance/test.db-wal
 
 # Debug channel dumps
 *.list

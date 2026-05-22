@@ -10,12 +10,33 @@ from pathlib import Path
 import pytest
 
 # Add parent directory to path so we can import app modules
-sys.path.insert(0, str(Path(__file__).parent.parent))
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+# Use an absolute, dedicated test DB path so stale repo-root or instance/test.db
+# files cannot interfere regardless of working directory or leftover WAL files.
+TEST_DB_PATH = PROJECT_ROOT / "instance" / "pytest.db"
+
+
+def _cleanup_test_db() -> None:
+    """Remove the test database and any SQLite WAL/SHM sidecar files."""
+    for suffix in ("", "-wal", "-shm"):
+        db_file = Path(f"{TEST_DB_PATH}{suffix}")
+        if db_file.exists():
+            db_file.unlink()
+
+
+def _reset_test_db(flask_app) -> None:
+    """Close all DB connections, then remove the test database files."""
+    with flask_app.app_context():
+        _db.session.remove()
+        _db.engine.dispose()
+    _cleanup_test_db()
+
 
 # Set test database URI BEFORE importing app
-# Use file-based database for testing to ensure proper connection handling
-# This avoids in-memory database connection issues with nested app contexts
-os.environ["DATABASE_URL"] = "sqlite:///test.db"
+os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
+TEST_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 # Import app and models AFTER setting environment
 import app as app_module
@@ -29,11 +50,10 @@ def app():
 
     Uses SQLite file-based database that's reset between tests.
     """
-    # Get the Flask app instance
     flask_app = app_module.app
-
-    # Configure for testing
     flask_app.config["TESTING"] = True
+
+    _reset_test_db(flask_app)
 
     # Create all tables
     with flask_app.app_context():
@@ -44,13 +64,9 @@ def app():
         _db.session.remove()
         _db.engine.dispose()
         _db.drop_all()
+        _db.engine.dispose()
 
-    # Clean up test database file
-    import pathlib
-
-    test_db = pathlib.Path("test.db")
-    if test_db.exists():
-        test_db.unlink()
+    _cleanup_test_db()
 
 
 @pytest.fixture(scope="function")

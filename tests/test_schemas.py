@@ -3,12 +3,8 @@ Tests for Marshmallow schemas
 
 Tests input validation for all API endpoints.
 """
-import os
-
 import pytest
 from marshmallow import ValidationError
-
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from schemas import (
     AccountCreateSchema,

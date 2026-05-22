@@ -1,7 +1,7 @@
 # TODO 07: Fix Test Database Isolation
 
 **Priority:** P1  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Small (conftest + gitignore)
 
 ---
@@ -102,11 +102,11 @@ Add troubleshooting section: "If tests fail with malformed database schema, run 
 
 ## Acceptance criteria
 
-- [ ] Fresh clone + `make test` passes without manual DB cleanup
-- [ ] Corrupt `instance/test.db` present does not break tests
-- [ ] Each test function gets clean schema (no cross-test pollution)
-- [ ] No `malformed database schema` errors after 3 consecutive test runs
-- [ ] `test_schemas.py` does not conflict with conftest DB setup
+- [x] Fresh clone + `make test` passes without manual DB cleanup
+- [x] Corrupt `instance/test.db` present does not break tests
+- [x] Each test function gets clean schema (no cross-test pollution)
+- [x] No `malformed database schema` errors after 3 consecutive test runs
+- [x] `test_schemas.py` does not conflict with conftest DB setup
 
 ---
 
@@ -129,6 +129,6 @@ for i in 1 2 3; do venv/bin/pytest tests/ -q --no-cov || exit 1; done
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Uses `instance/pytest.db` with engine dispose-before-delete reset; `make test-clean` runs before test targets |
