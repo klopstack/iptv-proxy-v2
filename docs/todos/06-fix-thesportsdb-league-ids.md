@@ -1,7 +1,7 @@
 # TODO 06: Fix TheSportsDB US League IDs
 
 **Priority:** P1  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Medium (research + service update + tests)
 
 ---
@@ -78,10 +78,10 @@ Fix the map. Add a unit test that asserts US league IDs are distinct and not equ
 
 ## Acceptance criteria
 
-- [ ] NFL, NBA, MLB, NHL each have distinct, verified league IDs
-- [ ] No US league maps to `"133602"`
-- [ ] `get_next_league_events` returns sport-appropriate events for each league (manual or mocked test)
-- [ ] Comment about "use team-based lookups" updated or removed if IDs are fixed
+- [x] NFL, NBA, MLB, NHL each have distinct, verified league IDs
+- [x] No US league maps to `"133602"`
+- [x] `get_next_league_events` returns sport-appropriate events for each league (manual or mocked test)
+- [x] Comment about "use team-based lookups" updated or removed if IDs are fixed
 
 ---
 
@@ -107,6 +107,6 @@ Optional integration test (marked `@pytest.mark.integration`) hitting real API.
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Verified IDs via live API: NFL 4391, NBA 4387, MLB 4424, NHL 4380 |

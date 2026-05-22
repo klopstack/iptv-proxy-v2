@@ -10,7 +10,56 @@ from unittest.mock import patch
 
 import pytest
 
-from services.thesportsdb_service import TheSportsDBService, get_thesportsdb_service
+from services.thesportsdb_service import LEAGUE_ID_MAP, TheSportsDBService, get_thesportsdb_service
+
+
+class TestLeagueIdMap:
+    """Test LEAGUE_ID_MAP has correct, distinct league IDs"""
+
+    def test_us_league_ids_are_not_placeholder(self):
+        """US leagues must not reuse the EPL placeholder ID"""
+        for league in ("NFL", "NBA", "MLB", "NHL"):
+            assert LEAGUE_ID_MAP[league] != "133602"
+            assert LEAGUE_ID_MAP[league] != LEAGUE_ID_MAP["English Premier League"]
+
+    def test_us_league_ids_are_distinct(self):
+        """Each US league should have its own TheSportsDB ID"""
+        us_ids = [LEAGUE_ID_MAP[league] for league in ("NFL", "NBA", "MLB", "NHL")]
+        assert len(us_ids) == len(set(us_ids))
+
+    @pytest.mark.parametrize(
+        "league,expected_id,expected_sport",
+        [
+            ("NFL", "4391", "American Football"),
+            ("NBA", "4387", "Basketball"),
+            ("MLB", "4424", "Baseball"),
+            ("NHL", "4380", "Ice Hockey"),
+        ],
+    )
+    @patch("services.thesportsdb_service.events.nextLeagueEvents")
+    def test_get_next_league_events_returns_sport_appropriate_events(
+        self, mock_events, league, expected_id, expected_sport
+    ):
+        """League event lookups should return events for the correct sport"""
+        mock_events.return_value = {
+            "events": [
+                {
+                    "idEvent": "1",
+                    "strEvent": f"{league} Test Game",
+                    "strLeague": league,
+                    "strSport": expected_sport,
+                    "strPostponed": "no",
+                }
+            ]
+        }
+
+        service = TheSportsDBService()
+        events_list = service.get_next_league_events(LEAGUE_ID_MAP[league])
+
+        assert LEAGUE_ID_MAP[league] == expected_id
+        mock_events.assert_called_once_with(expected_id)
+        assert len(events_list) == 1
+        assert events_list[0]["strSport"] == expected_sport
 
 
 class TestTheSportsDBServiceInitialization:

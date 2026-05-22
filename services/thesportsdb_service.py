@@ -30,11 +30,11 @@ LEAGUE_ID_MAP = {
     "German 2. Bundesliga": "781",
     # Ligue 1
     "French Ligue 1": "772",
-    # US Sports
-    "NFL": "133602",  # Placeholder - use team-based lookups
-    "NBA": "133602",  # Placeholder
-    "MLB": "133602",  # Placeholder
-    "NHL": "133602",  # Placeholder
+    # US Sports (verified via TheSportsDB leagueInfo API, May 2026)
+    "NFL": "4391",
+    "NBA": "4387",
+    "MLB": "4424",
+    "NHL": "4380",
 }
 
 
