@@ -23,7 +23,7 @@ Update the status column in this index as each item is completed.
 | 01 | [01-unify-epg-channel-selection.md](./01-unify-epg-channel-selection.md) | ⬜ | Route account + config EPG endpoints through `ChannelQueryService` so EPG matches M3U |
 | 02 | [02-unify-preview-channel-selection.md](./02-unify-preview-channel-selection.md) | ⬜ | Route preview APIs through `ChannelQueryService` (PPV visibility + filters) |
 | 03 | [03-fix-playlist-config-preview-live-api.md](./03-fix-playlist-config-preview-live-api.md) | ⬜ | Replace live IPTV API in playlist-config preview with database-first logic |
-| 04 | [04-fix-tag-id-detection.md](./04-fix-tag-id-detection.md) | ⬜ | Fix `ChannelQueryService` tag ID vs name detection when only exclude_tags are IDs |
+| 04 | [04-fix-tag-id-detection.md](./04-fix-tag-id-detection.md) | ✅ | Fix `ChannelQueryService` tag ID vs name detection when only exclude_tags are IDs |
 
 ## P1 — Important fixes and consistency
 

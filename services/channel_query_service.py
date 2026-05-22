@@ -53,6 +53,21 @@ class ChannelQueryService:
         return tags_map
 
     @staticmethod
+    def _tags_are_ids(include_tags: list, exclude_tags: list) -> bool:
+        """Return True if playlist config tags are stored as numeric IDs."""
+        all_tags = (include_tags or []) + (exclude_tags or [])
+        if not all_tags:
+            return False
+        ids = [isinstance(t, int) for t in all_tags]
+        if all(ids):
+            return True
+        if any(ids):
+            logger.warning(
+                "Playlist config has mixed tag IDs and names; using name-based filtering"
+            )
+        return False
+
+    @staticmethod
     def apply_tag_filter_by_id(
         channel_tag_ids: Set[int],
         include_tags: List[int],
@@ -192,7 +207,7 @@ class ChannelQueryService:
 
         if include_tags or exclude_tags:
             # Playlist configs may store tag IDs (int) or tag names (str)
-            use_ids = include_tags and isinstance(include_tags[0], int)
+            use_ids = ChannelQueryService._tags_are_ids(include_tags, exclude_tags)
             if use_ids:
                 tags_map = ChannelQueryService._load_tag_ids_for_channels(channels)
                 filtered = []

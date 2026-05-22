@@ -1,7 +1,7 @@
 # TODO 04: Fix Tag ID vs Name Detection in ChannelQueryService
 
 **Priority:** P0  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Small (1 function, few tests)
 
 ---
@@ -84,11 +84,11 @@ After `json.loads`, tag IDs may arrive as ints. Tag names are strings. Ensure `P
 
 ## Acceptance criteria
 
-- [ ] Config with `exclude_tags: [5]` (ID) and empty `include_tags` correctly excludes channels with tag ID 5
-- [ ] Config with `exclude_tags: ["PPV"]` (name) still works
-- [ ] Config with `include_tags: [1, 2]` still uses ID path
-- [ ] Empty include and empty exclude → no tag filtering (all channels pass tag stage)
-- [ ] No regression in existing tag filter tests
+- [x] Config with `exclude_tags: [5]` (ID) and empty `include_tags` correctly excludes channels with tag ID 5
+- [x] Config with `exclude_tags: ["PPV"]` (name) still works
+- [x] Config with `include_tags: [1, 2]` still uses ID path
+- [x] Empty include and empty exclude → no tag filtering (all channels pass tag stage)
+- [x] No regression in existing tag filter tests
 
 ---
 
@@ -116,6 +116,6 @@ venv/bin/pytest tests/test_channel_query_service.py -v --no-cov
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Mixed int/str configs log a warning and fall back to name-based filtering |

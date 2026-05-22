@@ -7,13 +7,23 @@ from models import (
     Account,
     Category,
     Channel,
+    ChannelTag,
     Event,
     EventChannelLink,
     PlaylistConfig,
+    Tag,
     XtreamCredential,
     db,
 )
 from services.channel_query_service import ChannelQueryService
+
+
+def test_tags_are_ids_detection():
+    assert ChannelQueryService._tags_are_ids([1, 2], []) is True
+    assert ChannelQueryService._tags_are_ids([], [5]) is True
+    assert ChannelQueryService._tags_are_ids([], ["PPV"]) is False
+    assert ChannelQueryService._tags_are_ids([], []) is False
+    assert ChannelQueryService._tags_are_ids([1], ["PPV"]) is False
 
 
 def test_apply_tag_filter_exclude_precedence():
@@ -46,6 +56,128 @@ def test_channels_for_account_consistency(app):
         )
         ids = {int(ch.stream_id) for ch in channels}
         assert ids == {42}
+
+
+def test_playlist_config_exclude_tag_ids_only(app):
+    """exclude_tags as IDs works when include_tags is empty."""
+    with app.app_context():
+        account = Account(name="Tags", server="s", username="u", password="p", enabled=True)
+        db.session.add(account)
+        db.session.commit()
+
+        ppv_tag = Tag(name="PPV")
+        hd_tag = Tag(name="HD")
+        db.session.add_all([ppv_tag, hd_tag])
+        db.session.commit()
+
+        ch_ppv = Channel(account_id=account.id, stream_id="ppv", name="PPV Ch", is_active=True)
+        ch_hd = Channel(account_id=account.id, stream_id="hd", name="HD Ch", is_active=True)
+        ch_plain = Channel(account_id=account.id, stream_id="plain", name="Plain Ch", is_active=True)
+        db.session.add_all([ch_ppv, ch_hd, ch_plain])
+        db.session.commit()
+
+        db.session.add_all(
+            [
+                ChannelTag(account_id=account.id, stream_id="ppv", tag_id=ppv_tag.id),
+                ChannelTag(account_id=account.id, stream_id="hd", tag_id=hd_tag.id),
+            ]
+        )
+        db.session.commit()
+
+        cfg = PlaylistConfig(
+            name="No PPV",
+            include_tags=json.dumps([]),
+            exclude_tags=json.dumps([ppv_tag.id]),
+            enabled=True,
+        )
+        db.session.add(cfg)
+        db.session.commit()
+
+        channels = ChannelQueryService.channels_for_playlist_config(
+            cfg,
+            apply_filters=False,
+            apply_ppv_visibility=False,
+        )
+        assert {ch.stream_id for ch in channels} == {"hd", "plain"}
+
+
+def test_playlist_config_exclude_tag_names_only(app):
+    """exclude_tags as names works when include_tags is empty."""
+    with app.app_context():
+        account = Account(name="Tags", server="s", username="u", password="p", enabled=True)
+        db.session.add(account)
+        db.session.commit()
+
+        ppv_tag = Tag(name="PPV")
+        hd_tag = Tag(name="HD")
+        db.session.add_all([ppv_tag, hd_tag])
+        db.session.commit()
+
+        ch_ppv = Channel(account_id=account.id, stream_id="ppv", name="PPV Ch", is_active=True)
+        ch_hd = Channel(account_id=account.id, stream_id="hd", name="HD Ch", is_active=True)
+        ch_plain = Channel(account_id=account.id, stream_id="plain", name="Plain Ch", is_active=True)
+        db.session.add_all([ch_ppv, ch_hd, ch_plain])
+        db.session.commit()
+
+        db.session.add_all(
+            [
+                ChannelTag(account_id=account.id, stream_id="ppv", tag_id=ppv_tag.id),
+                ChannelTag(account_id=account.id, stream_id="hd", tag_id=hd_tag.id),
+            ]
+        )
+        db.session.commit()
+
+        cfg = PlaylistConfig(
+            name="No PPV",
+            include_tags=json.dumps([]),
+            exclude_tags=json.dumps(["PPV"]),
+            enabled=True,
+        )
+        db.session.add(cfg)
+        db.session.commit()
+
+        channels = ChannelQueryService.channels_for_playlist_config(
+            cfg,
+            apply_filters=False,
+            apply_ppv_visibility=False,
+        )
+        assert {ch.stream_id for ch in channels} == {"hd", "plain"}
+
+
+def test_playlist_config_include_tag_ids(app):
+    """include_tags as IDs still uses the ID filter path."""
+    with app.app_context():
+        account = Account(name="Tags", server="s", username="u", password="p", enabled=True)
+        db.session.add(account)
+        db.session.commit()
+
+        hd_tag = Tag(name="HD")
+        db.session.add(hd_tag)
+        db.session.commit()
+
+        ch_hd = Channel(account_id=account.id, stream_id="hd", name="HD Ch", is_active=True)
+        ch_plain = Channel(account_id=account.id, stream_id="plain", name="Plain Ch", is_active=True)
+        db.session.add_all([ch_hd, ch_plain])
+        db.session.commit()
+
+        db.session.add(ChannelTag(account_id=account.id, stream_id="hd", tag_id=hd_tag.id))
+        db.session.commit()
+
+        cfg = PlaylistConfig(
+            name="HD Only",
+            include_tags=json.dumps([hd_tag.id]),
+            exclude_tags=json.dumps([]),
+            enabled=True,
+        )
+        db.session.add(cfg)
+        db.session.commit()
+
+        channels = ChannelQueryService.channels_for_playlist_config(
+            cfg,
+            apply_filters=False,
+            apply_ppv_visibility=False,
+        )
+        assert {ch.stream_id for ch in channels} == {"hd"}
 
 
 def test_multi_account_playlist_config(app):
