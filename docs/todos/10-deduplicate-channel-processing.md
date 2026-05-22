@@ -113,6 +113,16 @@ No new behavior — regression tests only.
 
 ---
 
+## Related todos
+
+| TODO | Relationship |
+|------|--------------|
+| 17 | Preview routes should consume shared collapse helper after extraction |
+| 18 | Config EPG collapse should use shared helper (avoid third copy-paste) |
+| 19 | M3U formatting is separate from selection/collapse (different concern) |
+
+---
+
 ## Completion
 
 | Field | Value |

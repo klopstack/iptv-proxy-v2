@@ -1,7 +1,7 @@
 # TODO 01: Unify EPG Channel Selection
 
 **Priority:** P0  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Medium (1–2 files, focused refactor)
 
 ---
@@ -127,13 +127,13 @@ Only add this if it avoids duplicating collapse logic in the route; otherwise in
 
 ## Acceptance criteria
 
-- [ ] `/epg/<account_id>.xml` channel count matches `/playlist/<account_id>.m3u` for the same account (same filters, no collapse)
-- [ ] `/epg/config/<id>.xml` channel set matches `/playlist/config/<id>.m3u` for the same config
-- [ ] PPV channel with `ppv_visibility=hide_all` appears in **neither** M3U nor EPG
-- [ ] PPV channel with past event + `hide_inactive` appears in **neither** M3U nor EPG
-- [ ] `?collapse_duplicates=true` on EPG still works and matches M3U collapse behavior
-- [ ] Docstring on `proxy_epg` remains accurate
-- [ ] All existing EPG route tests pass
+- [x] `/epg/<account_id>.xml` channel count matches `/playlist/<account_id>.m3u` for the same account (same filters, no collapse)
+- [x] `/epg/config/<id>.xml` channel set matches `/playlist/config/<id>.m3u` for the same config
+- [x] PPV channel with `ppv_visibility=hide_all` appears in **neither** M3U nor EPG
+- [x] PPV channel with past event + `hide_inactive` appears in **neither** M3U nor EPG
+- [x] `?collapse_duplicates=true` on EPG still works and matches M3U collapse behavior
+- [x] Docstring on `proxy_epg` remains accurate
+- [x] All existing EPG route tests pass
 
 ---
 
@@ -159,9 +159,10 @@ Add at least one integration test that:
 
 ## Out of scope
 
-- Preview API unification (TODO 02)
+- Preview API structural unification (TODO 17 — TODO 02 added PPV only)
 - Playlist config preview live API (TODO 03)
 - Extracting duplicate-collapse helper (TODO 10)
+- Config EPG `collapse_duplicates` (TODO 18)
 
 ---
 
@@ -169,6 +170,6 @@ Add at least one integration test that:
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | EPG routes use `ChannelQueryService`; guarded by TODO 08 parity tests. Config EPG collapse still missing — see TODO 18. |

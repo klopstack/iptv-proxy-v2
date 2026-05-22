@@ -1,7 +1,7 @@
 # TODO 08: Add EPG/M3U/Xtream Parity Contract Tests
 
 **Priority:** P1  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Medium (new test module)
 
 ---
@@ -81,11 +81,11 @@ Can stub config preview parity as follow-up if TODO 03 not done yet.
 
 ## Acceptance criteria
 
-- [ ] At least 5 parity scenarios implemented
-- [ ] Tests fail if EPG includes a channel M3U excludes (regression guard)
-- [ ] Tests fail if PPV visibility not applied to EPG
-- [ ] Tests use real route handlers (integration style), not mocked `EpgService`
-- [ ] EPG tests parse actual XML output (minimal fixture, mock EPG data in DB if needed)
+- [x] At least 5 parity scenarios implemented
+- [x] Tests fail if EPG includes a channel M3U excludes (regression guard)
+- [x] Tests fail if PPV visibility not applied to EPG
+- [x] Tests use real route handlers (integration style), not mocked `EpgService`
+- [x] EPG tests parse actual XML output (minimal fixture, mock EPG data in DB if needed)
 
 ---
 
@@ -107,6 +107,6 @@ For EPG content without full EPG sync, either:
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Added `tests/test_channel_output_parity.py` with 7 scenarios and shared extraction helpers. EPG assertions parse real XMLTV output end-to-end. |

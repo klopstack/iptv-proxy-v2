@@ -127,4 +127,4 @@ Add test case:
 |-------|-------|
 | Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | Added `ChannelQueryService.apply_ppv_visibility_to_channels`; wired into both preview endpoints |
+| Notes | Added `ChannelQueryService.apply_ppv_visibility_to_channels`; wired into both preview endpoints. Structural routing through CQS entry points deferred to TODO 17. |
