@@ -1,3 +1,5 @@
+import pytest
+
 """
 Tests for PPV channel visibility based on channel name detection
 
@@ -9,14 +11,10 @@ These tests verify the name-based detection logic.
 """
 
 from models import Account, Channel, ChannelTag, Tag, db
-from services.epg_service import (
-    PPV_PLACEHOLDER_PATTERNS,
-    generate_ppv_epg_entries,
-    get_ppv_epg_xmltv,
-    get_ppv_event_title,
-    is_ppv_placeholder_name,
-    update_ppv_channel_visibility,
-)
+from services.epg.constants import PPV_PLACEHOLDER_PATTERNS
+from services.epg_service import get_ppv_event_title, is_ppv_placeholder_name
+from services.ppv.epg import PPVEpgService
+from services.ppv.visibility import PPVVisibilityService
 
 
 class TestPPVPlaceholderDetection:
@@ -126,6 +124,7 @@ class TestGetPPVEventTitle:
             assert title is None
 
 
+@pytest.mark.skip(reason="Legacy is_visible mutation removed; use PPVVisibilityService (test_ppv_integration.py)")
 class TestPPVVisibilityUpdate:
     """Test PPV channel visibility updates based on channel names"""
 
@@ -377,6 +376,7 @@ class TestPPVVisibilityUpdate:
             assert stats["total_ppv_channels"] == 2
 
 
+@pytest.mark.skip(reason="Legacy name-based PPV EPG removed; use PPVEpgService (test_ppv_integration.py)")
 class TestPPVEpgGeneration:
     """Test PPV EPG generation for active events"""
 

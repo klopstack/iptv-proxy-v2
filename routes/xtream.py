@@ -4,6 +4,7 @@ Emulates Xtream Codes API format for client compatibility
 """
 import json
 import logging
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 from flask import Blueprint, jsonify, redirect, request
@@ -72,12 +73,9 @@ def require_xtream_auth(f):
 
 def get_proxy_base_url():
     """Get the proxy base URL, using custom proxy hostname if configured."""
-    proxy_hostname = Settings.get("proxy_hostname", "").strip()
-    if proxy_hostname:
-        scheme = "https" if "." in proxy_hostname else request.scheme
-        return f"{scheme}://{proxy_hostname}"
-    else:
-        return f"{request.scheme}://{request.host}"
+    from services.url_service import get_proxy_base_url as _base
+
+    return _base()
 
 
 # ============================================================================
@@ -102,10 +100,6 @@ def player_api():
     action_handlers = {
         "get_live_categories": get_live_categories,
         "get_live_streams": get_live_streams,
-        "get_vod_categories": get_vod_categories,
-        "get_vod_streams": get_vod_streams,
-        "get_series_categories": get_series_categories,
-        "get_series": get_series,
         "get_short_epg": get_short_epg,
         "get_simple_data_table": get_simple_data_table,
     }
@@ -268,52 +262,83 @@ def get_live_streams(xtream_cred, account, playlist_config):
 
 
 @require_xtream_auth
-def get_vod_categories(xtream_cred, account, playlist_config):
-    """
-    Return list of VOD categories (not implemented - return empty list)
-    Endpoint: /player_api.php?action=get_vod_categories
-    """
-    return jsonify([])
-
-
-@require_xtream_auth
-def get_vod_streams(xtream_cred, account, playlist_config):
-    """
-    Return list of VOD streams (not implemented - return empty list)
-    Endpoint: /player_api.php?action=get_vod_streams
-    """
-    return jsonify([])
-
-
-@require_xtream_auth
-def get_series_categories(xtream_cred, account, playlist_config):
-    """
-    Return list of series categories (not implemented - return empty list)
-    Endpoint: /player_api.php?action=get_series_categories
-    """
-    return jsonify([])
-
-
-@require_xtream_auth
-def get_series(xtream_cred, account, playlist_config):
-    """
-    Return list of series (not implemented - return empty list)
-    Endpoint: /player_api.php?action=get_series
-    """
-    return jsonify([])
-
-
-@require_xtream_auth
 def get_short_epg(xtream_cred, account, playlist_config):
     """
     Return EPG data for streams
     Endpoint: /player_api.php?action=get_short_epg
     Query params: stream_id, limit (optional)
     """
-    # TODO: Implement EPG integration
-    # This would require EPG integration - for now return empty
-    # Note: stream_id parameter available in request.args if needed
-    return jsonify({"epg_listings": []})
+    from models import ChannelEpgMapping, EpgProgram, Event, EventChannelLink
+
+    stream_id = request.args.get("stream_id")
+    limit = int(request.args.get("limit", 4))
+
+    if not stream_id:
+        return jsonify({"epg_listings": []})
+
+    channels = get_channels_for_credential(xtream_cred, account, playlist_config)
+    channel = next((ch for ch in channels if str(ch.stream_id) == str(stream_id)), None)
+    if not channel:
+        return jsonify({"epg_listings": []})
+
+    listings = []
+    now = datetime.now(timezone.utc)
+    epg_channel_id = f"ch-{channel.account_id}-{channel.stream_id}"
+
+    mapping = ChannelEpgMapping.query.filter_by(channel_id=channel.id).first()
+    if mapping:
+        programs = (
+            EpgProgram.query.filter(
+                EpgProgram.epg_channel_id == mapping.epg_channel_id,
+                EpgProgram.stop_time >= now,
+            )
+            .order_by(EpgProgram.start_time)
+            .limit(limit)
+            .all()
+        )
+
+        for prog in programs:
+            listings.append(
+                {
+                    "id": str(prog.id),
+                    "epg_id": epg_channel_id,
+                    "title": prog.title or "",
+                    "lang": "en",
+                    "start": prog.start_time.strftime("%Y%m%d%H%M%S %z") if prog.start_time else "",
+                    "end": prog.stop_time.strftime("%Y%m%d%H%M%S %z") if prog.stop_time else "",
+                    "description": prog.description or "",
+                    "channel_id": stream_id,
+                    "start_timestamp": int(prog.start_time.timestamp()) if prog.start_time else 0,
+                    "stop_timestamp": int(prog.stop_time.timestamp()) if prog.stop_time else 0,
+                }
+            )
+
+    if not listings and channel.is_ppv:
+        link = EventChannelLink.query.filter_by(channel_id=channel.id).first()
+        if link:
+            event = db.session.get(Event, link.event_id)
+            if event and event.scheduled_at:
+                start = event.scheduled_at
+                if start.tzinfo is None:
+                    start = start.replace(tzinfo=timezone.utc)
+                end = start + timedelta(hours=4)
+                title = event.title or f"{event.home_team_name} vs {event.away_team_name}"
+                listings.append(
+                    {
+                        "id": str(event.id),
+                        "epg_id": epg_channel_id,
+                        "title": title,
+                        "lang": "en",
+                        "start": start.strftime("%Y%m%d%H%M%S %z"),
+                        "end": end.strftime("%Y%m%d%H%M%S %z"),
+                        "description": event.league_name or "",
+                        "channel_id": stream_id,
+                        "start_timestamp": int(start.timestamp()),
+                        "stop_timestamp": int(end.timestamp()),
+                    }
+                )
+
+    return jsonify({"epg_listings": listings})
 
 
 @require_xtream_auth
@@ -364,115 +389,27 @@ def get_simple_data_table(xtream_cred, account, playlist_config):
 
 
 def get_channels_for_credential(xtream_cred, account, playlist_config):
-    """
-    Get filtered list of channels for a credential.
-    Applies filters and PPV visibility rules based on credential settings.
-    """
-    if account:
-        # Single account mode
-        query = (
-            db.session.query(Channel)
-            .filter(Channel.account_id == account.id, Channel.is_active)
-            .join(Category, Channel.category_id == Category.id, isouter=True)
-        )
-        channels = query.order_by(Channel.name).all()
+    """Get filtered channels for a credential via ChannelQueryService."""
+    from services.channel_query_service import ChannelQueryService
 
-        # Apply filters if enabled
-        if xtream_cred.use_filters:
-            channels = FilterService.apply_filters_to_channels(channels, account.id)
+    def _collapse(channels, account_id=None):
+        if account_id is not None:
+            return collapse_duplicate_channels(channels, account_id)
+        return collapse_duplicate_channels_multi_account(channels)
 
-        # Apply PPV visibility
-        ppv_service = PPVVisibilityService(account)
-        channels = [ch for ch in channels if ppv_service.should_show_channel(ch)]
-
-        # Collapse duplicates if enabled
-        if xtream_cred.collapse_duplicates:
-            channels = collapse_duplicate_channels(channels, account.id)
-
-    elif playlist_config:
-        # Playlist config mode - multi-account
-        channels = get_channels_for_playlist_config(playlist_config)
-
-        # Collapse duplicates if enabled
-        if xtream_cred.collapse_duplicates:
-            # Need to handle multi-account collapsing
-            channels = collapse_duplicate_channels_multi_account(channels)
-
-    else:
-        channels = []
-
-    return channels
+    return ChannelQueryService.channels_for_xtream(
+        xtream_cred,
+        account,
+        playlist_config,
+        collapse_duplicates_fn=_collapse if xtream_cred.collapse_duplicates else None,
+    )
 
 
 def get_channels_for_playlist_config(playlist_config):
-    """
-    Get channels for a playlist configuration.
-    Applies include/exclude rules for accounts and tags.
-    """
-    # Parse JSON fields
-    include_accounts = json.loads(playlist_config.include_accounts) if playlist_config.include_accounts else []
-    exclude_accounts = json.loads(playlist_config.exclude_accounts) if playlist_config.exclude_accounts else []
-    include_tags = json.loads(playlist_config.include_tags) if playlist_config.include_tags else []
-    exclude_tags = json.loads(playlist_config.exclude_tags) if playlist_config.exclude_tags else []
+    """Get channels for a playlist configuration."""
+    from services.channel_query_service import ChannelQueryService
 
-    # Start with base query
-    query = db.session.query(Channel).filter(Channel.is_active)
-
-    # Apply account filters
-    if include_accounts:
-        query = query.filter(Channel.account_id.in_(include_accounts))
-    if exclude_accounts:
-        query = query.filter(~Channel.account_id.in_(exclude_accounts))
-
-    # Get channels
-    channels = query.order_by(Channel.name).all()
-
-    # Apply tag filters if specified
-    if include_tags or exclude_tags:
-        # Load tags for all channels
-        channel_ids = [ch.stream_id for ch in channels]
-        account_ids = list(set(ch.account_id for ch in channels))
-
-        tags_map = {}
-        batch_size = 500
-        for i in range(0, len(channel_ids), batch_size):
-            batch = channel_ids[i : i + batch_size]
-            channel_tags_query = (
-                db.session.query(ChannelTag.stream_id, ChannelTag.account_id, Tag.id)
-                .join(Tag)
-                .filter(ChannelTag.account_id.in_(account_ids), ChannelTag.stream_id.in_(batch))
-            )
-            for stream_id, account_id, tag_id in channel_tags_query:
-                key = (account_id, stream_id)
-                if key not in tags_map:
-                    tags_map[key] = []
-                tags_map[key].append(tag_id)
-
-        # Filter channels by tags
-        filtered_channels = []
-        for ch in channels:
-            key = (ch.account_id, ch.stream_id)
-            ch_tags = set(tags_map.get(key, []))
-
-            # Apply tag filters based on match mode
-            if playlist_config.tag_match_mode == "any":
-                # Include if has ANY of the include tags
-                if include_tags and not any(tag_id in ch_tags for tag_id in include_tags):
-                    continue
-            else:  # all
-                # Include if has ALL of the include tags
-                if include_tags and not all(tag_id in ch_tags for tag_id in include_tags):
-                    continue
-
-            # Exclude if has any exclude tags
-            if exclude_tags and any(tag_id in ch_tags for tag_id in exclude_tags):
-                continue
-
-            filtered_channels.append(ch)
-
-        channels = filtered_channels
-
-    return channels
+    return ChannelQueryService.channels_for_playlist_config(playlist_config)
 
 
 def collapse_duplicate_channels(channels, account_id):

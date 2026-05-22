@@ -50,14 +50,14 @@ IPTV Proxy v2 is a Flask-based IPTV proxy that sits between Xtream Codes API ser
   - `routes/web.py` - HTML page rendering
   - `routes/accounts.py` - Account CRUD and credentials
   - `routes/epg/` - EPG management (sources, channels, match_rules, etc.)
-  - `routes/xtream_api.py` - Xtream Codes API compatibility
+  - `routes/xtream.py` - Xtream Codes API compatibility (TiviMate, IPTV Smarters)
 
 ### Business Logic
 - **`services/`**: Business logic services (29 files, ~18,500 lines)
   - `IPTVService` - Xtream Codes API integration
   - `TagService` - Tag extraction and rule processing
   - `EPGService` - EPG data management and XMLTV generation
-  - `PPVEnrichmentService` - TheSportsDB integration for events
+  - `services/ppv/` - PPV enrichment, visibility, and event-based EPG
   - `CacheService` - Simple in-memory caching (3600s TTL)
   - `FilterService` - Channel filtering logic
 

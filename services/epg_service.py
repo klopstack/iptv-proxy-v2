@@ -48,9 +48,6 @@ is_ppv_channel = ppv.is_ppv_channel
 is_ppv_category = ppv.is_ppv_category
 is_ppv_placeholder_name = ppv.is_ppv_placeholder_name
 get_ppv_event_title = ppv.get_ppv_event_title
-update_ppv_channel_visibility = ppv.update_ppv_channel_visibility
-generate_ppv_epg_entries = ppv.generate_ppv_epg_entries
-get_ppv_epg_xmltv = ppv.get_ppv_epg_xmltv
 
 
 class EpgService:
@@ -176,21 +173,6 @@ class EpgService:
     def get_ppv_event_title(channel: "Channel") -> Optional[str]:
         """Extract event title from PPV channel name."""
         return ppv.get_ppv_event_title(channel)
-
-    @staticmethod
-    def update_ppv_channel_visibility(account_id: Optional[int] = None) -> Dict[str, int]:
-        """Update visibility for PPV channels based on event status."""
-        return ppv.update_ppv_channel_visibility(account_id)
-
-    @staticmethod
-    def generate_ppv_epg_entries(account_id: Optional[int] = None, duration_hours: int = 8) -> List[Dict[str, Any]]:
-        """Generate EPG entries for PPV channels."""
-        return ppv.generate_ppv_epg_entries(account_id, duration_hours)
-
-    @staticmethod
-    def get_ppv_epg_xmltv(account_id: int) -> bytes:
-        """Generate XMLTV format EPG for PPV channels."""
-        return ppv.get_ppv_epg_xmltv(account_id)
 
     # ============================================================
     # Coverage Methods (from coverage.py)
@@ -512,7 +494,4 @@ __all__ = [
     "is_ppv_category",
     "is_ppv_placeholder_name",
     "get_ppv_event_title",
-    "update_ppv_channel_visibility",
-    "generate_ppv_epg_entries",
-    "get_ppv_epg_xmltv",
 ]

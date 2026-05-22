@@ -467,8 +467,6 @@ class SyncScheduler:
 
     def _sync_epg_sources(self):
         """Sync all enabled EPG sources"""
-        from services.epg_service import update_ppv_channel_visibility
-
         sources = EpgSource.query.filter_by(enabled=True).all()
         logger.info(f"Syncing {len(sources)} EPG source(s)")
 
@@ -482,19 +480,6 @@ class SyncScheduler:
                         f"{stats.get('channels_added', 0)} added, "
                         f"{stats.get('channels_updated', 0)} updated"
                     )
-
-                    # Update PPV visibility for provider sources
-                    if source.source_type == "provider" and source.account:
-                        try:
-                            ppv_stats = update_ppv_channel_visibility(source.account.id)
-                            logger.info(
-                                f"PPV visibility updated for {source.account.name}: "
-                                f"{ppv_stats['events_detected']} events detected, "
-                                f"{ppv_stats['channels_shown']} shown, "
-                                f"{ppv_stats['channels_hidden']} hidden"
-                            )
-                        except Exception as e:
-                            logger.warning(f"Failed to update PPV visibility: {e}")
 
             except Exception as e:
                 logger.error(f"Error syncing EPG source {source.name}: {e}")
@@ -631,14 +616,11 @@ class SyncScheduler:
         This ensures event data is available before matching is attempted.
         """
         try:
-            from services.enhanced_ppv_matcher import EnhancedPPVMatcher
+            from services.jobs.ppv_enrichment import run_ppv_prefetch
 
             logger.info("Starting PPV event data pre-fetch")
 
-            stats = EnhancedPPVMatcher.prefetch_all_accounts(
-                days_ahead=30,
-                days_back=7,
-            )
+            stats = run_ppv_prefetch(self.app)
 
             logger.info(
                 f"PPV pre-fetch complete: "
@@ -659,139 +641,24 @@ class SyncScheduler:
         (no API rate limits), then fetches event details via API.
         """
         try:
-            from models import Account, Channel
-            from services.ppv_calendar_enrichment_service import get_calendar_enrichment_service
+            from services.jobs.ppv_enrichment import run_ppv_enrichment
 
             logger.info("Starting PPV calendar-based enrichment")
 
-            service = get_calendar_enrichment_service(self.app)
+            total_stats = run_ppv_enrichment(self.app)
 
-            # Get all enabled accounts with PPV channels
-            accounts = Account.query.filter_by(enabled=True).all()
-            total_stats = {
-                "total_channels": 0,
-                "processed": 0,
-                "matched": 0,
-                "no_extraction": 0,
-                "no_match": 0,
-            }
-
-            for account in accounts:
-                # Get PPV channels that need enrichment (queued or not yet processed)
-                channels = (
-                    Channel.query.filter(
-                        Channel.account_id == account.id,
-                        Channel.is_ppv.is_(True),
-                        Channel.ppv_enrichment_status.in_([None, "queued", "retry_pending"]),
-                    )
-                    .limit(100)
-                    .all()
-                )  # Process in batches
-
-                if not channels:
-                    continue
-
-                logger.info(f"Enriching {len(channels)} PPV channels for account {account.name}")
-
-                # Run enrichment (uses calendar scraping, not API)
-                results = service.enrich_channels(channels, fetch_details=False)
-
-                # Aggregate stats
-                for key in total_stats:
-                    if key in results:
-                        total_stats[key] += results[key]
+            if total_stats.get("skipped"):
+                return
 
             logger.info(
-                f"PPV enrichment complete: "
-                f"{total_stats['processed']} processed, "
-                f"{total_stats['matched']} matched, "
-                f"{total_stats['no_match']} no match, "
-                f"{total_stats['no_extraction']} no extraction"
+                "PPV enrichment complete: %s processed, %s matched, %s no_match",
+                total_stats.get("channels_processed", 0),
+                total_stats.get("channels_matched", 0),
+                total_stats.get("channels_no_match", 0),
             )
-
-            # Start detail fetcher thread if not already running
-            if total_stats["matched"] > 0:
-                service.start_detail_fetcher()
-
-            # Run enhanced matching for channels that failed standard enrichment
-            if total_stats["no_match"] > 0:
-                self._run_enhanced_ppv_matching()
 
         except Exception as e:
             logger.error(f"Error enriching PPV events: {e}", exc_info=True)
-
-    def _run_enhanced_ppv_matching(self):
-        """
-        Run enhanced PPV matching for channels that failed standard enrichment.
-
-        This uses additional strategies like direct API lookup, sportsipy,
-        and multi-format date extraction.
-        """
-        try:
-            from models import Account, Channel, db
-            from services.enhanced_ppv_matcher import get_enhanced_ppv_matcher
-
-            logger.info("Running enhanced PPV matching for unmatched channels")
-
-            matcher = get_enhanced_ppv_matcher()
-            matcher.reset_stats()
-
-            # Get accounts
-            accounts = Account.query.filter_by(enabled=True).all()
-            total_matched = 0
-
-            for account in accounts:
-                # Get PPV channels that failed normal matching but aren't placeholders
-                channels = (
-                    Channel.query.filter(
-                        Channel.account_id == account.id,
-                        Channel.is_ppv.is_(True),
-                        Channel.ppv_enrichment_status == "no_match",
-                        ~Channel.name.like("%NO EVENT STREAMING%"),
-                    )
-                    .limit(50)  # Smaller batch for enhanced matching (more expensive)
-                    .all()
-                )
-
-                if not channels:
-                    continue
-
-                logger.info(f"Enhanced matching for {len(channels)} channels in {account.name}")
-
-                # Try enhanced matching for each channel
-                for channel in channels:
-                    try:
-                        result = matcher.find_match(channel.name)
-                        if result:
-                            event, confidence, method = result
-                            logger.info(
-                                f"Enhanced match for '{channel.name}': "
-                                f"'{event.get('strEvent', 'Unknown')}' "
-                                f"(confidence: {confidence:.2f}, method: {method})"
-                            )
-                            # Update channel status
-                            channel.ppv_enrichment_status = "matched"
-                            channel.matched_event_id = event.get("idEvent")
-                            channel.matched_event_name = event.get("strEvent")
-                            total_matched += 1
-                    except Exception as e:
-                        logger.warning(f"Enhanced matching error for '{channel.name}': {e}")
-
-                db.session.commit()
-
-            stats = matcher.get_stats()
-            logger.info(
-                f"Enhanced PPV matching complete: "
-                f"{total_matched} newly matched, "
-                f"strategy breakdown - "
-                f"reverse: {stats.get('reverse_match', 0)}, "
-                f"calendar: {stats.get('calendar_search', 0)}, "
-                f"direct: {stats.get('direct_lookup', 0)}, "
-                f"sportsipy: {stats.get('sportsipy_match', 0)}"
-            )
-
-        except Exception as e:
-            logger.error(f"Error in enhanced PPV matching: {e}", exc_info=True)
 
     def _refresh_sportsipy_teams(self):
         """

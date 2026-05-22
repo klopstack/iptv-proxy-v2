@@ -327,6 +327,8 @@ class ChannelSyncService:
                     changed = True
                 if chan.is_ppv != is_ppv:
                     chan.is_ppv = is_ppv
+                    if is_ppv:
+                        chan.ppv_enrichment_status = "queued"
                     changed = True
 
                 # Update other fields
@@ -371,6 +373,7 @@ class ChannelSyncService:
                         cleaned_name=cleaned_name,
                         category_id=category_id,
                         is_ppv=is_ppv,
+                        ppv_enrichment_status="queued" if is_ppv else None,
                         stream_type=chan_data.get("stream_type"),
                         stream_icon=chan_data.get("stream_icon"),
                         epg_channel_id=chan_data.get("epg_channel_id"),

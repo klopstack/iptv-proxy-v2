@@ -22,3 +22,6 @@ node_modules/
 .vscode/
 instance/test.db-shm
 instance/test.db-wal
+
+# Debug channel dumps
+*.list

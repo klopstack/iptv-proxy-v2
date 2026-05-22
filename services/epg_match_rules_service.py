@@ -747,6 +747,8 @@ class EpgMatchRulesService:
         if name_mappings is None:
             name_mappings = EpgMatchRulesService.get_channel_name_mappings()
 
+        best_match: Optional[Tuple[EpgChannel, float, str]] = None
+
         for rule in rules:
             if not rule.enabled:
                 continue
@@ -847,12 +849,11 @@ class EpgMatchRulesService:
                 matched_epg, confidence = result
                 if rule.stop_on_match:
                     return matched_epg, confidence, rule.match_type
-                # TODO: Implement using the best of multiple matches
-                # Continue trying other rules but remember this match
-                # (For now, we return immediately on match)
-                return matched_epg, confidence, rule.match_type
+                candidate = (matched_epg, confidence, rule.match_type)
+                if best_match is None or confidence > best_match[1]:
+                    best_match = candidate
 
-        return None
+        return best_match
 
     @staticmethod
     def _apply_match_rule(

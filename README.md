@@ -218,9 +218,7 @@ Forces specific event channels to be marked as PPV.
 5. Assign the ruleset to accounts
 6. Click **Discover Tags** to process channels
 
-For detailed documentation, see:
-- [Tag Rule PPV Implementation](docs/TAG_RULE_IS_PPV_IMPLEMENTATION.md)
-- [Tag Rule PPV Quick Start](docs/TAG_RULE_IS_PPV_QUICK_START.md)
+See [docs/API_REFERENCE.md](docs/API_REFERENCE.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed documentation.
 
 ## API Reference
 
@@ -369,7 +367,7 @@ The project uses GitHub Actions to automatically run tests and linting on all pu
 
 - **Linting**: flake8, black, isort, mypy
 - **Testing**: pytest with minimum 75% code coverage
-- **Multi-version**: Tests run on Python 3.9, 3.10, and 3.11
+- **Python**: Tests run on Python 3.11 (matches Docker image)
 
 ### Database Migrations
 
@@ -384,7 +382,7 @@ python app.py  # Will recreate database
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `sqlite:///iptv_proxy.db` | Database connection string |
+| `DATABASE_URL` | `sqlite:////app/data/iptv_proxy.db` (Docker) or `sqlite:///data/iptv_proxy.db` (local) | Database connection string |
 | `PORT` | `8000` | Server port |
 | `SECRET_KEY` | `dev-secret-key...` | Flask secret key |
 | `DEBUG` | `False` | Enable debug mode |
@@ -393,23 +391,21 @@ python app.py  # Will recreate database
 
 ```
 iptv-proxy-v2/
-├── app.py                 # Main application
-├── models.py              # Database models
-├── services/
-│   ├── iptv_service.py   # IPTV API client
-│   └── cache_service.py  # Caching layer
-├── templates/             # HTML templates
-│   ├── base.html
-│   ├── index.html
-│   ├── accounts.html
-│   ├── filters.html
-│   └── test.html
-├── tests/
-│   └── test_app.py       # Test suite
+├── app.py                 # Main application entry point
+├── models.py              # SQLAlchemy models
+├── routes/                # Flask blueprints (accounts, playlists, xtream, epg, ppv, ...)
+├── services/              # Business logic (sync, epg, ppv, filter, stream proxy, ...)
+│   ├── ppv/              # PPV enrichment domain package
+│   └── epg/              # EPG parsing, matching, generation
+├── templates/             # Web UI (Jinja2)
+├── static/js/             # Frontend scripts
+├── tests/                 # pytest suite (75%+ coverage required)
+├── migrations/            # Idempotent database migrations
+├── scripts/               # Operational utilities
+├── docs/                  # Architecture and API documentation
 ├── Dockerfile
 ├── docker-compose.yml
-├── requirements.txt
-└── README.md
+└── requirements.txt
 ```
 
 ## Upgrading from v1
@@ -438,7 +434,7 @@ docker-compose restart iptv-proxy-v2
 python run_migrations.py
 ```
 
-The migration system runs automatically on container startup and is completely idempotent. See [PERFORMANCE.md](PERFORMANCE.md) for details.
+The migration system runs automatically on container startup and is completely idempotent.
 
 ## Troubleshooting
 

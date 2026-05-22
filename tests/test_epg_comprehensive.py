@@ -163,6 +163,7 @@ def test_epg_mapping(app, test_channel, test_epg_channel):
 # ============================================================================
 
 
+@pytest.mark.skip(reason="Legacy /api/epg/ppv/* routes removed")
 class TestPPVVisibility:
     """Tests for PPV channel visibility endpoints"""
 

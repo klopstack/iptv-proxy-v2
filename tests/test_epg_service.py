@@ -24,7 +24,6 @@ from services.epg_service import (
     decompress_content,
     extract_callsign_from_xmltv_id,
     get_decompressing_stream,
-    get_ppv_epg_xmltv,
     get_ppv_event_title,
     is_ppv_category,
     is_ppv_channel,
@@ -32,7 +31,6 @@ from services.epg_service import (
     make_sd_xmltv_id,
     normalize_xmltv_url,
     shift_xmltv_time,
-    update_ppv_channel_visibility,
 )
 
 # ============================================================================
@@ -2530,6 +2528,7 @@ class TestGenerateEpgForChannels:
             db.session.commit()
 
 
+@pytest.mark.skip(reason="Legacy get_ppv_epg_xmltv removed; use PPVEpgService")
 class TestGetPpvEpgXmltv:
     """Tests for get_ppv_epg_xmltv function"""
 
@@ -3493,6 +3492,7 @@ class TestMatchChannelsToEpgFccEnhanced:
             db.session.commit()
 
 
+@pytest.mark.skip(reason="Legacy update_ppv_channel_visibility removed; use PPVVisibilityService")
 class TestUpdatePpvChannelVisibility:
     """Test suite for update_ppv_channel_visibility() function"""
 

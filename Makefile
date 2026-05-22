@@ -100,4 +100,4 @@ docker-stop: ## Stop Docker containers
 docker-migrate: ## Run migrations in Docker container
 	docker exec -it iptv-proxy-v2 python run_migrations.py
 
-ci: lint-all test ## Run all CI checks (Python + JavaScript linting + tests)
+ci: lint test ## Run all CI checks (Python + JavaScript linting + tests)

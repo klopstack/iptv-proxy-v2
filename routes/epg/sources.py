@@ -246,7 +246,6 @@ def get_source_mappings(source_id):
 @handle_errors(return_json=True, default_message="Error syncing EPG source")
 def sync_epg_source(source_id):
     """Sync EPG data from a source using EpgSyncService"""
-    from services.epg_service import update_ppv_channel_visibility
     from services.epg_sync_service import EpgSyncService
 
     source = EpgSource.query.get_or_404(source_id)
@@ -256,16 +255,6 @@ def sync_epg_source(source_id):
 
     # Update source sync status
     EpgSyncService.update_source_sync_status(source, success, message, stats)
-
-    # Update PPV visibility for provider accounts
-    if success and source.source_type == "provider":
-        try:
-            account = source.account
-            if account:
-                ppv_stats = update_ppv_channel_visibility(account.id)
-                logger.info(f"PPV visibility update after EPG sync: {ppv_stats}")
-        except Exception as e:
-            logger.warning(f"Failed to update PPV visibility after EPG sync: {e}")
 
     if success:
         return (
@@ -316,48 +305,3 @@ def get_category_epg_coverage(account_id):
             "categories": coverage,
         }
     )
-
-
-@epg_sources_bp.route("/ppv/update-visibility", methods=["POST"])
-@handle_errors(return_json=True, default_message="Error updating PPV channel visibility")
-def update_ppv_visibility():
-    """Update PPV channel visibility based on channel name changes"""
-    from services.epg_service import update_ppv_channel_visibility
-
-    account_id = request.args.get("account_id", type=int)
-
-    stats = update_ppv_channel_visibility(account_id)
-
-    message_parts = []
-    if stats["events_detected"] > 0:
-        message_parts.append(f"{stats['events_detected']} active event(s)")
-    if stats["channels_shown"] > 0:
-        message_parts.append(f"{stats['channels_shown']} channel(s) shown")
-    if stats["channels_hidden"] > 0:
-        message_parts.append(f"{stats['channels_hidden']} hidden")
-
-    message = ", ".join(message_parts) if message_parts else "No PPV channel visibility changes"
-
-    return jsonify(
-        {
-            "success": True,
-            "message": message,
-            "stats": stats,
-        }
-    )
-
-
-@epg_sources_bp.route("/ppv/xmltv", methods=["GET"])
-@handle_errors(return_json=False, default_message="Error generating PPV EPG")
-def get_ppv_epg_xmltv():
-    """Get XMLTV EPG data for active PPV channels"""
-    from flask import Response
-
-    from services.epg_service import get_ppv_epg_xmltv
-
-    account_id = request.args.get("account_id", type=int)
-    duration = request.args.get("duration", default=8, type=int)
-
-    xml_data = get_ppv_epg_xmltv(account_id, duration_hours=duration)
-
-    return Response(xml_data, mimetype="application/xml")
