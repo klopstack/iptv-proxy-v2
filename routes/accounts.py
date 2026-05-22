@@ -838,10 +838,13 @@ def preview_account_playlist(account_id):
     - search: Full-text search term for channel name/cleaned name
     - collapse_duplicates: If "true", collapse duplicate channels keeping highest quality
 
+    Preview applies the same account filters and PPV visibility rules as M3U output.
+    Search, category, and tag query params are additional preview-only narrowing filters.
+
     Returns:
     - JSON with total count, channel data, and using_database flag
     """
-    Account.query.get_or_404(account_id)
+    account = Account.query.get_or_404(account_id)
 
     # Parse tag filter
     tags_param = request.args.get("tags", "")
@@ -916,6 +919,10 @@ def preview_account_playlist(account_id):
         from services.filter_service import FilterService
 
         all_channels = FilterService.apply_filters_to_channels(all_channels, account_id)
+
+        from services.channel_query_service import ChannelQueryService
+
+        all_channels = ChannelQueryService.apply_ppv_visibility_to_channels(all_channels)
 
         # Get ALL channel IDs for batch tag loading
         all_channel_ids = [ch.stream_id for ch in all_channels]
@@ -994,6 +1001,10 @@ def preview_account_playlist(account_id):
         from services.filter_service import FilterService
 
         filtered_channels = FilterService.apply_filters_to_channels(all_channels, account_id)
+
+        from services.channel_query_service import ChannelQueryService
+
+        filtered_channels = ChannelQueryService.apply_ppv_visibility_to_channels(filtered_channels)
 
         # Get total count AFTER filtering
         total = len(filtered_channels)

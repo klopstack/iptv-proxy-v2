@@ -122,13 +122,23 @@ class EpgService:
         channels: List,
         account_xml_cache: Optional[Dict[int, bytes]] = None,
         use_channel_links: bool = True,
+        *,
+        east_west_fallback: Optional[bool] = None,
     ) -> bytes:
         """
         Generate EPG XML for a list of channels.
 
         This properly queries ChannelEpgMapping to fetch EPG from mapped sources.
+
+        east_west_fallback: When set, controls channel-link EPG inheritance (east/west).
+            Overrides use_channel_links when provided.
         """
-        return generation.generate_epg_for_channels(channels, account_xml_cache, use_channel_links)
+        return generation.generate_epg_for_channels(
+            channels,
+            account_xml_cache,
+            use_channel_links,
+            east_west_fallback=east_west_fallback,
+        )
 
     @staticmethod
     def generate_filtered_epg(

@@ -118,6 +118,26 @@ class ChannelQueryService:
         return tags_map
 
     @staticmethod
+    def apply_ppv_visibility_to_channels(channels: List[Channel]) -> List[Channel]:
+        """Filter channels using each account's PPV visibility rules."""
+        if not channels:
+            return []
+
+        by_account: dict = {}
+        for ch in channels:
+            by_account.setdefault(ch.account_id, []).append(ch)
+
+        visible = []
+        for acc_id, chs in by_account.items():
+            account = db.session.get(Account, acc_id)
+            if not account:
+                continue
+            ppv = PPVVisibilityService(account)
+            visible.extend([ch for ch in chs if ppv.should_show_channel(ch)])
+
+        return visible
+
+    @staticmethod
     def channels_for_account(
         account_id: int,
         *,
@@ -141,8 +161,7 @@ class ChannelQueryService:
             channels = FilterService.apply_filters_to_channels(channels, account_id)
 
         if apply_ppv_visibility:
-            ppv = PPVVisibilityService(account)
-            channels = [ch for ch in channels if ppv.should_show_channel(ch)]
+            channels = ChannelQueryService.apply_ppv_visibility_to_channels(channels)
 
         return channels
 
@@ -213,17 +232,7 @@ class ChannelQueryService:
             channels = merged
 
         if apply_ppv_visibility:
-            by_account = {}
-            for ch in channels:
-                by_account.setdefault(ch.account_id, []).append(ch)
-            visible = []
-            for acc_id, chs in by_account.items():
-                account = db.session.get(Account, acc_id)
-                if not account:
-                    continue
-                ppv = PPVVisibilityService(account)
-                visible.extend([ch for ch in chs if ppv.should_show_channel(ch)])
-            channels = visible
+            channels = ChannelQueryService.apply_ppv_visibility_to_channels(channels)
 
         return channels
 

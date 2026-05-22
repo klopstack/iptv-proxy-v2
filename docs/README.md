@@ -47,6 +47,11 @@ User-friendly guide for the Xtream Codes API feature:
 - Feature overview and compatibility information
 - Troubleshooting common issues
 
+### [todos/](todos/README.md)
+**For: Maintainers, Active Development**
+
+Post-restructuring work backlog from the May 2026 codebase audit. Sixteen prioritized items (P0–P3) with detailed problem statements, proposed solutions, acceptance criteria, and test plans. Work through [todos/README.md](todos/README.md) in order.
+
 ## Quick Navigation
 
 ### I want to...
@@ -71,6 +76,9 @@ User-friendly guide for the Xtream Codes API feature:
 
 **Run tests and check code quality**
 → Use commands in [DEVELOPER_GUIDE.md#testing](DEVELOPER_GUIDE.md#testing)
+
+**See planned fixes after the restructuring**
+→ Start with [todos/README.md](todos/README.md)
 
 ## Changelog
 

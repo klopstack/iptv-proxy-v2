@@ -601,8 +601,9 @@ def proxy_epg(account_id):
     """Proxy EPG/XMLTV for account, filtered to only channels in the M3U playlist.
 
     This endpoint returns EPG data only for channels that would appear in the
-    corresponding M3U playlist (/playlist/<account_id>.m3u), ensuring the EPG
-    matches the visible channels (with renaming applied and down channels excluded).
+    corresponding M3U playlist (/playlist/<account_id>.m3u), using the same
+    channel selection as M3U generation: dynamic blacklist/whitelist filters,
+    PPV visibility rules, and optional duplicate collapse.
 
     Query Parameters:
     - collapse_duplicates: "true" to collapse duplicate channels keeping highest quality
@@ -623,20 +624,11 @@ def proxy_epg(account_id):
     # Check if we should collapse duplicates (same logic as M3U generation)
     collapse_duplicates = request.args.get("collapse_duplicates", "").lower() == "true"
 
-    # Build base query - filters applied dynamically via FilterService
-    query = (
-        db.session.query(Channel)
-        .filter(Channel.account_id == account_id, Channel.is_active)
-        .join(Category, Channel.category_id == Category.id, isouter=True)
+    channels = ChannelQueryService.channels_for_account(
+        account_id,
+        apply_filters=True,
+        apply_ppv_visibility=True,
     )
-
-    # Get all matching channels
-    channels = query.order_by(Channel.name).all()
-
-    # Apply filters dynamically (includes is_visible check)
-    from services.filter_service import FilterService
-
-    channels = FilterService.apply_filters_to_channels(channels, account_id)
 
     # If collapsing duplicates, load tags and collapse (same logic as M3U)
     if collapse_duplicates:
@@ -751,72 +743,13 @@ def _generate_epg_from_config(config):
     # Check if east/west fallback is enabled
     east_west_fallback = request.args.get("east_west_fallback", "true").lower() != "false"
 
-    # Parse config
-    include_accounts = json.loads(config.include_accounts) if config.include_accounts else []
-    exclude_accounts = json.loads(config.exclude_accounts) if config.exclude_accounts else []
-    include_tags = json.loads(config.include_tags) if config.include_tags else []
-    exclude_tags = json.loads(config.exclude_tags) if config.exclude_tags else []
-    # Normalize tags for case-insensitive matching
-    include_tags = TagService.normalize_filter_tags(include_tags)
-    exclude_tags = TagService.normalize_filter_tags(exclude_tags)
+    channels = ChannelQueryService.channels_for_playlist_config(
+        config,
+        apply_filters=True,
+        apply_ppv_visibility=True,
+    )
 
-    # Get accounts to process
-    if include_accounts:
-        accounts = Account.query.filter(Account.id.in_(include_accounts), Account.enabled.is_(True)).all()
-    else:
-        accounts = Account.query.filter(Account.enabled.is_(True)).all()
-        if exclude_accounts:
-            accounts = [a for a in accounts if a.id not in exclude_accounts]
-
-    # Collect all matching channels from all accounts
-    all_channels = []
-
-    for account in accounts:
-        # Build query for channels from this account
-        query = db.session.query(Channel).filter(
-            Channel.account_id == account.id, Channel.is_active, Channel.is_visible
-        )
-
-        # Apply tag filtering if specified
-        if include_tags or exclude_tags:
-            if include_tags:
-                tag_subquery = (
-                    db.session.query(ChannelTag.stream_id)
-                    .join(Tag, ChannelTag.tag_id == Tag.id)
-                    .filter(ChannelTag.account_id == account.id, Tag.name.in_(include_tags))
-                )
-
-                if config.tag_match_mode == "all":
-                    # Must have ALL include tags
-                    tag_counts = (
-                        db.session.query(
-                            ChannelTag.stream_id, db.func.count(db.func.distinct(Tag.id)).label("tag_count")
-                        )
-                        .join(Tag, ChannelTag.tag_id == Tag.id)
-                        .filter(ChannelTag.account_id == account.id, Tag.name.in_(include_tags))
-                        .group_by(ChannelTag.stream_id)
-                        .having(db.func.count(db.func.distinct(Tag.id)) == len(include_tags))
-                        .subquery()
-                    )
-
-                    query = query.filter(Channel.stream_id.in_(db.session.query(tag_counts.c.stream_id)))
-                else:  # 'any'
-                    query = query.filter(Channel.stream_id.in_(tag_subquery))
-
-            if exclude_tags:
-                # Must NOT have any exclude tags
-                exclude_subquery = (
-                    db.session.query(ChannelTag.stream_id)
-                    .join(Tag, ChannelTag.tag_id == Tag.id)
-                    .filter(ChannelTag.account_id == account.id, Tag.name.in_(exclude_tags))
-                )
-                query = query.filter(~Channel.stream_id.in_(exclude_subquery))
-
-        # Get all matching channels
-        channels = query.all()
-        all_channels.extend(channels)
-
-    if not all_channels:
+    if not channels:
         # Return minimal valid XMLTV
         return Response(
             b'<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="iptv-proxy-v2"></tv>\n',
@@ -824,13 +757,13 @@ def _generate_epg_from_config(config):
         )
 
     logger.info(
-        f"Generating EPG for config {config.id} ({config.name}): {len(all_channels)} channels "
-        f"from {len(accounts)} accounts (east_west_fallback={east_west_fallback})"
+        f"Generating EPG for config {config.id} ({config.name}): {len(channels)} channels "
+        f"(east_west_fallback={east_west_fallback})"
     )
 
     # Generate filtered EPG
     epg_xml = EpgService.generate_epg_for_channels(
-        all_channels,
+        channels,
         east_west_fallback=east_west_fallback,
     )
 

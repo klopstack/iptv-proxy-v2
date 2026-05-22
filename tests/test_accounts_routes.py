@@ -1,11 +1,12 @@
 """
 Tests for accounts routes - account management, credentials, tags, channels, etc.
 """
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from models import Account, Category, Channel, ChannelTag, Credential, Tag, db
+from models import Account, Category, Channel, ChannelTag, Credential, Event, EventChannelLink, Tag, db
 
 
 @pytest.fixture
@@ -692,3 +693,118 @@ class TestRecomputeVisibility:
         # Should have 4 visible (0,2,3,4) and 1 hidden (1)
         assert data["channels_visible"] == 4
         assert data["channels_hidden"] == 1
+
+
+class TestAccountPreviewPPVVisibility:
+    """Preview should apply the same PPV visibility rules as M3U output."""
+
+    def _create_account_with_ppv(self, app, ppv_visibility="hide_all"):
+        with app.app_context():
+            account = Account(
+                name="PPV Preview Account",
+                username="ppv_user",
+                password="ppv_pass",
+                server="example.com",
+                enabled=True,
+                ppv_visibility=ppv_visibility,
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            regular = Channel(
+                account_id=account.id,
+                stream_id="regular1",
+                name="Regular Sports",
+                is_active=True,
+                is_ppv=False,
+            )
+            ppv = Channel(
+                account_id=account.id,
+                stream_id="ppv1",
+                name="UFC 300: Main Event",
+                is_active=True,
+                is_ppv=True,
+            )
+            db.session.add_all([regular, ppv])
+            db.session.commit()
+            return account.id, regular.stream_id, ppv.stream_id
+
+    def test_preview_hides_ppv_with_hide_all(self, app, client):
+        account_id, regular_stream_id, ppv_stream_id = self._create_account_with_ppv(app, "hide_all")
+
+        response = client.get(f"/api/accounts/{account_id}/preview?limit=100")
+        assert response.status_code == 200
+
+        data = response.json
+        stream_ids = {ch["stream_id"] for ch in data["channels"]}
+        assert regular_stream_id in stream_ids
+        assert ppv_stream_id not in stream_ids
+        assert data["total"] == 1
+        assert data["using_database"] is True
+
+    def test_preview_hides_inactive_ppv_event(self, app, client):
+        with app.app_context():
+            account = Account(
+                name="PPV Inactive Preview",
+                username="ppv_user",
+                password="ppv_pass",
+                server="example.com",
+                enabled=True,
+                ppv_visibility="hide_inactive",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            regular = Channel(
+                account_id=account.id,
+                stream_id="regular1",
+                name="Regular Sports",
+                is_active=True,
+                is_ppv=False,
+            )
+            ppv = Channel(
+                account_id=account.id,
+                stream_id="ppv1",
+                name="Past PPV Event",
+                is_active=True,
+                is_ppv=True,
+                ppv_enrichment_status="matched",
+            )
+            db.session.add_all([regular, ppv])
+            db.session.commit()
+
+            past = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=2)
+            event = Event(
+                external_id="past-preview-event",
+                title="Past Game",
+                home_team_id="1",
+                home_team_name="Home",
+                away_team_id="2",
+                away_team_name="Away",
+                scheduled_at=past,
+                status=Event.STATUS_FINISHED,
+            )
+            db.session.add(event)
+            db.session.commit()
+            db.session.add(EventChannelLink(channel_id=ppv.id, event_id=event.id))
+            db.session.commit()
+            account_id = account.id
+
+        response = client.get(f"/api/accounts/{account_id}/preview?limit=100")
+        assert response.status_code == 200
+
+        data = response.json
+        stream_ids = {ch["stream_id"] for ch in data["channels"]}
+        assert "regular1" in stream_ids
+        assert "ppv1" not in stream_ids
+        assert data["total"] == 1
+
+    def test_preview_without_extra_filters_matches_m3u_count(self, app, client):
+        account_id, _, _ = self._create_account_with_ppv(app, "hide_all")
+
+        preview = client.get(f"/api/accounts/{account_id}/preview?limit=100")
+        m3u = client.get(f"/playlist/{account_id}.m3u")
+
+        assert preview.status_code == 200
+        assert m3u.status_code == 200
+        assert preview.json["total"] == m3u.data.decode("utf-8").count("#EXTINF:")

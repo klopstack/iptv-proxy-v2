@@ -427,8 +427,8 @@ def preview_channels():
     # Get all channels (we need to apply filters dynamically)
     all_channels = query.order_by(Channel.name).all()
 
-    # Apply filters dynamically per account
-    # Group channels by account and filter each group
+    # Filter each account's channels, then apply PPV visibility per account
+    from services.channel_query_service import ChannelQueryService
     from services.filter_service import FilterService
 
     channels_by_account = {}
@@ -437,10 +437,11 @@ def preview_channels():
             channels_by_account[ch.account_id] = []
         channels_by_account[ch.account_id].append(ch)
 
-    # Filter each account's channels
     filtered_channels = []
     for acc_id, acc_channels in channels_by_account.items():
         filtered_channels.extend(FilterService.apply_filters_to_channels(acc_channels, acc_id))
+
+    filtered_channels = ChannelQueryService.apply_ppv_visibility_to_channels(filtered_channels)
 
     # Sort all filtered channels by name
     filtered_channels.sort(key=lambda ch: ch.name or "")

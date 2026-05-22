@@ -491,6 +491,8 @@ def generate_epg_for_channels(
     channels: List[Channel],
     account_xml_cache: Optional[Dict[int, bytes]] = None,
     use_channel_links: bool = True,
+    *,
+    east_west_fallback: Optional[bool] = None,
 ) -> bytes:
     """
     Generate EPG XML for a list of channels from database program records.
@@ -510,10 +512,15 @@ def generate_epg_for_channels(
         channels: List of Channel objects to generate EPG for
         account_xml_cache: DEPRECATED - ignored, kept for compatibility
         use_channel_links: Whether to use ChannelLink for linked channel EPG
+        east_west_fallback: When set, overrides use_channel_links for east/west
+            channel-link EPG inheritance.
 
     Returns:
         XMLTV XML content as bytes
     """
+    if east_west_fallback is not None:
+        use_channel_links = east_west_fallback
+
     if not channels:
         return b'<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="iptv-proxy-v2"></tv>\n'
 

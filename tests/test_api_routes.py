@@ -1,11 +1,12 @@
 """
 Tests for API routes - sync, tags, cache, and channel preview
 """
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
 
-from models import Account, Category, Channel, ChannelTag, Tag, db
+from models import Account, Category, Channel, ChannelTag, Event, EventChannelLink, Tag, db
 
 
 @pytest.fixture
@@ -488,3 +489,94 @@ def test_get_channel_details_wrong_account(app, client, test_channel_with_tags, 
         # Try to get test_channel_with_tags using other_account's ID
         response = client.get(f"/api/accounts/{other_account.id}/channels/ch1")
         assert response.status_code == 404
+
+
+class TestChannelPreviewPPVVisibility:
+    """Multi-account preview should apply PPV visibility per account."""
+
+    def test_preview_channels_hides_ppv_for_account(self, app, client):
+        with app.app_context():
+            account = Account(
+                name="PPV API Preview",
+                username="ppv_user",
+                password="ppv_pass",
+                server="http://example.com",
+                enabled=True,
+                ppv_visibility="hide_all",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            regular = Channel(
+                account_id=account.id,
+                stream_id="regular1",
+                name="Regular Channel",
+                is_active=True,
+                is_ppv=False,
+            )
+            ppv = Channel(
+                account_id=account.id,
+                stream_id="ppv1",
+                name="UFC 300",
+                is_active=True,
+                is_ppv=True,
+            )
+            db.session.add_all([regular, ppv])
+            db.session.commit()
+            account_id = account.id
+
+        response = client.get(f"/api/channels/preview?account_id={account_id}&limit=100")
+        assert response.status_code == 200
+
+        data = response.json
+        stream_ids = {ch["stream_id"] for ch in data["channels"]}
+        assert "regular1" in stream_ids
+        assert "ppv1" not in stream_ids
+        assert data["total"] == 1
+
+    def test_preview_channels_all_accounts_applies_ppv_per_account(self, app, client):
+        with app.app_context():
+            visible_account = Account(
+                name="Visible Account",
+                username="visible",
+                password="pass",
+                server="http://example.com",
+                enabled=True,
+                ppv_visibility="show_all",
+            )
+            hidden_account = Account(
+                name="Hidden Account",
+                username="hidden",
+                password="pass",
+                server="http://example.com",
+                enabled=True,
+                ppv_visibility="hide_all",
+            )
+            db.session.add_all([visible_account, hidden_account])
+            db.session.commit()
+
+            visible_ppv = Channel(
+                account_id=visible_account.id,
+                stream_id="visible-ppv",
+                name="Visible PPV",
+                is_active=True,
+                is_ppv=True,
+            )
+            hidden_ppv = Channel(
+                account_id=hidden_account.id,
+                stream_id="hidden-ppv",
+                name="Hidden PPV",
+                is_active=True,
+                is_ppv=True,
+            )
+            db.session.add_all([visible_ppv, hidden_ppv])
+            db.session.commit()
+
+        response = client.get("/api/channels/preview?limit=100")
+        assert response.status_code == 200
+
+        data = response.json
+        stream_ids = {ch["stream_id"] for ch in data["channels"]}
+        assert "visible-ppv" in stream_ids
+        assert "hidden-ppv" not in stream_ids
+        assert data["total"] == 1

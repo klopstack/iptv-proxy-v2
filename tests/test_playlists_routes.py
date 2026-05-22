@@ -6,6 +6,7 @@ import json
 import pytest
 
 from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Tag, db
+from services.channel_query_service import ChannelQueryService
 
 
 @pytest.fixture
@@ -525,3 +526,59 @@ class TestEPGProxy:
         assert response.status_code == 200
         assert "application/xml" in response.content_type
         assert b"<?xml version=" in response.data
+
+    def test_epg_excludes_ppv_hide_all_matching_m3u(self, app, client):
+        """PPV channels hidden from M3U (hide_all) must also be absent from account EPG."""
+        with app.app_context():
+            account = Account(
+                name="PPV Hide All",
+                username="ppv_user",
+                password="ppv_pass",
+                server="example.com",
+                enabled=True,
+                ppv_visibility="hide_all",
+            )
+            db.session.add(account)
+            db.session.flush()
+
+            category = Category(
+                account_id=account.id,
+                category_id="cat1",
+                category_name="Sports",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            regular = Channel(
+                account_id=account.id,
+                stream_id="regular1",
+                name="Regular Channel",
+                category_id=category.id,
+                is_active=True,
+                is_visible=True,
+            )
+            ppv = Channel(
+                account_id=account.id,
+                stream_id="ppv1",
+                name="PPV Event",
+                category_id=category.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            db.session.add_all([regular, ppv])
+            db.session.commit()
+            account_id = account.id
+            ppv_tvg_id = ChannelQueryService.epg_channel_id_for_channel(ppv)
+
+        m3u_response = client.get(f"/playlist/{account_id}.m3u")
+        assert m3u_response.status_code == 200
+        m3u_content = m3u_response.data.decode("utf-8")
+        assert f'tvg-id="{ppv_tvg_id}"' not in m3u_content
+        assert "Regular Channel" in m3u_content
+
+        epg_response = client.get(f"/epg/{account_id}.xml")
+        assert epg_response.status_code == 200
+        epg_content = epg_response.data.decode("utf-8")
+        assert f'<channel id="{ppv_tvg_id}"' not in epg_content
+        assert f'id="{ppv_tvg_id}"' not in epg_content

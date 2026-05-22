@@ -130,6 +130,37 @@ def test_ppv_hide_inactive_via_channel_query(app):
         assert all(c.stream_id != "99" for c in channels)
 
 
+def test_apply_ppv_visibility_to_channels_multi_account(app):
+    """Shared PPV helper filters each account group independently."""
+    with app.app_context():
+        acc1 = Account(
+            name="A1",
+            server="s",
+            username="u",
+            password="p",
+            enabled=True,
+            ppv_visibility="hide_all",
+        )
+        acc2 = Account(
+            name="A2",
+            server="s",
+            username="u",
+            password="p",
+            enabled=True,
+            ppv_visibility="show_all",
+        )
+        db.session.add_all([acc1, acc2])
+        db.session.commit()
+
+        ch1 = Channel(account_id=acc1.id, stream_id="1", name="Hidden PPV", is_active=True, is_ppv=True)
+        ch2 = Channel(account_id=acc2.id, stream_id="2", name="Visible PPV", is_active=True, is_ppv=True)
+        db.session.add_all([ch1, ch2])
+        db.session.commit()
+
+        visible = ChannelQueryService.apply_ppv_visibility_to_channels([ch1, ch2])
+        assert {ch.stream_id for ch in visible} == {"2"}
+
+
 def test_epg_channel_id_for_ppv_event(app):
     """PPV channels with linked events use event-{id} EPG identifiers."""
     with app.app_context():
