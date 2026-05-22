@@ -1025,21 +1025,29 @@ class TestPlaylistPreviewExtended:
             yield config.id
 
     def test_preview_with_tag_match_all_mode(self, app, client, playlist_config_with_all_mode):
-        """Test preview with tag_match_mode=all"""
-        from unittest.mock import patch
+        """Test preview with tag_match_mode=all uses database tags"""
+        with app.app_context():
+            sports_tag = Tag(name="SPORTS")
+            db.session.add(sports_tag)
+            db.session.flush()
 
-        mock_streams = [
-            {"stream_id": 1, "name": "Channel HD SPORTS", "category_id": "cat1", "stream_icon": "icon.png"},
-        ]
-        mock_categories = [{"category_id": "cat1", "category_name": "Sports"}]
+            db.session.add(
+                ChannelTag(
+                    account_id=json.loads(
+                        db.session.get(PlaylistConfig, playlist_config_with_all_mode).include_accounts
+                    )[0],
+                    stream_id="ch0",
+                    tag_id=sports_tag.id,
+                )
+            )
+            db.session.commit()
 
-        with patch("routes.playlists.IPTVService"):
-            with patch("routes.playlists.cache_service") as mock_cache:
-                mock_cache.get_cached_streams.return_value = mock_streams
-                mock_cache.get_cached_categories.return_value = mock_categories
-
-                response = client.get(f"/api/playlist-configs/{playlist_config_with_all_mode}/preview")
-                assert response.status_code == 200
+        response = client.get(f"/api/playlist-configs/{playlist_config_with_all_mode}/preview")
+        assert response.status_code == 200
+        data = response.json
+        assert data["total"] == 1
+        assert data["channels"][0]["stream_id"] == "ch0"
+        assert set(data["channels"][0]["tags"]) == {"HD", "SPORTS"}
 
 
 # ============================================================================

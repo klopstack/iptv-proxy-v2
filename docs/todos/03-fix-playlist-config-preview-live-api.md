@@ -1,7 +1,7 @@
 # TODO 03: Fix Playlist Config Preview (Live API → Database)
 
 **Priority:** P0  
-**Status:** ⬜ Not started  
+**Status:** ✅ Complete  
 **Estimated scope:** Medium (1 route function, tests)
 
 ---
@@ -119,13 +119,13 @@ After rewrite, this function should no longer need:
 
 ## Acceptance criteria
 
-- [ ] Preview does not call `IPTVService.get_live_streams`
-- [ ] Preview returns 503 when account not synced (consistent with M3U)
-- [ ] Preview channel list matches M3U from same config (same count, same stream_ids)
-- [ ] Tag include/exclude rules on config respected
-- [ ] PPV visibility respected
-- [ ] Pagination (`limit`, `offset`) still works
-- [ ] Existing tests updated and passing
+- [x] Preview does not call `IPTVService.get_live_streams`
+- [x] Preview returns 503 when account not synced (consistent with M3U)
+- [x] Preview channel list matches M3U from same config (same count, same stream_ids)
+- [x] Tag include/exclude rules on config respected
+- [x] PPV visibility respected
+- [x] Pagination (`limit`, `offset`) still works
+- [x] Existing tests updated and passing
 
 ---
 
@@ -155,6 +155,6 @@ Example test:
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Rewrote preview to use ChannelQueryService; removed IPTVService/cache/TagService deps from endpoint |

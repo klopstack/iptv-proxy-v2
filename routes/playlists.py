@@ -10,11 +10,8 @@ from flask import Blueprint, Response, jsonify, request
 from error_handling import ServiceUnavailableError, handle_errors, handle_xml_errors
 from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Settings, Tag, db
 from schemas import PlaylistConfigCreateSchema, validate_request_data
-from services.cache_service import CacheService
 from services.channel_query_service import ChannelQueryService
 from services.image_cache_service import ImageCacheService
-from services.iptv_service import IPTVService
-from services.tag_service import TagService
 from services.url_service import get_proxy_base_url as _proxy_base_url
 
 logger = logging.getLogger(__name__)
@@ -62,10 +59,6 @@ def sanitize_m3u_value(text: str) -> str:
 def get_proxy_base_url():
     """Get the proxy base URL, using custom proxy hostname if configured."""
     return _proxy_base_url()
-
-
-# Initialize cache service
-cache_service = CacheService()
 
 
 # ============================================================================
@@ -157,96 +150,77 @@ def delete_playlist_config(config_id):
 
 
 @playlists_bp.route("/api/playlist-configs/<int:config_id>/preview", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error previewing playlist config")
 def preview_playlist_config(config_id):
     """Preview channels that would be included in this playlist configuration"""
     config = PlaylistConfig.query.get_or_404(config_id)
     limit = request.args.get("limit", 50, type=int)
     offset = request.args.get("offset", 0, type=int)
 
-    try:
-        # Parse config
-        include_accounts = json.loads(config.include_accounts) if config.include_accounts else []
-        exclude_accounts = json.loads(config.exclude_accounts) if config.exclude_accounts else []
-        include_tags = json.loads(config.include_tags) if config.include_tags else []
-        exclude_tags = json.loads(config.exclude_tags) if config.exclude_tags else []
-        # Normalize tags for case-insensitive matching
-        include_tags = TagService.normalize_filter_tags(include_tags)
-        exclude_tags = TagService.normalize_filter_tags(exclude_tags)
+    include_accounts = json.loads(config.include_accounts) if config.include_accounts else []
+    exclude_accounts = json.loads(config.exclude_accounts) if config.exclude_accounts else []
 
-        # Get all enabled accounts or filter by include/exclude
-        if include_accounts:
-            accounts = Account.query.filter(Account.id.in_(include_accounts), Account.enabled.is_(True)).all()
-        else:
-            accounts = Account.query.filter(Account.enabled.is_(True)).all()
-            if exclude_accounts:
-                accounts = [a for a in accounts if a.id not in exclude_accounts]
+    if include_accounts:
+        accounts = Account.query.filter(Account.id.in_(include_accounts), Account.enabled.is_(True)).all()
+    else:
+        accounts = Account.query.filter(Account.enabled.is_(True)).all()
+        if exclude_accounts:
+            accounts = [a for a in accounts if a.id not in exclude_accounts]
 
-        # Collect matching channels
-        matching_channels = []
+    unsynced_accounts = []
+    for account in accounts:
+        channel_count = Channel.query.filter_by(account_id=account.id, is_active=True).count()
+        if channel_count == 0:
+            unsynced_accounts.append(account.name)
 
-        for account in accounts:
-            # Get streams for this account
-            service = IPTVService(
-                account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9"
-            )
-            streams = cache_service.get_cached_streams(account.id)
-            if not streams:
-                streams = service.get_live_streams()
-                cache_service.cache_streams(account.id, streams)
+    if unsynced_accounts:
+        raise ServiceUnavailableError(
+            f"The following accounts are not synced: {', '.join(unsynced_accounts)}. Please sync channels first."
+        )
 
-            categories = cache_service.get_cached_categories(account.id)
-            if not categories:
-                categories = service.get_live_categories()
-                cache_service.cache_categories(account.id, categories)
+    channels = ChannelQueryService.channels_for_playlist_config(
+        config,
+        apply_filters=True,
+        apply_ppv_visibility=True,
+    )
 
-            category_map = {str(c["category_id"]): c["category_name"] for c in categories}
+    total = len(channels)
+    paginated = channels[offset : offset + limit]
 
-            # Get tag rules for account
-            tag_rules = TagService.get_rules_for_account(account)
+    account_names = {account.id: account.name for account in accounts}
+    tags_map = ChannelQueryService._load_tag_names_for_channels(paginated)
 
-            # Process each stream
-            for stream in streams:
-                stream_id = str(stream.get("stream_id"))
-                channel_name = stream.get("name", "")
-                category_id = str(stream.get("category_id", ""))
-                category_name = category_map.get(category_id, "")
+    image_cache = ImageCacheService.get_instance()
+    proxy_base = f"{request.scheme}://{request.host}"
 
-                # Extract tags for this channel
-                tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, tag_rules)
-
-                # Check if channel matches filter criteria
-                if _matches_tag_filter(tags, include_tags, exclude_tags, config.tag_match_mode):
-                    matching_channels.append(
-                        {
-                            "account_id": account.id,
-                            "account_name": account.name,
-                            "stream_id": stream_id,
-                            "original_name": channel_name,
-                            "cleaned_name": cleaned_name,
-                            "category": category_name,
-                            "tags": list(tags),
-                            "icon": stream.get("stream_icon", ""),
-                        }
-                    )
-
-        # Apply pagination
-        total = len(matching_channels)
-        paginated = matching_channels[offset : offset + limit]
-
-        return jsonify(
+    preview_channels = []
+    for channel in paginated:
+        tag_names = sorted(tags_map.get((channel.account_id, channel.stream_id), set()))
+        preview_channels.append(
             {
-                "total": total,
-                "offset": offset,
-                "limit": limit,
-                "showing": len(paginated),
-                "channels": paginated,
-                "has_more": offset + limit < total,
+                "account_id": channel.account_id,
+                "account_name": account_names.get(channel.account_id, ""),
+                "stream_id": channel.stream_id,
+                "original_name": channel.name,
+                "cleaned_name": channel.cleaned_name if channel.cleaned_name is not None else channel.name,
+                "category": channel.category.cleaned_name or channel.category.category_name
+                if channel.category
+                else "",
+                "tags": tag_names,
+                "icon": image_cache.get_proxy_url(channel.stream_icon, proxy_base) if channel.stream_icon else "",
             }
         )
 
-    except Exception as e:
-        logger.error(f"Error previewing playlist config {config_id}: {e}")
-        return jsonify({"error": str(e)}), 400
+    return jsonify(
+        {
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "showing": len(preview_channels),
+            "channels": preview_channels,
+            "has_more": offset + limit < total,
+        }
+    )
 
 
 def _matches_tag_filter(channel_tags, include_tags, exclude_tags, match_mode):
