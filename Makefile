@@ -9,6 +9,8 @@ ISORT = $(VENV)/bin/isort
 FLAKE8 = $(VENV)/bin/flake8
 MYPY = $(VENV)/bin/mypy
 VULTURE = $(VENV)/bin/vulture
+MYPY_MODELS = models/
+VULTURE_MODELS = models/
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -43,13 +45,13 @@ lint-py: install ## Run Python linting checks in venv
 	$(FLAKE8) . --count --exit-zero --statistics
 	$(BLACK) --check .
 	$(ISORT) --check-only .
-	$(MYPY) app.py models.py services/ routes/
+	$(MYPY) app.py $(MYPY_MODELS) services/ routes/
 
 vulture: install ## Find dead code with vulture
-	$(VULTURE) app.py models.py services/ routes/ schemas.py error_handling.py vulture_whitelist.py --min-confidence 80
+	$(VULTURE) app.py $(VULTURE_MODELS) services/ routes/ schemas.py error_handling.py vulture_whitelist.py --min-confidence 80
 
 vulture-all: install ## Find dead code including lower confidence results
-	$(VULTURE) app.py models.py services/ routes/ schemas.py error_handling.py vulture_whitelist.py --min-confidence 60
+	$(VULTURE) app.py $(VULTURE_MODELS) services/ routes/ schemas.py error_handling.py vulture_whitelist.py --min-confidence 60
 
 lint-js: ## Run JavaScript/HTML linting
 	npm run lint

@@ -1,7 +1,7 @@
 # TODO 09: Update models.py References
 
 **Priority:** P2  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Small (docs + config files, no runtime logic)
 
 ---
@@ -87,11 +87,11 @@ Update ARCHITECTURE.md, DEVELOPER_GUIDE.md, copilot-instructions similarly.
 
 ## Acceptance criteria
 
-- [ ] `make lint-py` runs without "file not found" for models
-- [ ] `make vulture` runs successfully
-- [ ] `docker-compose -f docker-compose.yml -f docker-compose.dev.yml up` starts without empty models mount
-- [ ] No docs reference standalone `models.py` as current layout
-- [ ] Optional: add note that `from models import X` import style is unchanged
+- [x] `make lint-py` runs without "file not found" for models
+- [x] `make vulture` runs successfully
+- [x] `docker-compose -f docker-compose.yml -f docker-compose.dev.yml up` starts without empty models mount
+- [x] No docs reference standalone `models.py` as current layout
+- [x] Optional: add note that `from models import X` import style is unchanged
 
 ---
 
@@ -110,6 +110,6 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml config  # validat
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Updated Makefile, docker-compose.dev.yml, README, DEV_SETUP, ARCHITECTURE, DEVELOPER_GUIDE, copilot-instructions |

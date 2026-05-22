@@ -16,7 +16,7 @@ STREAM_BACKEND=mediaflow docker-compose -f docker-compose.yml -f docker-compose.
 
 The dev override mounts these directories for live updates:
 - `./app.py` - Main Flask application
-- `./models.py` - SQLAlchemy models
+- `./models/` - SQLAlchemy models package (`__init__.py` re-exports from `_core.py`)
 - `./schemas.py` - Request/response schemas
 - `./routes/` - API route blueprints
 - `./services/` - Business logic services

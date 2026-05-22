@@ -10,7 +10,7 @@ services:
     volumes:
       - ./data:/app/data  # Persist database
       - ./app.py:/app/app.py  # Main application
-      - ./models.py:/app/models.py  # Database models
+      - ./models:/app/models  # Database models package
       - ./schemas.py:/app/schemas.py  # Pydantic schemas
       - ./error_handling.py:/app/error_handling.py  # Error handling decorators
       - ./routes:/app/routes  # API routes

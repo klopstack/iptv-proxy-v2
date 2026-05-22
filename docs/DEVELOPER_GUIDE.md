@@ -147,7 +147,7 @@ make format
 black --check .          # Code formatting
 flake8 .                 # Style checking
 isort --check-only .     # Import sorting
-mypy app.py models.py services/  # Type checking
+mypy app.py models/ services/  # Type checking
 ```
 
 ### Code Style Guidelines

@@ -12,7 +12,7 @@ Flask-based IPTV proxy that sits between Xtream Codes API services and clients, 
 - `app.py`: Clean entry point (177 lines) with blueprint registration and scheduler setup
 - `routes/`: Flask blueprints organized by feature (17 blueprints)
 - `routes/epg/`: Decomposed EPG routes (sources, channels, match_rules, schedules_direct, xmltv)
-- `models.py`: SQLAlchemy models (2,063 lines, 41 models)
+- `models/`: SQLAlchemy models package (`__init__.py` re-exports from `_core.py`)
 - `services/`: Business logic services (29 files, ~18,500 lines covering IPTV, caching, EPG, PPV, etc.)
 - `templates/`: Web UI built with Jinja2 templates
 
@@ -186,7 +186,7 @@ make lint  # Check code quality
 make format  # Auto-format with black and isort
 flake8 .  # Check style issues
 black --check .  # Check formatting
-mypy app.py models.py services/  # Type checking
+mypy app.py models/ services/  # Type checking
 ```
 
 **Test Organization:**

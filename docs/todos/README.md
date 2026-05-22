@@ -38,7 +38,7 @@ Update the status column in this index as each item is completed.
 
 | # | Document | Status | Summary |
 |---|----------|--------|---------|
-| 09 | [09-update-models-py-references.md](./09-update-models-py-references.md) | ⬜ | Fix Makefile, Docker, docs referencing deleted `models.py` |
+| 09 | [09-update-models-py-references.md](./09-update-models-py-references.md) | ✅ | Fix Makefile, Docker, docs referencing deleted `models.py` |
 | 10 | [10-deduplicate-channel-processing.md](./10-deduplicate-channel-processing.md) | ⬜ | Extract shared tag-loading and duplicate-collapse helpers |
 | 11 | [11-test-hygiene.md](./11-test-hygiene.md) | ⬜ | Remove 26 skipped legacy tests; consolidate fixtures in conftest |
 | 12 | [12-ui-and-nav-cleanup.md](./12-ui-and-nav-cleanup.md) | ⬜ | Nav links, `/test` route naming, artifact cleanup |

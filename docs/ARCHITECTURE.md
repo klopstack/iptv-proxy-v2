@@ -62,7 +62,7 @@ IPTV Proxy v2 is a Flask-based IPTV proxy that sits between Xtream Codes API ser
   - `FilterService` - Channel filtering logic
 
 ### Data Layer
-- **`models.py`**: SQLAlchemy models (2,063 lines, 41 models)
+- **`models/`**: SQLAlchemy models package (`__init__.py` re-exports from `_core.py`; ~2,400 lines, 44 models)
 - **`migrations/`**: Database schema evolution scripts
 
 ## Data Flow

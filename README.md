@@ -358,7 +358,7 @@ make format
 flake8 .
 black --check .
 isort --check-only .
-mypy app.py models.py services/
+mypy app.py models/ services/
 ```
 
 ### Continuous Integration
@@ -392,7 +392,9 @@ python app.py  # Will recreate database
 ```
 iptv-proxy-v2/
 ├── app.py                 # Main application entry point
-├── models.py              # SQLAlchemy models
+├── models/                # SQLAlchemy models package
+│   ├── __init__.py        # Re-exports (from models import X unchanged)
+│   └── _core.py           # SQLAlchemy model definitions
 ├── routes/                # Flask blueprints (accounts, playlists, xtream, epg, ppv, ...)
 ├── services/              # Business logic (sync, epg, ppv, filter, stream proxy, ...)
 │   ├── ppv/              # PPV enrichment domain package
