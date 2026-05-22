@@ -273,7 +273,7 @@ class TestMatchChannelToCalendar:
                 event_name="Fighter A vs Fighter B",
                 league_name="UFC",
                 time_utc="22:00",
-                date="2026-01-05",
+                date="2027-01-05",
                 home_team="Fighter A",
                 away_team="Fighter B",
             )
@@ -320,7 +320,7 @@ class TestMatchChannelToCalendar:
                 event_name="Some Other Event",
                 league_name="UFC",
                 time_utc="22:00",
-                date="2026-01-05",
+                date="2027-01-05",
             )
 
             result = service._match_channel_to_calendar(channel, extraction, [mock_calendar_event], "2026-01-05")
@@ -339,7 +339,7 @@ class TestMatchChannelToCalendar:
                 event_name="Fighter A vs Fighter B",
                 league_name="UFC",
                 time_utc="22:00",
-                date="2026-01-05",
+                date="2027-01-05",
                 home_team="Fighter A",
                 away_team="Fighter B",
             )
@@ -349,7 +349,7 @@ class TestMatchChannelToCalendar:
                 event_name="Fighter A vs Fighter C",
                 league_name="UFC",
                 time_utc="23:00",
-                date="2026-01-05",
+                date="2027-01-05",
                 home_team="Fighter A",
                 away_team="Fighter C",
             )
@@ -388,7 +388,7 @@ class TestMatchChannelToCalendar:
                 event_name="Fighter A vs Fighter B",
                 league_name="UFC",
                 time_utc="22:00",
-                date="2026-01-05",
+                date="2027-01-05",
                 home_team="Fighter A",
                 away_team="Fighter B",
             )
@@ -398,7 +398,7 @@ class TestMatchChannelToCalendar:
                 event_name="Different Event",
                 league_name="Boxing",
                 time_utc="23:00",
-                date="2026-01-05",
+                date="2027-01-05",
             )
 
             # Mock ReverseEventMatcher with clear winner (gap >= 0.2 for low confidence)
@@ -441,7 +441,7 @@ class TestCreateOrUpdateEvent:
                 event_name="Fighter A vs Fighter B",
                 league_name="UFC",
                 time_utc="22:00",
-                date="2026-01-05",
+                date="2027-01-05",
                 home_team="Fighter A",
                 away_team="Fighter B",
             )
@@ -468,7 +468,7 @@ class TestCreateOrUpdateEvent:
                 home_team_name="Fighter A",
                 away_team_id="",
                 away_team_name="Fighter B",
-                scheduled_at=datetime(2026, 1, 5, 22, 0, tzinfo=timezone.utc),
+                scheduled_at=datetime(2027, 1, 5, 22, 0, tzinfo=timezone.utc),
                 status=Event.STATUS_SCHEDULED,
             )
             db.session.add(existing)
@@ -481,7 +481,7 @@ class TestCreateOrUpdateEvent:
                 event_name="Fighter A vs Fighter B",
                 league_name="UFC",
                 time_utc="22:00",
-                date="2026-01-05",
+                date="2027-01-05",
                 home_team="Fighter A",
                 away_team="Fighter B",
             )
@@ -634,7 +634,7 @@ class TestDetailFetcher:
             thread1 = service._detail_thread
 
             # Starting again should not create new thread
-            with patch("services.ppv_calendar_enrichment_service.logger") as mock_logger:
+            with patch("services.ppv.enrichment.logger") as mock_logger:
                 service.start_detail_fetcher()
                 mock_logger.warning.assert_called_once()
 

@@ -302,7 +302,7 @@ class TestXtreamPlayerAPI:
             assert len(data) == 3
 
     def test_get_vod_categories(self, app, client, xtream_credential):
-        """Test get_vod_categories endpoint (not implemented)"""
+        """VOD is not supported (live-only Xtream API)."""
         with app.app_context():
             response = client.get(
                 "/player_api.php",
@@ -312,12 +312,11 @@ class TestXtreamPlayerAPI:
                     "action": "get_vod_categories",
                 },
             )
-            assert response.status_code == 200
-            data = response.json
-            assert data == []
+            assert response.status_code == 400
+            assert "Unknown action" in response.json["error"]
 
     def test_get_vod_streams(self, app, client, xtream_credential):
-        """Test get_vod_streams endpoint (not implemented)"""
+        """VOD is not supported (live-only Xtream API)."""
         with app.app_context():
             response = client.get(
                 "/player_api.php",
@@ -327,12 +326,10 @@ class TestXtreamPlayerAPI:
                     "action": "get_vod_streams",
                 },
             )
-            assert response.status_code == 200
-            data = response.json
-            assert data == []
+            assert response.status_code == 400
 
     def test_get_series_categories(self, app, client, xtream_credential):
-        """Test get_series_categories endpoint (not implemented)"""
+        """Series is not supported (live-only Xtream API)."""
         with app.app_context():
             response = client.get(
                 "/player_api.php",
@@ -342,12 +339,10 @@ class TestXtreamPlayerAPI:
                     "action": "get_series_categories",
                 },
             )
-            assert response.status_code == 200
-            data = response.json
-            assert data == []
+            assert response.status_code == 400
 
     def test_get_series(self, app, client, xtream_credential):
-        """Test get_series endpoint (not implemented)"""
+        """Series is not supported (live-only Xtream API)."""
         with app.app_context():
             response = client.get(
                 "/player_api.php",
@@ -357,9 +352,7 @@ class TestXtreamPlayerAPI:
                     "action": "get_series",
                 },
             )
-            assert response.status_code == 200
-            data = response.json
-            assert data == []
+            assert response.status_code == 400
 
     def test_unknown_action(self, app, client, xtream_credential):
         """Test unknown action"""

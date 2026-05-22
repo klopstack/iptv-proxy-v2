@@ -468,6 +468,7 @@ class TestSchedulesDirectAuth:
 # ============================================================================
 
 
+@pytest.mark.skip(reason="Legacy /api/epg/ppv/* routes removed")
 class TestPPVRoutes:
     """Tests for PPV-related endpoints"""
 

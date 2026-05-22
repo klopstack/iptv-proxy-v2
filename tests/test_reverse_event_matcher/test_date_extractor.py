@@ -26,11 +26,11 @@ class TestDateExtractor:
         """Test extraction of ISO date without time."""
         extractor = DateExtractor()
 
-        channel = "Event on 2025-03-15"
+        channel = "Event on 2027-03-15"
         date = extractor.extract_date(channel)
 
         assert date is not None
-        assert date.year == 2025
+        assert date.year == 2027
         assert date.month == 3
         assert date.day == 15
         assert date.hour == 0

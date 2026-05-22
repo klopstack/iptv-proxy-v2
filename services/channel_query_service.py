@@ -17,6 +17,49 @@ class ChannelQueryService:
     """Single source of truth for which channels appear in client outputs."""
 
     @staticmethod
+    def _load_tag_ids_for_channels(channels: List[Channel]) -> dict:
+        """Map (account_id, stream_id) -> set of tag IDs."""
+        if not channels:
+            return {}
+
+        channel_ids = [ch.stream_id for ch in channels]
+        account_ids = list({ch.account_id for ch in channels})
+        tags_map: dict = {}
+
+        batch_size = 500
+        for i in range(0, len(channel_ids), batch_size):
+            batch = channel_ids[i : i + batch_size]
+            rows = (
+                db.session.query(ChannelTag.stream_id, ChannelTag.account_id, Tag.id)
+                .join(Tag)
+                .filter(
+                    ChannelTag.account_id.in_(account_ids),
+                    ChannelTag.stream_id.in_(batch),
+                )
+            )
+            for stream_id, account_id, tag_id in rows:
+                key = (account_id, stream_id)
+                tags_map.setdefault(key, set()).add(tag_id)
+
+        return tags_map
+
+    @staticmethod
+    def apply_tag_filter_by_id(
+        channel_tag_ids: Set[int],
+        include_tags: List[int],
+        exclude_tags: List[int],
+        match_mode: str = "any",
+    ) -> bool:
+        """Check if tag IDs match playlist filter rules (Xtream playlist configs use IDs)."""
+        if exclude_tags and any(tag_id in channel_tag_ids for tag_id in exclude_tags):
+            return False
+        if include_tags:
+            if match_mode == "all":
+                return all(tag_id in channel_tag_ids for tag_id in include_tags)
+            return any(tag_id in channel_tag_ids for tag_id in include_tags)
+        return True
+
+    @staticmethod
     def apply_tag_filter(
         channel_tag_names: Set[str],
         include_tags: List[str],
@@ -120,19 +163,36 @@ class ChannelQueryService:
         channels = query.order_by(Channel.name).all()
 
         if include_tags or exclude_tags:
-            tags_map = ChannelQueryService._load_tag_names_for_channels(channels)
-            filtered = []
-            for ch in channels:
-                key = (ch.account_id, ch.stream_id)
-                tag_names = tags_map.get(key, set())
-                if ChannelQueryService.apply_tag_filter(
-                    tag_names,
-                    include_tags,
-                    exclude_tags,
-                    playlist_config.tag_match_mode or "any",
-                ):
-                    filtered.append(ch)
-            channels = filtered
+            # Playlist configs may store tag IDs (int) or tag names (str)
+            use_ids = include_tags and isinstance(include_tags[0], int)
+            if use_ids:
+                tags_map = ChannelQueryService._load_tag_ids_for_channels(channels)
+                filtered = []
+                for ch in channels:
+                    key = (ch.account_id, ch.stream_id)
+                    ch_tag_ids = tags_map.get(key, set())
+                    if ChannelQueryService.apply_tag_filter_by_id(
+                        ch_tag_ids,
+                        include_tags,
+                        exclude_tags,
+                        playlist_config.tag_match_mode or "any",
+                    ):
+                        filtered.append(ch)
+                channels = filtered
+            else:
+                tags_map = ChannelQueryService._load_tag_names_for_channels(channels)
+                filtered = []
+                for ch in channels:
+                    key = (ch.account_id, ch.stream_id)
+                    tag_names = tags_map.get(key, set())
+                    if ChannelQueryService.apply_tag_filter(
+                        tag_names,
+                        include_tags,
+                        exclude_tags,
+                        playlist_config.tag_match_mode or "any",
+                    ):
+                        filtered.append(ch)
+                channels = filtered
 
         if apply_filters:
             by_account: dict = {}
