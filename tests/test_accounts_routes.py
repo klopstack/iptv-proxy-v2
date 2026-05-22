@@ -10,49 +10,6 @@ from models import Account, Category, Channel, ChannelTag, Credential, Event, Ev
 
 
 @pytest.fixture
-def test_account(app):
-    """Create a test account"""
-    with app.app_context():
-        account = Account(
-            name="Test Account",
-            username="test_user",
-            password="test_pass",
-            server="example.com",
-            enabled=True,
-        )
-        db.session.add(account)
-        db.session.commit()
-        yield account.id
-
-
-@pytest.fixture
-def test_account_with_channels(app, test_account):
-    """Create a test account with channels and categories"""
-    with app.app_context():
-        category = Category(
-            account_id=test_account,
-            category_id="cat1",
-            category_name="Test Category",
-        )
-        db.session.add(category)
-        db.session.flush()
-
-        for i in range(5):
-            channel = Channel(
-                account_id=test_account,
-                stream_id=f"ch{i}",
-                name=f"Test Channel {i}",
-                cleaned_name=f"Test Channel {i}",
-                category_id=category.id,
-                is_active=True,
-                is_visible=True,
-            )
-            db.session.add(channel)
-        db.session.commit()
-        yield test_account
-
-
-@pytest.fixture
 def test_credential(app, test_account):
     """Create a test credential"""
     with app.app_context():

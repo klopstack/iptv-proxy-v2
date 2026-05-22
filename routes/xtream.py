@@ -16,7 +16,6 @@ from services.epg.ppv import is_ppv_category
 from services.filter_service import FilterService
 from services.image_cache_service import ImageCacheService
 from services.ppv_visibility_service import PPVVisibilityService
-from services.quality_service import QualityService
 
 logger = logging.getLogger(__name__)
 
@@ -419,82 +418,12 @@ def collapse_duplicate_channels(channels, account_id):
 
     Includes health status and EPG mapping data for improved duplicate detection.
     """
-    from models import ChannelEpgMapping, ChannelHealthStatus
-
-    # Load tags for all channels
-    channel_ids = [ch.stream_id for ch in channels]
-    channel_db_ids = [ch.id for ch in channels]
-
-    # Load tags
-    tags_map = {}
-    batch_size = 500
-    for i in range(0, len(channel_ids), batch_size):
-        batch = channel_ids[i : i + batch_size]
-        channel_tags_query = (
-            db.session.query(ChannelTag.stream_id, Tag.name)
-            .join(Tag)
-            .filter(ChannelTag.account_id == account_id, ChannelTag.stream_id.in_(batch))
-        )
-        for stream_id, tag_name in channel_tags_query:
-            if stream_id not in tags_map:
-                tags_map[stream_id] = []
-            tags_map[stream_id].append(tag_name)
-
-    # Load health status
-    health_map = {}
-    for i in range(0, len(channel_db_ids), batch_size):
-        batch = channel_db_ids[i : i + batch_size]
-        health_query = db.session.query(
-            ChannelHealthStatus.channel_id,
-            ChannelHealthStatus.status,
-            ChannelHealthStatus.successful_checks,
-            ChannelHealthStatus.total_checks,
-        ).filter(ChannelHealthStatus.channel_id.in_(batch))
-        for channel_id, status, successful, total in health_query:
-            health_map[channel_id] = {
-                "status": status,
-                "successful_checks": successful,
-                "total_checks": total,
-            }
-
-    # Load EPG mappings
-    epg_map = {}
-    for i in range(0, len(channel_db_ids), batch_size):
-        batch = channel_db_ids[i : i + batch_size]
-        epg_query = db.session.query(
-            ChannelEpgMapping.channel_id,
-            ChannelEpgMapping.epg_channel_id,
-            ChannelEpgMapping.mapping_type,
-            ChannelEpgMapping.confidence,
-        ).filter(ChannelEpgMapping.channel_id.in_(batch))
-        for channel_id, epg_channel_id, mapping_type, confidence in epg_query:
-            if channel_id not in epg_map:
-                epg_map[channel_id] = []
-            epg_map[channel_id].append(
-                {
-                    "epg_channel_id": epg_channel_id,
-                    "mapping_type": mapping_type,
-                    "confidence": confidence,
-                }
-            )
-
-    # Build channel dicts for collapsing
-    channel_dicts = [
-        {
-            "channel": ch,
-            "stream_id": ch.stream_id,
-            "name": ch.name,
-            "cleaned_name": ch.cleaned_name or ch.name,
-            "tags": tags_map.get(ch.stream_id, []),
-            "health_status": health_map.get(ch.id),
-            "epg_mappings": epg_map.get(ch.id, []),
-        }
-        for ch in channels
-    ]
-
-    # Collapse duplicates
-    collapsed = QualityService.collapse_duplicates(channel_dicts)
-    return [d["channel"] for d in collapsed]
+    return ChannelQueryService.collapse_channels(
+        channels,
+        account_id,
+        include_health=True,
+        include_epg_mappings=True,
+    )
 
 
 def collapse_duplicate_channels_multi_account(channels):

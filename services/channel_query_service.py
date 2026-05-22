@@ -4,7 +4,7 @@ Unified channel selection for playlists, Xtream API, preview, and EPG views.
 
 import json
 import logging
-from typing import List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from models import Account, Category, Channel, ChannelTag, EventChannelLink, PlaylistConfig, Tag, XtreamCredential, db
 from services.filter_service import FilterService
@@ -131,6 +131,262 @@ class ChannelQueryService:
                 tags_map.setdefault(key, set()).add(tag_name)
 
         return tags_map
+
+    @staticmethod
+    def load_tags_for_account_channels(
+        account_id: int,
+        channels: List[Channel],
+        *,
+        by_id: bool = False,
+    ) -> Dict[Union[int, str], List[Any]]:
+        """Map stream_id -> tag names (or IDs) for channels on one account."""
+        if not channels:
+            return {}
+
+        loader = (
+            ChannelQueryService._load_tag_ids_for_channels
+            if by_id
+            else ChannelQueryService._load_tag_names_for_channels
+        )
+        raw = loader(channels)
+        return {
+            stream_id: list(tags)
+            for (acc_id, stream_id), tags in raw.items()
+            if acc_id == account_id
+        }
+
+    @staticmethod
+    def load_tags_for_channels(
+        channels: List[Channel],
+        *,
+        by_id: bool = False,
+    ) -> Dict[Tuple[int, Union[int, str]], List[Any]]:
+        """Map (account_id, stream_id) -> tag names (or IDs) for channel lists."""
+        if not channels:
+            return {}
+
+        loader = (
+            ChannelQueryService._load_tag_ids_for_channels
+            if by_id
+            else ChannelQueryService._load_tag_names_for_channels
+        )
+        raw = loader(channels)
+        return {key: list(tags) for key, tags in raw.items()}
+
+    @staticmethod
+    def _load_health_and_epg_maps(
+        channels: List[Channel],
+        *,
+        include_health: bool,
+        include_epg_mappings: bool,
+    ) -> Tuple[dict, dict]:
+        """Batch-load health status and EPG mappings keyed by channel DB id."""
+        from models import ChannelEpgMapping, ChannelHealthStatus
+
+        health_map: dict = {}
+        epg_map: dict = {}
+        if not channels or (not include_health and not include_epg_mappings):
+            return health_map, epg_map
+
+        channel_db_ids = [ch.id for ch in channels]
+        batch_size = 500
+
+        if include_health:
+            for i in range(0, len(channel_db_ids), batch_size):
+                batch = channel_db_ids[i : i + batch_size]
+                health_query = db.session.query(
+                    ChannelHealthStatus.channel_id,
+                    ChannelHealthStatus.status,
+                    ChannelHealthStatus.successful_checks,
+                    ChannelHealthStatus.total_checks,
+                ).filter(ChannelHealthStatus.channel_id.in_(batch))
+                for channel_id, status, successful, total in health_query:
+                    health_map[channel_id] = {
+                        "status": status,
+                        "successful_checks": successful,
+                        "total_checks": total,
+                    }
+
+        if include_epg_mappings:
+            for i in range(0, len(channel_db_ids), batch_size):
+                batch = channel_db_ids[i : i + batch_size]
+                epg_query = db.session.query(
+                    ChannelEpgMapping.channel_id,
+                    ChannelEpgMapping.epg_channel_id,
+                    ChannelEpgMapping.mapping_type,
+                    ChannelEpgMapping.confidence,
+                ).filter(ChannelEpgMapping.channel_id.in_(batch))
+                for channel_id, epg_channel_id, mapping_type, confidence in epg_query:
+                    epg_map.setdefault(channel_id, []).append(
+                        {
+                            "epg_channel_id": epg_channel_id,
+                            "mapping_type": mapping_type,
+                            "confidence": confidence,
+                        }
+                    )
+
+        return health_map, epg_map
+
+    @staticmethod
+    def _tags_for_collapse(
+        channel: Channel,
+        tags_map: dict,
+        account_id: Optional[int],
+    ) -> List[Any]:
+        if account_id is not None:
+            return tags_map.get(channel.stream_id, [])
+        return list(tags_map.get((channel.account_id, channel.stream_id), []))
+
+    @staticmethod
+    def prepare_collapse_input(
+        channels: List[Channel],
+        tags_map: dict,
+        *,
+        account_id: Optional[int] = None,
+        include_health: bool = False,
+        include_epg_mappings: bool = False,
+        extra_fields_fn: Optional[Callable[[Channel], Dict[str, Any]]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Build channel dicts for QualityService.collapse_duplicates."""
+        if not channels:
+            return []
+
+        health_map, epg_map = ChannelQueryService._load_health_and_epg_maps(
+            channels,
+            include_health=include_health,
+            include_epg_mappings=include_epg_mappings,
+        )
+
+        channel_dicts: List[Dict[str, Any]] = []
+        for ch in channels:
+            entry: Dict[str, Any] = {
+                "channel": ch,
+                "stream_id": ch.stream_id,
+                "cleaned_name": ch.cleaned_name or ch.name,
+                "tags": ChannelQueryService._tags_for_collapse(ch, tags_map, account_id),
+            }
+            if include_health or include_epg_mappings:
+                entry["name"] = ch.name
+            if include_health:
+                entry["health_status"] = health_map.get(ch.id)
+            if include_epg_mappings:
+                entry["epg_mappings"] = epg_map.get(ch.id, [])
+            if extra_fields_fn:
+                entry.update(extra_fields_fn(ch))
+            channel_dicts.append(entry)
+
+        return channel_dicts
+
+    @staticmethod
+    def collapse_channel_dicts(
+        channels: List[Channel],
+        account_id: Optional[int] = None,
+        *,
+        include_health: bool = False,
+        include_epg_mappings: bool = False,
+        extra_fields_fn: Optional[Callable[[Channel], Dict[str, Any]]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Load tags, build dicts, collapse duplicates, return collapsed dicts."""
+        from services.quality_service import QualityService
+
+        if not channels:
+            return []
+
+        if account_id is not None:
+            tags_map = ChannelQueryService.load_tags_for_account_channels(account_id, channels)
+        else:
+            tags_map = ChannelQueryService.load_tags_for_channels(channels)
+
+        channel_dicts = ChannelQueryService.prepare_collapse_input(
+            channels,
+            tags_map,
+            account_id=account_id,
+            include_health=include_health,
+            include_epg_mappings=include_epg_mappings,
+            extra_fields_fn=extra_fields_fn,
+        )
+        return QualityService.collapse_duplicates(channel_dicts)
+
+    @staticmethod
+    def collapse_channels(
+        channels: List[Channel],
+        account_id: Optional[int] = None,
+        *,
+        include_health: bool = False,
+        include_epg_mappings: bool = False,
+    ) -> List[Channel]:
+        """Load tags, build dicts, collapse duplicates, return Channel list."""
+        collapsed = ChannelQueryService.collapse_channel_dicts(
+            channels,
+            account_id,
+            include_health=include_health,
+            include_epg_mappings=include_epg_mappings,
+        )
+        return [entry["channel"] for entry in collapsed]
+
+    @staticmethod
+    def collapse_account_channels_if_requested(
+        channels: List[Channel],
+        account_id: int,
+        collapse_duplicates: bool,
+        *,
+        context: str = "",
+    ) -> List[Channel]:
+        """Collapse duplicate channels when requested; otherwise return input unchanged."""
+        if not collapse_duplicates:
+            return channels
+
+        original_count = len(channels)
+        collapsed = ChannelQueryService.collapse_channels(channels, account_id)
+        suffix = f" {context}" if context else ""
+        logger.info(
+            f"Collapsed {original_count} channels to {len(collapsed)} unique channels{suffix}"
+        )
+        return collapsed
+
+    @staticmethod
+    def _account_data_for_playlist(account_by_id: dict, channel: Channel) -> Dict[str, Any]:
+        account = account_by_id[channel.account_id]
+        primary_cred = account.get_primary_credential()
+        return {
+            "id": account.id,
+            "name": account.name,
+            "server": account.server,
+            "username": account.username,
+            "password": account.password,
+            "primary_username": primary_cred.username if primary_cred else account.username,
+            "primary_password": primary_cred.password if primary_cred else account.password,
+        }
+
+    @staticmethod
+    def channel_data_for_playlist_config(
+        eligible_channels: List[Channel],
+        account_by_id: dict,
+        collapse_duplicates: bool,
+    ) -> List[Dict[str, Any]]:
+        """Build per-channel rows for multi-account playlist output, optionally collapsed."""
+
+        def account_extra(ch: Channel) -> Dict[str, Any]:
+            return {
+                "account_data": ChannelQueryService._account_data_for_playlist(account_by_id, ch)
+            }
+
+        if collapse_duplicates:
+            original_count = len(eligible_channels)
+            channel_data = ChannelQueryService.collapse_channel_dicts(
+                eligible_channels,
+                extra_fields_fn=account_extra,
+            )
+            logger.info(
+                f"Collapsed {original_count} channels to {len(channel_data)} unique channels"
+            )
+            return channel_data
+
+        return ChannelQueryService.prepare_collapse_input(
+            eligible_channels,
+            {},
+            extra_fields_fn=account_extra,
+        )
 
     @staticmethod
     def apply_ppv_visibility_to_channels(channels: List[Channel]) -> List[Channel]:

@@ -16,36 +16,6 @@ from routes.epg.sources import _sync_sd_channels_to_epg
 
 
 @pytest.fixture
-def test_account(app):
-    """Create a test account"""
-    with app.app_context():
-        account = Account(
-            name="Test Account",
-            username="test_user",
-            password="test_pass",
-            server="example.com",
-            enabled=True,
-        )
-        db.session.add(account)
-        db.session.commit()
-        yield account.id
-
-
-@pytest.fixture
-def test_category(app, test_account):
-    """Create a test category"""
-    with app.app_context():
-        category = Category(
-            account_id=test_account,
-            category_id="cat1",
-            category_name="Test Category",
-        )
-        db.session.add(category)
-        db.session.commit()
-        yield category.id
-
-
-@pytest.fixture
 def test_channel(app, test_account, test_category):
     """Create a test channel"""
     with app.app_context():
@@ -461,40 +431,6 @@ class TestSchedulesDirectAuth:
             json={"username": "wrong", "password": "wrong"},
         )
         assert response.status_code == 401
-
-
-# ============================================================================
-# PPV Tests
-# ============================================================================
-
-
-@pytest.mark.skip(reason="Legacy /api/epg/ppv/* routes removed")
-class TestPPVRoutes:
-    """Tests for PPV-related endpoints"""
-
-    @patch("services.epg_service.update_ppv_channel_visibility")
-    def test_update_ppv_visibility(self, mock_update, app, client):
-        """Test updating PPV visibility"""
-        mock_update.return_value = {
-            "events_detected": 5,
-            "channels_shown": 3,
-            "channels_hidden": 2,
-            "ppv_channels_processed": 10,
-        }
-
-        response = client.post("/api/epg/ppv/update-visibility")
-        assert response.status_code == 200
-        assert "success" in response.json
-
-    @patch("services.epg_service.get_ppv_epg_xmltv")
-    def test_get_ppv_epg_xmltv(self, mock_get_ppv, app, client):
-        """Test getting PPV EPG XMLTV data"""
-        mock_xml = b"<?xml version='1.0'?><tv></tv>"
-        mock_get_ppv.return_value = mock_xml
-
-        response = client.get("/api/epg/ppv/xmltv")
-        assert response.status_code == 200
-        assert "xml" in response.content_type.lower()
 
 
 # ============================================================================

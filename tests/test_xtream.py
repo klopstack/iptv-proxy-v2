@@ -21,31 +21,11 @@ from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Tag, 
 
 
 @pytest.fixture
-def test_account(app):
-    """Create a test account with channels"""
-    with app.app_context():
-        account = Account(
-            name="Test Account",
-            username="test_user",
-            password="test_pass",
-            server="http://example.com",
-            user_agent="test-agent",
-            enabled=True,
-            last_sync=None,
-        )
-        db.session.add(account)
-        db.session.commit()
-        # Refresh to get the ID
-        db.session.refresh(account)
-        yield account
-
-
-@pytest.fixture
 def test_category(app, test_account):
     """Create a test category"""
     with app.app_context():
         category = Category(
-            account_id=test_account.id,
+            account_id=test_account,
             category_id="100",
             category_name="Sports",
             cleaned_name="Sports",
@@ -64,7 +44,7 @@ def test_channels(app, test_account, test_category):
         channels = []
         for i in range(3):
             channel = Channel(
-                account_id=test_account.id,
+                account_id=test_account,
                 stream_id=str(1000 + i),
                 name=f"Channel {i + 1}",
                 cleaned_name=f"Channel {i + 1}",
@@ -89,7 +69,7 @@ def xtream_credential(app, test_account):
         cred = XtreamCredential(
             username="xtream_user",
             password="xtream_pass",
-            account_id=test_account.id,
+            account_id=test_account,
             enabled=True,
             use_filters=False,
             collapse_duplicates=False,
@@ -106,7 +86,7 @@ def playlist_config(app, test_account):
     with app.app_context():
         config = PlaylistConfig(
             name="Test Playlist",
-            include_accounts=json.dumps([test_account.id]),
+            include_accounts=json.dumps([test_account]),
             exclude_accounts=json.dumps([]),
             include_tags=json.dumps([]),
             exclude_tags=json.dumps([]),
@@ -191,7 +171,7 @@ class TestXtreamAuthentication:
         """Test authentication with disabled account"""
         with app.app_context():
             # Fetch and update within same session
-            acc = db.session.get(Account, test_account.id)
+            acc = db.session.get(Account, test_account)
             acc.enabled = False
             db.session.commit()
 
@@ -501,7 +481,7 @@ class TestXtreamStreamURLs:
         with app.app_context():
             response = client.get("/xmltv.php", query_string={"username": "xtream_user", "password": "xtream_pass"})
             assert response.status_code == 302
-            assert f"/epg/{test_account.id}.xml" in response.location
+            assert f"/epg/{test_account}.xml" in response.location
 
     def test_xmltv_epg_playlist_config(self, app, client, xtream_credential_playlist, playlist_config):
         """Test XMLTV EPG endpoint with playlist config"""
@@ -543,7 +523,7 @@ class TestXtreamCredentialManagement:
                 json={
                     "username": "new_user",
                     "password": "new_pass",
-                    "account_id": test_account.id,
+                    "account_id": test_account,
                     "use_filters": True,
                     "collapse_duplicates": False,
                 },
@@ -551,7 +531,7 @@ class TestXtreamCredentialManagement:
             assert response.status_code == 201
             data = response.json
             assert data["username"] == "new_user"
-            assert data["account_id"] == test_account.id
+            assert data["account_id"] == test_account
 
     def test_create_credential_playlist_config(self, app, client, playlist_config):
         """Test creating credential for playlist config"""
@@ -573,7 +553,7 @@ class TestXtreamCredentialManagement:
         with app.app_context():
             response = client.post(
                 "/api/xtream-credentials",
-                json={"password": "pass", "account_id": test_account.id},
+                json={"password": "pass", "account_id": test_account},
             )
             assert response.status_code == 400
 
@@ -594,7 +574,7 @@ class TestXtreamCredentialManagement:
                 json={
                     "username": "xtream_user",
                     "password": "different_pass",
-                    "account_id": test_account.id,
+                    "account_id": test_account,
                 },
             )
             assert response.status_code == 409
@@ -653,7 +633,7 @@ class TestXtreamChannelFiltering:
             cred = XtreamCredential(
                 username="filter_user",
                 password="filter_pass",
-                account_id=test_account.id,
+                account_id=test_account,
                 enabled=True,
                 use_filters=True,
             )
@@ -708,7 +688,7 @@ class TestXtreamChannelFiltering:
             db.session.flush()
 
             # Link tag to first channel
-            channel_tag = ChannelTag(account_id=test_account.id, stream_id=test_channels[0].stream_id, tag_id=tag.id)
+            channel_tag = ChannelTag(account_id=test_account, stream_id=test_channels[0].stream_id, tag_id=tag.id)
             db.session.add(channel_tag)
             db.session.commit()
 
@@ -748,7 +728,7 @@ class TestXtreamChannelFiltering:
             # Create duplicate channels with different names but same base name
             for i, quality in enumerate(["SD", "HD", "4K"]):
                 channel = Channel(
-                    account_id=test_account.id,
+                    account_id=test_account,
                     stream_id=f"{2000 + i}",
                     name=f"Test Channel {quality}",
                     cleaned_name="Test Channel",
@@ -763,7 +743,7 @@ class TestXtreamChannelFiltering:
             cred = XtreamCredential(
                 username="collapse_user",
                 password="collapse_pass",
-                account_id=test_account.id,
+                account_id=test_account,
                 enabled=True,
                 collapse_duplicates=True,
             )

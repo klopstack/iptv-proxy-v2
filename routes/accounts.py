@@ -924,23 +924,7 @@ def preview_account_playlist(account_id):
 
         all_channels = ChannelQueryService.apply_ppv_visibility_to_channels(all_channels)
 
-        # Get ALL channel IDs for batch tag loading
-        all_channel_ids = [ch.stream_id for ch in all_channels]
-
-        # Load tags for ALL channels in batches
-        tags_map = {}
-        batch_size = 500
-        for i in range(0, len(all_channel_ids), batch_size):
-            batch = all_channel_ids[i : i + batch_size]
-            channel_tags_query = (
-                db.session.query(ChannelTag.stream_id, Tag.name)
-                .join(Tag)
-                .filter(ChannelTag.account_id == account_id, ChannelTag.stream_id.in_(batch))
-            )
-            for stream_id, tag_name in channel_tags_query:
-                if stream_id not in tags_map:
-                    tags_map[stream_id] = []
-                tags_map[stream_id].append(tag_name)
+        tags_map = ChannelQueryService.load_tags_for_account_channels(account_id, all_channels)
 
         # Initialize image cache for proxying icons
         from services.image_cache_service import ImageCacheService
@@ -1012,22 +996,7 @@ def preview_account_playlist(account_id):
         # Apply pagination to filtered results
         channels = filtered_channels[offset : offset + limit]
 
-        # Get channel IDs for batch tag loading
-        channel_ids = [ch.stream_id for ch in channels]
-
-        # Load tags for these channels in batch
-        channel_tags_query = (
-            db.session.query(ChannelTag.stream_id, Tag.name)
-            .join(Tag)
-            .filter(ChannelTag.account_id == account_id, ChannelTag.stream_id.in_(channel_ids))
-        )
-
-        # Build tag map
-        tags_map = {}
-        for stream_id, tag_name in channel_tags_query:
-            if stream_id not in tags_map:
-                tags_map[stream_id] = []
-            tags_map[stream_id].append(tag_name)
+        tags_map = ChannelQueryService.load_tags_for_account_channels(account_id, channels)
 
         # Initialize image cache for proxying icons
         from services.image_cache_service import ImageCacheService

@@ -8,7 +8,7 @@ import re
 from flask import Blueprint, Response, jsonify, request
 
 from error_handling import ServiceUnavailableError, handle_errors, handle_xml_errors
-from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Settings, Tag, db
+from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Settings, db
 from schemas import PlaylistConfigCreateSchema, validate_request_data
 from services.channel_query_service import ChannelQueryService
 from services.image_cache_service import ImageCacheService
@@ -59,6 +59,19 @@ def sanitize_m3u_value(text: str) -> str:
 def get_proxy_base_url():
     """Get the proxy base URL, using custom proxy hostname if configured."""
     return _proxy_base_url()
+
+
+def _ensure_accounts_synced(accounts):
+    """Raise if any account in the list has no synced active channels."""
+    unsynced = [
+        account.name
+        for account in accounts
+        if Channel.query.filter_by(account_id=account.id, is_active=True).count() == 0
+    ]
+    if unsynced:
+        raise ServiceUnavailableError(
+            f"The following accounts are not synced: {', '.join(unsynced)}. Please sync channels first."
+        )
 
 
 # ============================================================================
@@ -167,16 +180,7 @@ def preview_playlist_config(config_id):
         if exclude_accounts:
             accounts = [a for a in accounts if a.id not in exclude_accounts]
 
-    unsynced_accounts = []
-    for account in accounts:
-        channel_count = Channel.query.filter_by(account_id=account.id, is_active=True).count()
-        if channel_count == 0:
-            unsynced_accounts.append(account.name)
-
-    if unsynced_accounts:
-        raise ServiceUnavailableError(
-            f"The following accounts are not synced: {', '.join(unsynced_accounts)}. Please sync channels first."
-        )
+    _ensure_accounts_synced(accounts)
 
     channels = ChannelQueryService.channels_for_playlist_config(
         config,
@@ -188,7 +192,7 @@ def preview_playlist_config(config_id):
     paginated = channels[offset : offset + limit]
 
     account_names = {account.id: account.name for account in accounts}
-    tags_map = ChannelQueryService._load_tag_names_for_channels(paginated)
+    tags_map = ChannelQueryService.load_tags_for_channels(paginated)
 
     image_cache = ImageCacheService.get_instance()
     proxy_base = f"{request.scheme}://{request.host}"
@@ -299,41 +303,11 @@ def generate_playlist(account_id):
         apply_ppv_visibility=True,
     )
 
-    # If collapsing duplicates, load tags and collapse
-    if collapse_duplicates:
-        from services.quality_service import QualityService
-
-        # Load tags for all channels
-        channel_ids = [ch.stream_id for ch in channels]
-        tags_map = {}
-        batch_size = 500
-        for i in range(0, len(channel_ids), batch_size):
-            batch = channel_ids[i : i + batch_size]
-            channel_tags_query = (
-                db.session.query(ChannelTag.stream_id, Tag.name)
-                .join(Tag)
-                .filter(ChannelTag.account_id == account_id, ChannelTag.stream_id.in_(batch))
-            )
-            for stream_id, tag_name in channel_tags_query:
-                if stream_id not in tags_map:
-                    tags_map[stream_id] = []
-                tags_map[stream_id].append(tag_name)
-
-        # Build channel dicts for collapsing
-        channel_dicts = [
-            {
-                "channel": ch,
-                "stream_id": ch.stream_id,
-                "cleaned_name": ch.cleaned_name or ch.name,
-                "tags": tags_map.get(ch.stream_id, []),
-            }
-            for ch in channels
-        ]
-
-        # Collapse duplicates
-        collapsed = QualityService.collapse_duplicates(channel_dicts)
-        channels = [d["channel"] for d in collapsed]
-        logger.info(f"Collapsed {len(channel_dicts)} channels to {len(channels)} unique channels")
+    channels = ChannelQueryService.collapse_account_channels_if_requested(
+        channels,
+        account_id,
+        collapse_duplicates,
+    )
 
     # Get primary credential for direct URL mode
     primary_cred = account.get_primary_credential() if not use_proxy else None
@@ -456,20 +430,12 @@ def _generate_playlist_from_config(config):
         if exclude_accounts:
             accounts = [a for a in accounts if a.id not in exclude_accounts]
 
-    # Verify all accounts have synced channels
-    unsynced_accounts = []
-    for account in accounts:
-        channel_count = Channel.query.filter_by(account_id=account.id, is_active=True).count()
-        if channel_count == 0:
-            unsynced_accounts.append(account.name)
-        # Auto-enable proxy for accounts with multiple credentials
-        if not use_proxy and hasattr(account, "credentials") and len(account.credentials) > 1:
-            use_proxy = True
-
-    if unsynced_accounts:
-        raise ServiceUnavailableError(
-            f"The following accounts are not synced: {', '.join(unsynced_accounts)}. Please sync channels first."
-        )
+    _ensure_accounts_synced(accounts)
+    if not use_proxy:
+        for account in accounts:
+            if hasattr(account, "credentials") and len(account.credentials) > 1:
+                use_proxy = True
+                break
 
     channels = ChannelQueryService.channels_for_playlist_config(
         config,
@@ -478,46 +444,12 @@ def _generate_playlist_from_config(config):
     )
 
     account_by_id = {a.id: a for a in accounts}
-    all_channel_data = []
-    tags_map_by_account: dict = {}
-    if collapse_duplicates:
-        for acc_id in {ch.account_id for ch in channels}:
-            acc_channels = [ch for ch in channels if ch.account_id == acc_id]
-            tags_map_by_account[acc_id] = ChannelQueryService._load_tag_names_for_channels(acc_channels)
-
-    for channel in channels:
-        account = account_by_id.get(channel.account_id)
-        if not account:
-            continue
-        primary_cred = account.get_primary_credential()
-        account_data = {
-            "id": account.id,
-            "name": account.name,
-            "server": account.server,
-            "username": account.username,
-            "password": account.password,
-            "primary_username": primary_cred.username if primary_cred else account.username,
-            "primary_password": primary_cred.password if primary_cred else account.password,
-        }
-        key = (channel.account_id, channel.stream_id)
-        tags = list(tags_map_by_account.get(channel.account_id, {}).get(key, set())) if collapse_duplicates else []
-        all_channel_data.append(
-            {
-                "channel": channel,
-                "account_data": account_data,
-                "stream_id": channel.stream_id,
-                "cleaned_name": channel.cleaned_name or channel.name,
-                "tags": tags,
-            }
-        )
-
-    # Apply duplicate collapsing across all accounts if enabled
-    if collapse_duplicates:
-        from services.quality_service import QualityService
-
-        original_count = len(all_channel_data)
-        all_channel_data = QualityService.collapse_duplicates(all_channel_data)
-        logger.info(f"Collapsed {original_count} channels to {len(all_channel_data)} unique channels")
+    eligible_channels = [ch for ch in channels if ch.account_id in account_by_id]
+    all_channel_data = ChannelQueryService.channel_data_for_playlist_config(
+        eligible_channels,
+        account_by_id,
+        collapse_duplicates,
+    )
 
     # Generate M3U
     m3u_lines = ["#EXTM3U"]
@@ -606,41 +538,12 @@ def proxy_epg(account_id):
         apply_ppv_visibility=True,
     )
 
-    # If collapsing duplicates, load tags and collapse (same logic as M3U)
-    if collapse_duplicates:
-        from services.quality_service import QualityService
-
-        # Load tags for all channels
-        channel_ids = [ch.stream_id for ch in channels]
-        tags_map = {}
-        batch_size = 500
-        for i in range(0, len(channel_ids), batch_size):
-            batch = channel_ids[i : i + batch_size]
-            channel_tags_query = (
-                db.session.query(ChannelTag.stream_id, Tag.name)
-                .join(Tag)
-                .filter(ChannelTag.account_id == account_id, ChannelTag.stream_id.in_(batch))
-            )
-            for stream_id, tag_name in channel_tags_query:
-                if stream_id not in tags_map:
-                    tags_map[stream_id] = []
-                tags_map[stream_id].append(tag_name)
-
-        # Build channel dicts for collapsing
-        channel_dicts = [
-            {
-                "channel": ch,
-                "stream_id": ch.stream_id,
-                "cleaned_name": ch.cleaned_name or ch.name,
-                "tags": tags_map.get(ch.stream_id, []),
-            }
-            for ch in channels
-        ]
-
-        # Collapse duplicates
-        collapsed = QualityService.collapse_duplicates(channel_dicts)
-        channels = [d["channel"] for d in collapsed]
-        logger.info(f"Collapsed {len(channel_dicts)} channels to {len(channels)} unique channels for EPG")
+    channels = ChannelQueryService.collapse_account_channels_if_requested(
+        channels,
+        account_id,
+        collapse_duplicates,
+        context="for EPG",
+    )
 
     if not channels:
         # Return minimal valid XMLTV

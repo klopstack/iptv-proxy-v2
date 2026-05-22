@@ -1,7 +1,7 @@
 # TODO 10: Deduplicate Channel Processing Logic
 
 **Priority:** P2  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Medium–Large (refactor)
 
 ---
@@ -96,10 +96,10 @@ Best done **after** TODO 01–03 so route logic is stable before extraction.
 
 ## Acceptance criteria
 
-- [ ] No duplicated tag batch-loading loops in route files
-- [ ] Collapse behavior unchanged (existing collapse tests pass)
-- [ ] Xtream collapse still includes health/EPG data when enabled
-- [ ] Line count reduction in `routes/playlists.py` (target: −80 lines minimum)
+- [x] No duplicated tag batch-loading loops in route files
+- [x] Collapse behavior unchanged (existing collapse tests pass)
+- [x] Xtream collapse still includes health/EPG data when enabled
+- [x] Line count reduction in `routes/playlists.py` (target: −80 lines minimum)
 
 ---
 
@@ -127,6 +127,6 @@ No new behavior — regression tests only.
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Added shared helpers on `ChannelQueryService`; `routes/playlists.py` −97 lines (746→649). All 113 regression tests pass. |

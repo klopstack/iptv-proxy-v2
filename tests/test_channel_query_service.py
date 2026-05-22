@@ -389,3 +389,184 @@ def test_multi_account_xtream_stream_routes_to_channel_account(app, client):
         response = client.get("/live/route/route/555.ts")
         assert response.status_code == 302
         assert f"/stream/{acc2.id}/555.ts" in response.headers["Location"]
+
+
+def test_load_tags_for_account_channels(app):
+    """Single-account tag loader returns stream_id -> tag name lists."""
+    with app.app_context():
+        account = Account(name="Tags", server="s", username="u", password="p", enabled=True)
+        db.session.add(account)
+        db.session.commit()
+
+        hd_tag = Tag(name="HD")
+        db.session.add(hd_tag)
+        db.session.commit()
+
+        ch = Channel(account_id=account.id, stream_id="1", name="HD Ch", is_active=True)
+        db.session.add(ch)
+        db.session.commit()
+        db.session.add(ChannelTag(account_id=account.id, stream_id="1", tag_id=hd_tag.id))
+        db.session.commit()
+
+        tags_map = ChannelQueryService.load_tags_for_account_channels(account.id, [ch])
+        assert tags_map == {"1": ["HD"]}
+
+
+def test_load_tags_for_channels_multi_account(app):
+    """Multi-account tag loader keys by (account_id, stream_id)."""
+    with app.app_context():
+        acc1 = Account(name="A1", server="s", username="u", password="p", enabled=True)
+        acc2 = Account(name="A2", server="s", username="u", password="p", enabled=True)
+        db.session.add_all([acc1, acc2])
+        db.session.commit()
+
+        tag = Tag(name="Sports")
+        db.session.add(tag)
+        db.session.commit()
+
+        ch1 = Channel(account_id=acc1.id, stream_id="10", name="Ch1", is_active=True)
+        ch2 = Channel(account_id=acc2.id, stream_id="20", name="Ch2", is_active=True)
+        db.session.add_all([ch1, ch2])
+        db.session.commit()
+        db.session.add_all(
+            [
+                ChannelTag(account_id=acc1.id, stream_id="10", tag_id=tag.id),
+                ChannelTag(account_id=acc2.id, stream_id="20", tag_id=tag.id),
+            ]
+        )
+        db.session.commit()
+
+        tags_map = ChannelQueryService.load_tags_for_channels([ch1, ch2])
+        assert tags_map[(acc1.id, "10")] == ["Sports"]
+        assert tags_map[(acc2.id, "20")] == ["Sports"]
+
+
+def test_prepare_collapse_input_includes_optional_fields(app):
+    """Collapse input builder attaches tags and optional health/EPG data."""
+    with app.app_context():
+        from models import ChannelEpgMapping, ChannelHealthStatus
+
+        account = Account(name="Collapse", server="s", username="u", password="p", enabled=True)
+        db.session.add(account)
+        db.session.commit()
+
+        hd_tag = Tag(name="HD")
+        db.session.add(hd_tag)
+        db.session.commit()
+
+        ch = Channel(account_id=account.id, stream_id="1", name="ESPN HD", cleaned_name="ESPN", is_active=True)
+        db.session.add(ch)
+        db.session.commit()
+        db.session.add(ChannelTag(account_id=account.id, stream_id="1", tag_id=hd_tag.id))
+        db.session.add(
+            ChannelHealthStatus(
+                channel_id=ch.id,
+                status="healthy",
+                successful_checks=3,
+                total_checks=3,
+            )
+        )
+        db.session.add(
+            ChannelEpgMapping(
+                channel_id=ch.id,
+                epg_channel_id=123,
+                mapping_type="manual",
+                confidence=1.0,
+            )
+        )
+        db.session.commit()
+
+        tags_map = ChannelQueryService.load_tags_for_account_channels(account.id, [ch])
+        channel_dicts = ChannelQueryService.prepare_collapse_input(
+            [ch],
+            tags_map,
+            account_id=account.id,
+            include_health=True,
+            include_epg_mappings=True,
+        )
+
+        assert len(channel_dicts) == 1
+        entry = channel_dicts[0]
+        assert entry["channel"] is ch
+        assert entry["tags"] == ["HD"]
+        assert entry["health_status"]["status"] == "healthy"
+        assert entry["epg_mappings"][0]["epg_channel_id"] == 123
+
+
+def test_collapse_channels_keeps_highest_quality(app):
+    """Shared collapse helper keeps the best-quality duplicate."""
+    with app.app_context():
+        account = Account(name="Dup", server="s", username="u", password="p", enabled=True)
+        db.session.add(account)
+        db.session.commit()
+
+        sd_tag = Tag(name="SD")
+        hd_tag = Tag(name="HD")
+        db.session.add_all([sd_tag, hd_tag])
+        db.session.commit()
+
+        ch_sd = Channel(
+            account_id=account.id,
+            stream_id="1",
+            name="ESPN SD",
+            cleaned_name="ESPN",
+            is_active=True,
+        )
+        ch_hd = Channel(
+            account_id=account.id,
+            stream_id="2",
+            name="ESPN HD",
+            cleaned_name="ESPN",
+            is_active=True,
+        )
+        db.session.add_all([ch_sd, ch_hd])
+        db.session.commit()
+        db.session.add_all(
+            [
+                ChannelTag(account_id=account.id, stream_id="1", tag_id=sd_tag.id),
+                ChannelTag(account_id=account.id, stream_id="2", tag_id=hd_tag.id),
+            ]
+        )
+        db.session.commit()
+
+        collapsed = ChannelQueryService.collapse_channels([ch_sd, ch_hd], account.id)
+        assert len(collapsed) == 1
+        assert collapsed[0].stream_id == "2"
+
+
+def test_collapse_account_channels_if_requested_noop(app):
+    """Requested collapse helper returns input unchanged when disabled."""
+    with app.app_context():
+        account = Account(name="A", server="s", username="u", password="p", enabled=True)
+        db.session.add(account)
+        db.session.commit()
+        ch = Channel(account_id=account.id, stream_id="1", name="Ch", is_active=True)
+        db.session.add(ch)
+        db.session.commit()
+
+        result = ChannelQueryService.collapse_account_channels_if_requested(
+            [ch],
+            account.id,
+            False,
+        )
+        assert result == [ch]
+
+
+def test_channel_data_for_playlist_config(app):
+    """Multi-account playlist helper attaches account_data for M3U generation."""
+    with app.app_context():
+        account = Account(name="Cfg", server="srv", username="u", password="p", enabled=True)
+        db.session.add(account)
+        db.session.commit()
+        ch = Channel(account_id=account.id, stream_id="1", name="News", is_active=True)
+        db.session.add(ch)
+        db.session.commit()
+
+        rows = ChannelQueryService.channel_data_for_playlist_config(
+            [ch],
+            {account.id: account},
+            collapse_duplicates=False,
+        )
+        assert len(rows) == 1
+        assert rows[0]["channel"] is ch
+        assert rows[0]["account_data"]["server"] == "srv"

@@ -1,7 +1,7 @@
 # TODO 11: Test Hygiene
 
 **Priority:** P2  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Medium
 
 ---
@@ -94,11 +94,11 @@ In `test_playlist_generation.py`:
 
 ## Acceptance criteria
 
-- [ ] Zero `@pytest.mark.skip` for "Legacy" removed APIs
-- [ ] `pytest --collect-only` shows ~26 fewer tests (or replaced with active tests)
-- [ ] All remaining tests pass
-- [ ] At least 5 major test files use conftest `test_account`
-- [ ] No large blocks of commented-out test code remain
+- [x] Zero `@pytest.mark.skip` for "Legacy" removed APIs
+- [x] `pytest --collect-only` shows ~26 fewer tests (or replaced with active tests)
+- [x] All remaining tests pass
+- [x] At least 5 major test files use conftest `test_account`
+- [x] No large blocks of commented-out test code remain
 
 ---
 
@@ -122,6 +122,6 @@ venv/bin/pytest tests/ --collect-only -q | tail -1  # compare test count
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Removed 26 skipped legacy PPV tests; added shared `test_account`, `test_category`, and `test_account_with_channels` fixtures to conftest; deduplicated fixtures in 7 test files; deleted commented slug/disabled-config tests (slug support not yet implemented). 2340 tests collected, all passing. |

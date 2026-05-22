@@ -35,22 +35,6 @@ from models import (
 
 
 @pytest.fixture
-def test_account(app):
-    """Create a test account"""
-    with app.app_context():
-        account = Account(
-            name="Test Account",
-            username="test_user",
-            password="test_pass",
-            server="example.com",
-            enabled=True,
-        )
-        db.session.add(account)
-        db.session.commit()
-        yield account.id
-
-
-@pytest.fixture
 def test_account_with_credential(app):
     """Create a test account with credentials"""
     with app.app_context():

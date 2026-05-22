@@ -25,43 +25,6 @@ from routes.epg.sources import _sync_sd_channels_to_epg
 
 
 @pytest.fixture
-def test_account(app):
-    """Create a test account"""
-    with app.app_context():
-        account = Account(
-            name="Test Account",
-            username="test_user",
-            password="test_pass",
-            server="example.com",
-            enabled=True,
-        )
-        db.session.add(account)
-        db.session.commit()
-        yield account.id
-
-
-@pytest.fixture
-def test_account_obj(app, test_account):
-    """Get the Account object"""
-    with app.app_context():
-        yield db.session.get(Account, test_account)
-
-
-@pytest.fixture
-def test_category(app, test_account):
-    """Create a test category"""
-    with app.app_context():
-        category = Category(
-            account_id=test_account,
-            category_id="cat1",
-            category_name="Test Category",
-        )
-        db.session.add(category)
-        db.session.commit()
-        yield category.id
-
-
-@pytest.fixture
 def test_channel(app, test_account, test_category):
     """Create a test channel"""
     with app.app_context():
@@ -156,68 +119,6 @@ def test_epg_mapping(app, test_channel, test_epg_channel):
         db.session.add(mapping)
         db.session.commit()
         yield mapping.id
-
-
-# ============================================================================
-# Tests for PPV Routes (no database dependencies)
-# ============================================================================
-
-
-@pytest.mark.skip(reason="Legacy /api/epg/ppv/* routes removed")
-class TestPPVVisibility:
-    """Tests for PPV channel visibility endpoints"""
-
-    @patch("services.epg_service.update_ppv_channel_visibility")
-    def test_update_ppv_visibility_success(self, mock_update, app, client):
-        """Test updating PPV channel visibility"""
-        mock_update.return_value = {
-            "events_detected": 5,
-            "channels_shown": 3,
-            "channels_hidden": 2,
-            "ppv_channels_processed": 10,
-        }
-
-        response = client.post("/api/epg/ppv/update-visibility")
-        assert response.status_code == 200
-        data = response.json
-        assert data["success"] is True
-        assert "5 active event" in data["message"]
-        assert "3 channel(s) shown" in data["message"]
-
-    @patch("services.epg_service.update_ppv_channel_visibility")
-    def test_update_ppv_visibility_with_account(self, mock_update, app, client, test_account):
-        """Test updating PPV visibility for specific account"""
-        mock_update.return_value = {
-            "events_detected": 2,
-            "channels_shown": 1,
-            "channels_hidden": 1,
-            "ppv_channels_processed": 3,
-        }
-
-        response = client.post(f"/api/epg/ppv/update-visibility?account_id={test_account}")
-        assert response.status_code == 200
-        mock_update.assert_called_once_with(test_account)
-
-    @patch("services.epg_service.get_ppv_epg_xmltv")
-    def test_get_ppv_epg_xmltv(self, mock_get_ppv, app, client):
-        """Test getting PPV EPG XMLTV data"""
-        mock_xml = b"<?xml version='1.0'?><tv></tv>"
-        mock_get_ppv.return_value = mock_xml
-
-        response = client.get("/api/epg/ppv/xmltv")
-        assert response.status_code == 200
-        assert "application/xml" in response.content_type
-        assert response.data == mock_xml
-
-    @patch("services.epg_service.get_ppv_epg_xmltv")
-    def test_get_ppv_epg_xmltv_with_params(self, mock_get_ppv, app, client, test_account):
-        """Test getting PPV EPG with duration parameter"""
-        mock_xml = b"<?xml version='1.0'?><tv></tv>"
-        mock_get_ppv.return_value = mock_xml
-
-        response = client.get(f"/api/epg/ppv/xmltv?account_id={test_account}&duration=12")
-        assert response.status_code == 200
-        mock_get_ppv.assert_called_once_with(test_account, duration_hours=12)
 
 
 # ============================================================================

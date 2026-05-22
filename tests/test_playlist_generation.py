@@ -468,35 +468,11 @@ class TestUnsyncedAccounts:
 class TestSlugBasedPlaylistGeneration:
     """Test slug-based playlist lookup"""
 
-    # Note: Slug-based playlist generation not yet implemented in the model
-    # These tests are commented out until slug support is added
-
-    # def test_generate_by_slug(self, app, client, tag_filter_config):
-    #     """Test generating playlist using slug instead of ID"""
-    #     response = client.get("/playlist/config/hd-only.m3u")
-
-    #     assert response.status_code == 200
-    #     content = response.data.decode("utf-8")
-
-    #     assert "#EXTM3U" in content
-    #     assert "# Playlist: HD Only" in content
-
     def test_generate_by_slug_not_found(self, app, client):
         """Test 404 for non-existent slug"""
         response = client.get("/playlist/config/nonexistent-slug.m3u")
 
         assert response.status_code == 404
-
-    # def test_generate_by_slug_disabled(self, app, client, tag_filter_config):
-    #     """Test that disabled configs can't be accessed by slug"""
-    #     with app.app_context():
-    #         config = db.session.get(PlaylistConfig, tag_filter_config)
-    #         config.enabled = False
-    #         db.session.commit()
-
-    #     response = client.get("/playlist/config/hd-only.m3u")
-
-    #     assert response.status_code == 403
 
 
 class TestEPGGeneration:
@@ -512,16 +488,6 @@ class TestEPGGeneration:
             assert response.status_code == 200
             assert response.mimetype == "application/xml"
             mock_epg.generate_epg_for_channels.assert_called_once()
-
-    # def test_epg_config_by_slug(self, app, client, tag_filter_config):
-    #     """Test generating EPG using slug"""
-    #     with patch("routes.playlists.EpgService") as mock_epg:
-    #         mock_epg.generate_epg_for_channels.return_value = b'<?xml version="1.0"?><tv></tv>'
-
-    #         response = client.get("/epg/config/hd-only.xml")
-
-    #         assert response.status_code == 200
-    #         assert response.mimetype == "application/xml"
 
     def test_epg_config_empty_channels(self, app, client, exclude_tag_config):
         """Test EPG generation when no channels match"""

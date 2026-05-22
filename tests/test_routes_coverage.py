@@ -14,44 +14,6 @@ from models import Account, Category, Channel, ChannelHealthConfig, Credential, 
 
 
 @pytest.fixture
-def test_account(app):
-    """Create a test account with credentials."""
-    with app.app_context():
-        account = Account(
-            name="Test Account",
-            server="test.server.com",
-            enabled=True,
-        )
-        db.session.add(account)
-        db.session.commit()
-
-        credential = Credential(
-            account_id=account.id,
-            username="testuser",
-            password="testpass",
-            max_connections=3,
-        )
-        db.session.add(credential)
-        db.session.commit()
-
-        return account.id
-
-
-@pytest.fixture
-def test_category(app, test_account):
-    """Create a test category."""
-    with app.app_context():
-        category = Category(
-            account_id=test_account,
-            category_id="1",
-            category_name="Test Category",
-        )
-        db.session.add(category)
-        db.session.commit()
-        return category.id
-
-
-@pytest.fixture
 def test_channel(app, test_account, test_category):
     """Create a test channel."""
     with app.app_context():
