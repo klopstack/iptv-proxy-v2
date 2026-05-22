@@ -11,10 +11,11 @@ from error_handling import ServiceUnavailableError, handle_errors, handle_xml_er
 from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Settings, Tag, db
 from schemas import PlaylistConfigCreateSchema, validate_request_data
 from services.cache_service import CacheService
+from services.channel_query_service import ChannelQueryService
 from services.image_cache_service import ImageCacheService
 from services.iptv_service import IPTVService
-from services.ppv_visibility_service import PPVVisibilityService
 from services.tag_service import TagService
+from services.url_service import get_proxy_base_url as _proxy_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -60,14 +61,7 @@ def sanitize_m3u_value(text: str) -> str:
 
 def get_proxy_base_url():
     """Get the proxy base URL, using custom proxy hostname if configured."""
-    proxy_hostname = Settings.get("proxy_hostname", "").strip()
-    if proxy_hostname:
-        # Use custom hostname (assumes https for external domains)
-        scheme = "https" if "." in proxy_hostname else request.scheme
-        return f"{scheme}://{proxy_hostname}"
-    else:
-        # Use request hostname
-        return f"{request.scheme}://{request.host}"
+    return _proxy_base_url()
 
 
 # Initialize cache service
@@ -325,24 +319,11 @@ def generate_playlist(account_id):
     # Initialize image cache if proxying icons
     image_cache = ImageCacheService.get_instance() if proxy_icons else None
 
-    # Build base query - fetch all active channels, will apply filters dynamically
-    query = (
-        db.session.query(Channel)
-        .filter(Channel.account_id == account_id, Channel.is_active)
-        .join(Category, Channel.category_id == Category.id, isouter=True)
+    channels = ChannelQueryService.channels_for_account(
+        account_id,
+        apply_filters=True,
+        apply_ppv_visibility=True,
     )
-
-    # Get all matching channels
-    channels = query.order_by(Channel.name).all()
-
-    # Apply filters dynamically to channels
-    from services.filter_service import FilterService
-
-    channels = FilterService.apply_filters_to_channels(channels, account_id)
-
-    # Apply PPV visibility filtering based on account settings
-    ppv_service = PPVVisibilityService(account)
-    channels = [ch for ch in channels if ppv_service.should_show_channel(ch)]
 
     # If collapsing duplicates, load tags and collapse
     if collapse_duplicates:
@@ -383,21 +364,6 @@ def generate_playlist(account_id):
     # Get primary credential for direct URL mode
     primary_cred = account.get_primary_credential() if not use_proxy else None
 
-    # Load event IDs for PPV channels (for EPG identifiers)
-    from models import Event, EventChannelLink
-
-    ppv_channel_ids = [ch.id for ch in channels if ch.is_ppv]
-    event_map = {}
-    if ppv_channel_ids:
-        event_links = (
-            db.session.query(EventChannelLink.channel_id, Event.id, Event.external_id)
-            .join(Event, EventChannelLink.event_id == Event.id)
-            .filter(EventChannelLink.channel_id.in_(ppv_channel_ids))
-            .all()
-        )
-        for channel_id, event_id, external_id in event_links:
-            event_map[channel_id] = (event_id, external_id)
-
     # Generate M3U
     m3u_lines = ["#EXTM3U"]
     for channel in channels:
@@ -407,15 +373,7 @@ def generate_playlist(account_id):
             channel.category.cleaned_name or channel.category.category_name if channel.category else "Unknown"
         )
 
-        # For PPV channels with linked events, use event ID as EPG identifier
-        # This allows EPG to be auto-generated from Event records
-        if channel.is_ppv and channel.id in event_map:
-            event_id, external_id = event_map[channel.id]
-            tvg_id = f"event-{event_id}"
-            logger.debug(f"PPV channel {channel.name[:60]} using event EPG ID: {tvg_id} (external: {external_id})")
-        else:
-            # Standard EPG ID format for non-PPV or unlinked channels
-            tvg_id = f"ch-{account_id}-{channel.stream_id}"
+        tvg_id = ChannelQueryService.epg_channel_id_for_channel(channel)
 
         original_icon = channel.stream_icon or ""
 
@@ -512,16 +470,9 @@ def _generate_playlist_from_config(config):
     # Initialize image cache if proxying icons
     image_cache = ImageCacheService.get_instance() if proxy_icons else None
 
-    # Parse config
     include_accounts = json.loads(config.include_accounts) if config.include_accounts else []
     exclude_accounts = json.loads(config.exclude_accounts) if config.exclude_accounts else []
-    include_tags = json.loads(config.include_tags) if config.include_tags else []
-    exclude_tags = json.loads(config.exclude_tags) if config.exclude_tags else []
-    # Normalize tags for case-insensitive matching
-    include_tags = TagService.normalize_filter_tags(include_tags)
-    exclude_tags = TagService.normalize_filter_tags(exclude_tags)
 
-    # Get accounts to process
     if include_accounts:
         accounts = Account.query.filter(Account.id.in_(include_accounts), Account.enabled.is_(True)).all()
     else:
@@ -544,85 +495,24 @@ def _generate_playlist_from_config(config):
             f"The following accounts are not synced: {', '.join(unsynced_accounts)}. Please sync channels first."
         )
 
-    # Collect all channels from all accounts first (needed for cross-account collapsing)
+    channels = ChannelQueryService.channels_for_playlist_config(
+        config,
+        apply_filters=True,
+        apply_ppv_visibility=True,
+    )
+
+    account_by_id = {a.id: a for a in accounts}
     all_channel_data = []
+    tags_map_by_account: dict = {}
+    if collapse_duplicates:
+        for acc_id in {ch.account_id for ch in channels}:
+            acc_channels = [ch for ch in channels if ch.account_id == acc_id]
+            tags_map_by_account[acc_id] = ChannelQueryService._load_tag_names_for_channels(acc_channels)
 
-    for account in accounts:
-        # Build query for channels from this account
-        # Filters will be applied dynamically via FilterService
-        query = (
-            db.session.query(Channel)
-            .filter(Channel.account_id == account.id, Channel.is_active)
-            .join(Category, Channel.category_id == Category.id, isouter=True)
-        )
-
-        # Apply tag filtering if specified
-        if include_tags or exclude_tags:
-            if include_tags:
-                tag_subquery = (
-                    db.session.query(ChannelTag.stream_id)
-                    .join(Tag, ChannelTag.tag_id == Tag.id)
-                    .filter(ChannelTag.account_id == account.id, Tag.name.in_(include_tags))
-                )
-
-                if config.tag_match_mode == "all":
-                    # Must have ALL include tags
-                    tag_counts = (
-                        db.session.query(
-                            ChannelTag.stream_id, db.func.count(db.func.distinct(Tag.id)).label("tag_count")
-                        )
-                        .join(Tag, ChannelTag.tag_id == Tag.id)
-                        .filter(ChannelTag.account_id == account.id, Tag.name.in_(include_tags))
-                        .group_by(ChannelTag.stream_id)
-                        .having(db.func.count(db.func.distinct(Tag.id)) == len(include_tags))
-                        .subquery()
-                    )
-
-                    query = query.filter(Channel.stream_id.in_(db.session.query(tag_counts.c.stream_id)))
-                else:  # 'any'
-                    query = query.filter(Channel.stream_id.in_(tag_subquery))
-
-            if exclude_tags:
-                # Must NOT have any exclude tags
-                exclude_subquery = (
-                    db.session.query(ChannelTag.stream_id)
-                    .join(Tag, ChannelTag.tag_id == Tag.id)
-                    .filter(ChannelTag.account_id == account.id, Tag.name.in_(exclude_tags))
-                )
-                query = query.filter(~Channel.stream_id.in_(exclude_subquery))
-
-        # Get all matching channels
-        channels = query.order_by(Channel.name).all()
-
-        # Apply filters dynamically via FilterService (includes is_visible check)
-        from services.filter_service import FilterService
-
-        channels = FilterService.apply_filters_to_channels(channels, account.id)
-
-        # Apply PPV visibility filtering based on account settings
-        ppv_service = PPVVisibilityService(account)
-        channels = [ch for ch in channels if ppv_service.should_show_channel(ch)]
-
-        # Load tags for these channels if collapsing is enabled
-        tags_map = {}
-        if collapse_duplicates:
-            channel_ids = [ch.stream_id for ch in channels]
-            batch_size = 500
-            for i in range(0, len(channel_ids), batch_size):
-                batch = channel_ids[i : i + batch_size]
-                channel_tags_query = (
-                    db.session.query(ChannelTag.stream_id, Tag.name)
-                    .join(Tag)
-                    .filter(ChannelTag.account_id == account.id, ChannelTag.stream_id.in_(batch))
-                )
-                for stream_id, tag_name in channel_tags_query:
-                    if stream_id not in tags_map:
-                        tags_map[stream_id] = []
-                    tags_map[stream_id].append(tag_name)
-
-        # Collect channel data with account info
-        # Extract account data now while it's still in the session
-        # to avoid ObjectDeletedError later when session is closed
+    for channel in channels:
+        account = account_by_id.get(channel.account_id)
+        if not account:
+            continue
         primary_cred = account.get_primary_credential()
         account_data = {
             "id": account.id,
@@ -633,16 +523,17 @@ def _generate_playlist_from_config(config):
             "primary_username": primary_cred.username if primary_cred else account.username,
             "primary_password": primary_cred.password if primary_cred else account.password,
         }
-        for channel in channels:
-            all_channel_data.append(
-                {
-                    "channel": channel,
-                    "account_data": account_data,
-                    "stream_id": channel.stream_id,
-                    "cleaned_name": channel.cleaned_name or channel.name,
-                    "tags": tags_map.get(channel.stream_id, []),
-                }
-            )
+        key = (channel.account_id, channel.stream_id)
+        tags = list(tags_map_by_account.get(channel.account_id, {}).get(key, set())) if collapse_duplicates else []
+        all_channel_data.append(
+            {
+                "channel": channel,
+                "account_data": account_data,
+                "stream_id": channel.stream_id,
+                "cleaned_name": channel.cleaned_name or channel.name,
+                "tags": tags,
+            }
+        )
 
     # Apply duplicate collapsing across all accounts if enabled
     if collapse_duplicates:
@@ -670,8 +561,7 @@ def _generate_playlist_from_config(config):
             channel.category.cleaned_name or channel.category.category_name if channel.category else "Unknown"
         )
 
-        # Always use standardized EPG ID format to prevent collisions across providers
-        tvg_id = f"ch-{account_data['id']}-{channel.stream_id}"
+        tvg_id = ChannelQueryService.epg_channel_id_for_channel(channel)
         original_icon = channel.stream_icon or ""
 
         # Proxy icon URL if enabled
@@ -690,7 +580,7 @@ def _generate_playlist_from_config(config):
 
         if use_proxy:
             # Use proxy URL for multiplexed streaming
-            stream_url = f"{proxy_base}/stream/{account_data['id']}/{channel.stream_id}.ts"
+            stream_url = f"{proxy_base}/stream/{channel.account_id}/{channel.stream_id}.ts"
         else:
             # Direct URL to IPTV provider
             stream_url = f"https://{account_data['server']}/live/{account_data['primary_username']}/{account_data['primary_password']}/{channel.stream_id}.ts"

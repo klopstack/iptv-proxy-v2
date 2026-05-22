@@ -6,7 +6,7 @@ import json
 import logging
 from typing import List, Optional, Set
 
-from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Tag, XtreamCredential, db
+from models import Account, Category, Channel, ChannelTag, EventChannelLink, PlaylistConfig, Tag, XtreamCredential, db
 from services.filter_service import FilterService
 from services.ppv.visibility import PPVVisibilityService
 
@@ -15,6 +15,15 @@ logger = logging.getLogger(__name__)
 
 class ChannelQueryService:
     """Single source of truth for which channels appear in client outputs."""
+
+    @staticmethod
+    def epg_channel_id_for_channel(channel: Channel) -> str:
+        """EPG/tvg-id used consistently across M3U, Xtream, and XMLTV outputs."""
+        if channel.is_ppv:
+            link = EventChannelLink.query.filter_by(channel_id=channel.id).first()
+            if link:
+                return f"event-{link.event_id}"
+        return f"ch-{channel.account_id}-{channel.stream_id}"
 
     @staticmethod
     def _load_tag_ids_for_channels(channels: List[Channel]) -> dict:

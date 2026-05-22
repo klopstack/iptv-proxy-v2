@@ -11,6 +11,7 @@ from flask import Blueprint, jsonify, redirect, request
 
 from error_handling import handle_errors, handle_xml_errors
 from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Settings, Tag, XtreamCredential, db
+from services.channel_query_service import ChannelQueryService
 from services.epg.ppv import is_ppv_category
 from services.filter_service import FilterService
 from services.image_cache_service import ImageCacheService
@@ -247,7 +248,7 @@ def get_live_streams(xtream_cred, account, playlist_config):
             "stream_type": "live",
             "stream_id": int(ch.stream_id),
             "stream_icon": icon_url,
-            "epg_channel_id": f"ch-{ch.account_id}-{ch.stream_id}",
+            "epg_channel_id": ChannelQueryService.epg_channel_id_for_channel(ch),
             "added": str(int(ch.created_at.timestamp())) if ch.created_at else "",
             "category_id": str(ch.category.id) if ch.category else "0",
             "custom_sid": "",
@@ -283,7 +284,7 @@ def get_short_epg(xtream_cred, account, playlist_config):
 
     listings = []
     now = datetime.now(timezone.utc)
-    epg_channel_id = f"ch-{channel.account_id}-{channel.stream_id}"
+    epg_channel_id = ChannelQueryService.epg_channel_id_for_channel(channel)
 
     mapping = ChannelEpgMapping.query.filter_by(channel_id=channel.id).first()
     if mapping:
@@ -370,7 +371,7 @@ def get_simple_data_table(xtream_cred, account, playlist_config):
         "stream_type": "live",
         "stream_id": int(channel.stream_id),
         "stream_icon": icon_url,
-        "epg_channel_id": f"ch-{channel.account_id}-{channel.stream_id}",
+        "epg_channel_id": ChannelQueryService.epg_channel_id_for_channel(channel),
         "added": str(int(channel.created_at.timestamp())) if channel.created_at else "",
         "category_id": str(channel.category.id) if channel.category else "0",
         "category_name": channel.category.cleaned_name or channel.category.category_name if channel.category else "",
@@ -592,10 +593,8 @@ def xtream_live_stream(username, password, stream_id, ext="ts"):
             logger.info(f"Sample channel IDs: {sample_ids}")
         return jsonify({"error": "Stream not found or not accessible"}), 404
 
-    # Redirect to internal stream proxy
-    # Use the account ID and stream ID for the internal endpoint
-    account_id = account.id if account else playlist_config.id
-    internal_url = f"/stream/{account_id}/{stream_id}.{ext}"
+    # Redirect to internal stream proxy using the channel's owning account
+    internal_url = f"/stream/{channel.account_id}/{stream_id}.{ext}"
 
     return redirect(internal_url)
 
