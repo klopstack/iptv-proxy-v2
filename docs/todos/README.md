@@ -47,7 +47,7 @@ Update the status column in this index as each item is completed.
 
 | # | Document | Status | Summary |
 |---|----------|--------|---------|
-| 13 | [13-coverage-test-audit.md](./13-coverage-test-audit.md) | ⬜ | Audit and trim coverage-padding test modules |
+| 13 | [13-coverage-test-audit.md](./13-coverage-test-audit.md) | ✅ | Audit and trim coverage-padding test modules |
 | 14 | [14-models-package-split.md](./14-models-package-split.md) | ⬜ | Continue splitting `models/_core.py` into domain modules |
 | 15 | [15-facade-layer-consolidation.md](./15-facade-layer-consolidation.md) | ⬜ | Gradually remove backward-compat service facades |
 | 16 | [16-frontend-tests.md](./16-frontend-tests.md) | ⬜ | Add minimal JS/HTML lint test coverage |
