@@ -161,22 +161,30 @@ def _run_startup_tasks():
 
 
 def _ensure_scheduler_started():
-    """Lazy initialization of scheduler - only starts in worker 0."""
+    """Lazy initialization of scheduler - one instance per deployment via heartbeat."""
     global _scheduler_started
     if _scheduler_started or _disable_scheduler:
         return
 
-    # Use WORKER_ID environment variable (set by gunicorn config)
-    worker_id = os.getenv("WORKER_ID", "0")
+    _scheduler_started = True
 
-    # Only start scheduler in worker 0
-    if worker_id == "0":
-        sync_scheduler.start()
-        logger.info(f"Sync scheduler started in worker {worker_id} (interval: {sync_interval} hours)")
-        _scheduler_started = True
-    else:
-        logger.info(f"Sync scheduler NOT started in worker {worker_id} (running in worker 0 only)")
-        _scheduler_started = True
+    if sync_scheduler.running:
+        return
+
+    with app.app_context():
+        if sync_scheduler._is_scheduler_alive():
+            logger.info(
+                "Sync scheduler already active in another worker (pid=%s skipped)",
+                os.getpid(),
+            )
+            return
+
+    sync_scheduler.start()
+    logger.info(
+        "Sync scheduler started in worker pid=%s (interval: %s hours)",
+        os.getpid(),
+        sync_interval,
+    )
 
 
 # Register a before_request handler to ensure scheduler starts

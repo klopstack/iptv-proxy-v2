@@ -30,17 +30,9 @@ loglevel = os.getenv("LOG_LEVEL", "info").lower()
 def post_worker_init(worker):
     """
     Called just after a worker has been forked.
-    Set WORKER_ID environment variable so the app knows which worker it's in.
-    Only worker 0 should run the scheduler.
-
-    Worker.age starts at 1 and increments on restart. We subtract 1 to get 0-indexed IDs.
+    Logs worker identity for debugging. Scheduler ownership uses DB heartbeat, not worker index.
     """
-    # Get the worker index based on its age (starts at 1, so subtract 1)
-    # First worker gets 0, second gets 1, etc.
-    worker_id = worker.age - 1
-    os.environ["WORKER_ID"] = str(worker_id)
-    # Use stderr to ensure this appears in logs immediately
     import sys
 
-    sys.stderr.write(f"[GUNICORN] Worker PID {worker.pid} assigned WORKER_ID={worker_id} (age={worker.age})\n")
+    sys.stderr.write(f"[GUNICORN] Worker PID {worker.pid} started (age={worker.age})\n")
     sys.stderr.flush()

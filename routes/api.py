@@ -548,7 +548,7 @@ def stop_scheduler():
     if _scheduler is None:
         return jsonify({"error": "Scheduler not initialized"}), 500
 
-    if not _scheduler.running:
+    if not _scheduler.running and not _scheduler._is_scheduler_alive():
         return jsonify({"error": "Scheduler is not running"}), 400
 
     _scheduler.stop()
@@ -562,7 +562,7 @@ def start_scheduler():
     if _scheduler is None:
         return jsonify({"error": "Scheduler not initialized"}), 500
 
-    if _scheduler.running:
+    if _scheduler.running or _scheduler._is_scheduler_alive():
         return jsonify({"error": "Scheduler is already running"}), 400
 
     _scheduler.start()

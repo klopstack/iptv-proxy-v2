@@ -13,8 +13,10 @@ from models import SyncMetadata, db
 from services.scheduler import (
     DEFAULT_EPG_INTERVAL_HOURS,
     DEFAULT_FCC_INTERVAL_HOURS,
+    SCHEDULER_HEARTBEAT_TIMEOUT_SECONDS,
     SYNC_KEY_ACCOUNT_INTERVAL,
     SYNC_KEY_LAST_ACCOUNT_SYNC,
+    SYNC_KEY_SCHEDULER_HEARTBEAT,
     SyncScheduler,
 )
 
@@ -249,3 +251,38 @@ class TestTriggerSync:
         mock_sync.return_value = None
         with app.app_context():
             assert mock_sync is not None
+
+
+class TestSchedulerHeartbeat:
+    """Heartbeat keeps scheduler status accurate during long sync work"""
+
+    def test_is_scheduler_alive_with_recent_heartbeat(self, scheduler, app):
+        with app.app_context():
+            scheduler._touch_heartbeat()
+            assert scheduler._is_scheduler_alive() is True
+
+    def test_is_scheduler_alive_stale_heartbeat(self, scheduler, app):
+        with app.app_context():
+            stale = datetime.now(timezone.utc) - timedelta(seconds=SCHEDULER_HEARTBEAT_TIMEOUT_SECONDS + 60)
+            SyncMetadata.set(SYNC_KEY_SCHEDULER_HEARTBEAT, stale.isoformat())
+            assert scheduler._is_scheduler_alive() is False
+
+    def test_get_status_running_during_long_sync(self, scheduler, app):
+        """Status stays 'running' while sync work is in progress."""
+        with app.app_context():
+
+            def slow_accounts():
+                scheduler._touch_heartbeat()
+                SyncMetadata.set(
+                    SYNC_KEY_SCHEDULER_HEARTBEAT,
+                    (datetime.now(timezone.utc) - timedelta(seconds=300)).isoformat(),
+                )
+                scheduler._touch_heartbeat()
+
+            with patch.object(scheduler, "_sync_accounts", side_effect=slow_accounts):
+                with patch.object(scheduler, "_needs_sync", return_value=True):
+                    with patch.object(scheduler, "_set_last_sync_time"):
+                        with patch.object(scheduler, "_scan_channel_health"):
+                            scheduler._check_and_sync()
+
+            assert scheduler.get_status()["running"] is True

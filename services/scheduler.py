@@ -53,7 +53,8 @@ DEFAULT_EPG_PROGRAM_RETENTION_DAYS = 7
 
 # Scheduler heartbeat for multi-worker detection
 SYNC_KEY_SCHEDULER_HEARTBEAT = "scheduler_heartbeat"
-SCHEDULER_HEARTBEAT_TIMEOUT_SECONDS = 120  # Consider dead if no heartbeat for 2 minutes
+# Must exceed longest single sync step (EPG fetches use up to 600s timeouts)
+SCHEDULER_HEARTBEAT_TIMEOUT_SECONDS = 900
 
 
 class SyncScheduler:
@@ -206,6 +207,13 @@ class SyncScheduler:
         """Update the scheduler heartbeat timestamp"""
         SyncMetadata.set(SYNC_KEY_SCHEDULER_HEARTBEAT, datetime.now(timezone.utc).isoformat())
 
+    def _touch_heartbeat(self):
+        """Update heartbeat; log but do not raise on failure."""
+        try:
+            self._update_heartbeat()
+        except Exception as e:
+            logger.error("Error updating scheduler heartbeat: %s", e)
+
     def _is_scheduler_alive(self) -> bool:
         """Check if scheduler is alive based on heartbeat (works across workers)"""
         heartbeat_str = SyncMetadata.get(SYNC_KEY_SCHEDULER_HEARTBEAT)
@@ -257,6 +265,13 @@ class SyncScheduler:
         time.sleep(30)
 
         while self.running:
+            # Heartbeat before sync work so long-running jobs do not look dead
+            try:
+                with self.app.app_context():
+                    self._touch_heartbeat()
+            except Exception as e:
+                logger.error("Error updating scheduler heartbeat before sync: %s", e)
+
             try:
                 self._check_and_sync()
             except Exception as e:
@@ -274,12 +289,11 @@ class SyncScheduler:
                         rollback_error,
                     )
 
-            # Update heartbeat to show we're alive
             try:
                 with self.app.app_context():
-                    self._update_heartbeat()
+                    self._touch_heartbeat()
             except Exception as e:
-                logger.error(f"Error updating scheduler heartbeat: {e}")
+                logger.error("Error updating scheduler heartbeat after sync: %s", e)
 
             # Sleep in small intervals so we can stop quickly
             for _ in range(self._check_interval):
@@ -295,18 +309,21 @@ class SyncScheduler:
                 logger.info(f"Account sync due (interval: {self._account_interval_hours} hours)")
                 self._sync_accounts()
                 self._set_last_sync_time(SYNC_KEY_LAST_ACCOUNT_SYNC)
+                self._touch_heartbeat()
 
             # Check if EPG sync is needed (uses its own interval)
             if self._needs_sync(SYNC_KEY_LAST_EPG_SYNC, self._epg_interval_hours):
                 logger.info(f"EPG sync due (interval: {self._epg_interval_hours} hours)")
                 self._sync_epg_sources()
                 self._set_last_sync_time(SYNC_KEY_LAST_EPG_SYNC)
+                self._touch_heartbeat()
 
             # Check if FCC sync is needed (configurable, default weekly)
             if self._needs_sync(SYNC_KEY_LAST_FCC_SYNC, self._fcc_interval_hours):
                 logger.info(f"FCC sync due (interval: {self._fcc_interval_hours} hours)")
                 self._sync_fcc_data()
                 self._set_last_sync_time(SYNC_KEY_LAST_FCC_SYNC)
+                self._touch_heartbeat()
 
             # Check if PPV event pre-fetch is needed (every 6 hours)
             # This loads event data for dates found in channels + 30 days ahead
@@ -314,33 +331,39 @@ class SyncScheduler:
                 logger.info("PPV event pre-fetch due (6 hour schedule)")
                 self._prefetch_ppv_events()
                 self._set_last_sync_time(SYNC_KEY_LAST_PPV_PREFETCH)
+                self._touch_heartbeat()
 
             # Check if PPV enrichment is needed (hourly, respects API rate limits)
             if self._needs_sync(SYNC_KEY_LAST_PPV_ENRICHMENT, DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS):
                 logger.info("PPV enrichment due (hourly schedule)")
                 self._enrich_ppv_events()
                 self._set_last_sync_time(SYNC_KEY_LAST_PPV_ENRICHMENT)
+                self._touch_heartbeat()
 
             # Check if sportsipy team data refresh is needed (weekly)
             if self._needs_sync(SYNC_KEY_LAST_SPORTSIPY_REFRESH, DEFAULT_SPORTSIPY_REFRESH_INTERVAL_HOURS):
                 logger.info("Sportsipy team data refresh due (weekly schedule)")
                 self._refresh_sportsipy_teams()
                 self._set_last_sync_time(SYNC_KEY_LAST_SPORTSIPY_REFRESH)
+                self._touch_heartbeat()
 
             # Expired EPG program cleanup (daily)
             if self._needs_sync(SYNC_KEY_LAST_EPG_PROGRAM_CLEANUP, DEFAULT_EPG_PROGRAM_CLEANUP_INTERVAL_HOURS):
                 logger.info("EPG program cleanup due (daily schedule)")
                 self._cleanup_epg_programs()
                 self._set_last_sync_time(SYNC_KEY_LAST_EPG_PROGRAM_CLEANUP)
+                self._touch_heartbeat()
 
             # Health check history cleanup (weekly)
             if self._needs_sync(SYNC_KEY_LAST_HEALTH_CHECK_CLEANUP, DEFAULT_HEALTH_CHECK_CLEANUP_INTERVAL_HOURS):
                 logger.info("Health check history cleanup due (weekly schedule)")
                 self._cleanup_health_checks()
                 self._set_last_sync_time(SYNC_KEY_LAST_HEALTH_CHECK_CLEANUP)
+                self._touch_heartbeat()
 
             # Run channel health scanning (runs continuously when idle)
             self._scan_channel_health()
+            self._touch_heartbeat()
 
     def _sync_accounts(self):
         """Sync all enabled accounts and process their tags"""
@@ -351,6 +374,7 @@ class SyncScheduler:
 
         for account in accounts:
             try:
+                self._touch_heartbeat()
                 logger.info(f"Syncing account: {account.name}")
                 stats = ChannelSyncService.sync_account(account.id)
                 logger.info(
@@ -496,6 +520,7 @@ class SyncScheduler:
 
         for source in sources:
             try:
+                self._touch_heartbeat()
                 logger.info(f"Syncing EPG source: {source.name} ({source.source_type})")
                 stats = self._sync_single_epg_source(source)
                 if stats:

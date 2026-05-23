@@ -56,6 +56,7 @@ class TestSchedulerAPI:
         """Test stop scheduler when already stopped"""
         mock_scheduler = MagicMock()
         mock_scheduler.running = False
+        mock_scheduler._is_scheduler_alive.return_value = False
 
         with patch("routes.api._scheduler", mock_scheduler):
             response = client.post("/api/scheduler/stop")
@@ -66,6 +67,7 @@ class TestSchedulerAPI:
         """Test successful scheduler stop"""
         mock_scheduler = MagicMock()
         mock_scheduler.running = True
+        mock_scheduler._is_scheduler_alive.return_value = True
 
         with patch("routes.api._scheduler", mock_scheduler):
             response = client.post("/api/scheduler/stop")
@@ -83,6 +85,7 @@ class TestSchedulerAPI:
         """Test start scheduler when already running"""
         mock_scheduler = MagicMock()
         mock_scheduler.running = True
+        mock_scheduler._is_scheduler_alive.return_value = True
 
         with patch("routes.api._scheduler", mock_scheduler):
             response = client.post("/api/scheduler/start")
@@ -93,6 +96,7 @@ class TestSchedulerAPI:
         """Test successful scheduler start"""
         mock_scheduler = MagicMock()
         mock_scheduler.running = False
+        mock_scheduler._is_scheduler_alive.return_value = False
 
         with patch("routes.api._scheduler", mock_scheduler):
             response = client.post("/api/scheduler/start")
