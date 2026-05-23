@@ -187,8 +187,15 @@ Background scheduler (`services/scheduler.py`) syncs EPG data:
 - Updates existing programs, adds new ones, deletes old ones
 
 **Provider EPG (Legacy):**
-- Direct passthrough from IPTV provider (deprecated in architecture; admin UI still exposes it — see [TODO 31](./todos/31-deprecate-provider-epg-ui.md))
-- Recommendation: Use EPG mappings to Schedules Direct or XMLTV sources instead
+- Direct passthrough from IPTV provider (deprecated)
+- Admin UI shows a deprecation warning when adding provider sources; existing sources display a "Legacy" badge
+- Recommendation: Use Schedules Direct, XMLTV grabbers, or XMLTV URLs, then map channels via EPG match rules
+
+**Migration path (provider → SD/XMLTV):**
+1. Add a Schedules Direct or XMLTV source and sync channels/programs
+2. Run EPG match rules (or manual mapping) to link IPTV channels to the new source
+3. Disable or delete the legacy provider source once mappings are verified
+4. Generated EPG (`/epg/<account_id>.xml`) uses database-first data from mappings — no provider passthrough at serve time
 
 ### EPG Generation Flow
 

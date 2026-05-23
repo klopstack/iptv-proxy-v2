@@ -7,18 +7,9 @@ import re
 from typing import Dict, List, Optional
 
 from models import Account, Channel, ChannelTag, Filter, Tag, db
-from services.epg.constants import PPV_PLACEHOLDER_PATTERNS
+from services.epg.ppv import is_ppv_placeholder_name
 
 logger = logging.getLogger(__name__)
-
-_PPV_COMPILED_PATTERNS = [re.compile(p, re.IGNORECASE) for p in PPV_PLACEHOLDER_PATTERNS]
-
-
-def is_ppv_placeholder_name(channel_name: str) -> bool:
-    """Return True if the channel name matches a PPV placeholder pattern."""
-    if not channel_name:
-        return False
-    return any(pattern.search(channel_name) for pattern in _PPV_COMPILED_PATTERNS)
 
 
 class FilterService:

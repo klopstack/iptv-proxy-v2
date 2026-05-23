@@ -1,7 +1,7 @@
 # TODO 32: Expand Frontend JavaScript Test Coverage
 
 **Priority:** P3  
-**Status:** ⬜ Not started  
+**Status:** ✅ Complete  
 **Estimated scope:** Medium
 
 ---
@@ -100,10 +100,10 @@ If TODO 31 adds client-side deprecation banner, test warning visibility in `epg_
 
 ## Acceptance criteria
 
-- [ ] ≥4 JS test files (double TODO 16 baseline)
-- [ ] Critical pure functions covered: escapeHtml, preview URL building, match rule validation
-- [ ] `npm test` passes locally and in CI
-- [ ] No regression in templates (manual smoke: preview page, EPG management)
+- [x] ≥4 JS test files (double TODO 16 baseline)
+- [x] Critical pure functions covered: escapeHtml, preview URL building, match rule validation
+- [x] `npm test` passes locally and in CI
+- [x] No regression in templates (manual smoke: preview page, EPG management)
 
 ---
 
@@ -127,6 +127,6 @@ npm run lint
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Extracted pure helpers to `static/js/lib/`; 5 Vitest files / 53 tests; EPG lib shim in `epg_management.html` |

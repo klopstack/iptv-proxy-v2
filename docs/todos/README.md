@@ -100,10 +100,10 @@ Follow-up audit after TODOs 01–21. Focus: dead shims, test duplication, semant
 | 28 | [28-playlist-config-hardening.md](./28-playlist-config-hardening.md) | ✅ | PUT schema validation; indexed slug column (replace O(n) scan) |
 | 29 | [29-deduplicate-shared-helpers.md](./29-deduplicate-shared-helpers.md) | ✅ | Single `get_iptv_service_for_account`; Xtream CQS cleanup |
 | 30 | [30-split-epg-match-rules-service.md](./30-split-epg-match-rules-service.md) | ✅ | Split 2k-line `epg_match_rules_service.py` into `services/epg/match_rules/` |
-| 31 | [31-deprecate-provider-epg-ui.md](./31-deprecate-provider-epg-ui.md) | ⬜ | Align EPG management UI with deprecated provider EPG |
-| 32 | [32-expand-frontend-js-tests.md](./32-expand-frontend-js-tests.md) | ⬜ | Extend Vitest beyond 2 files / 18 JS modules |
-| 33 | [33-error-handling-and-logging-hygiene.md](./33-error-handling-and-logging-hygiene.md) | ⬜ | Replace silent `except` blocks in routes/services |
-| 34 | [34-post-cleanup-simplifications.md](./34-post-cleanup-simplifications.md) | ⬜ | Final layer removal after 22–33 (EpgService facade, FilterService) |
+| 31 | [31-deprecate-provider-epg-ui.md](./31-deprecate-provider-epg-ui.md) | ✅ | Align EPG management UI with deprecated provider EPG |
+| 32 | [32-expand-frontend-js-tests.md](./32-expand-frontend-js-tests.md) | ✅ | Extend Vitest beyond 2 files / 18 JS modules |
+| 33 | [33-error-handling-and-logging-hygiene.md](./33-error-handling-and-logging-hygiene.md) | ✅ | Replace silent `except` blocks in routes/services |
+| 34 | [34-post-cleanup-simplifications.md](./34-post-cleanup-simplifications.md) | ✅ | Final layer removal after 22–33 (EpgService facade, FilterService) |
 
 ### Recommended order for items 22–34
 
@@ -150,5 +150,5 @@ These items were derived from full codebase reviews covering:
 - Zero MediaFlow/stream-factory tests
 - `is_visible` column semantics contradict FilterService docstrings
 - Playlist config PUT lacks schema validation; slug lookup is O(n)
-- Provider EPG promoted in UI but marked deprecated in architecture
-- 2 Vitest files vs 18 JS modules
+- Provider EPG de-emphasized in UI with deprecation warnings (TODO 31 ✅)
+- Vitest coverage expanded to 5 test files / 53 tests across lib helpers (TODO 32 ✅)

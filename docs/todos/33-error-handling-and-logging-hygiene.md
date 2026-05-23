@@ -1,7 +1,7 @@
 # TODO 33: Error Handling and Logging Hygiene
 
 **Priority:** P3  
-**Status:** ⬜ Not started  
+**Status:** ✅ Complete  
 **Estimated scope:** Medium (incremental)
 
 ---
@@ -117,10 +117,10 @@ Add tests that mock failures and assert:
 
 ## Acceptance criteria
 
-- [ ] Zero bare `except:` (no exception type) in routes/
-- [ ] Zero `except Exception: pass` in routes/ and services/epg/
-- [ ] Each remaining broad catch has comment or log explaining continuation
-- [ ] At least 5 new tests for previously silent failure paths
+- [x] Zero bare `except:` (no exception type) in routes/
+- [x] Zero `except Exception: pass` in routes/ and services/epg/
+- [x] Each remaining broad catch has comment or log explaining continuation
+- [x] At least 5 new tests for previously silent failure paths
 
 ---
 
@@ -137,6 +137,6 @@ rg "except:\s*$|except Exception:\s*pass" routes/ services/
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Replaced silent catches in `routes/api.py`, `services/epg/parsing.py`, `services/epg/cache.py`, `services/scheduler.py`; added debug/warning logs in match rules + programs; 7 new hygiene tests |

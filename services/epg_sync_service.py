@@ -14,7 +14,7 @@ from typing import Dict, Tuple
 
 from models import EpgSource, db
 from services.epg.cache import save_to_cache
-from services.epg import EpgService
+from services.epg.parsing import sync_epg_source
 from services.iptv_service import IPTVService
 from services.schedules_direct import SchedulesDirectClient, SchedulesDirectError
 from services.xmltv_grabber_service import XmltvGrabberService
@@ -71,7 +71,7 @@ class EpgSyncService:
             xml_content = service.get_xmltv()
             logger.info(f"Fetched {len(xml_content)} bytes of XMLTV from provider for source {source.id}")
 
-            stats = EpgService.sync_epg_source(source, xml_content)
+            stats = sync_epg_source(source, xml_content)
             logger.info(f"Synced EPG channels for source {source.id}: {stats}")
 
             # Cache the raw XMLTV for EPG generation
@@ -139,7 +139,7 @@ class EpgSyncService:
             response.raise_for_status()
             logger.info(f"Fetched {len(response.content)} bytes of XMLTV from URL for source {source.id}")
 
-            stats = EpgService.sync_epg_source(source, response.content)
+            stats = sync_epg_source(source, response.content)
             logger.info(f"Synced EPG channels for source {source.id}: {stats}")
 
             # Cache the raw XMLTV for EPG generation
@@ -279,7 +279,7 @@ class EpgSyncService:
             if not success:
                 return False, f"XMLTV grabber failed: {error}", {}
 
-            stats = EpgService.sync_epg_source(source, xml_content)
+            stats = sync_epg_source(source, xml_content)
             logger.info(f"Synced EPG channels for source {source.id}: {stats}")
 
             # Cache the raw XMLTV for EPG generation

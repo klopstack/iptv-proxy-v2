@@ -11,7 +11,7 @@ A modern web-based IPTV proxy with advanced filtering, tag-based playlist genera
 ✅ **Custom Rulesets** - Create provider-specific tag extraction rules  
 ✅ **Tag-Based Playlists** - Generate playlists filtered by tags  
 ✅ **Database-First EPG** - EPG data synced to database for fast, reliable program guides  
-✅ **Multi-Source EPG** - Supports Schedules Direct and XMLTV sources  
+✅ **Multi-Source EPG** - Supports Schedules Direct and XMLTV sources (provider EPG is legacy)  
 ✅ **Xtream Codes API** - Connect IPTV clients (TiviMate, IPTV Smarters) using standard API format  
 
 Using the pre-built image from GitHub Container Registry:
@@ -115,6 +115,16 @@ http://localhost:8889/epg/<account_id>.xml
 ```
 
 Replace `<account_id>` with your account ID (shown in the UI).
+
+### EPG setup (recommended)
+
+Configure EPG under **EPG Management** in the web UI:
+
+1. **Schedules Direct** (US/Canada) or an **XMLTV grabber/URL** — preferred sources synced to the database
+2. **Match rules** — auto-map IPTV channels to EPG stations
+3. **Provider EPG** — legacy passthrough only; use for bootstrap, then migrate to SD/XMLTV
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) for details.
 
 ## Filter Examples
 

@@ -106,6 +106,7 @@ function renderSources() {
     `;
     
     for (const source of sources) {
+        const isLegacyProvider = isLegacyProviderSource(source);
         const statusBadge = source.last_sync_status === 'success' 
             ? '<span class="badge bg-success">Success</span>'
             : source.last_sync_status === 'error'
@@ -138,7 +139,10 @@ function renderSources() {
                     ${!source.enabled ? '<span class="badge bg-secondary ms-2">Disabled</span>' : ''}
                     ${source.source_type === 'schedules_direct' ? '<button class="btn btn-sm btn-link p-0 ms-2" onclick="toggleSdLineups(' + source.id + ')" title="Show/Hide Lineups" id="sd-toggle-' + source.id + '"><i class="bi bi-chevron-down"></i></button>' : ''}
                 </td>
-                <td><span class="badge bg-info">${source.source_type}</span></td>
+                <td>
+                    <span class="badge bg-info">${source.source_type}</span>
+                    ${isLegacyProvider ? '<span class="badge bg-warning text-dark ms-1">Legacy</span>' : ''}
+                </td>
                 <td>${sourceInfo}</td>
                 <td>${source.channel_count || 0}</td>
                 <td>${inUseHtml}</td>
@@ -183,11 +187,17 @@ function renderSources() {
 
 function onSourceTypeChange() {
     const type = document.getElementById('sourceType').value;
-    document.getElementById('providerFields').style.display = type === 'provider' ? 'block' : 'none';
-    document.getElementById('xmltvUrlFields').style.display = type === 'xmltv_url' ? 'block' : 'none';
-    document.getElementById('sdFields').style.display = type === 'schedules_direct' ? 'block' : 'none';
-    document.getElementById('grabberFields').style.display = type === 'xmltv_grabber' ? 'block' : 'none';
-    document.getElementById('ppvFields').style.display = type === 'ppv_events' ? 'block' : 'none';
+    const visibility = getSourceTypeFieldVisibility(type);
+
+    const providerWarning = document.getElementById('providerDeprecationWarning');
+    if (providerWarning) {
+        providerWarning.style.display = visibility.providerDeprecationWarning ? 'block' : 'none';
+    }
+    document.getElementById('providerFields').style.display = visibility.providerFields ? 'block' : 'none';
+    document.getElementById('xmltvUrlFields').style.display = visibility.xmltvUrlFields ? 'block' : 'none';
+    document.getElementById('sdFields').style.display = visibility.sdFields ? 'block' : 'none';
+    document.getElementById('grabberFields').style.display = visibility.grabberFields ? 'block' : 'none';
+    document.getElementById('ppvFields').style.display = visibility.ppvFields ? 'block' : 'none';
     
     if (type === 'xmltv_grabber') {
         populateGrabberSelect();

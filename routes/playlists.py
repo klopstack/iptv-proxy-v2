@@ -4,7 +4,7 @@ Playlist configuration and M3U generation routes
 import json
 import logging
 
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, Response, jsonify, redirect, request, url_for
 
 from error_handling import ServiceUnavailableError, handle_errors, handle_xml_errors
 from marshmallow import ValidationError
@@ -16,6 +16,7 @@ from schemas import (
     validate_request_data,
 )
 from services.channel_query_service import ChannelQueryService
+from services.epg.generation import generate_epg_for_channels
 from services.image_cache_service import ImageCacheService
 from services.playlist_config_service import assign_slug, get_playlist_config_by_slug
 from services.playlist_format_service import render_account_m3u_playlist, render_config_m3u_playlist
@@ -304,12 +305,19 @@ def generate_playlist(account_id):
     return Response(body, mimetype="application/x-mpegurl")
 
 
-# Keep old ID-based route for backward compatibility
+# Keep old ID-based route for backward compatibility (redirects to slug when available)
 @playlists_bp.route("/playlist/config/<int:config_id>.m3u")
 @handle_errors(return_json=False, default_message="Error generating playlist from config")
 def generate_playlist_from_config_by_id(config_id):
-    """Generate M3U playlist from config by ID (backward compatibility)."""
+    """Generate M3U playlist from config by ID (deprecated — prefer slug URL)."""
     config = PlaylistConfig.query.get_or_404(config_id)
+    if config.slug:
+        response = redirect(
+            url_for("playlists.generate_playlist_from_config_by_name", slug=config.slug),
+            code=301,
+        )
+        response.headers["Deprecation"] = "Use /playlist/config/<slug>.m3u instead of numeric config IDs"
+        return response
     return _generate_playlist_from_config(config)
 
 
@@ -420,8 +428,6 @@ def proxy_epg(account_id):
     - collapse_duplicates: "true" to collapse duplicate channels keeping highest quality
     - proxy_icons: "true" to proxy icon URLs through local cache
     """
-    from services.epg import EpgService
-
     account = Account.query.get_or_404(account_id)
 
     if not account.enabled:
@@ -456,7 +462,7 @@ def proxy_epg(account_id):
         )
 
     # Generate filtered EPG for these channels
-    epg_xml = EpgService.generate_epg_for_channels(channels, use_channel_links=True)
+    epg_xml = generate_epg_for_channels(channels, use_channel_links=True)
 
     logger.info(
         f"Generated proxied EPG for account {account_id}: {len(channels)} channels (collapsed={collapse_duplicates})"
@@ -473,16 +479,15 @@ def proxy_epg(account_id):
 @playlists_bp.route("/epg/config/<int:config_id>.xml")
 @handle_xml_errors(default_message="Error generating EPG from config")
 def generate_epg_from_config(config_id):
-    """Generate XMLTV EPG for playlist configuration by ID.
-
-    Returns EPG data filtered to only include channels that would appear
-    in the corresponding playlist. Handles east/west channel fallback.
-
-    Query Parameters:
-    - collapse_duplicates: "true" to collapse duplicate channels keeping highest quality
-    - east_west_fallback: "false" to disable west EPG generation from east (default: true)
-    """
+    """Generate XMLTV EPG for playlist configuration by ID (deprecated — prefer slug URL)."""
     config = PlaylistConfig.query.get_or_404(config_id)
+    if config.slug:
+        response = redirect(
+            url_for("playlists.generate_epg_from_config_by_name", slug=config.slug, **request.args),
+            code=301,
+        )
+        response.headers["Deprecation"] = "Use /epg/config/<slug>.xml instead of numeric config IDs"
+        return response
     return _generate_epg_from_config(config)
 
 
@@ -514,8 +519,6 @@ def _generate_epg_from_config(config):
     - collapse_duplicates: "true" to collapse duplicate channels keeping highest quality
     - east_west_fallback: "false" to disable west EPG generation from east (default: true)
     """
-    from services.epg import EpgService
-
     if not config.enabled:
         raise PermissionError("Playlist configuration is disabled")
 
@@ -550,7 +553,7 @@ def _generate_epg_from_config(config):
     )
 
     # Generate filtered EPG
-    epg_xml = EpgService.generate_epg_for_channels(
+    epg_xml = generate_epg_for_channels(
         channels,
         east_west_fallback=east_west_fallback,
     )

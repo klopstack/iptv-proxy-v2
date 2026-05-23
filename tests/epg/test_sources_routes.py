@@ -22,6 +22,18 @@ class TestEpgSources:
         sources = response.json
         assert len(sources) == 1
         assert sources[0]["name"] == "Test EPG Source"
+        assert sources[0]["deprecated"] is True
+
+    def test_get_epg_sources_marks_provider_deprecated(
+        self, app, client, test_epg_source, test_xmltv_url_source
+    ):
+        """Provider sources are flagged deprecated; other types are not."""
+        response = client.get("/api/epg/sources")
+        assert response.status_code == 200
+
+        by_id = {s["id"]: s for s in response.json}
+        assert by_id[test_epg_source]["deprecated"] is True
+        assert by_id[test_xmltv_url_source]["deprecated"] is False
 
     def test_create_epg_source_missing_name(self, app, client):
         """Test creating EPG source without name"""
@@ -77,6 +89,7 @@ class TestEpgSources:
         )
         assert response.status_code == 201
         assert "id" in response.json
+        assert response.json["deprecated"] is True
 
     def test_create_epg_source_xmltv_url(self, app, client):
         """Test creating XMLTV URL source"""

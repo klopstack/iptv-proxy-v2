@@ -7,12 +7,39 @@ from flask import Blueprint, jsonify, request
 
 from error_handling import handle_errors
 from models import Account, ChannelEpgMapping, EpgChannel, EpgSource, db
-from services.epg import EpgService
+from services.epg.coverage import get_category_epg_coverage, get_epg_coverage_stats
 
 logger = logging.getLogger(__name__)
 
 # Create blueprint
 epg_sources_bp = Blueprint("epg_sources", __name__, url_prefix="/api/epg")
+
+PROVIDER_SOURCE_TYPE = "provider"
+
+
+def _serialize_epg_source(source, *, mapping_count=0):
+    """Serialize an EpgSource for JSON responses."""
+    return {
+        "id": source.id,
+        "name": source.name,
+        "source_type": source.source_type,
+        "account_id": source.account_id,
+        "account_name": source.account.name if source.account else None,
+        "url": source.url,
+        "priority": source.priority,
+        "enabled": source.enabled,
+        "last_sync": source.last_sync.isoformat() if source.last_sync else None,
+        "last_sync_status": source.last_sync_status,
+        "last_sync_message": source.last_sync_message,
+        "channel_count": source.channel_count,
+        "used_mapping_count": mapping_count,
+        "xmltv_grabber": source.xmltv_grabber,
+        "xmltv_config_name": source.xmltv_config_name,
+        "xmltv_days": source.xmltv_days,
+        "xmltv_offset": source.xmltv_offset,
+        "xmltv_extra_args": source.xmltv_extra_args,
+        "deprecated": source.source_type == PROVIDER_SOURCE_TYPE,
+    }
 
 
 # ============================================================================
@@ -37,26 +64,7 @@ def get_epg_sources():
 
     return jsonify(
         [
-            {
-                "id": s.id,
-                "name": s.name,
-                "source_type": s.source_type,
-                "account_id": s.account_id,
-                "account_name": s.account.name if s.account else None,
-                "url": s.url,
-                "priority": s.priority,
-                "enabled": s.enabled,
-                "last_sync": s.last_sync.isoformat() if s.last_sync else None,
-                "last_sync_status": s.last_sync_status,
-                "last_sync_message": s.last_sync_message,
-                "channel_count": s.channel_count,
-                "used_mapping_count": mapping_count_map.get(s.id, 0),
-                "xmltv_grabber": s.xmltv_grabber,
-                "xmltv_config_name": s.xmltv_config_name,
-                "xmltv_days": s.xmltv_days,
-                "xmltv_offset": s.xmltv_offset,
-                "xmltv_extra_args": s.xmltv_extra_args,
-            }
+            _serialize_epg_source(s, mapping_count=mapping_count_map.get(s.id, 0))
             for s in sources
         ]
     )
@@ -114,6 +122,7 @@ def create_epg_source():
                 "id": source.id,
                 "name": source.name,
                 "source_type": source.source_type,
+                "deprecated": source.source_type == PROVIDER_SOURCE_TYPE,
                 "message": "EPG source created successfully",
             }
         ),
@@ -281,7 +290,7 @@ def get_epg_coverage():
     if account_id:
         Account.query.get_or_404(account_id)
 
-    stats = EpgService.get_epg_coverage_stats(account_id)
+    stats = get_epg_coverage_stats(account_id)
 
     return jsonify(stats)
 
@@ -291,7 +300,7 @@ def get_category_epg_coverage(account_id):
     """Get EPG coverage broken down by category for an account"""
     Account.query.get_or_404(account_id)
 
-    coverage = EpgService.get_category_epg_coverage(account_id)
+    coverage = get_category_epg_coverage(account_id)
 
     return jsonify(
         {

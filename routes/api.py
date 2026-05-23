@@ -388,51 +388,16 @@ def preview_channels():
     # Normalize for case-insensitive matching
     filter_tags = TagService.normalize_filter_tags(filter_tags)
 
-    # Build base query - filters will be applied dynamically
-    query = (
-        db.session.query(Channel)
-        .join(Category, Channel.category_id == Category.id, isouter=True)
-        .filter(Channel.is_active)
-    )
-
-    # Apply account filter if specified
     if account_id:
-        db.get_or_404(Account, account_id)  # Validate account exists
-        query = query.filter(Channel.account_id == account_id)
+        db.get_or_404(Account, account_id)
 
-    # Apply category filter if specified (check both original and cleaned names)
-    if category_filter:
-        query = query.filter(
-            db.or_(Category.category_name == category_filter, Category.cleaned_name == category_filter)
-        )
-
-    # Apply tag filter if specified
-    if filter_tags:
-        # Find channels that have at least one of the requested tags
-        tag_subquery = (
-            db.session.query(ChannelTag.stream_id)
-            .join(Tag, ChannelTag.tag_id == Tag.id)
-            .filter(Tag.name.in_(filter_tags))
-        )
-        if account_id:
-            tag_subquery = tag_subquery.filter(ChannelTag.account_id == account_id)
-        tag_subquery = tag_subquery.distinct()
-
-        query = query.filter(Channel.stream_id.in_(tag_subquery))
-
-    # Get all channels (we need to apply filters dynamically)
-    all_channels = query.order_by(Channel.name).all()
-
-    filtered_channels = ChannelQueryService.channels_for_multi_account_candidates(all_channels)
-
-    # Sort all filtered channels by name
-    filtered_channels.sort(key=lambda ch: ch.name or "")
-
-    # Get total count after filtering
-    total = len(filtered_channels)
-
-    # Apply pagination
-    channels = filtered_channels[offset : offset + limit]
+    channels, total = ChannelQueryService.preview_channels_for_scope(
+        account_id=account_id,
+        category=category_filter,
+        filter_tags=filter_tags,
+        limit=limit,
+        offset=offset,
+    )
 
     # Batch-load tags for all channels at once
     stream_ids = [ch.stream_id for ch in channels]
@@ -624,7 +589,7 @@ def get_overview_stats():
     - Scheduler (sync status and intervals)
     """
     from models import EpgChannel, EpgProgram, EpgSource, SyncMetadata
-    from services.epg import EpgService
+    from services.epg.coverage import get_epg_coverage_stats
 
     stats = {}
 
@@ -674,13 +639,16 @@ def get_overview_stats():
     total_epg_programs = EpgProgram.query.count()
 
     # EPG coverage
+    epg_coverage_error = None
     try:
-        coverage_stats = EpgService.get_epg_coverage_stats()
+        coverage_stats = get_epg_coverage_stats()
         epg_coverage_pct = coverage_stats.get("coverage_percentage", 0)
         mapped_channels = coverage_stats.get("channels_with_epg", 0)
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to load EPG coverage stats for overview: %s", e, exc_info=True)
         epg_coverage_pct = 0
         mapped_channels = 0
+        epg_coverage_error = str(e)
 
     stats["epg"] = {
         "sources": {
@@ -692,6 +660,7 @@ def get_overview_stats():
         "coverage": {
             "percentage": round(epg_coverage_pct, 1),
             "mapped_channels": mapped_channels,
+            **({"error": epg_coverage_error} if epg_coverage_error else {}),
         },
     }
 
@@ -725,7 +694,12 @@ def get_overview_stats():
             "accounts": last_account_sync,
             "epg": last_epg_sync,
         }
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Failed to load sync metadata for overview stats: %s", e, exc_info=True)
+        stats["last_full_sync"] = {
+            "accounts": None,
+            "epg": None,
+            "error": str(e),
+        }
 
     return jsonify(stats)

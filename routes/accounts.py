@@ -863,49 +863,18 @@ def preview_account_playlist(account_id):
     if not has_synced:
         return jsonify({"success": False, "error": "Account not synced. Please sync the account first."}), 503
 
-    # Build base query - only filter by active status, apply filters dynamically later
-    base_query = (
-        db.session.query(Channel)
-        .filter(
-            Channel.account_id == account_id,
-            Channel.is_active,
-        )
-        .join(Category, Channel.category_id == Category.id, isouter=True)
-    )
-
-    # Apply category filter if specified
-    if category_filter:
-        base_query = base_query.filter(
-            db.or_(Category.cleaned_name == category_filter, Category.category_name == category_filter)
-        )
-
-    # Apply search filter if specified (searches channel name and cleaned name)
-    if search_term:
-        search_pattern = f"%{search_term}%"
-        base_query = base_query.filter(
-            db.or_(Channel.name.ilike(search_pattern), Channel.cleaned_name.ilike(search_pattern))
-        )
-
-    # Apply tag filter if specified
-    if filter_tags:
-        # Find channels that have at least one of the requested tags
-        tag_subquery = (
-            db.session.query(ChannelTag.stream_id)
-            .join(Tag, ChannelTag.tag_id == Tag.id)
-            .filter(ChannelTag.account_id == account_id, Tag.name.in_(filter_tags))
-            .distinct()
-        )
-        base_query = base_query.filter(Channel.stream_id.in_(tag_subquery))
-
-    base_query = base_query.order_by(Channel.name)
-
-    # Apply pagination
     limit = request.args.get("limit", 50, type=int)
     offset = request.args.get("offset", 0, type=int)
 
+    base_query = ChannelQueryService.build_preview_channel_query(
+        account_id=account_id,
+        category=category_filter,
+        search=search_term,
+        filter_tags=filter_tags,
+    )
+
     if collapse_duplicates:
-        # For duplicate collapsing, we need to load ALL matching channels first
-        # to properly group and collapse them, then paginate the result
+        # For duplicate collapsing, load all matching channels first.
         all_channels = base_query.all()
         all_channels = ChannelQueryService.channels_for_account_candidates(account_id, all_channels)
 
@@ -959,22 +928,14 @@ def preview_account_playlist(account_id):
             }
         )
     else:
-        # Standard pagination without collapsing
-        # For accurate pagination with filters, we need to:
-        # 1. Load all channels (or use a larger batch)
-        # 2. Apply filters
-        # 3. Then paginate
-        # This is necessary because filters can't be applied at SQL level efficiently
-        all_channels = base_query.all()
-        filtered_channels = ChannelQueryService.channels_for_account_candidates(
-            account_id, all_channels
+        channels, total = ChannelQueryService.preview_channels_for_account(
+            account_id,
+            category=category_filter,
+            search=search_term,
+            filter_tags=filter_tags,
+            limit=limit,
+            offset=offset,
         )
-
-        # Get total count AFTER filtering
-        total = len(filtered_channels)
-
-        # Apply pagination to filtered results
-        channels = filtered_channels[offset : offset + limit]
 
         tags_map = ChannelQueryService.load_tags_for_account_channels(account_id, channels)
 

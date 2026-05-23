@@ -48,21 +48,16 @@ async function editRule(ruleId) {
 function updateRuleFormVisibility() {
     const matchType = document.getElementById('rule-match-type').value;
     const action = document.getElementById('rule-action').value;
-    
-    const confidenceGroup = document.getElementById('confidence-group');
-    confidenceGroup.style.display = matchType === 'fuzzy_name' ? 'block' : 'none';
-    
-    const fallbackGroup = document.getElementById('fallback-group');
-    fallbackGroup.style.display = action === 'use_fallback' ? 'block' : 'none';
+    const visibility = getRuleFormFieldVisibility(matchType, action);
+
+    document.getElementById('confidence-group').style.display = visibility.confidenceGroup ? 'block' : 'none';
+    document.getElementById('fallback-group').style.display = visibility.fallbackGroup ? 'block' : 'none';
 }
 
 async function saveRule() {
     const id = document.getElementById('rule-id').value;
-    const countryCodes = document.getElementById('rule-country-codes').value
-        .split(',')
-        .map(s => s.trim().toUpperCase())
-        .filter(s => s.length > 0);
-    
+    const countryCodes = parseCountryCodes(document.getElementById('rule-country-codes').value);
+
     const data = {
         ruleset_id: parseInt(document.getElementById('rule-ruleset-id').value),
         name: document.getElementById('rule-name').value,
@@ -75,7 +70,7 @@ async function saveRule() {
         fallback_epg_id: document.getElementById('rule-fallback-epg-id').value || null,
         category_pattern: document.getElementById('rule-category-pattern').value || null,
         category_exclude_pattern: document.getElementById('rule-category-exclude-pattern').value || null,
-        country_codes: countryCodes.length > 0 ? countryCodes : null,
+        country_codes: countryCodes,
         time_offset_hours: parseInt(document.getElementById('rule-time-offset').value) || 0,
         priority: parseInt(document.getElementById('rule-priority').value),
         enabled: document.getElementById('rule-enabled').checked,
@@ -125,13 +120,12 @@ async function previewRulePattern() {
     const categoryExcludePattern = document.getElementById('rule-category-exclude-pattern').value;
     const accountId = document.getElementById('rule-account-filter').value;
     
-    const patternBasedTypes = ['regex', 'exact_name', 'fuzzy_name', 'category_pattern'];
-    const needsPattern = patternBasedTypes.includes(matchType);
-    
-    if (needsPattern && !pattern && !categoryPattern) {
+    const previewError = validateRulePreviewInput(matchType, pattern, categoryPattern);
+
+    if (previewError) {
         document.getElementById('rule-preview-results').style.display = 'block';
         document.getElementById('rule-preview-error').style.display = 'block';
-        document.getElementById('rule-preview-error').textContent = 'Please enter a pattern or category filter to preview';
+        document.getElementById('rule-preview-error').textContent = previewError;
         document.getElementById('rule-preview-content').style.display = 'none';
         return;
     }

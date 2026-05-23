@@ -709,8 +709,8 @@ def preview_channel_name_mapping():
                     if re.search(old_name, name, flags):
                         matched = True
                         transformed = re.sub(old_name, new_name, name, flags=flags)
-                except re.error:
-                    pass
+                except re.error as e:
+                    logger.debug("Invalid regex in name mapping preview for pattern %r: %s", old_name, e)
 
             if matched:
                 matches.append(
@@ -1017,8 +1017,8 @@ def preview_rule_pattern():
                     try:
                         if re.search(pattern, source_value, re.IGNORECASE):
                             filtered.append((channel, category_name))
-                    except re.error:
-                        pass
+                    except re.error as e:
+                        logger.debug("Invalid regex in rule preview for pattern %r: %s", pattern, e)
                 elif match_type == "exact_name":
                     # Normalize and compare
                     normalized = re.sub(r"[^a-z0-9]", "", source_value.lower())

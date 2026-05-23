@@ -54,7 +54,7 @@
                     </div>
                     <div class="card-body">
                         <p class="text-muted small mb-3">
-                            Manage EPG (Electronic Program Guide) sources including provider EPG, Schedules Direct, and XMLTV grabbers.
+                            Manage EPG (Electronic Program Guide) sources. Prefer Schedules Direct or XMLTV grabbers for reliable program data; provider EPG is legacy.
                         </p>
                         
                         <!-- Coverage Summary -->
@@ -88,10 +88,10 @@
                 <div class="alert alert-info">
                     <h6><i class="bi bi-info-circle"></i> EPG Source Types</h6>
                     <ul class="mb-0">
-                        <li><strong>Provider:</strong> Use EPG data from your IPTV provider</li>
-                        <li><strong>Schedules Direct:</strong> Premium TV listings service (US/Canada)</li>
-                        <li><strong>XMLTV Grabber:</strong> Use local XMLTV grabber scripts</li>
-                        <li><strong>XMLTV URL/File:</strong> Import EPG from external XMLTV source</li>
+                        <li><strong>Schedules Direct:</strong> Recommended for US/Canada — premium TV listings synced to the database</li>
+                        <li><strong>XMLTV Grabber:</strong> Recommended for local or custom XMLTV grabber scripts</li>
+                        <li><strong>XMLTV URL/File:</strong> Import EPG from an external XMLTV feed</li>
+                        <li><strong>Provider (legacy):</strong> Passthrough from your IPTV provider — lower quality; migrate to SD or XMLTV when possible</li>
                         <li><strong>PPV Events:</strong> Auto-managed source synced during PPV channel enrichment (read-only)</li>
                     </ul>
                 </div>
@@ -393,12 +393,19 @@
                         <label for="sourceType" class="form-label">Source Type</label>
                         <select class="form-select" id="sourceType" required onchange="onSourceTypeChange()">
                             <option value="">Select type...</option>
-                            <option value="provider">IPTV Provider</option>
-                            <option value="xmltv_url">XMLTV URL</option>
                             <option value="schedules_direct">Schedules Direct</option>
                             <option value="xmltv_grabber">XMLTV Grabber</option>
+                            <option value="xmltv_url">XMLTV URL</option>
+                            <option value="provider">IPTV Provider (legacy)</option>
                             <option value="ppv_events">PPV Events</option>
                         </select>
+                    </div>
+
+                    <div id="providerDeprecationWarning" class="alert alert-warning" style="display: none;">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>Legacy source type.</strong> Provider EPG is a passthrough from your IPTV provider and is deprecated.
+                        Prefer Schedules Direct or an XMLTV grabber for better coverage and database-first generation.
+                        See the <a href="https://github.com/klopstack/iptv-proxy-v2/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noopener">architecture docs</a> for the migration path.
                     </div>
                     
                     <!-- Provider-specific fields -->
@@ -1084,6 +1091,49 @@
 
 <!-- EPG Management Scripts -->
 <script src="{{ url_for('static', filename='js/mpegts.min.js') }}"></script>
+<script type="module">
+import {
+    formatLocalDate,
+    formatLocalDateTime,
+    formatLocalTime,
+    formatProgramTimeRange,
+    formatRelativeTime,
+    parseUTCDateTime,
+} from "{{ url_for('static', filename='js/lib/epg_datetime.js') }}";
+import {
+    getSourceTypeFieldVisibility,
+    isLegacyProviderSource,
+    shouldShowProviderDeprecationWarning,
+} from "{{ url_for('static', filename='js/lib/epg_sources_helpers.js') }}";
+import {
+    getRuleFormFieldVisibility,
+    normalizeNameMappingKey,
+    parseCountryCodes,
+    ruleNeedsPattern,
+    sortByPriority,
+    validateNameMappingPreviewInput,
+    validateRulePreviewInput,
+} from "{{ url_for('static', filename='js/lib/match_rules_helpers.js') }}";
+
+Object.assign(window, {
+    parseUTCDateTime,
+    formatLocalTime,
+    formatLocalDate,
+    formatLocalDateTime,
+    formatProgramTimeRange,
+    formatRelativeTime,
+    getSourceTypeFieldVisibility,
+    isLegacyProviderSource,
+    shouldShowProviderDeprecationWarning,
+    getRuleFormFieldVisibility,
+    normalizeNameMappingKey,
+    parseCountryCodes,
+    ruleNeedsPattern,
+    sortByPriority,
+    validateNameMappingPreviewInput,
+    validateRulePreviewInput,
+});
+</script>
 <script src="{{ url_for('static', filename='js/epg_common.js') }}"></script>
 <script src="{{ url_for('static', filename='js/epg_sources.js') }}"></script>
 <script src="{{ url_for('static', filename='js/epg_channels.js') }}"></script>

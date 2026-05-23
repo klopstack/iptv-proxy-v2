@@ -49,7 +49,7 @@ class TestEpgSourceSync:
         assert "url" in response.json["error"].lower()
 
     @patch("services.iptv_service.IPTVService.get_xmltv")
-    @patch("services.epg_sync_service.EpgService.sync_epg_source")
+    @patch("services.epg.parsing.sync_epg_source")
     def test_sync_provider_source_success(self, mock_sync, mock_get_xmltv, app, client, test_epg_source, test_account):
         """Test successful provider source sync"""
         mock_get_xmltv.return_value = b"<tv></tv>"
@@ -60,7 +60,7 @@ class TestEpgSourceSync:
         assert response.json["success"] is True
 
     @patch("requests.get")
-    @patch("services.epg_sync_service.EpgService.sync_epg_source")
+    @patch("services.epg.parsing.sync_epg_source")
     def test_sync_xmltv_url_success(self, mock_sync, mock_requests, app, client):
         """Test successful XMLTV URL source sync"""
         # Create XMLTV URL source

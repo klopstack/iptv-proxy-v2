@@ -155,7 +155,8 @@ def is_cache_valid(source_id: int, max_age_hours: int = 24) -> bool:
         cached_at = datetime.fromisoformat(info["cached_at"])
         age = datetime.now(timezone.utc) - cached_at
         return age.total_seconds() < (max_age_hours * 3600)
-    except Exception:
+    except (ValueError, TypeError, OSError) as e:
+        logger.warning("Invalid cache metadata for source %s: %s", source_id, e)
         return False
 
 

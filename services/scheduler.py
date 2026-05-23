@@ -11,7 +11,7 @@ from typing import Optional
 import requests
 
 from models import Account, EpgSource, SyncMetadata
-from services.epg import EpgService
+from services.epg.parsing import sync_epg_source
 from services.epg.utils import normalize_xmltv_url
 from services.iptv_service import IPTVService
 from services.sync_service import ChannelSyncService
@@ -260,8 +260,12 @@ class SyncScheduler:
 
                     with self.app.app_context():
                         db.session.rollback()
-                except Exception:
-                    pass
+                except Exception as rollback_error:
+                    # Rollback is best-effort after a scheduler failure; log and continue the loop.
+                    logger.warning(
+                        "Failed to rollback database session after scheduler error: %s",
+                        rollback_error,
+                    )
 
             # Update heartbeat to show we're alive
             try:
@@ -514,7 +518,7 @@ class SyncScheduler:
                 )
 
             xml_content = service.get_xmltv()
-            stats = EpgService.sync_epg_source(source, xml_content)
+            stats = sync_epg_source(source, xml_content)
 
         elif source.source_type == "xmltv_url":
             if not source.url:
@@ -530,7 +534,7 @@ class SyncScheduler:
             response = requests.get(url, timeout=600)
             response.raise_for_status()
             xml_content = response.content
-            stats = EpgService.sync_epg_source(source, xml_content)
+            stats = sync_epg_source(source, xml_content)
 
         elif source.source_type == "schedules_direct":
             # Schedules Direct - sync programs directly from SD API

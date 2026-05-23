@@ -195,8 +195,6 @@ is_ppv_channel
 is_ppv_category
 is_ppv_placeholder_name
 get_ppv_event_title
-generate_ppv_epg_entries
-get_ppv_epg_xmltv
 PPV_PLACEHOLDER_PATTERNS
 event  # xml iteration variable
 

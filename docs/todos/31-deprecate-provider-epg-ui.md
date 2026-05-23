@@ -1,7 +1,7 @@
 # TODO 31: Deprecate Provider EPG in UI and Docs
 
 **Priority:** P2  
-**Status:** ⬜ Not started  
+**Status:** ✅ Complete  
 **Estimated scope:** Medium (product + UI)
 
 ---
@@ -105,10 +105,10 @@ Add `"deprecated": true` on provider source objects in list API (optional) for U
 
 ## Acceptance criteria
 
-- [ ] New users see clear guidance: SD/XMLTV/grabber preferred over provider
-- [ ] Provider option either hidden, warned, or documented as legacy per chosen option
-- [ ] Existing provider sources continue to work (no breaking change unless Option C)
-- [ ] ARCHITECTURE and UI copy consistent
+- [x] New users see clear guidance: SD/XMLTV/grabber preferred over provider
+- [x] Provider option either hidden, warned, or documented as legacy per chosen option
+- [x] Existing provider sources continue to work (no breaking change unless Option C)
+- [x] ARCHITECTURE and UI copy consistent
 
 ---
 
@@ -132,6 +132,6 @@ venv/bin/pytest tests/ -k "EpgSource" -v --no-cov
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | Record chosen option A/B/C |
+| Notes | **Option B (Warn)** — provider kept in dropdown with deprecation banner, Legacy badge in source list, `deprecated: true` in API; docs aligned |

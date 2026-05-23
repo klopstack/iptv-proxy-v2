@@ -200,8 +200,14 @@ def sync_epg_source(source: EpgSource, xml_content: bytes) -> Dict[str, int]:
                                         prog_stats["first_time"] = t
                                     if prog_stats["last_time"] is None or t > prog_stats["last_time"]:
                                         prog_stats["last_time"] = t
-                            except Exception:
-                                pass
+                            except (TypeError, ValueError) as e:
+                                logger.debug(
+                                    "Skipping invalid programme %s time %r for channel %s: %s",
+                                    time_field,
+                                    time_str,
+                                    channel_id,
+                                    e,
+                                )
 
     except ValueError as e:
         source.last_sync = datetime.now(timezone.utc).replace(tzinfo=None)

@@ -162,10 +162,12 @@ async function previewNameMapping() {
     const caseSensitive = document.getElementById('name-mapping-case-sensitive').checked;
     const accountId = document.getElementById('name-mapping-account-filter').value;
     
-    if (!oldName) {
+    const previewError = validateNameMappingPreviewInput(oldName);
+
+    if (previewError) {
         document.getElementById('name-mapping-preview-results').style.display = 'block';
         document.getElementById('name-mapping-preview-error').style.display = 'block';
-        document.getElementById('name-mapping-preview-error').textContent = 'Please enter an old name pattern to preview';
+        document.getElementById('name-mapping-preview-error').textContent = previewError;
         document.getElementById('name-mapping-preview-content').style.display = 'none';
         return;
     }

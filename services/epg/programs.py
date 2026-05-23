@@ -920,8 +920,8 @@ def epg_channel_to_xmltv_element(
                 if name and name != display_name_elem.text:
                     extra_name = ET.SubElement(channel_elem, "display-name")
                     extra_name.text = name
-        except (json.JSONDecodeError, TypeError):
-            pass
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.debug("Invalid display_names_json for EPG channel %s: %s", epg_channel.id, e)
 
     # Icon
     if epg_channel.icon_url:

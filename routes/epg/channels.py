@@ -8,7 +8,8 @@ from flask import Blueprint, jsonify, make_response, request
 from error_handling import handle_errors
 from models import Account, Channel, ChannelEpgMapping, EpgChannel, EpgSource, Event, EventChannelLink, db
 from services.epg.match_rules import EpgMatchRulesService
-from services.epg import EpgService
+from services.epg.matching_legacy import create_provider_epg_source
+from services.epg.parsing import sync_epg_source
 from services.channel_query_service import ChannelQueryService
 from services.iptv_service import IPTVService
 
@@ -673,7 +674,7 @@ def create_account_epg_source(account_id):
     """Create or get an EPG source for a provider account, then sync it"""
     Account.query.get_or_404(account_id)
 
-    source = EpgService.create_provider_epg_source(account_id)
+    source = create_provider_epg_source(account_id)
 
     # Optionally sync immediately
     if request.args.get("sync", "false").lower() == "true":
@@ -687,7 +688,7 @@ def create_account_epg_source(account_id):
             )
 
         xml_content = service.get_xmltv()
-        stats = EpgService.sync_epg_source(source, xml_content)
+        stats = sync_epg_source(source, xml_content)
 
         return jsonify(
             {

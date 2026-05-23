@@ -517,6 +517,100 @@ class ChannelQueryService:
         return ChannelQueryService._exclude_health_auto_disabled(filtered)
 
     @staticmethod
+    def build_preview_channel_query(
+        *,
+        account_id: Optional[int] = None,
+        category: str = "",
+        search: str = "",
+        filter_tags: Optional[List[str]] = None,
+    ):
+        """Build the shared SQLAlchemy query used by preview endpoints."""
+        query = (
+            db.session.query(Channel)
+            .join(Category, Channel.category_id == Category.id, isouter=True)
+            .filter(Channel.is_active)
+        )
+
+        if account_id is not None:
+            query = query.filter(Channel.account_id == account_id)
+
+        if category:
+            query = query.filter(
+                db.or_(Category.category_name == category, Category.cleaned_name == category)
+            )
+
+        if search:
+            search_pattern = f"%{search}%"
+            query = query.filter(
+                db.or_(Channel.name.ilike(search_pattern), Channel.cleaned_name.ilike(search_pattern))
+            )
+
+        if filter_tags:
+            tag_subquery = (
+                db.session.query(ChannelTag.stream_id)
+                .join(Tag, ChannelTag.tag_id == Tag.id)
+                .filter(Tag.name.in_(filter_tags))
+            )
+            if account_id is not None:
+                tag_subquery = tag_subquery.filter(ChannelTag.account_id == account_id)
+            tag_subquery = tag_subquery.distinct()
+            query = query.filter(Channel.stream_id.in_(tag_subquery))
+
+        return query.order_by(Channel.name)
+
+    @staticmethod
+    def preview_channels_for_account(
+        account_id: int,
+        *,
+        category: str = "",
+        search: str = "",
+        filter_tags: Optional[List[str]] = None,
+        limit: int = 50,
+        offset: int = 0,
+        collapse_duplicates: bool = False,
+    ) -> Tuple[List[Channel], int]:
+        """Return paginated preview channels for one account."""
+        query = ChannelQueryService.build_preview_channel_query(
+            account_id=account_id,
+            category=category,
+            search=search,
+            filter_tags=filter_tags,
+        )
+
+        if collapse_duplicates:
+            all_channels = query.all()
+            all_channels = ChannelQueryService.channels_for_account_candidates(account_id, all_channels)
+            all_channels.sort(key=lambda ch: ch.name or "")
+            total = len(all_channels)
+            return all_channels[offset : offset + limit], total
+
+        all_channels = query.all()
+        filtered = ChannelQueryService.channels_for_account_candidates(account_id, all_channels)
+        total = len(filtered)
+        return filtered[offset : offset + limit], total
+
+    @staticmethod
+    def preview_channels_for_scope(
+        *,
+        account_id: Optional[int] = None,
+        category: str = "",
+        filter_tags: Optional[List[str]] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Tuple[List[Channel], int]:
+        """Return paginated preview channels for one or all accounts."""
+        query = ChannelQueryService.build_preview_channel_query(
+            account_id=account_id,
+            category=category,
+            filter_tags=filter_tags,
+        )
+        all_channels = query.all()
+        filtered_channels = ChannelQueryService.channels_for_multi_account_candidates(all_channels)
+        filtered_channels.sort(key=lambda ch: ch.name or "")
+        total = len(filtered_channels)
+        return filtered_channels[offset : offset + limit], total
+
+    @staticmethod
     def visible_channel_set_for_account(account_id: int) -> Set[Tuple[int, str]]:
         """(account_id, stream_id) keys for channels visible in playlist output."""
         channels = ChannelQueryService.channels_for_account(account_id)

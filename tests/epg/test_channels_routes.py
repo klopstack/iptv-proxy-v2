@@ -94,7 +94,7 @@ class TestAccountEpgSource:
         response = client.post("/api/accounts/999/epg-source")
         assert response.status_code == 404
 
-    @patch("routes.epg.channels.EpgService.create_provider_epg_source")
+    @patch("routes.epg.channels.create_provider_epg_source")
     def test_create_account_epg_source_success(self, mock_create, app, client, test_account):
         """Test successful account EPG source creation"""
         mock_source = MagicMock()
@@ -107,8 +107,8 @@ class TestAccountEpgSource:
         assert response.json["source_id"] == 1
 
     @patch("routes.epg.channels.IPTVService")
-    @patch("routes.epg.channels.EpgService.sync_epg_source")
-    @patch("routes.epg.channels.EpgService.create_provider_epg_source")
+    @patch("routes.epg.channels.sync_epg_source")
+    @patch("routes.epg.channels.create_provider_epg_source")
     def test_create_account_epg_source_with_sync(
         self, mock_create, mock_sync, MockIPTVService, app, client, test_account
     ):
