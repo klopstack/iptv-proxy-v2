@@ -12,6 +12,7 @@ from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Setti
 from schemas import PlaylistConfigCreateSchema, validate_request_data
 from services.channel_query_service import ChannelQueryService
 from services.image_cache_service import ImageCacheService
+from services.playlist_format_service import render_account_m3u_playlist, render_config_m3u_playlist
 from services.url_service import get_proxy_base_url as _proxy_base_url
 
 logger = logging.getLogger(__name__)
@@ -28,32 +29,6 @@ def slugify(text):
     text = re.sub(r"[\s_]+", "-", text)  # Replace spaces/underscores with hyphens
     text = re.sub(r"-+", "-", text)  # Collapse multiple hyphens
     return text.strip("-")
-
-
-def sanitize_m3u_value(text: str) -> str:
-    """
-    Sanitize a string for use in M3U playlist fields.
-
-    M3U format requires single-line values. This function:
-    - Replaces newlines and carriage returns with spaces
-    - Removes other control characters
-    - Strips excess whitespace
-
-    Args:
-        text: The string to sanitize
-
-    Returns:
-        A single-line sanitized string safe for M3U use
-    """
-    if not text:
-        return text
-    # Replace newlines/carriage returns with spaces
-    text = re.sub(r"[\r\n]+", " ", text)
-    # Remove other control characters (ASCII 0-31 except space)
-    text = re.sub(r"[\x00-\x1f]", "", text)
-    # Collapse multiple spaces
-    text = re.sub(r"  +", " ", text)
-    return text.strip()
 
 
 def get_proxy_base_url():
@@ -294,9 +269,6 @@ def generate_playlist(account_id):
     # Get proxy base URL (uses custom proxy hostname if configured)
     proxy_base = get_proxy_base_url()
 
-    # Initialize image cache if proxying icons
-    image_cache = ImageCacheService.get_instance() if proxy_icons else None
-
     channels = ChannelQueryService.channels_for_account(
         account_id,
         apply_filters=True,
@@ -309,51 +281,21 @@ def generate_playlist(account_id):
         collapse_duplicates,
     )
 
-    # Get primary credential for direct URL mode
     primary_cred = account.get_primary_credential() if not use_proxy else None
 
-    # Generate M3U
-    m3u_lines = ["#EXTM3U"]
-    for channel in channels:
-        # Use cleaned name (pre-computed during sync)
-        display_name = sanitize_m3u_value(channel.cleaned_name or channel.name)
-        category_name = sanitize_m3u_value(
-            channel.category.cleaned_name or channel.category.category_name if channel.category else "Unknown"
-        )
-
-        tvg_id = ChannelQueryService.epg_channel_id_for_channel(channel)
-
-        original_icon = channel.stream_icon or ""
-
-        # Proxy icon URL if enabled
-        if proxy_icons and image_cache and original_icon:
-            tvg_logo = image_cache.get_proxy_url(original_icon, proxy_base)
-        else:
-            tvg_logo = original_icon
-
-        extinf = f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{display_name}" tvg-logo="{tvg_logo}" group-title="{category_name}",{display_name}'
-
-        if use_proxy:
-            # Use proxy URL for multiplexed streaming
-            stream_url = f"{proxy_base}/stream/{account_id}/{channel.stream_id}.ts"
-        else:
-            # Direct URL to IPTV provider
-            cred = primary_cred
-            if cred:
-                stream_url = f"https://{account.server}/live/{cred.username}/{cred.password}/{channel.stream_id}.ts"
-            else:
-                # Fallback for legacy accounts without credentials
-                stream_url = (
-                    f"https://{account.server}/live/{account.username}/{account.password}/{channel.stream_id}.ts"
-                )
-
-        m3u_lines.append(extinf)
-        m3u_lines.append(stream_url)
+    body = render_account_m3u_playlist(
+        channels,
+        account=account,
+        proxy_base=proxy_base,
+        use_proxy=use_proxy,
+        proxy_icons=proxy_icons,
+        primary_cred=primary_cred,
+    )
 
     logger.info(
         f"Generated playlist for account {account_id}: {len(channels)} channels (proxied={use_proxy}, collapsed={collapse_duplicates})"
     )
-    return Response("\n".join(m3u_lines), mimetype="application/x-mpegurl")
+    return Response(body, mimetype="application/x-mpegurl")
 
 
 # Keep old ID-based route for backward compatibility
@@ -417,9 +359,6 @@ def _generate_playlist_from_config(config):
     # Get proxy base URL (uses custom proxy hostname if configured)
     proxy_base = get_proxy_base_url()
 
-    # Initialize image cache if proxying icons
-    image_cache = ImageCacheService.get_instance() if proxy_icons else None
-
     include_accounts = json.loads(config.include_accounts) if config.include_accounts else []
     exclude_accounts = json.loads(config.exclude_accounts) if config.exclude_accounts else []
 
@@ -451,56 +390,20 @@ def _generate_playlist_from_config(config):
         collapse_duplicates,
     )
 
-    # Generate M3U
-    m3u_lines = ["#EXTM3U"]
-    m3u_lines.append(f"# Playlist: {config.name}")
-    if config.description:
-        m3u_lines.append(f"# {config.description}")
-
-    total_channels = 0
-
-    for data in all_channel_data:
-        channel = data["channel"]
-        account_data = data["account_data"]
-
-        # Use cleaned name (pre-computed during sync/tag processing)
-        display_name = sanitize_m3u_value(channel.cleaned_name or channel.name)
-        category_name = sanitize_m3u_value(
-            channel.category.cleaned_name or channel.category.category_name if channel.category else "Unknown"
-        )
-
-        tvg_id = ChannelQueryService.epg_channel_id_for_channel(channel)
-        original_icon = channel.stream_icon or ""
-
-        # Proxy icon URL if enabled
-        if proxy_icons and image_cache and original_icon:
-            tvg_logo = image_cache.get_proxy_url(original_icon, proxy_base)
-        else:
-            tvg_logo = original_icon
-
-        # Add account name to group title for multi-account playlists
-        if len(accounts) > 1:
-            group_title = sanitize_m3u_value(f"{category_name} ({account_data['name']})")
-        else:
-            group_title = category_name
-
-        extinf = f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{display_name}" tvg-logo="{tvg_logo}" group-title="{group_title}",{display_name}'
-
-        if use_proxy:
-            # Use proxy URL for multiplexed streaming
-            stream_url = f"{proxy_base}/stream/{channel.account_id}/{channel.stream_id}.ts"
-        else:
-            # Direct URL to IPTV provider
-            stream_url = f"https://{account_data['server']}/live/{account_data['primary_username']}/{account_data['primary_password']}/{channel.stream_id}.ts"
-
-        m3u_lines.append(extinf)
-        m3u_lines.append(stream_url)
-        total_channels += 1
+    body = render_config_m3u_playlist(
+        all_channel_data,
+        config_name=config.name,
+        config_description=config.description,
+        multi_account=len(accounts) > 1,
+        proxy_base=proxy_base,
+        use_proxy=use_proxy,
+        proxy_icons=proxy_icons,
+    )
 
     logger.info(
-        f"Generated playlist from config {config.id} ({config.name}): {total_channels} channels from {len(accounts)} accounts (proxied={use_proxy}, collapsed={collapse_duplicates})"
+        f"Generated playlist from config {config.id} ({config.name}): {len(all_channel_data)} channels from {len(accounts)} accounts (proxied={use_proxy}, collapsed={collapse_duplicates})"
     )
-    return Response("\n".join(m3u_lines), mimetype="application/x-mpegurl")
+    return Response(body, mimetype="application/x-mpegurl")
 
 
 @playlists_bp.route("/epg/<int:account_id>.xml")

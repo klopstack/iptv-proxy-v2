@@ -17,6 +17,7 @@ import pytest
 
 from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Tag, db
 from services.channel_query_service import ChannelQueryService
+from services.playlist_format_service import sanitize_m3u_value
 
 
 @pytest.fixture
@@ -249,7 +250,7 @@ class TestPlaylistGeneration:
 
     def test_generate_playlist_proxy_icons(self, app, client, test_account1):
         """Test playlist generation with icon proxying"""
-        with patch("routes.playlists.ImageCacheService") as mock_image_cache:
+        with patch("services.playlist_format_service.ImageCacheService") as mock_image_cache:
             mock_instance = MagicMock()
             mock_instance.get_proxy_url.return_value = "http://localhost:8000/icons/cached_icon.png"
             mock_image_cache.get_instance.return_value = mock_instance
@@ -559,6 +560,12 @@ class TestEPGGeneration:
 
 class TestChannelMetadata:
     """Test channel metadata in M3U output"""
+
+    def test_sanitize_m3u_value_strips_control_characters(self):
+        """Unit test for shared M3U value sanitization."""
+        assert sanitize_m3u_value("Line1\nLine2\r\nLine3") == "Line1 Line2 Line3"
+        assert sanitize_m3u_value("  spaced  out  ") == "spaced out"
+        assert sanitize_m3u_value("") == ""
 
     def test_tvg_id_format(self, app, client, test_account1):
         """Test that TVG IDs use standardized format"""

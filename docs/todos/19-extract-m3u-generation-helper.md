@@ -1,7 +1,7 @@
 # TODO 19: Extract Shared M3U Generation Helper
 
 **Priority:** P2  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Medium (1 helper module + 2 route functions)
 
 ---
@@ -81,10 +81,10 @@ Keep account-specific direct-URL credential lookup in the account route; pass re
 
 ## Acceptance criteria
 
-- [ ] Single implementation of EXTINF + stream URL formatting
-- [ ] Account M3U output byte-identical for existing test fixtures (proxy on/off, icons on/off)
-- [ ] Config M3U output unchanged for multi-account and collapse scenarios
-- [ ] `sanitize_m3u_value` usage centralized in helper
+- [x] Single implementation of EXTINF + stream URL formatting
+- [x] Account M3U output byte-identical for existing test fixtures (proxy on/off, icons on/off)
+- [x] Config M3U output unchanged for multi-account and collapse scenarios
+- [x] `sanitize_m3u_value` usage centralized in helper
 
 ---
 
@@ -94,12 +94,14 @@ Keep account-specific direct-URL credential lookup in the account route; pass re
 venv/bin/pytest tests/test_playlist_generation.py tests/test_playlists_routes.py tests/test_collapse_duplicates.py -v --no-cov
 ```
 
+All 76 tests pass.
+
 ---
 
 ## Completion
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Added `services/playlist_format_service.py` with `render_account_m3u_playlist`, `render_config_m3u_playlist`, and `sanitize_m3u_value`. Route handlers delegate after CQS channel resolution. |
