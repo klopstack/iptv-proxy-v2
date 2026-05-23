@@ -1,7 +1,7 @@
 # TODO 20: Align Admin “Visible Channel” Semantics With Playlist Output
 
 **Priority:** P2  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Medium (audit + targeted route updates)
 
 ---
@@ -91,10 +91,10 @@ Templates/JS that show “visible channels” should clarify when PPV-hidden cha
 
 ## Acceptance criteria
 
-- [ ] Each affected endpoint has an explicit docstring stating which visibility semantics it uses
-- [ ] No endpoint silently uses filter-only counts where UI implies playlist parity
-- [ ] If aligned: PPV hide_all reduces category visible counts same as M3U
-- [ ] If documented: UI distinguishes admin vs playlist-visible counts
+- [x] Each affected endpoint has an explicit docstring stating which visibility semantics it uses
+- [x] No endpoint silently uses filter-only counts where UI implies playlist parity
+- [x] If aligned: PPV hide_all reduces category visible counts same as M3U
+- [ ] If documented: UI distinguishes admin vs playlist-visible counts (N/A — chose Option A)
 
 ---
 
@@ -119,6 +119,6 @@ Add tests for PPV hide_all account: stats/categories count excludes PPV **if Opt
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | Requires product decision: admin sees all synced vs playlist-visible |
+| Notes | Option A: aligned categories, account stats, EPG mappings (when `show_filtered=false`), and channel-health categories with `ChannelQueryService` playlist-visible semantics. `show_filtered=true` on EPG endpoints still returns all synced channels for admin mapping. |

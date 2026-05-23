@@ -158,9 +158,10 @@ class TestStatsAPI:
     """Test for Issue 24: Dashboard statistics"""
 
     def test_stats_include_visibility_counts(self, client, sample_account):
-        """Ensure stats API returns visible/hidden channel counts"""
+        """Stats visible/hidden counts follow playlist-visible semantics (filters + PPV)."""
         from models import db
 
+        sample_account.ppv_visibility = "hide_all"
         category = Category(
             account_id=sample_account.id,
             category_id=1,
@@ -168,17 +169,28 @@ class TestStatsAPI:
         )
         db.session.add(category)
 
-        # Create 5 visible and 3 hidden channels
-        for i in range(8):
-            channel = Channel(
-                account_id=sample_account.id,
-                stream_id=i,
-                name=f"Channel {i}",
-                category_id=category.id,
-                is_active=True,
-                is_visible=(i < 5),  # First 5 are visible
+        for i in range(5):
+            db.session.add(
+                Channel(
+                    account_id=sample_account.id,
+                    stream_id=f"reg{i}",
+                    name=f"Channel {i}",
+                    category_id=category.id,
+                    is_active=True,
+                    is_ppv=False,
+                )
             )
-            db.session.add(channel)
+        for i in range(3):
+            db.session.add(
+                Channel(
+                    account_id=sample_account.id,
+                    stream_id=f"ppv{i}",
+                    name=f"PPV {i}",
+                    category_id=category.id,
+                    is_active=True,
+                    is_ppv=True,
+                )
+            )
         db.session.commit()
 
         response = client.get(f"/api/accounts/{sample_account.id}/stats")

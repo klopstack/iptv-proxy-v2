@@ -117,7 +117,10 @@ def sync_fcc_data():
 @api_bp.route("/api/categories", methods=["GET"])
 @handle_errors(return_json=True, default_message="Error fetching categories")
 def get_all_categories():
-    """Get all categories across all accounts with channel counts
+    """Get all categories across all accounts with channel counts.
+
+    visible_count / hidden_count use playlist-visible semantics (account filters
+    plus PPV visibility), matching M3U/EPG/Xtream output.
 
     Query parameters:
     - account_id (optional): Filter to specific account
@@ -125,8 +128,6 @@ def get_all_categories():
     - include_epg (optional): Include EPG coverage stats (default: false)
     - include_ppv (optional): Include PPV categories (default: true)
     """
-    from services.filter_service import FilterService
-
     account_id = request.args.get("account_id", type=int)
     include_empty = request.args.get("include_empty", "false").lower() == "true"
     include_epg = request.args.get("include_epg", "false").lower() == "true"
@@ -149,23 +150,17 @@ def get_all_categories():
         channel_query = channel_query.filter(Channel.account_id == account_id)
     all_channels = channel_query.all()
 
-    # Apply filters dynamically using FilterService
     if account_id:
-        filtered_channels = FilterService.apply_filters_to_channels(all_channels, account_id)
+        playlist_visible_keys = ChannelQueryService.visible_channel_set_for_account(account_id)
     else:
-        # For multi-account view, apply filters per account
-        filtered_channels = []
-        channels_by_account = {}
-        for ch in all_channels:
-            if ch.account_id not in channels_by_account:
-                channels_by_account[ch.account_id] = []
-            channels_by_account[ch.account_id].append(ch)
-
-        for acc_id, channels in channels_by_account.items():
-            filtered_channels.extend(FilterService.apply_filters_to_channels(channels, acc_id))
+        account_ids = list({ch.account_id for ch in all_channels})
+        visible_by_account = ChannelQueryService.visible_channel_sets_by_account(account_ids)
+        playlist_visible_keys = set()
+        for keys in visible_by_account.values():
+            playlist_visible_keys.update(keys)
 
     # Build channel counts per category
-    filtered_stream_ids = set((ch.account_id, ch.stream_id) for ch in filtered_channels)
+    filtered_stream_ids = playlist_visible_keys
     category_visible_counts = {}
     category_total_counts = {}
     category_epg_counts = {}
@@ -176,8 +171,8 @@ def get_all_categories():
             # Count total channels
             category_total_counts[cat_id] = category_total_counts.get(cat_id, 0) + 1
 
-            # Count filtered (visible) channels
-            if (ch.account_id, ch.stream_id) in filtered_stream_ids:
+            # Count playlist-visible channels
+            if (ch.account_id, str(ch.stream_id)) in filtered_stream_ids:
                 category_visible_counts[cat_id] = category_visible_counts.get(cat_id, 0) + 1
 
             # Count channels with EPG IDs

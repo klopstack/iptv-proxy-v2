@@ -342,6 +342,62 @@ class TestChannelHealthRoutes:
         )
         assert response.status_code == 400
 
+    def test_health_categories_exclude_ppv_only_category(self, app, client):
+        """Category filter lists only categories with playlist-visible channels."""
+        with app.app_context():
+            account = Account(
+                name="PPV Health",
+                server="test.server.com",
+                enabled=True,
+                ppv_visibility="hide_all",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            ppv_cat = Category(
+                account_id=account.id,
+                category_id="ppv",
+                category_name="PPV Only",
+            )
+            reg_cat = Category(
+                account_id=account.id,
+                category_id="reg",
+                category_name="Regular",
+            )
+            db.session.add_all([ppv_cat, reg_cat])
+            db.session.flush()
+
+            db.session.add_all(
+                [
+                    Channel(
+                        account_id=account.id,
+                        stream_id="ppv1",
+                        name="UFC",
+                        category_id=ppv_cat.id,
+                        is_active=True,
+                        is_ppv=True,
+                    ),
+                    Channel(
+                        account_id=account.id,
+                        stream_id="reg1",
+                        name="News",
+                        category_id=reg_cat.id,
+                        is_active=True,
+                        is_ppv=False,
+                    ),
+                ]
+            )
+            db.session.commit()
+            account_id = account.id
+            reg_cat_id = reg_cat.id
+
+        response = client.get(f"/api/channel-health/categories?account_id={account_id}")
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        cat_ids = {c["id"] for c in data["categories"]}
+        assert reg_cat_id in cat_ids
+        assert len(cat_ids) == 1
+
 
 class TestChannelHealthService:
     """Test channel health service."""

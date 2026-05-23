@@ -395,6 +395,59 @@ class TestCategoriesAPI:
         response = client.get("/api/categories?include_epg=true")
         assert response.status_code == 200
 
+    def test_categories_visible_count_excludes_ppv_hide_all(self, app, client):
+        """Category visible_count uses playlist-visible semantics."""
+        with app.app_context():
+            account = Account(
+                name="PPV Categories",
+                username="ppv_user",
+                password="ppv_pass",
+                server="example.com",
+                enabled=True,
+                ppv_visibility="hide_all",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            category = Category(
+                account_id=account.id,
+                category_id="sports",
+                category_name="Sports",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            db.session.add_all(
+                [
+                    Channel(
+                        account_id=account.id,
+                        stream_id="reg1",
+                        name="Regular",
+                        category_id=category.id,
+                        is_active=True,
+                        is_ppv=False,
+                    ),
+                    Channel(
+                        account_id=account.id,
+                        stream_id="ppv1",
+                        name="UFC 300",
+                        category_id=category.id,
+                        is_active=True,
+                        is_ppv=True,
+                    ),
+                ]
+            )
+            db.session.commit()
+            account_id = account.id
+            category_db_id = category.id
+
+        response = client.get(f"/api/categories?account_id={account_id}")
+        assert response.status_code == 200
+        cat = next(c for c in response.json if c["id"] == category_db_id)
+        assert cat["visible_count"] == 1
+        assert cat["hidden_count"] == 1
+        assert cat["total_count"] == 2
+
     def test_get_categories_invalid_account(self, app, client):
         """Test getting categories for non-existent account"""
         response = client.get("/api/categories?account_id=999")

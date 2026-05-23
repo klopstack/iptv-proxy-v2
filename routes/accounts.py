@@ -422,7 +422,11 @@ def _process_tags_for_account(account_id, streams, categories):
 
 @accounts_bp.route("/api/accounts/<int:account_id>/stats", methods=["GET"])
 def get_account_stats(account_id):
-    """Get statistics for account (uses database if synced, otherwise API)"""
+    """Get statistics for account (uses database if synced, otherwise API).
+
+    visible_channels / hidden_channels use playlist-visible semantics (account
+    filters plus PPV visibility), matching M3U/EPG/Xtream output.
+    """
     account = Account.query.get_or_404(account_id)
 
     # Check if account is synced to database
@@ -432,11 +436,8 @@ def get_account_stats(account_id):
         # Use database stats (fast!)
         category_count = db.session.query(Category.id).filter_by(account_id=account_id).count()
 
-        # Get visible/hidden counts using FilterService for accurate stats
-        # Load all active channels and apply filters
-        all_channels = Channel.query.filter_by(account_id=account_id, is_active=True).all()
-        FilterService.apply_filters_to_channels(all_channels, account_id)
-        visible_count = sum(1 for ch in all_channels if ch.is_visible)
+        playlist_visible = ChannelQueryService.channels_for_account(account_id)
+        visible_count = len(playlist_visible)
         hidden_count = channel_count - visible_count
 
         # Get category distribution

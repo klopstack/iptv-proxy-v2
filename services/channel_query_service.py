@@ -474,6 +474,22 @@ class ChannelQueryService:
         return filtered
 
     @staticmethod
+    def visible_channel_set_for_account(account_id: int) -> Set[Tuple[int, str]]:
+        """(account_id, stream_id) keys for channels visible in playlist output."""
+        channels = ChannelQueryService.channels_for_account(account_id)
+        return {(ch.account_id, str(ch.stream_id)) for ch in channels}
+
+    @staticmethod
+    def visible_channel_sets_by_account(
+        account_ids: List[int],
+    ) -> Dict[int, Set[Tuple[int, str]]]:
+        """Per-account playlist-visible channel keys for multi-account admin views."""
+        return {
+            acc_id: ChannelQueryService.visible_channel_set_for_account(acc_id)
+            for acc_id in account_ids
+        }
+
+    @staticmethod
     def channels_for_account(
         account_id: int,
         *,

@@ -765,3 +765,45 @@ class TestAccountPreviewPPVVisibility:
         assert preview.status_code == 200
         assert m3u.status_code == 200
         assert preview.json["total"] == m3u.data.decode("utf-8").count("#EXTINF:")
+
+
+class TestAccountStatsPlaylistVisible:
+    """Account stats visible counts should match playlist output."""
+
+    def test_stats_excludes_ppv_with_hide_all(self, app, client):
+        with app.app_context():
+            account = Account(
+                name="PPV Stats",
+                username="ppv_user",
+                password="ppv_pass",
+                server="example.com",
+                enabled=True,
+                ppv_visibility="hide_all",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            regular = Channel(
+                account_id=account.id,
+                stream_id="regular1",
+                name="Regular",
+                is_active=True,
+                is_ppv=False,
+            )
+            ppv = Channel(
+                account_id=account.id,
+                stream_id="ppv1",
+                name="UFC 300",
+                is_active=True,
+                is_ppv=True,
+            )
+            db.session.add_all([regular, ppv])
+            db.session.commit()
+            account_id = account.id
+
+        response = client.get(f"/api/accounts/{account_id}/stats")
+        assert response.status_code == 200
+        data = response.json
+        assert data["total_channels"] == 2
+        assert data["visible_channels"] == 1
+        assert data["hidden_channels"] == 1

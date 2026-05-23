@@ -15,7 +15,7 @@ from flask import Blueprint, jsonify, request
 from error_handling import handle_errors
 from models import Category, Channel, ChannelHealthConfig, ChannelHealthStatus
 from services.channel_health_service import ChannelHealthService
-from services.filter_service import FilterService
+from services.channel_query_service import ChannelQueryService
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +158,9 @@ def get_channels_paginated():
 def get_categories():
     """
     Get list of categories for filtering.
-    Only returns categories that have at least one visible channel.
+
+    Only returns categories with at least one playlist-visible channel
+    (account filters plus PPV visibility), matching M3U output.
 
     Query parameters:
     - account_id (optional): Filter categories by account ID
@@ -173,16 +175,14 @@ def get_categories():
 
     categories_with_channels = query.distinct().all()
 
-    # Apply FilterService to determine which categories have visible channels
     visible_category_ids = set()
     for category in categories_with_channels:
-        # Get channels for this category
         channels = Channel.query.filter_by(category_id=category.id, is_active=True).all()
         if channels:
-            # Apply filters
-            FilterService.apply_filters_to_channels(channels, category.account_id)
-            # Check if any are visible
-            if any(ch.is_visible for ch in channels):
+            visible = ChannelQueryService.channels_for_account_candidates(
+                category.account_id, channels
+            )
+            if visible:
                 visible_category_ids.add(category.id)
 
     # Filter to only visible categories

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from models import Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
+from models import Account, Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
 
 
 @pytest.fixture
@@ -549,6 +549,48 @@ class TestEpgMappings:
             # Should only return channels in cat2
             for ch in data["unmapped_channels"]:
                 assert ch["category_id"] == cat2.id
+
+    def test_unmapped_mappings_exclude_ppv_hide_all(self, app, client):
+        """Unmapped list uses playlist-visible semantics when show_filtered is false."""
+        with app.app_context():
+            account = Account(
+                name="PPV EPG",
+                username="ppv_user",
+                password="ppv_pass",
+                server="example.com",
+                enabled=True,
+                ppv_visibility="hide_all",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            db.session.add_all(
+                [
+                    Channel(
+                        account_id=account.id,
+                        stream_id="reg1",
+                        name="Regular",
+                        is_active=True,
+                        is_ppv=False,
+                    ),
+                    Channel(
+                        account_id=account.id,
+                        stream_id="ppv1",
+                        name="UFC 300",
+                        is_active=True,
+                        is_ppv=True,
+                    ),
+                ]
+            )
+            db.session.commit()
+            account_id = account.id
+
+        response = client.get(
+            f"/api/epg/mappings?view_mode=unmapped&account_id={account_id}"
+        )
+        assert response.status_code == 200
+        stream_ids = {ch["stream_id"] for ch in response.json["unmapped_channels"]}
+        assert stream_ids == {"reg1"}
 
     def test_get_epg_mappings_unmapped_includes_category_info(self, app, client, test_channel, test_account):
         """Test that unmapped channels include category info in response"""

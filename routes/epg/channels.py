@@ -9,7 +9,7 @@ from error_handling import handle_errors
 from models import Account, Channel, ChannelEpgMapping, EpgChannel, EpgSource, Event, EventChannelLink, db
 from services.epg_match_rules_service import EpgMatchRulesService
 from services.epg import EpgService
-from services.filter_service import FilterService
+from services.channel_query_service import ChannelQueryService
 from services.iptv_service import IPTVService
 
 logger = logging.getLogger(__name__)
@@ -170,7 +170,11 @@ def match_channels_to_epg_with_rules(account_id):
 
 @epg_channels_bp.route("/mappings", methods=["GET"])
 def get_epg_mappings():
-    """Get EPG mappings with optional filtering
+    """Get EPG mappings with optional filtering.
+
+    When show_filtered is false and account_id is set, only playlist-visible
+    channels are returned (account filters plus PPV visibility), matching M3U output.
+    Set show_filtered=true to include all synced channels for admin mapping work.
 
     Query parameters:
     - account_id: Filter by account
@@ -178,7 +182,7 @@ def get_epg_mappings():
     - epg_source_id: Filter by EPG source (only affects 'mapped' view_mode)
     - view_mode: 'all', 'mapped', or 'unmapped' (default: 'all')
     - unmapped_only: (deprecated) Show only unmapped channels if true
-    - show_filtered: Include channels that are filtered out (default: false)
+    - show_filtered: Include channels hidden from playlists (default: false)
     - limit: Max results
     - offset: Pagination offset
     """
@@ -205,13 +209,10 @@ def get_epg_mappings():
         if category_id:
             query = query.filter_by(category_id=category_id)
 
-        # Get all channels, then apply FilterService if needed
         all_channels = query.order_by(Channel.name).all()
 
-        # Apply FilterService to determine visibility
         if not show_filtered and account_id:
-            FilterService.apply_filters_to_channels(all_channels, account_id)
-            channels = [ch for ch in all_channels if ch.is_visible]
+            channels = ChannelQueryService.channels_for_account_candidates(account_id, all_channels)
         else:
             channels = all_channels
 
@@ -309,16 +310,14 @@ def get_epg_mappings():
             if category_id:
                 query = query.filter(Channel.category_id == category_id)
 
-            # Get all mappings, then apply FilterService if needed
             all_mappings = query.all()
 
-        # Apply FilterService to determine visibility
         if not show_filtered and account_id:
-            # Extract channels from mappings
             channels = [m.channel for m in all_mappings if m.channel]
-            FilterService.apply_filters_to_channels(channels, account_id)
-            # Filter mappings to only visible channels
-            visible_ids = {ch.id for ch in channels if ch.is_visible}
+            visible_channels = ChannelQueryService.channels_for_account_candidates(
+                account_id, channels
+            )
+            visible_ids = {ch.id for ch in visible_channels}
             mappings = [m for m in all_mappings if m.channel and m.channel.id in visible_ids]
         else:
             mappings = all_mappings
@@ -398,13 +397,10 @@ def get_epg_mappings():
             )
             query = query.filter(Channel.id.in_(ppv_channel_ids))
 
-        # Get all channels, then apply FilterService if needed
         all_channels = query.order_by(Channel.name).all()
 
-        # Apply FilterService to determine visibility
         if not show_filtered and account_id:
-            FilterService.apply_filters_to_channels(all_channels, account_id)
-            channels = [ch for ch in all_channels if ch.is_visible]
+            channels = ChannelQueryService.channels_for_account_candidates(account_id, all_channels)
         else:
             channels = all_channels
 
@@ -881,14 +877,14 @@ def get_epg_channel_schedule(epg_channel_id):
 def get_mappings_with_current_programs():
     """Get EPG mappings with current program information.
 
-    This endpoint combines channel EPG mappings with current program data
-    to show what's currently airing for verification purposes.
+    When show_filtered is false, only playlist-visible channels are returned
+    (account filters plus PPV visibility), matching M3U output.
 
     Query parameters:
     - account_id: Filter by account (required)
     - category_id: Filter by category
     - view_mode: 'all', 'mapped', or 'unmapped' (default: 'all')
-    - show_filtered: Include filtered channels (default: false)
+    - show_filtered: Include channels hidden from playlists (default: false)
     - limit: Max results (default 100)
     - offset: Pagination offset
     """
@@ -922,11 +918,13 @@ def get_mappings_with_current_programs():
 
     results = query.order_by(Channel.name).all()
 
-    # Apply filter visibility
     if not show_filtered:
         channels = [r[0] for r in results]
-        FilterService.apply_filters_to_channels(channels, account_id)
-        results = [r for r in results if r[0].is_visible]
+        visible_channels = ChannelQueryService.channels_for_account_candidates(
+            account_id, channels
+        )
+        visible_ids = {ch.id for ch in visible_channels}
+        results = [r for r in results if r[0].id in visible_ids]
 
     total = len(results)
     results = results[offset : offset + limit]

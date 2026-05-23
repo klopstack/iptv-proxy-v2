@@ -293,6 +293,46 @@ def test_apply_ppv_visibility_to_channels_multi_account(app):
         assert {ch.stream_id for ch in visible} == {"2"}
 
 
+def test_visible_channel_set_for_account_matches_channels_for_account(app):
+    """visible_channel_set_for_account keys match channels_for_account output."""
+    with app.app_context():
+        account = Account(
+            name="Set Test",
+            server="s",
+            username="u",
+            password="p",
+            enabled=True,
+            ppv_visibility="hide_all",
+        )
+        db.session.add(account)
+        db.session.commit()
+
+        db.session.add_all(
+            [
+                Channel(
+                    account_id=account.id,
+                    stream_id="reg",
+                    name="Regular",
+                    is_active=True,
+                    is_ppv=False,
+                ),
+                Channel(
+                    account_id=account.id,
+                    stream_id="ppv",
+                    name="PPV",
+                    is_active=True,
+                    is_ppv=True,
+                ),
+            ]
+        )
+        db.session.commit()
+
+        keys = ChannelQueryService.visible_channel_set_for_account(account.id)
+        channels = ChannelQueryService.channels_for_account(account.id)
+        assert keys == {(ch.account_id, str(ch.stream_id)) for ch in channels}
+        assert keys == {(account.id, "reg")}
+
+
 def test_channels_for_account_candidates_applies_filters(app):
     """Candidate helper applies account filters to a pre-narrowed list."""
     with app.app_context():
