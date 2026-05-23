@@ -67,6 +67,8 @@ class TestEpgMatching:
 
         response = client.post(f"/api/epg/match/{test_account}")
         assert response.status_code == 200
+        assert response.headers.get("Deprecation") == "true"
+        assert "match-with-rules" in response.headers.get("Link", "")
         assert response.json["success"] is True
         assert "18 channels" in response.json["message"]
         assert "skipped 2" in response.json["message"]

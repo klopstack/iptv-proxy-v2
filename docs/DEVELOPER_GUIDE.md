@@ -329,7 +329,7 @@ for i in range(0, len(stream_ids), batch_size):
 
 ### Service Import Paths
 
-Use package imports for EPG and PPV services. Legacy top-level facade modules (`services/epg_service.py`, `services/ppv_*_service.py`) remain as deprecated re-exports and will be removed in a future release.
+Use package imports for EPG and PPV services:
 
 ```python
 # EPG — prefer submodule imports for new code
@@ -531,10 +531,6 @@ def generate_epg_for_channels(
     3. Synthetic channel (no programmes)
     """
 ```
-
-> **Note:** The legacy `account_xml_cache` parameter still exists on the function
-> signature for backward compatibility but is ignored at runtime. It will be removed
-> in a future release (see [TODO 23](./todos/23-remove-backward-compat-shims.md)).
 
 **Key helper functions:**
 ```python

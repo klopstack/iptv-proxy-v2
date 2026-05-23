@@ -56,14 +56,14 @@ IPTV Proxy v2 is a Flask-based IPTV proxy that sits between Xtream Codes API ser
 - **`services/`**: Business logic services (66 Python modules, ~25,000 lines)
   - `IPTVService` - Xtream Codes API integration
   - `TagService` - Tag extraction and rule processing
-  - `services/epg/` - EPG package (14 modules: `generation`, `matching`, `parsing`, `programs`, `sd_programs`, etc.); `services/epg_service.py` is a deprecated re-export shim
+  - `services/epg/` - EPG package (14 modules: `generation`, `matching`, `parsing`, `programs`, `sd_programs`, etc.)
   - `ChannelQueryService` - Unified channel selection for M3U, EPG, Xtream, and previews
   - `services/ppv/` - PPV enrichment, visibility, and event-based EPG
   - `CacheService` - Simple in-memory caching (3600s TTL)
   - `FilterService` - Channel filtering logic (used internally by `ChannelQueryService`)
 
 ### Data Layer
-- **`models/`**: SQLAlchemy models split by domain (`__init__.py` re-exports all 44 models; `_core.py` is a deprecated shim)
+- **`models/`**: SQLAlchemy models split by domain (`__init__.py` re-exports all 44 models)
   - `_base.py` — `db` instance
   - `account.py` — Account, Credential, XtreamCredential, PlaylistConfig, ActiveStream
   - `channel.py` — Channel, Category, tags, filters, rulesets

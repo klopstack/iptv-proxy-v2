@@ -75,7 +75,6 @@ class EpgService:
     @staticmethod
     def generate_epg_for_channels(
         channels: List,
-        account_xml_cache: Optional[Dict[int, bytes]] = None,
         use_channel_links: bool = True,
         *,
         east_west_fallback: Optional[bool] = None,
@@ -90,7 +89,6 @@ class EpgService:
         """
         return generation.generate_epg_for_channels(
             channels,
-            account_xml_cache,
             use_channel_links,
             east_west_fallback=east_west_fallback,
         )

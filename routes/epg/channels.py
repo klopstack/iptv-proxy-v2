@@ -3,7 +3,7 @@ EPG channel management routes - channels, matching, mappings, and programs
 """
 import logging
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, make_response, request
 
 from error_handling import handle_errors
 from models import Account, Channel, ChannelEpgMapping, EpgChannel, EpgSource, Event, EventChannelLink, db
@@ -114,7 +114,12 @@ def match_channels_to_epg(account_id):
     - include_filtered: Include filtered out channels (default false)
     """
     # Redirect to the rule-based matching endpoint
-    return match_channels_to_epg_with_rules(account_id)
+    response = make_response(match_channels_to_epg_with_rules(account_id))
+    response.headers["Deprecation"] = "true"
+    response.headers["Link"] = (
+        f'</api/epg/match-with-rules/{account_id}>; rel="successor-version"'
+    )
+    return response
 
 
 @epg_channels_bp.route("/match-with-rules/<int:account_id>", methods=["POST"])

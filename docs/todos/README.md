@@ -92,7 +92,7 @@ Follow-up audit after TODOs 01–21. Focus: dead shims, test duplication, semant
 | # | Document | Status | Summary |
 |---|----------|--------|---------|
 | 22 | [22-audit-index-and-doc-sync.md](./22-audit-index-and-doc-sync.md) | ✅ | Sync stale index (incl. TODO 18 ✅), fix misleading docstrings |
-| 23 | [23-remove-backward-compat-shims.md](./23-remove-backward-compat-shims.md) | ⬜ | Delete 6 facade shims, `models/_core.py`, `account_xml_cache` param |
+| 23 | [23-remove-backward-compat-shims.md](./23-remove-backward-compat-shims.md) | ✅ | Delete 6 facade shims, `models/_core.py`, `account_xml_cache` param |
 | 24 | [24-consolidate-epg-route-tests.md](./24-consolidate-epg-route-tests.md) | ✅ | Merge 3 overlapping EPG route test modules (~2,700 lines) |
 | 25 | [25-refactor-epg-service-and-phase-tests.md](./25-refactor-epg-service-and-phase-tests.md) | ✅ | Split `test_epg_service.py` (3.4k lines); rename phase-era tests |
 | 26 | [26-mediaflow-stream-backend-tests.md](./26-mediaflow-stream-backend-tests.md) | ✅ | Test stream factory + MediaFlow service (zero tests today) |
@@ -146,7 +146,6 @@ These items were derived from full codebase reviews covering:
 - Models package split; proxy defaults aligned; admin visible counts use CQS (TODO 20)
 
 **Remaining debt:**
-- Six unused Python deprecation shims + `models/_core.py`
 - ~6,500 lines of overlapping EPG tests across 4 files
 - Zero MediaFlow/stream-factory tests
 - `is_visible` column semantics contradict FilterService docstrings

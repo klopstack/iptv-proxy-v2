@@ -478,19 +478,6 @@ class TestGenerateEpgForChannels:
             channels = root.findall("channel")
             assert len(channels) >= 2
 
-    def test_with_account_xml_cache(self, app, db, sample_account, sample_channels):
-        """Test using pre-cached XML content."""
-        with app.app_context():
-            from services.epg.generation import generate_epg_for_channels
-
-            # Provide cached XML
-            cache = {sample_account.id: SAMPLE_XMLTV}
-
-            result = generate_epg_for_channels(sample_channels, account_xml_cache=cache)
-
-            # Should use cached data
-            assert b"<?xml" in result
-
 
 class TestGetChannelLinksForFallback:
     """Tests for get_channel_links_for_fallback function."""

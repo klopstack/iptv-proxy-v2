@@ -1,7 +1,7 @@
 """
 PPV Visibility Service - Apply PPV visibility rules based on account settings
 
-Uses database Event records created by ppv_calendar_enrichment_service for filtering.
+Uses database Event records created by services.ppv.enrichment for filtering.
 """
 
 import logging
@@ -72,7 +72,7 @@ class PPVVisibilityService:
         Check if a PPV channel has an active event.
 
         Queries Event records linked to this channel via EventChannelLink.
-        Events are created by ppv_calendar_enrichment_service which:
+        Events are created by services.ppv.enrichment which:
         1. Extracts event info from channel names
         2. Matches against TheSportsDB calendar
         3. Creates Event records with full details

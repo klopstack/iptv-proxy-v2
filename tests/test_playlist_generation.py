@@ -417,7 +417,7 @@ class TestPPVVisibility:
     def test_ppv_visibility_applied(self, app, client, test_account1):
         """Test that PPV visibility service is invoked during playlist generation"""
         # This test verifies the service is called, not the full filtering logic
-        # (Full PPV filtering is covered in services/test_ppv_visibility_service.py)
+        # (Full PPV filtering is covered in tests/test_ppv_visibility.py)
         response = client.get(f"/playlist/{test_account1}.m3u")
 
         assert response.status_code == 200

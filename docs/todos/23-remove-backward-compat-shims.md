@@ -1,7 +1,7 @@
 # TODO 23: Remove Backward-Compatibility Shim Modules
 
 **Priority:** P2  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Medium (delete + grep cleanup)
 
 ---
@@ -123,12 +123,12 @@ Remove whitelist entries for deleted shims.
 
 ## Acceptance criteria
 
-- [ ] Six facade shim modules deleted; tests pass importing only package paths
-- [ ] `models/_core.py` deleted; no import errors
-- [ ] `account_xml_cache` removed from signatures and docs
-- [ ] Deprecated EPG match endpoint handled (headers, removal, or documented sunset)
-- [ ] Legacy account credential path still works (existing `test_connection_manager.py` passes)
-- [ ] `rg` shows zero imports of deleted modules
+- [x] Six facade shim modules deleted; tests pass importing only package paths
+- [x] `models/_core.py` deleted; no import errors
+- [x] `account_xml_cache` removed from signatures and docs
+- [x] Deprecated EPG match endpoint handled (headers, removal, or documented sunset)
+- [x] Legacy account credential path still works (existing `test_connection_manager.py` passes)
+- [x] `rg` shows zero imports of deleted modules
 
 ---
 
@@ -153,6 +153,6 @@ npm run lint  # if JS callers changed
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Deleted 6 service shims + `models/_core.py`; removed `account_xml_cache`; added `Deprecation`/`Link` headers on legacy `/api/epg/match/` endpoint; consolidated PPV tests (`test_ppv_visibility`, `test_ppv_matching/test_enhanced`, `test_ppv_epg`, `test_ppv_extraction`, `test_ppv_enrichment`); updated DEVELOPER_GUIDE and ARCHITECTURE. |
