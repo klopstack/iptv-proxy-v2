@@ -1,2 +1,100 @@
-"""SQLAlchemy models — split package; imports from _core during migration."""
-from models._core import *  # noqa: F401,F403
+"""SQLAlchemy models — domain modules with unified public API."""
+
+from models._base import db
+from models.account import (
+    Account,
+    ActiveStream,
+    Credential,
+    PlaylistConfig,
+    XtreamCredential,
+)
+from models.channel import (
+    AccountRuleSet,
+    CallsignSuffix,
+    Category,
+    Channel,
+    ChannelLink,
+    ChannelTag,
+    CountryTag,
+    Filter,
+    QualityTag,
+    RuleSet,
+    Tag,
+    TagRule,
+)
+from models.epg import (
+    CachedImage,
+    ChannelEpgMapping,
+    EpgChannel,
+    EpgProgram,
+    EpgSource,
+    SdLineup,
+    SdStation,
+)
+from models.epg_match import (
+    AccountEpgMatchRuleSet,
+    EpgChannelNameMapping,
+    EpgCountrySuffix,
+    EpgExclusionPattern,
+    EpgMatchRule,
+    EpgMatchRuleSet,
+)
+from models.fcc import (
+    FccCorrection,
+    FccFacility,
+    FccMatchChannelPattern,
+    FccMatchLocationPattern,
+    FccMatchNetwork,
+    FccMatchStrategy,
+)
+from models.health import ChannelHealthCheck, ChannelHealthConfig, ChannelHealthStatus
+from models.ppv import Event, EventChannelLink, SportsTeam
+from models.sync import Settings, SyncMetadata
+
+__all__ = [
+    "db",
+    "SyncMetadata",
+    "Settings",
+    "Account",
+    "Credential",
+    "ActiveStream",
+    "PlaylistConfig",
+    "XtreamCredential",
+    "Filter",
+    "RuleSet",
+    "AccountRuleSet",
+    "TagRule",
+    "Category",
+    "Channel",
+    "Tag",
+    "ChannelTag",
+    "ChannelLink",
+    "QualityTag",
+    "CountryTag",
+    "CallsignSuffix",
+    "Event",
+    "EventChannelLink",
+    "SportsTeam",
+    "EpgSource",
+    "EpgChannel",
+    "EpgProgram",
+    "ChannelEpgMapping",
+    "SdLineup",
+    "SdStation",
+    "CachedImage",
+    "EpgMatchRuleSet",
+    "AccountEpgMatchRuleSet",
+    "EpgMatchRule",
+    "EpgExclusionPattern",
+    "EpgChannelNameMapping",
+    "EpgCountrySuffix",
+    "FccFacility",
+    "FccCorrection",
+    "FccMatchNetwork",
+    "FccMatchChannelPattern",
+    "FccMatchLocationPattern",
+    "FccMatchStrategy",
+    "ChannelHealthCheck",
+    "ChannelHealthStatus",
+    "ChannelHealthConfig",
+]

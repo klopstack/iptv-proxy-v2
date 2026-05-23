@@ -1,7 +1,7 @@
 # TODO 14: Models Package Split
 
 **Priority:** P3  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Large (multi-PR effort)
 
 ---
@@ -83,11 +83,11 @@ Exact grouping subject to review — aim for ~200–400 lines per file.
 
 ## Acceptance criteria
 
-- [ ] No single model file >500 lines
-- [ ] All existing imports work unchanged
-- [ ] Full test suite passes
-- [ ] mypy passes on models package
-- [ ] `_core.py` deleted or reduced to deprecation shim
+- [x] No single model file >500 lines
+- [x] All existing imports work unchanged
+- [x] Full test suite passes
+- [x] mypy passes on models package
+- [x] `_core.py` deleted or reduced to deprecation shim
 
 ---
 
@@ -110,6 +110,6 @@ venv/bin/mypy models/ app.py
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Split `_core.py` (2,063 lines) into 9 domain modules; `_core.py` retained as thin re-export shim |

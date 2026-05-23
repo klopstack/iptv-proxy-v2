@@ -7,7 +7,7 @@ from flask import Blueprint, jsonify, request
 
 from error_handling import handle_errors
 from models import Account, ChannelEpgMapping, EpgChannel, EpgSource, db
-from services.epg_service import EpgService
+from services.epg import EpgService
 
 # Import common helper functions
 from .common import sync_sd_channels_to_epg as _sync_sd_channels_to_epg

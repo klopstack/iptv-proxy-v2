@@ -735,7 +735,7 @@ class TestEpgMappings:
 class TestEpgCoverage:
     """Tests for EPG coverage endpoints"""
 
-    @patch("services.epg_service.EpgService.get_epg_coverage_stats")
+    @patch("routes.epg.sources.EpgService.get_epg_coverage_stats")
     def test_get_epg_coverage(self, mock_coverage, app, client):
         """Test getting EPG coverage stats"""
         mock_coverage.return_value = {"total_channels": 100, "mapped_channels": 50}
@@ -744,7 +744,7 @@ class TestEpgCoverage:
         assert response.status_code == 200
         assert "total_channels" in response.json
 
-    @patch("services.epg_service.EpgService.get_epg_coverage_stats")
+    @patch("routes.epg.sources.EpgService.get_epg_coverage_stats")
     def test_get_epg_coverage_with_account(self, mock_coverage, app, client, test_account):
         """Test getting EPG coverage stats for specific account"""
         mock_coverage.return_value = {"total_channels": 50, "mapped_channels": 25}
@@ -752,7 +752,7 @@ class TestEpgCoverage:
         response = client.get(f"/api/epg/coverage?account_id={test_account}")
         assert response.status_code == 200
 
-    @patch("services.epg_service.EpgService.get_category_epg_coverage")
+    @patch("routes.epg.sources.EpgService.get_category_epg_coverage")
     def test_get_category_coverage(self, mock_coverage, app, client, test_account):
         """Test getting EPG coverage by category"""
         mock_coverage.return_value = [{"category_id": 1, "total": 10, "mapped": 5}]
@@ -845,7 +845,7 @@ class TestEpgSourceSync:
         assert "url" in response.json["error"].lower()
 
     @patch("services.iptv_service.IPTVService.get_xmltv")
-    @patch("services.epg_service.EpgService.sync_epg_source")
+    @patch("services.epg_sync_service.EpgService.sync_epg_source")
     def test_sync_provider_source_success(self, mock_sync, mock_get_xmltv, app, client, test_epg_source, test_account):
         """Test successful provider source sync"""
         mock_get_xmltv.return_value = b"<tv></tv>"
@@ -856,7 +856,7 @@ class TestEpgSourceSync:
         assert response.json["success"] is True
 
     @patch("requests.get")
-    @patch("services.epg_service.EpgService.sync_epg_source")
+    @patch("services.epg_sync_service.EpgService.sync_epg_source")
     def test_sync_xmltv_url_success(self, mock_sync, mock_requests, app, client):
         """Test successful XMLTV URL source sync"""
         # Create XMLTV URL source
@@ -1181,7 +1181,7 @@ class TestAccountEpgSource:
         response = client.post("/api/accounts/999/epg-source")
         assert response.status_code == 404
 
-    @patch("services.epg_service.EpgService.create_provider_epg_source")
+    @patch("routes.epg.channels.EpgService.create_provider_epg_source")
     def test_create_account_epg_source_success(self, mock_create, app, client, test_account):
         """Test successful account EPG source creation"""
         mock_source = MagicMock()
@@ -1194,8 +1194,8 @@ class TestAccountEpgSource:
         assert response.json["source_id"] == 1
 
     @patch("routes.epg.channels.IPTVService")
-    @patch("services.epg_service.EpgService.sync_epg_source")
-    @patch("services.epg_service.EpgService.create_provider_epg_source")
+    @patch("routes.epg.channels.EpgService.sync_epg_source")
+    @patch("routes.epg.channels.EpgService.create_provider_epg_source")
     def test_create_account_epg_source_with_sync(
         self, mock_create, mock_sync, MockIPTVService, app, client, test_account
     ):

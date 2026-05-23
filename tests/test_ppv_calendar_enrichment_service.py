@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from services.ppv_calendar_enrichment_service import (
+from services.ppv.enrichment import (
     GENERIC_CHANNEL_PATTERNS,
     EnrichmentResult,
     PPVCalendarEnrichmentService,
@@ -753,7 +753,7 @@ class TestGetCalendarEnrichmentService:
     def test_returns_singleton(self, app):
         """Test that function returns same instance."""
         # Reset singleton for test
-        import services.ppv_calendar_enrichment_service as module
+        import services.ppv.enrichment as module
 
         module._service_instance = None
 
@@ -777,7 +777,7 @@ class TestEnrichPPVChannelsBatch:
             db.session.commit()
 
             # Reset singleton
-            import services.ppv_calendar_enrichment_service as module
+            import services.ppv.enrichment as module
 
             module._service_instance = None
 

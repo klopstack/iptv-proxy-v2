@@ -15,7 +15,7 @@ from services.channel_query_service import ChannelQueryService
 from services.epg.ppv import is_ppv_category
 from services.filter_service import FilterService
 from services.image_cache_service import ImageCacheService
-from services.ppv_visibility_service import PPVVisibilityService
+from services.ppv.visibility import PPVVisibilityService
 
 logger = logging.getLogger(__name__)
 

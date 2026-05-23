@@ -17,17 +17,18 @@ from models import (
     Tag,
     db,
 )
-from services.epg_service import (
-    EAST_TAGS,
-    WEST_TAGS,
-    EpgService,
-    decompress_content,
-    extract_callsign_from_xmltv_id,
-    get_decompressing_stream,
+from services.epg import EpgService
+from services.epg.constants import EAST_TAGS, WEST_TAGS
+from services.epg.ppv import (
     get_ppv_event_title,
     is_ppv_category,
     is_ppv_channel,
     is_ppv_placeholder_name,
+)
+from services.epg.utils import (
+    decompress_content,
+    extract_callsign_from_xmltv_id,
+    get_decompressing_stream,
     make_sd_xmltv_id,
     normalize_xmltv_url,
     shift_xmltv_time,
@@ -2227,7 +2228,7 @@ class TestFccEnhancedEpgMatching:
         This tests the scenario where a CW affiliate in a market without local EPG
         coverage falls back to the generic CW.us2 feed with lower confidence.
         """
-        from services.epg_service import EpgService
+        from services.epg import EpgService
 
         with app.app_context():
             # Create an account

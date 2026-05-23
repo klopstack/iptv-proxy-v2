@@ -8,7 +8,7 @@ from flask import Blueprint, jsonify, request
 from error_handling import handle_errors
 from models import Account, Channel, ChannelEpgMapping, EpgChannel, EpgSource, Event, EventChannelLink, db
 from services.epg_match_rules_service import EpgMatchRulesService
-from services.epg_service import EpgService
+from services.epg import EpgService
 from services.filter_service import FilterService
 from services.iptv_service import IPTVService
 

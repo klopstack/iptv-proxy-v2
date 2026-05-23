@@ -11,7 +11,7 @@ import logging
 from flask import Blueprint, current_app, jsonify, request
 from flask_cors import cross_origin
 
-from services.ppv_calendar_enrichment_service import get_calendar_enrichment_service
+from services.ppv.enrichment import get_calendar_enrichment_service
 
 logger = logging.getLogger(__name__)
 
@@ -239,7 +239,7 @@ def get_enrichment_settings():
     Returns configuration details including rate limits for detail fetching.
     """
     try:
-        from services.ppv_calendar_enrichment_service import API_REQUESTS_PER_MINUTE, DETAIL_FETCH_BATCH_SIZE
+        from services.ppv.enrichment import API_REQUESTS_PER_MINUTE, DETAIL_FETCH_BATCH_SIZE
 
         return (
             jsonify(

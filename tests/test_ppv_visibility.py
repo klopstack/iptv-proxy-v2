@@ -10,7 +10,7 @@ These tests verify the name-based detection logic.
 
 from models import Account, Channel, ChannelTag, Tag, db
 from services.epg.constants import PPV_PLACEHOLDER_PATTERNS
-from services.epg_service import get_ppv_event_title, is_ppv_placeholder_name
+from services.epg.ppv import get_ppv_event_title, is_ppv_placeholder_name
 
 
 class TestPPVPlaceholderDetection:

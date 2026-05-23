@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app import app
 from models import Channel, EventChannelLink, db
-from services.ppv_calendar_enrichment_service import get_calendar_enrichment_service
+from services.ppv.enrichment import get_calendar_enrichment_service
 
 
 def clear_existing_matches(account_id=None, dry_run=True):

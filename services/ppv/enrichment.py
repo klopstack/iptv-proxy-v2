@@ -335,7 +335,7 @@ class PPVCalendarEnrichmentService:
             # Auto-create PPV EPG source if events were created/updated
             if results.get("events_created", 0) > 0 or results.get("events_updated", 0) > 0:
                 try:
-                    from services.ppv_epg_service import PPVEpgService
+                    from services.ppv.epg import PPVEpgService
 
                     source_id = PPVEpgService.create_epg_source_for_ppv_events()
                     logger.info(f"Auto-created/verified PPV EPG source with ID: {source_id}")

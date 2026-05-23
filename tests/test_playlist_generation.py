@@ -480,7 +480,7 @@ class TestEPGGeneration:
 
     def test_epg_config_generation(self, app, client, tag_filter_config):
         """Test generating EPG for playlist config"""
-        with patch("services.epg_service.EpgService") as mock_epg:
+        with patch("services.epg.EpgService") as mock_epg:
             mock_epg.generate_epg_for_channels.return_value = b'<?xml version="1.0"?><tv></tv>'
 
             response = client.get(f"/epg/config/{tag_filter_config}.xml")
@@ -502,7 +502,7 @@ class TestEPGGeneration:
 
     def test_epg_east_west_fallback(self, app, client, tag_filter_config):
         """Test EPG generation with east/west fallback parameter"""
-        with patch("services.epg_service.EpgService") as mock_epg:
+        with patch("services.epg.EpgService") as mock_epg:
             mock_epg.generate_epg_for_channels.return_value = b'<?xml version="1.0"?><tv></tv>'
 
             response = client.get(f"/epg/config/{tag_filter_config}.xml?east_west_fallback=true")
@@ -514,7 +514,7 @@ class TestEPGGeneration:
 
     def test_epg_no_east_west_fallback(self, app, client, tag_filter_config):
         """Test EPG generation with fallback disabled"""
-        with patch("services.epg_service.EpgService") as mock_epg:
+        with patch("services.epg.EpgService") as mock_epg:
             mock_epg.generate_epg_for_channels.return_value = b'<?xml version="1.0"?><tv></tv>'
 
             response = client.get(f"/epg/config/{tag_filter_config}.xml?east_west_fallback=false")
@@ -543,7 +543,7 @@ class TestEPGGeneration:
 
         assert m3u_tvg_ids == expected_tvg_ids
 
-        with patch("services.epg_service.EpgService") as mock_epg:
+        with patch("services.epg.EpgService") as mock_epg:
             mock_epg.generate_epg_for_channels.return_value = (
                 b'<?xml version="1.0"?><tv></tv>'
             )

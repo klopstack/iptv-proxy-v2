@@ -207,7 +207,7 @@ class ChannelSyncService:
                 continue
 
             # Check if this is a PPV category
-            from services.epg_service import is_ppv_category
+            from services.epg.ppv import is_ppv_category
 
             is_ppv = is_ppv_category(category_name)
 
@@ -287,7 +287,7 @@ class ChannelSyncService:
                 category_name = category_names.get(cat_id_str, "")
 
             # Determine if this is a PPV channel based on category
-            from services.epg_service import is_ppv_category
+            from services.epg.ppv import is_ppv_category
 
             is_ppv = is_ppv_category(category_name) if category_name else False
 

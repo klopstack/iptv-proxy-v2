@@ -300,6 +300,27 @@ for i in range(0, len(stream_ids), batch_size):
 
 ## Common Patterns
 
+### Service Import Paths
+
+Use package imports for EPG and PPV services. Legacy top-level facade modules (`services/epg_service.py`, `services/ppv_*_service.py`) remain as deprecated re-exports and will be removed in a future release.
+
+```python
+# EPG — prefer submodule imports for new code
+from services.epg import EpgService  # legacy facade class
+from services.epg.generation import generate_epg_for_channels
+from services.epg.matching import EpgMatcher
+from services.epg.parsing import parse_xmltv
+from services.epg.ppv import is_ppv_channel, is_ppv_category
+from services.epg.utils import normalize_xmltv_url, make_sd_xmltv_id
+
+# PPV
+from services.ppv.visibility import PPVVisibilityService
+from services.ppv.enrichment import get_calendar_enrichment_service
+from services.ppv.epg import PPVEpgService
+from services.ppv.extraction import PPVEventExtractor
+from services.ppv.matching.enhanced import EnhancedPPVMatcher
+```
+
 ### JSON Field Handling
 
 ⚠️ **Important**: Several models store arrays as JSON text fields.

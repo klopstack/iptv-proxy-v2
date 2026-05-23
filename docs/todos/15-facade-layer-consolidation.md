@@ -1,7 +1,7 @@
 # TODO 15: Facade Layer Consolidation
 
 **Priority:** P3  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Large (incremental)
 
 ---
@@ -93,10 +93,10 @@ Priority order (smallest facades first):
 
 ## Acceptance criteria
 
-- [ ] Zero facade imports in `routes/` and `services/` (tests may lag one PR)
-- [ ] DEVELOPER_GUIDE documents canonical import paths
-- [ ] Facade files removed or marked deprecated with removal version
-- [ ] Full test suite passes
+- [x] Zero facade imports in `routes/` and `services/` (tests may lag one PR)
+- [x] DEVELOPER_GUIDE documents canonical import paths
+- [x] Facade files removed or marked deprecated with removal version
+- [x] Full test suite passes
 
 ---
 
@@ -119,6 +119,6 @@ rg "ppv_visibility_service|epg_service import EpgService" routes/ services/
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Migrated routes/services/tests to package imports; EpgService moved to services/epg/facade.py; legacy facade modules kept with DeprecationWarning |

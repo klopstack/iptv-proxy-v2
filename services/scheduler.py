@@ -11,7 +11,8 @@ from typing import Optional
 import requests
 
 from models import Account, EpgSource, SyncMetadata
-from services.epg_service import EpgService, normalize_xmltv_url
+from services.epg import EpgService
+from services.epg.utils import normalize_xmltv_url
 from services.iptv_service import IPTVService
 from services.sync_service import ChannelSyncService
 from services.tag_service import TagService

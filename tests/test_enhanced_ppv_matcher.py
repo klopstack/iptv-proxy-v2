@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from services.enhanced_ppv_matcher import (
+from services.ppv.matching.enhanced import (
     ChannelCategory,
     EnhancedMatchResult,
     EnhancedPPVMatcher,
@@ -132,7 +132,7 @@ class TestChannelInfoExtraction:
         current_date = datetime(2026, 1, 5)
         matcher = EnhancedPPVMatcher(
             event_extractor=__import__(
-                "services.ppv_event_extractor", fromlist=["PPVEventExtractor"]
+                "services.ppv.extraction", fromlist=["PPVEventExtractor"]
             ).PPVEventExtractor(current_date=current_date)
         )
 

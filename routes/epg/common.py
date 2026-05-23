@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Dict, List
 
 from models import EpgChannel, EpgSource, SdLineup, SdStation, db
-from services.epg_service import make_sd_xmltv_id
+from services.epg.utils import make_sd_xmltv_id
 from services.schedules_direct import SchedulesDirectClient, SchedulesDirectError
 
 logger = logging.getLogger(__name__)

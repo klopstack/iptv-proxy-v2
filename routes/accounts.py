@@ -182,7 +182,7 @@ def update_ppv_visibility(account_id):
     ppv_visibility = data.get("ppv_visibility", "hide_inactive")
 
     # Validate the value
-    from services.ppv_visibility_service import PPVVisibilityService
+    from services.ppv.visibility import PPVVisibilityService
 
     if ppv_visibility not in PPVVisibilityService.VALID_MODES:
         return (
@@ -199,7 +199,7 @@ def update_ppv_visibility(account_id):
 @accounts_bp.route("/api/ppv-visibility-options", methods=["GET"])
 def get_ppv_visibility_options():
     """Get available PPV visibility options"""
-    from services.ppv_visibility_service import PPVVisibilityService
+    from services.ppv.visibility import PPVVisibilityService
 
     options = PPVVisibilityService.get_visibility_options()
     return jsonify(options)

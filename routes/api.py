@@ -642,7 +642,7 @@ def get_overview_stats():
     - Scheduler (sync status and intervals)
     """
     from models import EpgChannel, EpgProgram, EpgSource, SyncMetadata
-    from services.epg_service import EpgService
+    from services.epg import EpgService
 
     stats = {}
 

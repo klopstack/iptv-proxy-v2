@@ -441,7 +441,7 @@ class TestSchedulesDirectAuth:
 class TestEpgCoverage:
     """Tests for EPG coverage statistics"""
 
-    @patch("services.epg_service.EpgService.get_epg_coverage_stats")
+    @patch("routes.epg.sources.EpgService.get_epg_coverage_stats")
     def test_get_epg_coverage(self, mock_stats, app, client):
         """Test getting EPG coverage"""
         mock_stats.return_value = {

@@ -11,7 +11,7 @@ from flask_cors import cross_origin
 
 from error_handling import handle_errors
 from models import Account, db
-from services.ppv_epg_service import PPVEpgService
+from services.ppv.epg import PPVEpgService
 
 logger = logging.getLogger(__name__)
 

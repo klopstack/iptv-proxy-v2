@@ -34,9 +34,13 @@ Usage:
 
     # Import constants
     from services.epg.constants import PPV_CATEGORY_PATTERNS
+
+    # Legacy facade class (prefer submodule imports for new code)
+    from services.epg import EpgService
 """
 # Import submodules for direct access
 from services.epg import cache, constants, coverage, fcc, generation, matching, parsing, ppv, programs, utils
+from services.epg.facade import EpgService
 
 # Re-export commonly used constants for convenience
 from services.epg.constants import (
@@ -61,6 +65,8 @@ __all__ = [
     "coverage",
     "fcc",
     "programs",
+    # Legacy facade class
+    "EpgService",
     # Constants (re-exported for convenience)
     "MAJOR_BROADCAST_NETWORKS",
     "NETWORK_FALLBACK_EPG_IDS",

@@ -7,7 +7,7 @@ actual data extraction runs.
 """
 from datetime import datetime
 
-from services.ppv_event_extractor import PPVEventExtractor
+from services.ppv.extraction import PPVEventExtractor
 
 # Reference date from last database sync (2025-12-28 00:04:36 UTC)
 # Using this ensures all tests are consistent with production extraction

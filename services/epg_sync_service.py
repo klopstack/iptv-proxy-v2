@@ -14,7 +14,7 @@ from typing import Dict, Tuple
 
 from models import EpgSource, db
 from services.epg.cache import save_to_cache
-from services.epg_service import EpgService
+from services.epg import EpgService
 from services.iptv_service import IPTVService
 from services.schedules_direct import SchedulesDirectClient, SchedulesDirectError
 from services.xmltv_grabber_service import XmltvGrabberService
@@ -127,7 +127,7 @@ class EpgSyncService:
         try:
             import requests
 
-            from services.epg_service import normalize_xmltv_url
+            from services.epg.utils import normalize_xmltv_url
 
             # Normalize URL (e.g., convert GitHub blob URLs to raw URLs)
             url = normalize_xmltv_url(source.url)
@@ -333,7 +333,7 @@ class EpgSyncService:
             Tuple of (success, message, stats)
         """
         try:
-            from services.ppv_epg_service import PPVEpgService
+            from services.ppv.epg import PPVEpgService
 
             # First, sync Event records to EpgChannel entries
             created, updated = PPVEpgService.sync_ppv_events_to_epg_channels(source.id)

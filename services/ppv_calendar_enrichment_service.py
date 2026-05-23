@@ -1,5 +1,13 @@
 """Backward compatibility — use services.ppv.enrichment instead."""
 
+import warnings
+
+warnings.warn(
+    "Import from services.ppv.enrichment instead of services.ppv_calendar_enrichment_service",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 from services.ppv.enrichment import (  # noqa: F401
     API_REQUEST_INTERVAL,
     API_REQUESTS_PER_MINUTE,

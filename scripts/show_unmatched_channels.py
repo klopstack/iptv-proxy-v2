@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app import app
 from models import Channel
-from services.ppv_event_extractor import PPVEventExtractor
+from services.ppv.extraction import PPVEventExtractor
 from services.reverse_event_matcher.date_extractor import DateExtractor
 
 

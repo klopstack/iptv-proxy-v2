@@ -517,7 +517,7 @@ def proxy_epg(account_id):
     - collapse_duplicates: "true" to collapse duplicate channels keeping highest quality
     - proxy_icons: "true" to proxy icon URLs through local cache
     """
-    from services.epg_service import EpgService
+    from services.epg import EpgService
 
     account = Account.query.get_or_404(account_id)
 
@@ -614,7 +614,7 @@ def _generate_epg_from_config(config):
     Query Parameters:
     - east_west_fallback: "false" to disable west EPG generation from east (default: true)
     """
-    from services.epg_service import EpgService
+    from services.epg import EpgService
 
     if not config.enabled:
         raise PermissionError("Playlist configuration is disabled")

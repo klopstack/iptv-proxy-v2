@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from models import Channel, EpgChannel, EpgSource, Event, EventChannelLink, db
-from services.ppv_epg_service import PPVEpgService
+from services.ppv.epg import PPVEpgService
 
 
 @pytest.fixture
@@ -605,7 +605,7 @@ class TestPPVEpgRoutes:
             assert initial_source is None
 
             # Test auto-creation by directly calling the service method
-            from services.ppv_epg_service import PPVEpgService
+            from services.ppv.epg import PPVEpgService
 
             source_id = PPVEpgService.create_epg_source_for_ppv_events()
 
@@ -628,7 +628,7 @@ def test_ppv_channel_epg_matching(app, sample_events):
     with app.app_context():
         from models import Account, Category, Channel, ChannelEpgMapping, Event, EventChannelLink
         from services.epg_match_rules_service import EpgMatchRulesService
-        from services.ppv_epg_service import PPVEpgService
+        from services.ppv.epg import PPVEpgService
 
         # Get the event created by fixture
         event = Event.query.first()

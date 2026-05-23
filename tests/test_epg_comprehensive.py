@@ -533,7 +533,7 @@ class TestEpgMappings:
 class TestEpgCoverage:
     """Tests for EPG coverage statistics"""
 
-    @patch("services.epg_service.EpgService.get_epg_coverage_stats")
+    @patch("routes.epg.sources.EpgService.get_epg_coverage_stats")
     def test_get_epg_coverage(self, mock_stats, app, client):
         """Test getting EPG coverage statistics"""
         mock_stats.return_value = {
@@ -547,7 +547,7 @@ class TestEpgCoverage:
         assert response.status_code == 200
         assert response.json["total_channels"] == 100
 
-    @patch("services.epg_service.EpgService.get_epg_coverage_stats")
+    @patch("routes.epg.sources.EpgService.get_epg_coverage_stats")
     def test_get_epg_coverage_filtered(self, mock_stats, app, client, test_account):
         """Test getting EPG coverage for specific account"""
         mock_stats.return_value = {
@@ -560,7 +560,7 @@ class TestEpgCoverage:
         assert response.status_code == 200
         mock_stats.assert_called_once_with(test_account)
 
-    @patch("services.epg_service.EpgService.get_category_epg_coverage")
+    @patch("routes.epg.sources.EpgService.get_category_epg_coverage")
     def test_get_category_epg_coverage(self, mock_coverage, app, client, test_account):
         """Test getting EPG coverage by category"""
         mock_coverage.return_value = [

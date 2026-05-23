@@ -2,7 +2,8 @@
 Tests for PPV (Pay-Per-View) channel detection and EPG handling
 """
 from models import Account, Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
-from services.epg_service import EpgService, is_ppv_channel
+from services.epg import EpgService
+from services.epg.ppv import is_ppv_channel
 
 
 class TestPPVDetection:
