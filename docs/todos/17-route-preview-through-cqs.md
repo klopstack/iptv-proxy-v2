@@ -1,7 +1,7 @@
 # TODO 17: Route Preview Endpoints Through ChannelQueryService Entry Points
 
 **Priority:** P1  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Medium (2 route files + small CQS API)
 
 ---
@@ -96,11 +96,11 @@ Group by account, call `channels_for_account_candidates` per group (or full `cha
 
 ## Acceptance criteria
 
-- [ ] Preview routes contain no direct `FilterService.apply_filters_to_channels` + `apply_ppv_visibility_to_channels` pairs
-- [ ] With no search/category/tag params, preview channel set still matches M3U (TODO 08 tests pass)
-- [ ] With search/category/tag params, preview returns a **subset** of M3U-equivalent output
-- [ ] `collapse_duplicates=true` on preview still works
-- [ ] PPV hide_all / hide_inactive scenarios still pass
+- [x] Preview routes contain no direct `FilterService.apply_filters_to_channels` + `apply_ppv_visibility_to_channels` pairs
+- [x] With no search/category/tag params, preview channel set still matches M3U (TODO 08 tests pass)
+- [x] With search/category/tag params, preview returns a **subset** of M3U-equivalent output
+- [x] `collapse_duplicates=true` on preview still works
+- [x] PPV hide_all / hide_inactive scenarios still pass
 
 ---
 
@@ -124,6 +124,6 @@ venv/bin/pytest tests/test_channel_query_service.py -v --no-cov
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | Identified post-TODO 08: behavioral parity exists, structural unification does not |
+| Notes | Added `channels_for_account_candidates` and `channels_for_multi_account_candidates`; preview routes delegate to CQS |

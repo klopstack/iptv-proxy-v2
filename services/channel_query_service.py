@@ -345,6 +345,25 @@ class ChannelQueryService:
         return collapsed
 
     @staticmethod
+    def collapse_config_channels_if_requested(
+        channels: List[Channel],
+        collapse_duplicates: bool,
+        *,
+        context: str = "",
+    ) -> List[Channel]:
+        """Collapse duplicate channels across accounts when requested; otherwise unchanged."""
+        if not collapse_duplicates:
+            return channels
+
+        original_count = len(channels)
+        collapsed = ChannelQueryService.collapse_channels(channels)
+        suffix = f" {context}" if context else ""
+        logger.info(
+            f"Collapsed {original_count} channels to {len(collapsed)} unique channels{suffix}"
+        )
+        return collapsed
+
+    @staticmethod
     def _account_data_for_playlist(account_by_id: dict, channel: Channel) -> Dict[str, Any]:
         account = account_by_id[channel.account_id]
         primary_cred = account.get_primary_credential()
@@ -409,6 +428,52 @@ class ChannelQueryService:
         return visible
 
     @staticmethod
+    def channels_for_account_candidates(
+        account_id: int,
+        candidates: List[Channel],
+        *,
+        apply_filters: bool = True,
+        apply_ppv_visibility: bool = True,
+    ) -> List[Channel]:
+        """Apply account selection rules to an already-narrowed channel list."""
+        if apply_filters:
+            candidates = FilterService.apply_filters_to_channels(candidates, account_id)
+        if apply_ppv_visibility:
+            candidates = ChannelQueryService.apply_ppv_visibility_to_channels(candidates)
+        return candidates
+
+    @staticmethod
+    def channels_for_multi_account_candidates(
+        candidates: List[Channel],
+        *,
+        apply_filters: bool = True,
+        apply_ppv_visibility: bool = True,
+    ) -> List[Channel]:
+        """Apply per-account selection rules to a multi-account candidate list."""
+        if not candidates:
+            return []
+
+        by_account: dict = {}
+        for ch in candidates:
+            by_account.setdefault(ch.account_id, []).append(ch)
+
+        filtered: List[Channel] = []
+        for acc_id, acc_channels in by_account.items():
+            filtered.extend(
+                ChannelQueryService.channels_for_account_candidates(
+                    acc_id,
+                    acc_channels,
+                    apply_filters=apply_filters,
+                    apply_ppv_visibility=False,
+                )
+            )
+
+        if apply_ppv_visibility:
+            filtered = ChannelQueryService.apply_ppv_visibility_to_channels(filtered)
+
+        return filtered
+
+    @staticmethod
     def channels_for_account(
         account_id: int,
         *,
@@ -428,13 +493,12 @@ class ChannelQueryService:
             .all()
         )
 
-        if apply_filters:
-            channels = FilterService.apply_filters_to_channels(channels, account_id)
-
-        if apply_ppv_visibility:
-            channels = ChannelQueryService.apply_ppv_visibility_to_channels(channels)
-
-        return channels
+        return ChannelQueryService.channels_for_account_candidates(
+            account_id,
+            channels,
+            apply_filters=apply_filters,
+            apply_ppv_visibility=apply_ppv_visibility,
+        )
 
     @staticmethod
     def channels_for_playlist_config(

@@ -8,6 +8,7 @@ from flask import Blueprint, jsonify, request
 from error_handling import handle_errors
 from models import Account, Category, Channel, ChannelTag, Tag, db
 from services.cache_service import CacheService
+from services.channel_query_service import ChannelQueryService
 from services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
@@ -427,21 +428,7 @@ def preview_channels():
     # Get all channels (we need to apply filters dynamically)
     all_channels = query.order_by(Channel.name).all()
 
-    # Filter each account's channels, then apply PPV visibility per account
-    from services.channel_query_service import ChannelQueryService
-    from services.filter_service import FilterService
-
-    channels_by_account = {}
-    for ch in all_channels:
-        if ch.account_id not in channels_by_account:
-            channels_by_account[ch.account_id] = []
-        channels_by_account[ch.account_id].append(ch)
-
-    filtered_channels = []
-    for acc_id, acc_channels in channels_by_account.items():
-        filtered_channels.extend(FilterService.apply_filters_to_channels(acc_channels, acc_id))
-
-    filtered_channels = ChannelQueryService.apply_ppv_visibility_to_channels(filtered_channels)
+    filtered_channels = ChannelQueryService.channels_for_multi_account_candidates(all_channels)
 
     # Sort all filtered channels by name
     filtered_channels.sort(key=lambda ch: ch.name or "")

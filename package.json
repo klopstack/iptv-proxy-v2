@@ -6,13 +6,16 @@
   "scripts": {
     "lint": "eslint templates/**/*.html",
     "lint:fix": "eslint templates/**/*.html --fix",
-    "test": "echo 'No JS tests yet' && exit 0"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@html-eslint/eslint-plugin": "^0.27.0",
     "@html-eslint/parser": "^0.27.0",
     "eslint": "^8.57.0",
-    "eslint-plugin-html": "^8.1.2"
+    "eslint-plugin-html": "^8.1.2",
+    "jsdom": "^26.1.0",
+    "vitest": "^3.2.4"
   },
   "eslintConfig": {
     "extends": [

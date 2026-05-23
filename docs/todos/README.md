@@ -50,7 +50,7 @@ Update the status column in this index as each item is completed.
 | 13 | [13-coverage-test-audit.md](./13-coverage-test-audit.md) | ✅ | Audit and trim coverage-padding test modules |
 | 14 | [14-models-package-split.md](./14-models-package-split.md) | ✅ | Continue splitting `models/_core.py` into domain modules |
 | 15 | [15-facade-layer-consolidation.md](./15-facade-layer-consolidation.md) | ✅ | Gradually remove backward-compat service facades |
-| 16 | [16-frontend-tests.md](./16-frontend-tests.md) | ⬜ | Add minimal JS/HTML lint test coverage |
+| 16 | [16-frontend-tests.md](./16-frontend-tests.md) | ✅ | Add minimal JS/HTML lint test coverage |
 
 ## P1–P2 — Remaining structural deduplication (post-TODO 08 audit)
 
@@ -58,7 +58,7 @@ These items close gaps where **behavioral parity exists** (TODO 08 tests) but **
 
 | # | Document | Status | Summary |
 |---|----------|--------|---------|
-| 17 | [17-route-preview-through-cqs.md](./17-route-preview-through-cqs.md) | ⬜ | Preview endpoints call CQS entry points, not inline FilterService + PPV |
+| 17 | [17-route-preview-through-cqs.md](./17-route-preview-through-cqs.md) | ✅ | Preview endpoints call CQS entry points, not inline FilterService + PPV |
 | 18 | [18-config-epg-collapse-duplicates.md](./18-config-epg-collapse-duplicates.md) | ⬜ | Add `?collapse_duplicates=true` to config EPG (parity with config M3U) |
 | 19 | [19-extract-m3u-generation-helper.md](./19-extract-m3u-generation-helper.md) | ⬜ | Shared M3U EXTINF/URL formatting for account vs config routes |
 | 20 | [20-align-admin-visible-channel-semantics.md](./20-align-admin-visible-channel-semantics.md) | ⬜ | Align or document filter-only counts in stats/categories/EPG admin APIs |

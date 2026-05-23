@@ -293,6 +293,117 @@ def test_apply_ppv_visibility_to_channels_multi_account(app):
         assert {ch.stream_id for ch in visible} == {"2"}
 
 
+def test_channels_for_account_candidates_applies_filters(app):
+    """Candidate helper applies account filters to a pre-narrowed list."""
+    with app.app_context():
+        from models import Filter
+
+        account = Account(name="F", server="s", username="u", password="p", enabled=True)
+        db.session.add(account)
+        db.session.commit()
+
+        cat = Category(account_id=account.id, category_id="1", category_name="Sports")
+        db.session.add(cat)
+        db.session.commit()
+
+        ch_sports = Channel(
+            account_id=account.id,
+            stream_id="1",
+            name="Sports Ch",
+            category_id=cat.id,
+            is_active=True,
+        )
+        ch_other = Channel(account_id=account.id, stream_id="2", name="Other Ch", is_active=True)
+        db.session.add_all([ch_sports, ch_other])
+        db.session.commit()
+
+        db.session.add(
+            Filter(
+                account_id=account.id,
+                name="Sports Only",
+                filter_type="category",
+                filter_action="whitelist",
+                filter_value="Sports",
+                enabled=True,
+            )
+        )
+        db.session.commit()
+
+        result = ChannelQueryService.channels_for_account_candidates(
+            account.id,
+            [ch_sports, ch_other],
+            apply_ppv_visibility=False,
+        )
+        assert {ch.stream_id for ch in result} == {"1"}
+
+
+def test_channels_for_account_candidates_applies_ppv(app):
+    """Candidate helper applies PPV visibility when enabled."""
+    with app.app_context():
+        account = Account(
+            name="PPV",
+            server="s",
+            username="u",
+            password="p",
+            enabled=True,
+            ppv_visibility="hide_all",
+        )
+        db.session.add(account)
+        db.session.commit()
+
+        ch_ppv = Channel(
+            account_id=account.id,
+            stream_id="ppv",
+            name="PPV Ch",
+            is_active=True,
+            is_ppv=True,
+        )
+        ch_live = Channel(account_id=account.id, stream_id="live", name="Live Ch", is_active=True)
+        db.session.add_all([ch_ppv, ch_live])
+        db.session.commit()
+
+        result = ChannelQueryService.channels_for_account_candidates(
+            account.id,
+            [ch_ppv, ch_live],
+            apply_filters=False,
+        )
+        assert {ch.stream_id for ch in result} == {"live"}
+
+
+def test_channels_for_multi_account_candidates(app):
+    """Multi-account candidate helper applies filters and PPV per account."""
+    with app.app_context():
+        acc1 = Account(
+            name="A1",
+            server="s",
+            username="u",
+            password="p",
+            enabled=True,
+            ppv_visibility="hide_all",
+        )
+        acc2 = Account(
+            name="A2",
+            server="s",
+            username="u",
+            password="p",
+            enabled=True,
+            ppv_visibility="show_all",
+        )
+        db.session.add_all([acc1, acc2])
+        db.session.commit()
+
+        ch1 = Channel(account_id=acc1.id, stream_id="1", name="Hidden PPV", is_active=True, is_ppv=True)
+        ch2 = Channel(account_id=acc2.id, stream_id="2", name="Visible PPV", is_active=True, is_ppv=True)
+        db.session.add_all([ch1, ch2])
+        db.session.commit()
+
+        result = ChannelQueryService.channels_for_multi_account_candidates(
+            [ch1, ch2],
+            apply_filters=False,
+        )
+        assert {ch.stream_id for ch in result} == {"2"}
+
+
 def test_epg_channel_id_for_ppv_event(app):
     """PPV channels with linked events use event-{id} EPG identifiers."""
     with app.app_context():
@@ -549,6 +660,20 @@ def test_collapse_account_channels_if_requested_noop(app):
             account.id,
             False,
         )
+        assert result == [ch]
+
+
+def test_collapse_config_channels_if_requested_noop(app):
+    """Config collapse helper returns input unchanged when disabled."""
+    with app.app_context():
+        account = Account(name="A", server="s", username="u", password="p", enabled=True)
+        db.session.add(account)
+        db.session.commit()
+        ch = Channel(account_id=account.id, stream_id="1", name="Ch", is_active=True)
+        db.session.add(ch)
+        db.session.commit()
+
+        result = ChannelQueryService.collapse_config_channels_if_requested([ch], False)
         assert result == [ch]
 
 

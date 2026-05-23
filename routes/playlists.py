@@ -576,6 +576,7 @@ def generate_epg_from_config(config_id):
     in the corresponding playlist. Handles east/west channel fallback.
 
     Query Parameters:
+    - collapse_duplicates: "true" to collapse duplicate channels keeping highest quality
     - east_west_fallback: "false" to disable west EPG generation from east (default: true)
     """
     config = PlaylistConfig.query.get_or_404(config_id)
@@ -612,12 +613,16 @@ def _generate_epg_from_config(config):
     the EPG matches the playlist content.
 
     Query Parameters:
+    - collapse_duplicates: "true" to collapse duplicate channels keeping highest quality
     - east_west_fallback: "false" to disable west EPG generation from east (default: true)
     """
     from services.epg import EpgService
 
     if not config.enabled:
         raise PermissionError("Playlist configuration is disabled")
+
+    # Check if we should collapse duplicates (same logic as config M3U generation)
+    collapse_duplicates = request.args.get("collapse_duplicates", "").lower() == "true"
 
     # Check if east/west fallback is enabled
     east_west_fallback = request.args.get("east_west_fallback", "true").lower() != "false"
@@ -626,6 +631,12 @@ def _generate_epg_from_config(config):
         config,
         apply_filters=True,
         apply_ppv_visibility=True,
+    )
+
+    channels = ChannelQueryService.collapse_config_channels_if_requested(
+        channels,
+        collapse_duplicates,
+        context="for EPG",
     )
 
     if not channels:
@@ -637,7 +648,7 @@ def _generate_epg_from_config(config):
 
     logger.info(
         f"Generating EPG for config {config.id} ({config.name}): {len(channels)} channels "
-        f"(east_west_fallback={east_west_fallback})"
+        f"(east_west_fallback={east_west_fallback}, collapsed={collapse_duplicates})"
     )
 
     # Generate filtered EPG

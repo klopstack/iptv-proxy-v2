@@ -11,6 +11,7 @@ from models import Account, Category, Channel, ChannelTag, Credential, Filter, T
 from schemas import AccountCreateSchema, AccountUpdateSchema, validate_request_data
 from services.cache_service import CacheService
 from services.connection_manager import ConnectionManager
+from services.channel_query_service import ChannelQueryService
 from services.filter_service import FilterService
 from services.iptv_service import IPTVService
 from services.tag_service import TagService
@@ -914,15 +915,7 @@ def preview_account_playlist(account_id):
         # For duplicate collapsing, we need to load ALL matching channels first
         # to properly group and collapse them, then paginate the result
         all_channels = base_query.all()
-
-        # Apply filters dynamically to channels
-        from services.filter_service import FilterService
-
-        all_channels = FilterService.apply_filters_to_channels(all_channels, account_id)
-
-        from services.channel_query_service import ChannelQueryService
-
-        all_channels = ChannelQueryService.apply_ppv_visibility_to_channels(all_channels)
+        all_channels = ChannelQueryService.channels_for_account_candidates(account_id, all_channels)
 
         tags_map = ChannelQueryService.load_tags_for_account_channels(account_id, all_channels)
 
@@ -980,15 +973,9 @@ def preview_account_playlist(account_id):
         # 3. Then paginate
         # This is necessary because filters can't be applied at SQL level efficiently
         all_channels = base_query.all()
-
-        # Apply filters dynamically to channels
-        from services.filter_service import FilterService
-
-        filtered_channels = FilterService.apply_filters_to_channels(all_channels, account_id)
-
-        from services.channel_query_service import ChannelQueryService
-
-        filtered_channels = ChannelQueryService.apply_ppv_visibility_to_channels(filtered_channels)
+        filtered_channels = ChannelQueryService.channels_for_account_candidates(
+            account_id, all_channels
+        )
 
         # Get total count AFTER filtering
         total = len(filtered_channels)

@@ -1,4 +1,4 @@
-.PHONY: help install install-js test test-fast test-clean lint lint-js format clean run debug docker-build docker-run venv vulture vulture-all
+.PHONY: help install install-js test test-js test-fast test-clean lint lint-js format clean run debug docker-build docker-run venv vulture vulture-all
 
 VENV = venv
 PYTHON = $(VENV)/bin/python
@@ -36,6 +36,9 @@ test-clean: ## Remove stale test database files
 
 test: install test-clean ## Run tests with coverage in venv
 	$(PYTEST) tests/ -v --cov=. --cov-report=html --cov-report=term-missing
+
+test-js: install-js ## Run JavaScript unit tests
+	npm test
 
 test-fast: install test-clean ## Run tests without coverage in venv
 	$(PYTEST) tests/ -v
@@ -105,4 +108,4 @@ docker-stop: ## Stop Docker containers
 docker-migrate: ## Run migrations in Docker container
 	docker exec -it iptv-proxy-v2 python run_migrations.py
 
-ci: lint test ## Run all CI checks (Python + JavaScript linting + tests)
+ci: lint test-js test ## Run all CI checks (Python + JavaScript linting + tests)

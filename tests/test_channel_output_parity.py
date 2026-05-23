@@ -489,6 +489,23 @@ def collapse_account(app):
         yield account.id
 
 
+@pytest.fixture
+def collapse_config(app, collapse_account):
+    """Playlist config with duplicate ESPN channels for collapse parity."""
+    with app.app_context():
+        config = PlaylistConfig(
+            name="Collapse Config Parity",
+            include_accounts=json.dumps([collapse_account]),
+            include_tags=json.dumps([]),
+            exclude_tags=json.dumps([]),
+            tag_match_mode="any",
+            enabled=True,
+        )
+        db.session.add(config)
+        db.session.commit()
+        yield config.id
+
+
 class TestBasicAccountParity:
     """Scenario 1: basic account, no filters."""
 
@@ -624,6 +641,18 @@ class TestCollapseDuplicatesParity:
         m3u_ids = stream_ids_from_m3u(m3u.data)
 
         epg = client.get(f"/epg/{collapse_account}.xml?{params}")
+        assert epg.status_code == 200
+        assert_m3u_epg_channel_parity(m3u.data, epg.data)
+
+        assert m3u_ids == {"espn_raw_60fps", "cnn_hd"}
+
+    def test_config_m3u_epg_same_stream_ids_after_collapse(self, client, collapse_config):
+        params = "collapse_duplicates=true&proxy_icons=false"
+        m3u = client.get(f"/playlist/config/{collapse_config}.m3u?{params}")
+        assert m3u.status_code == 200
+        m3u_ids = stream_ids_from_m3u(m3u.data)
+
+        epg = client.get(f"/epg/config/{collapse_config}.xml?{params}")
         assert epg.status_code == 200
         assert_m3u_epg_channel_parity(m3u.data, epg.data)
 

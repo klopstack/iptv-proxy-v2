@@ -1,7 +1,7 @@
 # TODO 16: Frontend Tests
 
 **Priority:** P3  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Medium
 
 ---
@@ -91,10 +91,10 @@ Or include in `make ci` after `npm install`.
 | File | Action |
 |------|--------|
 | `package.json` | Real test script + vitest devDep |
-| `vitest.config.js` | **New** |
+| `vitest.config.mjs` | **New** |
 | `static/js/utils.js` | **New** — shared helpers |
 | `static/js/__tests__/*.test.js` | **New** |
-| `templates/test.html` | Import extracted JS |
+| `templates/preview_channels.html` | Import extracted JS |
 | `Makefile` | Optional `test-js` target |
 | `.github/workflows/build.yml` | Run JS tests |
 
@@ -102,10 +102,10 @@ Or include in `make ci` after `npm install`.
 
 ## Acceptance criteria
 
-- [ ] `npm test` runs real tests (not echo stub)
-- [ ] At least 10 unit tests for extracted pure functions
-- [ ] CI runs JS tests on PRs
-- [ ] No regression in `npm run lint`
+- [x] `npm test` runs real tests (not echo stub)
+- [x] At least 10 unit tests for extracted pure functions
+- [x] CI runs JS tests on PRs
+- [x] No regression in `npm run lint`
 
 ---
 
@@ -131,6 +131,6 @@ make ci  # if integrated
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Vitest + 19 unit tests; extracted `utils.js`, `preview_channels.js`, and `preview_channels_page.js` from preview page |
