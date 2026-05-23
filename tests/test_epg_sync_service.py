@@ -103,7 +103,7 @@ class TestSyncProviderSource:
         assert stats == {}
 
     @patch("services.epg_sync_service.IPTVService")
-    @patch("services.epg.parsing.sync_epg_source")
+    @patch("services.epg_sync_service.sync_epg_source")
     @patch("services.epg_sync_service.save_to_cache")
     def test_sync_provider_source_with_credential(self, mock_cache, mock_sync_epg, mock_iptv_service):
         """Sync provider with credential object"""
@@ -139,7 +139,7 @@ class TestSyncProviderSource:
         mock_cache.assert_called_once_with(1, b"<xml>test</xml>")
 
     @patch("services.epg_sync_service.IPTVService")
-    @patch("services.epg.parsing.sync_epg_source")
+    @patch("services.epg_sync_service.sync_epg_source")
     @patch("services.epg_sync_service.save_to_cache")
     def test_sync_provider_source_without_credential(self, mock_cache, mock_sync_epg, mock_iptv_service):
         """Sync provider using account credentials if no credential object"""
@@ -281,7 +281,7 @@ class TestSyncXmltvGrabberSource:
         assert "no xmltv grabber" in message.lower()
 
     @patch("services.epg_sync_service.XmltvGrabberService.run_grabber")
-    @patch("services.epg.parsing.sync_epg_source")
+    @patch("services.epg_sync_service.sync_epg_source")
     @patch("services.epg_sync_service.save_to_cache")
     def test_sync_grabber_success(self, mock_cache, mock_sync, mock_run_grabber):
         """Successfully sync XMLTV grabber"""
@@ -326,7 +326,7 @@ class TestSyncXmltvGrabberSource:
         assert "grabber failed" in message.lower()
 
     @patch("services.epg_sync_service.XmltvGrabberService.run_grabber")
-    @patch("services.epg.parsing.sync_epg_source")
+    @patch("services.epg_sync_service.sync_epg_source")
     @patch("services.epg_sync_service.save_to_cache")
     def test_sync_grabber_with_extra_args(self, mock_cache, mock_sync, mock_run_grabber):
         """Sync grabber with extra arguments"""

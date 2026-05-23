@@ -186,6 +186,42 @@ mypy app.py models/ services/  # Type checking
 - Add docstrings to functions and classes
 - Keep functions focused and single-purpose
 
+## Database Lifecycle (SQLite)
+
+### Boot order (Docker / production)
+
+1. `db.create_all()` — creates any tables defined in models but missing from the file
+2. `python run_migrations.py` — applies column/index changes; records each file in `schema_migrations`
+
+See [`entrypoint.sh`](../entrypoint.sh). Do not rely on `create_all()` alone for upgrades; always add a migration for schema changes.
+
+### Foreign keys
+
+SQLite requires `PRAGMA foreign_keys=ON` per connection. The app enables this in [`app.py`](../app.py) (`set_sqlite_pragma`). Migration DDL with `ON DELETE CASCADE` only takes effect when this pragma is set.
+
+### Account deletion
+
+Use [`services/account_delete_service.py`](../services/account_delete_service.py) — explicit deletion of all account-scoped rows. Global `tags`, `events`, and `rulesets` are preserved.
+
+### Backups
+
+Copy all three files when the app is running with WAL mode:
+
+- `iptv_proxy.db`
+- `iptv_proxy.db-wal`
+- `iptv_proxy.db-shm`
+
+### Adding a schema change
+
+1. Update SQLAlchemy models in `models/`
+2. Add idempotent migration in `migrations/YYYY_MM_DD_description.py`
+3. Run `python run_migrations.py` locally
+4. Add or extend `tests/test_migrations.py` / `tests/test_schema_parity.py`
+
+### Indexes
+
+Use `python run_migrations.py` only. The legacy `add_indexes.py` script delegates to the migration runner.
+
 ## Database Migrations
 
 Migrations live in `migrations/` and are named with date prefix (e.g., `2024_01_19_add_tag_rule_replacement.py`).
@@ -373,7 +409,7 @@ Multi-account playlist and EPG config endpoints use **slug URLs** as the canonic
 - `/playlist/config/<slug>.m3u`
 - `/epg/config/<slug>.xml`
 
-Numeric ID routes (`/playlist/config/<int:id>.m3u`, `/epg/config/<int:id>.xml`) remain for backward compatibility and **301-redirect to the slug** when one is set. New integrations should use slugs only.
+Numeric ID routes (`/playlist/config/<int:id>.m3u`, `/epg/config/<int:id>.xml`) remain for backward compatibility and return a `Deprecation` response header when a slug exists. New integrations should use slug URLs only; numeric routes may redirect in a future release.
 - Treat `is_visible` as a filter cache for admin queries only; it may lag until recompute but must not gate playlists.
 - Health auto-disable hides channels via `ChannelHealthStatus.auto_disabled_at`; CQS excludes those from output.
 - PPV placeholder patterns live in `services/epg/constants.py` (re-exported from `services/ppv/constants.py`); import via `services.ppv.detection.is_ppv_placeholder_name`.

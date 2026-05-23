@@ -4,10 +4,11 @@ This directory contains database migration scripts that are run automatically on
 
 ## How It Works
 
-1. **Idempotent**: All migrations check if changes are needed before applying them
-2. **Sequential**: Migrations run in alphabetical order by filename
-3. **Automatic**: Run on every container start via `entrypoint.sh`
-4. **Safe**: Each migration handles errors gracefully
+1. **Boot**: `entrypoint.sh` runs `db.create_all()` then `python run_migrations.py`
+2. **Tracking**: Applied migrations are recorded in the `schema_migrations` table (skipped on subsequent boots)
+3. **Idempotent**: Each migration checks if changes are needed before applying
+4. **Sequential**: Files run in alphabetical order by filename
+5. **Safe**: Failed migrations abort container startup
 
 ## Naming Convention
 
@@ -81,6 +82,9 @@ python run_migrations.py
 ## Rollback
 
 These migrations don't support automatic rollback. If a migration fails:
-1. Restore from backup
+
+1. Restore from backup (include `.db`, `-wal`, and `-shm` files)
 2. Fix the migration script
-3. Run again (migrations are idempotent)
+3. Run again (migrations are idempotent; already-recorded names in `schema_migrations` are skipped)
+
+To re-run a single migration after fixing it, delete its row from `schema_migrations` before restarting.

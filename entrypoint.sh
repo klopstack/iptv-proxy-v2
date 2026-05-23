@@ -26,14 +26,11 @@ else
     fi
 fi
 
-# Initialize database if it doesn't exist
-if [ ! -f /app/data/iptv_proxy.db ]; then
-    echo "Initializing database..."
-    python -c 'from app import app, db; app.app_context().push(); db.create_all()'
-    echo "Database initialized successfully"
-fi
+# Ensure ORM tables exist, then apply column/index migrations
+echo "Ensuring database schema (create_all)..."
+python -c 'from app import app, db; app.app_context().push(); db.create_all()'
 
-# Run database migrations
+# Run database migrations (tracked in schema_migrations)
 echo "Running database migrations..."
 python run_migrations.py
 if [ $? -ne 0 ]; then

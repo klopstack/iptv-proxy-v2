@@ -1384,3 +1384,27 @@ class ChannelHealthService:
             status["accounts"] = accounts_status
 
         return status
+
+
+def cleanup_old_health_checks(days_old: Optional[int] = None) -> int:
+    """
+    Delete health check history older than retention period.
+
+    ChannelHealthStatus aggregates are preserved.
+
+    Args:
+        days_old: Override retention days (default from ChannelHealthConfig)
+
+    Returns:
+        Number of rows deleted
+    """
+    if days_old is None:
+        days_old = ChannelHealthConfig.get_int("health_check_retention_days", 30)
+
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days_old)
+    deleted = ChannelHealthCheck.query.filter(ChannelHealthCheck.checked_at < cutoff).delete(
+        synchronize_session=False
+    )
+    db.session.commit()
+    logger.info("Cleaned up %s health check records older than %s days", deleted, days_old)
+    return deleted

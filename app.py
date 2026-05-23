@@ -63,6 +63,8 @@ if "sqlite" in app.config["SQLALCHEMY_DATABASE_URI"]:
         cursor.execute("PRAGMA temp_store=MEMORY")
         # Synchronous=NORMAL is safe in WAL mode and faster
         cursor.execute("PRAGMA synchronous=NORMAL")
+        # Enforce ON DELETE CASCADE / RESTRICT from migration DDL
+        cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 
 
@@ -136,7 +138,26 @@ _disable_scheduler = (
 )
 
 # Scheduler will be started lazily on first request in worker 0 only
+_startup_tasks_done = False
 _scheduler_started = False
+
+
+def _run_startup_tasks():
+    """One-time startup: recover stale sync locks, then start scheduler."""
+    global _startup_tasks_done
+    if _startup_tasks_done or _disable_scheduler:
+        return
+
+    try:
+        from services.sync_service import recover_stale_sync_locks
+
+        recovered = recover_stale_sync_locks()
+        if recovered:
+            logger.info("Recovered %s stale sync lock(s) on startup", recovered)
+    except Exception as e:
+        logger.warning("Could not recover stale sync locks on startup: %s", e)
+
+    _startup_tasks_done = True
 
 
 def _ensure_scheduler_started():
@@ -161,6 +182,7 @@ def _ensure_scheduler_started():
 # Register a before_request handler to ensure scheduler starts
 @app.before_request
 def before_request():
+    _run_startup_tasks()
     _ensure_scheduler_started()
 
 

@@ -15,7 +15,7 @@ class EpgSource(db.Model):  # type: ignore[name-defined]
     source_type = db.Column(db.String(50), nullable=False)
 
     # For provider sources, link to account
-    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=True, index=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id", ondelete="CASCADE"), nullable=True, index=True)
 
     # For external URL sources
     url = db.Column(db.String(500))
@@ -62,7 +62,7 @@ class EpgChannel(db.Model):  # type: ignore[name-defined]
     __tablename__ = "epg_channels"
 
     id = db.Column(db.Integer, primary_key=True)
-    source_id = db.Column(db.Integer, db.ForeignKey("epg_sources.id"), nullable=False, index=True)
+    source_id = db.Column(db.Integer, db.ForeignKey("epg_sources.id", ondelete="CASCADE"), nullable=False, index=True)
     channel_id = db.Column(db.String(100), nullable=False, index=True)  # XMLTV channel id attribute
 
     # Display names (XMLTV can have multiple)
@@ -256,8 +256,10 @@ class ChannelEpgMapping(db.Model):  # type: ignore[name-defined]
     __tablename__ = "channel_epg_mappings"
 
     id = db.Column(db.Integer, primary_key=True)
-    channel_id = db.Column(db.Integer, db.ForeignKey("channels.id"), nullable=False, index=True)
-    epg_channel_id = db.Column(db.Integer, db.ForeignKey("epg_channels.id"), nullable=False, index=True)
+    channel_id = db.Column(db.Integer, db.ForeignKey("channels.id", ondelete="CASCADE"), nullable=False, index=True)
+    epg_channel_id = db.Column(
+        db.Integer, db.ForeignKey("epg_channels.id", ondelete="CASCADE"), nullable=False, index=True
+    )
 
     # How this mapping was created
     mapping_type = db.Column(db.String(50), nullable=False)  # 'auto_exact', 'auto_fuzzy', 'manual', 'provider'
@@ -297,7 +299,7 @@ class SdLineup(db.Model):  # type: ignore[name-defined]
     __tablename__ = "sd_lineups"
 
     id = db.Column(db.Integer, primary_key=True)
-    epg_source_id = db.Column(db.Integer, db.ForeignKey("epg_sources.id"), nullable=False, index=True)
+    epg_source_id = db.Column(db.Integer, db.ForeignKey("epg_sources.id", ondelete="CASCADE"), nullable=False, index=True)
     lineup_id = db.Column(db.String(100), nullable=False)  # SD lineup ID (e.g., "USA-NY12345-X")
     name = db.Column(db.String(200))  # Display name
     location = db.Column(db.String(200))  # Location description
@@ -332,7 +334,7 @@ class SdStation(db.Model):  # type: ignore[name-defined]
     __tablename__ = "sd_stations"
 
     id = db.Column(db.Integer, primary_key=True)
-    lineup_id = db.Column(db.Integer, db.ForeignKey("sd_lineups.id"), nullable=False, index=True)
+    lineup_id = db.Column(db.Integer, db.ForeignKey("sd_lineups.id", ondelete="CASCADE"), nullable=False, index=True)
     station_id = db.Column(db.String(50), nullable=False)  # SD station ID
     channel_number = db.Column(db.String(20))  # Channel number in lineup
 

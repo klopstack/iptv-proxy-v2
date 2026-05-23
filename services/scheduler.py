@@ -44,6 +44,13 @@ DEFAULT_PPV_PREFETCH_INTERVAL_HOURS = 6  # Pre-fetch event data every 6 hours
 SYNC_KEY_LAST_SPORTSIPY_REFRESH = "last_sportsipy_refresh"
 DEFAULT_SPORTSIPY_REFRESH_INTERVAL_HOURS = 168  # Weekly (7 days)
 
+# Data retention maintenance
+SYNC_KEY_LAST_EPG_PROGRAM_CLEANUP = "last_epg_program_cleanup"
+SYNC_KEY_LAST_HEALTH_CHECK_CLEANUP = "last_health_check_cleanup"
+DEFAULT_EPG_PROGRAM_CLEANUP_INTERVAL_HOURS = 24
+DEFAULT_HEALTH_CHECK_CLEANUP_INTERVAL_HOURS = 168
+DEFAULT_EPG_PROGRAM_RETENTION_DAYS = 7
+
 # Scheduler heartbeat for multi-worker detection
 SYNC_KEY_SCHEDULER_HEARTBEAT = "scheduler_heartbeat"
 SCHEDULER_HEARTBEAT_TIMEOUT_SECONDS = 120  # Consider dead if no heartbeat for 2 minutes
@@ -319,6 +326,18 @@ class SyncScheduler:
                 logger.info("Sportsipy team data refresh due (weekly schedule)")
                 self._refresh_sportsipy_teams()
                 self._set_last_sync_time(SYNC_KEY_LAST_SPORTSIPY_REFRESH)
+
+            # Expired EPG program cleanup (daily)
+            if self._needs_sync(SYNC_KEY_LAST_EPG_PROGRAM_CLEANUP, DEFAULT_EPG_PROGRAM_CLEANUP_INTERVAL_HOURS):
+                logger.info("EPG program cleanup due (daily schedule)")
+                self._cleanup_epg_programs()
+                self._set_last_sync_time(SYNC_KEY_LAST_EPG_PROGRAM_CLEANUP)
+
+            # Health check history cleanup (weekly)
+            if self._needs_sync(SYNC_KEY_LAST_HEALTH_CHECK_CLEANUP, DEFAULT_HEALTH_CHECK_CLEANUP_INTERVAL_HOURS):
+                logger.info("Health check history cleanup due (weekly schedule)")
+                self._cleanup_health_checks()
+                self._set_last_sync_time(SYNC_KEY_LAST_HEALTH_CHECK_CLEANUP)
 
             # Run channel health scanning (runs continuously when idle)
             self._scan_channel_health()
@@ -709,3 +728,23 @@ class SyncScheduler:
 
         except Exception as e:
             logger.error(f"Error refreshing sportsipy teams: {e}", exc_info=True)
+
+    def _cleanup_epg_programs(self):
+        """Remove expired rows from epg_programs."""
+        try:
+            from services.epg.programs import cleanup_expired_programs
+
+            deleted = cleanup_expired_programs(days_old=DEFAULT_EPG_PROGRAM_RETENTION_DAYS)
+            logger.info("EPG program cleanup removed %s row(s)", deleted)
+        except Exception as e:
+            logger.error("Error during EPG program cleanup: %s", e, exc_info=True)
+
+    def _cleanup_health_checks(self):
+        """Remove old channel_health_checks rows."""
+        try:
+            from services.channel_health_service import cleanup_old_health_checks
+
+            deleted = cleanup_old_health_checks()
+            logger.info("Health check cleanup removed %s row(s)", deleted)
+        except Exception as e:
+            logger.error("Error during health check cleanup: %s", e, exc_info=True)

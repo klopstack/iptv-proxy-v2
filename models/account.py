@@ -26,6 +26,7 @@ class Account(db.Model):  # type: ignore[name-defined]
     last_sync = db.Column(db.DateTime)  # Last time this account was synced
     last_sync_status = db.Column(db.String(50))  # 'success', 'error'
     sync_in_progress = db.Column(db.Boolean, default=False)  # Prevents concurrent syncs
+    sync_started_at = db.Column(db.DateTime)  # When current sync lock was acquired
 
     # PPV visibility settings: 'hide_all' | 'hide_inactive' (default) | 'show_all'
     ppv_visibility = db.Column(db.String(20), default="hide_inactive", nullable=False)
@@ -76,7 +77,7 @@ class Credential(db.Model):  # type: ignore[name-defined]
     __tablename__ = "credentials"
 
     id = db.Column(db.Integer, primary_key=True)
-    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False, index=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
     username = db.Column(db.String(100), nullable=False)
     password = db.Column(db.String(100), nullable=False)
 

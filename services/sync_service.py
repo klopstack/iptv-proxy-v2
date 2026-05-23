@@ -7,6 +7,8 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
+from sqlalchemy import delete, select, update
+
 from models import Account, Category, Channel, ChannelLink, ChannelTag, EventChannelLink, Tag, db
 from services.iptv_service import get_iptv_service_for_account
 from services.tag_service import TagService
@@ -17,12 +19,49 @@ logger = logging.getLogger(__name__)
 EAST_TAGS = {"EAST", "E", "ET", "EST", "EASTERN"}
 WEST_TAGS = {"WEST", "W", "PT", "PST", "PACIFIC", "WESTERN"}
 
+# Stale sync locks older than this are cleared on startup
+STALE_SYNC_LOCK_MINUTES = 30
+
+
+def recover_stale_sync_locks(max_age_minutes: int = STALE_SYNC_LOCK_MINUTES) -> int:
+    """
+    Reset sync locks held longer than max_age_minutes (e.g. after worker crash).
+
+    Returns:
+        Number of accounts recovered.
+    """
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=max_age_minutes)
+    stale = Account.query.filter(
+        Account.sync_in_progress.is_(True),
+        db.or_(
+            db.and_(Account.sync_started_at.isnot(None), Account.sync_started_at < cutoff),
+            db.and_(Account.sync_started_at.is_(None), Account.updated_at < cutoff),
+        ),
+    ).all()
+
+    for account in stale:
+        logger.warning(
+            "Recovering stale sync lock for account %s (id=%s, started=%s)",
+            account.name,
+            account.id,
+            account.sync_started_at,
+        )
+        account.sync_in_progress = False
+        account.sync_started_at = None
+
+    if stale:
+        db.session.commit()
+
+    return len(stale)
+
 
 @contextmanager
 def sync_lock(account_id: int):
     """
     Context manager for acquiring/releasing sync lock on an account.
     Prevents concurrent syncs of the same account across multiple workers.
+
+    Uses an atomic UPDATE to claim the lock (safe across gunicorn workers).
 
     Args:
         account_id: Account ID to lock
@@ -37,23 +76,29 @@ def sync_lock(account_id: int):
     if not account:
         raise ValueError(f"Account {account_id} not found")
 
-    # Check if sync is already in progress
-    if account.sync_in_progress:
-        raise ValueError(f"Sync already in progress for account {account.name}")
-
-    # Acquire lock
-    account.sync_in_progress = True
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    result = db.session.execute(
+        update(Account)
+        .where(Account.id == account_id, Account.sync_in_progress.is_(False))
+        .values(sync_in_progress=True, sync_started_at=now)
+    )
     db.session.commit()
+
+    if result.rowcount == 0:
+        account = db.session.get(Account, account_id)
+        raise ValueError(f"Sync already in progress for account {account.name if account else account_id}")
+
+    account = db.session.get(Account, account_id)
     logger.info(f"Acquired sync lock for account {account.name} (ID: {account_id})")
 
     try:
         yield account
     finally:
-        # Always release lock, even if sync fails
         try:
-            account = db.session.get(Account, account_id)  # Re-fetch in case of rollback
+            account = db.session.get(Account, account_id)
             if account:
                 account.sync_in_progress = False
+                account.sync_started_at = None
                 db.session.commit()
                 logger.info(f"Released sync lock for account {account.name} (ID: {account_id})")
         except Exception as e:
@@ -146,6 +191,8 @@ class ChannelSyncService:
                 db.session.commit()
                 stats["channels_deactivated"] = deactivated
 
+                stats["channel_tags_pruned"] = ChannelSyncService.prune_inactive_channel_tags(account_id)
+
                 # Compute filter visibility after sync
                 try:
                     from services.filter_service import FilterService
@@ -173,6 +220,41 @@ class ChannelSyncService:
             db.session.rollback()
 
         return stats
+
+    @staticmethod
+    def prune_inactive_channel_tags(account_id: int) -> int:
+        """
+        Remove channel_tags rows for streams that are no longer active.
+
+        ChannelTag rows are keyed by (account_id, stream_id), not channel PK,
+        so tags can linger after a stream is deactivated.
+        """
+        inactive_stream_ids = list(
+            db.session.scalars(
+                select(Channel.stream_id).where(
+                    Channel.account_id == account_id,
+                    Channel.is_active.is_(False),
+                )
+            ).all()
+        )
+        if not inactive_stream_ids:
+            return 0
+
+        result = db.session.execute(
+            delete(ChannelTag).where(
+                ChannelTag.account_id == account_id,
+                ChannelTag.stream_id.in_(inactive_stream_ids),
+            )
+        )
+        db.session.commit()
+        deleted = result.rowcount or 0
+        if deleted:
+            logger.info(
+                "Pruned %s channel_tag row(s) for inactive streams on account %s",
+                deleted,
+                account_id,
+            )
+        return deleted
 
     @staticmethod
     def _sync_categories(account_id: int, categories: List[Dict], stats: Dict) -> Dict:

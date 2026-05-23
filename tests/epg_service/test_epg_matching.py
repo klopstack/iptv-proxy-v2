@@ -470,7 +470,7 @@ class TestFccEnhancedEpgMatching:
                 account_id=account.id,
                 stream_id="us_abc_la",
                 name="US: ABC 7 (KABC) Los Angeles",
-                category_id=1,
+                category_id=None,
                 is_active=True,
             )
             db.session.add(channel)
@@ -1155,7 +1155,7 @@ class TestFccEnhancedEpgMatching:
                 stream_id="cw_laredo",
                 name="US: CW 13 LAREDO TX",
                 cleaned_name="CW 13 LAREDO TX",
-                category_id=1,
+                category_id=None,
                 is_active=True,
             )
             db.session.add(channel)

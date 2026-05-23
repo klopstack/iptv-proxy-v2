@@ -661,7 +661,7 @@ def test_load_tags_for_channels_multi_account(app):
 def test_prepare_collapse_input_includes_optional_fields(app):
     """Collapse input builder attaches tags and optional health/EPG data."""
     with app.app_context():
-        from models import ChannelEpgMapping, ChannelHealthStatus
+        from models import ChannelEpgMapping, ChannelHealthStatus, EpgChannel, EpgSource
 
         account = Account(name="Collapse", server="s", username="u", password="p", enabled=True)
         db.session.add(account)
@@ -669,6 +669,17 @@ def test_prepare_collapse_input_includes_optional_fields(app):
 
         hd_tag = Tag(name="HD")
         db.session.add(hd_tag)
+        db.session.commit()
+
+        epg_source = EpgSource(name="Test EPG", source_type="xmltv", enabled=True)
+        db.session.add(epg_source)
+        db.session.commit()
+        epg_channel = EpgChannel(
+            source_id=epg_source.id,
+            channel_id="espn.us",
+            display_name="ESPN",
+        )
+        db.session.add(epg_channel)
         db.session.commit()
 
         ch = Channel(account_id=account.id, stream_id="1", name="ESPN HD", cleaned_name="ESPN", is_active=True)
@@ -686,7 +697,7 @@ def test_prepare_collapse_input_includes_optional_fields(app):
         db.session.add(
             ChannelEpgMapping(
                 channel_id=ch.id,
-                epg_channel_id=123,
+                epg_channel_id=epg_channel.id,
                 mapping_type="manual",
                 confidence=1.0,
             )
@@ -707,7 +718,7 @@ def test_prepare_collapse_input_includes_optional_fields(app):
         assert entry["channel"] is ch
         assert entry["tags"] == ["HD"]
         assert entry["health_status"]["status"] == "healthy"
-        assert entry["epg_mappings"][0]["epg_channel_id"] == 123
+        assert entry["epg_mappings"][0]["epg_channel_id"] == epg_channel.id
 
 
 def test_collapse_channels_keeps_highest_quality(app):

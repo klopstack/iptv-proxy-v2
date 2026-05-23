@@ -471,7 +471,7 @@ class TestXtreamStreamURLs:
         with app.app_context():
             response = client.get("/xmltv.php", query_string={"username": "playlist_user", "password": "playlist_pass"})
             assert response.status_code == 302
-            assert f"/epg/config/{playlist_config.id}.xml" in response.location
+            assert f"/epg/config/{playlist_config.slug}.xml" in response.location
 
     def test_xmltv_epg_invalid_credentials(self, app, client):
         """Test XMLTV EPG with invalid credentials"""

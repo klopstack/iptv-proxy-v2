@@ -213,6 +213,10 @@ class ChannelHealthConfig(db.Model):  # type: ignore[name-defined]
             "false",
             "Whether to scan hidden/filtered channels (visible channels are always prioritized)",
         ),
+        "health_check_retention_days": (
+            "30",
+            "Delete individual health check records older than this many days",
+        ),
     }
 
     @staticmethod

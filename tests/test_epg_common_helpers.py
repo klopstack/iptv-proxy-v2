@@ -12,6 +12,31 @@ from services.epg.sources import sync_sd_channels_to_epg
 from services.schedules_direct import SchedulesDirectError
 
 
+def _create_sd_epg_source(**kwargs):
+    """Create a Schedules Direct EPG source without invalid FK references."""
+    source = EpgSource(
+        name="Test Source",
+        source_type="schedules_direct",
+        **kwargs,
+    )
+    db.session.add(source)
+    db.session.commit()
+    return source
+
+
+def _create_sd_lineup(source, **kwargs):
+    """Create an SD lineup linked to the given EPG source."""
+    lineup = SdLineup(
+        epg_source_id=source.id,
+        lineup_id="USA-12345",
+        name="Test Lineup",
+        **kwargs,
+    )
+    db.session.add(lineup)
+    db.session.commit()
+    return lineup
+
+
 class TestSyncSdChannelsToEpg:
     """Test sync_sd_channels_to_epg function"""
 
@@ -24,14 +49,7 @@ class TestSyncSdChannelsToEpg:
     def test_sync_sd_channels_empty_list(self, app):
         """Sync with empty channel list returns zero stats"""
         with app.app_context():
-            source = EpgSource(
-                id=1,
-                account_id=1,
-                name="Test Source",
-                source_type="schedules_direct",
-            )
-            db.session.add(source)
-            db.session.commit()
+            source = _create_sd_epg_source()
 
             stats = sync_sd_channels_to_epg(source, [])
 
@@ -42,14 +60,7 @@ class TestSyncSdChannelsToEpg:
     def test_sync_sd_channels_new_channels(self, app):
         """Sync creates new channels"""
         with app.app_context():
-            source = EpgSource(
-                id=1,
-                account_id=1,
-                name="Test Source",
-                source_type="schedules_direct",
-            )
-            db.session.add(source)
-            db.session.commit()
+            source = _create_sd_epg_source()
 
             channels = [
                 {
@@ -72,20 +83,13 @@ class TestSyncSdChannelsToEpg:
             assert stats["channels_updated"] == 0
 
             # Verify channels were created
-            channels_in_db = EpgChannel.query.filter_by(source_id=1).all()
+            channels_in_db = EpgChannel.query.filter_by(source_id=source.id).all()
             assert len(channels_in_db) == 2
 
     def test_sync_sd_channels_update_existing(self, app):
         """Sync updates existing channels"""
         with app.app_context():
-            source = EpgSource(
-                id=1,
-                account_id=1,
-                name="Test Source",
-                source_type="schedules_direct",
-            )
-            db.session.add(source)
-            db.session.commit()
+            source = _create_sd_epg_source()
 
             # Create initial channel with the correct channel_id format
             from services.epg.utils import make_sd_xmltv_id
@@ -93,7 +97,7 @@ class TestSyncSdChannelsToEpg:
             expected_channel_id = make_sd_xmltv_id("12345")
 
             existing_channel = EpgChannel(
-                source_id=1,
+                source_id=source.id,
                 channel_id=expected_channel_id,
                 display_name="Old NBC",
             )
@@ -116,20 +120,13 @@ class TestSyncSdChannelsToEpg:
             assert stats["channels_updated"] == 1
 
             # Verify channel was updated
-            updated = EpgChannel.query.filter_by(source_id=1).first()
+            updated = EpgChannel.query.filter_by(source_id=source.id).first()
             assert updated.display_name == "NBC"
 
     def test_sync_sd_channels_with_display_names(self, app):
         """Sync stores display names as JSON"""
         with app.app_context():
-            source = EpgSource(
-                id=1,
-                account_id=1,
-                name="Test Source",
-                source_type="schedules_direct",
-            )
-            db.session.add(source)
-            db.session.commit()
+            source = _create_sd_epg_source()
 
             channels = [
                 {
@@ -141,7 +138,7 @@ class TestSyncSdChannelsToEpg:
 
             sync_sd_channels_to_epg(source, channels)
 
-            channel = EpgChannel.query.filter_by(source_id=1).first()
+            channel = EpgChannel.query.filter_by(source_id=source.id).first()
             assert channel.display_names_json is not None
             names = json.loads(channel.display_names_json)
             assert "NBC" in names
@@ -150,14 +147,7 @@ class TestSyncSdChannelsToEpg:
     def test_sync_sd_channels_missing_station_id(self, app):
         """Sync skips channels without stationID"""
         with app.app_context():
-            source = EpgSource(
-                id=1,
-                account_id=1,
-                name="Test Source",
-                source_type="schedules_direct",
-            )
-            db.session.add(source)
-            db.session.commit()
+            source = _create_sd_epg_source()
 
             channels = [
                 {
@@ -180,18 +170,11 @@ class TestSyncSdChannelsToEpg:
     def test_sync_sd_channels_tracks_unseen(self, app):
         """Sync tracks channels that weren't in sync"""
         with app.app_context():
-            source = EpgSource(
-                id=1,
-                account_id=1,
-                name="Test Source",
-                source_type="schedules_direct",
-            )
-            db.session.add(source)
-            db.session.commit()
+            source = _create_sd_epg_source()
 
             # Create initial channels
-            ch1 = EpgChannel(source_id=1, channel_id="sd_old1", display_name="Old 1")
-            ch2 = EpgChannel(source_id=1, channel_id="sd_old2", display_name="Old 2")
+            ch1 = EpgChannel(source_id=source.id, channel_id="sd_old1", display_name="Old 1")
+            ch2 = EpgChannel(source_id=source.id, channel_id="sd_old2", display_name="Old 2")
             db.session.add_all([ch1, ch2])
             db.session.commit()
 
@@ -217,25 +200,8 @@ class TestSyncSdLineupImpl:
     def test_sync_lineup_adds_new_lineup(self, mock_sd_client_class, app):
         """Sync adds lineup if not already on account"""
         with app.app_context():
-            source = EpgSource(
-                id=1,
-                account_id=1,
-                name="Test Source",
-                source_type="schedules_direct",
-                sd_username="user",
-                sd_password="pass",
-            )
-            db.session.add(source)
-            db.session.commit()
-
-            lineup = SdLineup(
-                id=1,
-                epg_source_id=1,
-                lineup_id="USA-12345",
-                name="Test Lineup",
-            )
-            db.session.add(lineup)
-            db.session.commit()
+            source = _create_sd_epg_source(sd_username="user", sd_password="pass")
+            lineup = _create_sd_lineup(source)
 
             mock_client = Mock()
             mock_sd_client_class.return_value = mock_client
@@ -268,25 +234,8 @@ class TestSyncSdLineupImpl:
     def test_sync_lineup_skips_existing_lineup(self, mock_sd_client_class, app):
         """Sync skips adding lineup if already on account"""
         with app.app_context():
-            source = EpgSource(
-                id=1,
-                account_id=1,
-                name="Test Source",
-                source_type="schedules_direct",
-                sd_username="user",
-                sd_password="pass",
-            )
-            db.session.add(source)
-            db.session.commit()
-
-            lineup = SdLineup(
-                id=1,
-                epg_source_id=1,
-                lineup_id="USA-12345",
-                name="Test Lineup",
-            )
-            db.session.add(lineup)
-            db.session.commit()
+            source = _create_sd_epg_source(sd_username="user", sd_password="pass")
+            lineup = _create_sd_lineup(source)
 
             mock_client = Mock()
             mock_sd_client_class.return_value = mock_client
@@ -312,25 +261,8 @@ class TestSyncSdLineupImpl:
     def test_sync_lineup_max_lineups_error(self, mock_sd_client_class, app):
         """Sync raises error if account is at lineup limit"""
         with app.app_context():
-            source = EpgSource(
-                id=1,
-                account_id=1,
-                name="Test Source",
-                source_type="schedules_direct",
-                sd_username="user",
-                sd_password="pass",
-            )
-            db.session.add(source)
-            db.session.commit()
-
-            lineup = SdLineup(
-                id=1,
-                epg_source_id=1,
-                lineup_id="USA-12345",
-                name="Test Lineup",
-            )
-            db.session.add(lineup)
-            db.session.commit()
+            source = _create_sd_epg_source(sd_username="user", sd_password="pass")
+            lineup = _create_sd_lineup(source)
 
             mock_client = Mock()
             mock_sd_client_class.return_value = mock_client
@@ -351,25 +283,8 @@ class TestSyncSdLineupImpl:
     def test_sync_lineup_duplicate_error_ignored(self, mock_sd_client_class, app):
         """Sync ignores duplicate lineup error (code 2100)"""
         with app.app_context():
-            source = EpgSource(
-                id=1,
-                account_id=1,
-                name="Test Source",
-                source_type="schedules_direct",
-                sd_username="user",
-                sd_password="pass",
-            )
-            db.session.add(source)
-            db.session.commit()
-
-            lineup = SdLineup(
-                id=1,
-                epg_source_id=1,
-                lineup_id="USA-12345",
-                name="Test Lineup",
-            )
-            db.session.add(lineup)
-            db.session.commit()
+            source = _create_sd_epg_source(sd_username="user", sd_password="pass")
+            lineup = _create_sd_lineup(source)
 
             mock_client = Mock()
             mock_sd_client_class.return_value = mock_client
@@ -396,29 +311,12 @@ class TestSyncSdLineupImpl:
     def test_sync_lineup_updates_stations(self, mock_sd_client_class, app):
         """Sync updates existing station records"""
         with app.app_context():
-            source = EpgSource(
-                id=1,
-                account_id=1,
-                name="Test Source",
-                source_type="schedules_direct",
-                sd_username="user",
-                sd_password="pass",
-            )
-            db.session.add(source)
-            db.session.commit()
-
-            lineup = SdLineup(
-                id=1,
-                epg_source_id=1,
-                lineup_id="USA-12345",
-                name="Test Lineup",
-            )
-            db.session.add(lineup)
-            db.session.commit()
+            source = _create_sd_epg_source(sd_username="user", sd_password="pass")
+            lineup = _create_sd_lineup(source)
 
             # Create existing station
             existing_station = SdStation(
-                lineup_id=1,
+                lineup_id=lineup.id,
                 station_id="12345",
                 channel_number="4.1",
                 callsign="Old NBC",

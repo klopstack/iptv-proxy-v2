@@ -123,6 +123,18 @@ Follow-up audit after TODOs 01–21. Focus: dead shims, test duplication, semant
 
 **Highest impact first:** 22 (truth in docs) → 26 (untested MediaFlow) → 27 (visibility semantics) → 24 (CI time / maintainability).
 
+---
+
+## P4 — Database hardening (May 2026)
+
+| # | Document | Status | Summary |
+|---|----------|--------|---------|
+| 35 | [35-referential-integrity-and-account-delete.md](./35-referential-integrity-and-account-delete.md) | ✅ | FK pragma, AccountDeleteService, model ondelete alignment |
+| 36 | [36-schema-lifecycle-and-migration-tracking.md](./36-schema-lifecycle-and-migration-tracking.md) | ✅ | schema_migrations table, create_all+migrate boot, playlist_configs migration |
+| 37 | [37-sync-lock-hardening.md](./37-sync-lock-hardening.md) | ✅ | Atomic sync lock, sync_started_at, stale lock recovery |
+| 38 | [38-data-retention-and-growth-control.md](./38-data-retention-and-growth-control.md) | ✅ | EPG/health cleanup scheduler, prune inactive channel_tags |
+| 39 | [39-indexing-test-parity-and-docs.md](./39-indexing-test-parity-and-docs.md) | ✅ | channel_tags index, schema parity tests, developer docs |
+
 ## How to use these documents
 
 1. Open the next ⬜ item in order (or pick one explicitly).

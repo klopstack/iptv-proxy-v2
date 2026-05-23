@@ -200,14 +200,15 @@ def get_ppv_visibility_options():
 @accounts_bp.route("/api/accounts/<int:account_id>", methods=["DELETE"])
 def delete_account(account_id):
     """Delete account and all associated data"""
-    account = Account.query.get_or_404(account_id)
+    Account.query.get_or_404(account_id)
 
-    # Clear cache first
     cache_service.clear_account_cache(account_id)
 
-    # Delete account (cascade will handle filters, channels, credentials, etc.)
-    db.session.delete(account)
-    db.session.commit()
+    from services.account_delete_service import AccountDeleteService
+
+    result = AccountDeleteService.delete_account(account_id)
+    if not result.get("success"):
+        return jsonify(result), 404
 
     return "", 204
 

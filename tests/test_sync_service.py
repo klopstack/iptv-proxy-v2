@@ -221,7 +221,7 @@ class TestChannelSyncService:
                 account_id=account_id,
                 stream_id="101",
                 name="Old ESPN Name",
-                category_id="1",
+                category_id=None,
                 is_active=True,
                 last_seen=datetime.now(timezone.utc),
             )
@@ -265,7 +265,7 @@ class TestChannelSyncService:
                 account_id=account_id,
                 stream_id="999",
                 name="Old Channel",
-                category_id="1",
+                category_id=None,
                 is_active=True,
                 last_seen=datetime.now(timezone.utc) - timedelta(hours=1),  # Old timestamp
             )

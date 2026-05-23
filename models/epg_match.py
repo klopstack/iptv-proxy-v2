@@ -49,7 +49,7 @@ class AccountEpgMatchRuleSet(db.Model):  # type: ignore[name-defined]
     __tablename__ = "account_epg_match_rulesets"
 
     id = db.Column(db.Integer, primary_key=True)
-    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
     ruleset_id = db.Column(db.Integer, db.ForeignKey("epg_match_rulesets.id"), nullable=False)
     priority = db.Column(db.Integer, default=100)  # Order to apply rulesets for this account
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))

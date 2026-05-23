@@ -664,7 +664,7 @@ class TestChannelsCallsignLookup:
                     stream_id="abc_la",
                     name="US: ABC 7 (KABC) Los Angeles",
                     cleaned_name="ABC 7 Los Angeles",
-                    category_id=1,
+                    category_id=None,
                     is_active=True,
                 ),
                 Channel(
@@ -672,7 +672,7 @@ class TestChannelsCallsignLookup:
                     stream_id="nbc_ny",
                     name="US: NBC (WNBC) New York",
                     cleaned_name="NBC New York",
-                    category_id=1,
+                    category_id=None,
                     is_active=True,
                 ),
                 Channel(
@@ -680,7 +680,7 @@ class TestChannelsCallsignLookup:
                     stream_id="cbs_la",
                     name="US: CBS (KCBS) Los Angeles",
                     cleaned_name="CBS Los Angeles",
-                    category_id=1,
+                    category_id=None,
                     is_active=False,  # Inactive channel
                 ),
             ]

@@ -11,7 +11,7 @@ class Filter(db.Model):  # type: ignore[name-defined]
     __tablename__ = "filters"
 
     id = db.Column(db.Integer, primary_key=True)
-    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     filter_type = db.Column(db.String(50), nullable=False)  # category, channel_name, regex, tag
     filter_action = db.Column(db.String(20), nullable=False)  # whitelist, blacklist
@@ -61,7 +61,7 @@ class AccountRuleSet(db.Model):  # type: ignore[name-defined]
     __tablename__ = "account_rulesets"
 
     id = db.Column(db.Integer, primary_key=True)
-    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
     ruleset_id = db.Column(db.Integer, db.ForeignKey("rulesets.id"), nullable=False)
     priority = db.Column(db.Integer, default=100)  # Order to apply rulesets for this account
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
@@ -115,7 +115,7 @@ class Category(db.Model):  # type: ignore[name-defined]
     __tablename__ = "categories"
 
     id = db.Column(db.Integer, primary_key=True)
-    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False, index=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
     category_id = db.Column(db.String(50), nullable=False)  # External category ID from provider
     category_name = db.Column(db.String(200), nullable=False)
     cleaned_name = db.Column(db.String(200))  # Processed name after tag extraction
@@ -149,7 +149,7 @@ class Channel(db.Model):  # type: ignore[name-defined]
     __tablename__ = "channels"
 
     id = db.Column(db.Integer, primary_key=True)
-    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False, index=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
     stream_id = db.Column(db.String(50), nullable=False)  # External stream ID from provider
     name = db.Column(db.String(500), nullable=False, index=True)
     cleaned_name = db.Column(db.String(500))  # Processed name after tag extraction
@@ -232,7 +232,7 @@ class ChannelTag(db.Model):  # type: ignore[name-defined]
     SOURCE_SYNC = "sync"  # From channel sync process
 
     id = db.Column(db.Integer, primary_key=True)
-    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False, index=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
     stream_id = db.Column(db.String(50), nullable=False)  # Stream ID from IPTV provider
     tag_id = db.Column(db.Integer, db.ForeignKey("tags.id"), nullable=False, index=True)
     source = db.Column(db.String(20), default=SOURCE_EXTRACTION, nullable=False, index=True)
@@ -251,6 +251,7 @@ class ChannelTag(db.Model):  # type: ignore[name-defined]
     __table_args__ = (
         db.UniqueConstraint("account_id", "stream_id", "tag_id", name="_channel_tag_uc"),
         db.Index("idx_channel_tags_account_tag", "account_id", "tag_id"),
+        db.Index("idx_channel_tags_account_stream", "account_id", "stream_id"),
     )
 
     def __repr__(self):

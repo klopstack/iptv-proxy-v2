@@ -4,7 +4,7 @@ Playlist configuration and M3U generation routes
 import json
 import logging
 
-from flask import Blueprint, Response, jsonify, redirect, request, url_for
+from flask import Blueprint, Response, jsonify, request
 
 from error_handling import ServiceUnavailableError, handle_errors, handle_xml_errors
 from marshmallow import ValidationError
@@ -311,14 +311,10 @@ def generate_playlist(account_id):
 def generate_playlist_from_config_by_id(config_id):
     """Generate M3U playlist from config by ID (deprecated — prefer slug URL)."""
     config = PlaylistConfig.query.get_or_404(config_id)
+    response = _generate_playlist_from_config(config)
     if config.slug:
-        response = redirect(
-            url_for("playlists.generate_playlist_from_config_by_name", slug=config.slug),
-            code=301,
-        )
         response.headers["Deprecation"] = "Use /playlist/config/<slug>.m3u instead of numeric config IDs"
-        return response
-    return _generate_playlist_from_config(config)
+    return response
 
 
 @playlists_bp.route("/playlist/config/<slug>.m3u")
@@ -481,14 +477,10 @@ def proxy_epg(account_id):
 def generate_epg_from_config(config_id):
     """Generate XMLTV EPG for playlist configuration by ID (deprecated — prefer slug URL)."""
     config = PlaylistConfig.query.get_or_404(config_id)
+    response = _generate_epg_from_config(config)
     if config.slug:
-        response = redirect(
-            url_for("playlists.generate_epg_from_config_by_name", slug=config.slug, **request.args),
-            code=301,
-        )
         response.headers["Deprecation"] = "Use /epg/config/<slug>.xml instead of numeric config IDs"
-        return response
-    return _generate_epg_from_config(config)
+    return response
 
 
 @playlists_bp.route("/epg/config/<slug>.xml")
