@@ -1,7 +1,7 @@
 # TODO 12: UI and Navigation Cleanup
 
 **Priority:** P2  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Small–Medium
 
 ---
@@ -86,11 +86,11 @@ In `templates/accounts.html`, the EPG link tooltip says filtered to M3U channels
 
 ## Acceptance criteria
 
-- [ ] Preview page reachable at intuitive URL (`/preview` preferred)
-- [ ] Old `/test` URL redirects (if renamed)
-- [ ] Configurable Patterns discoverable from nav or FCC page
-- [ ] No debug output files in repo root
-- [ ] Nav active-state CSS works for renamed route
+- [x] Preview page reachable at intuitive URL (`/preview` preferred)
+- [x] Old `/test` URL redirects (if renamed)
+- [x] Configurable Patterns discoverable from nav or FCC page
+- [x] No debug output files in repo root
+- [x] Nav active-state CSS works for renamed route
 
 ---
 
@@ -120,6 +120,6 @@ def test_preview_redirect_from_test(client):
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Renamed `/test` → `/preview` with redirect; added Configurable Patterns nav link; removed `ppv_analysis_output.txt` and gitignore patterns for analysis artifacts. |

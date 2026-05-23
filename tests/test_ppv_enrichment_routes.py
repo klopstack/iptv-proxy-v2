@@ -4,42 +4,29 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from models import Account, Channel, db
+from models import Channel, db
 
 
 class TestPPVEnrichmentRoutes:
     """Tests for PPV enrichment API endpoints."""
 
     @pytest.fixture
-    def test_account(self):
-        """Create a test account."""
-        account = Account(
-            name="Test Account",
-            server="http://test.com",
-            username="test",
-            password="test",
-            enabled=True,
-        )
-        db.session.add(account)
-        db.session.commit()
-        return account
-
-    @pytest.fixture
-    def test_ppv_channels(self, test_account):
+    def test_ppv_channels(self, app, test_account):
         """Create test PPV channels."""
-        channels = []
-        for i in range(3):
-            channel = Channel(
-                account_id=test_account.id,
-                stream_id=str(1000 + i),
-                name=f"PPV Channel {i}",
-                is_ppv=True,
-                ppv_enrichment_status="queued",
-            )
-            db.session.add(channel)
-            channels.append(channel)
-        db.session.commit()
-        return channels
+        with app.app_context():
+            channels = []
+            for i in range(3):
+                channel = Channel(
+                    account_id=test_account,
+                    stream_id=str(1000 + i),
+                    name=f"PPV Channel {i}",
+                    is_ppv=True,
+                    ppv_enrichment_status="queued",
+                )
+                db.session.add(channel)
+                channels.append(channel)
+            db.session.commit()
+            return [channel.id for channel in channels]
 
     @patch("routes.ppv_enrichment.get_calendar_enrichment_service")
     def test_get_enrichment_status(self, mock_get_service, client, test_account, test_ppv_channels):
@@ -72,7 +59,7 @@ class TestPPVEnrichmentRoutes:
         """Test queuing channels for a specific account."""
         response = client.post(
             "/api/ppv-enrichment/queue/all-ppv",
-            json={"account_id": test_account.id},
+            json={"account_id": test_account},
             content_type="application/json",
         )
         assert response.status_code == 200
@@ -119,7 +106,7 @@ class TestPPVEnrichmentRoutes:
 
         response = client.post(
             "/api/ppv-enrichment/process",
-            json={"account_id": test_account.id},
+            json={"account_id": test_account},
             content_type="application/json",
         )
         assert response.status_code == 200
@@ -137,7 +124,7 @@ class TestPPVEnrichmentRoutes:
 
     def test_queue_specific_channels(self, client, test_ppv_channels):
         """Test queuing specific channels by ID."""
-        channel_ids = [test_ppv_channels[0].id, test_ppv_channels[1].id]
+        channel_ids = test_ppv_channels[:2]
         response = client.post(
             "/api/ppv-enrichment/queue/channels",
             json={"channel_ids": channel_ids},

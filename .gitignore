@@ -30,3 +30,5 @@ node_modules/
 
 # Debug channel dumps
 *.list
+*_analysis_output.txt
+reverse_matcher_output.txt

@@ -21,23 +21,6 @@ from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Tag, 
 
 
 @pytest.fixture
-def test_category(app, test_account):
-    """Create a test category"""
-    with app.app_context():
-        category = Category(
-            account_id=test_account,
-            category_id="100",
-            category_name="Sports",
-            cleaned_name="Sports",
-            is_active=True,
-        )
-        db.session.add(category)
-        db.session.commit()
-        db.session.refresh(category)
-        yield category
-
-
-@pytest.fixture
 def test_channels(app, test_account, test_category):
     """Create test channels"""
     with app.app_context():
@@ -48,7 +31,7 @@ def test_channels(app, test_account, test_category):
                 stream_id=str(1000 + i),
                 name=f"Channel {i + 1}",
                 cleaned_name=f"Channel {i + 1}",
-                category_id=test_category.id,
+                category_id=test_category,
                 stream_icon=f"http://example.com/icon{i + 1}.png",
                 is_active=True,
                 is_visible=True,
@@ -244,7 +227,7 @@ class TestXtreamPlayerAPI:
             data = response.json
             assert isinstance(data, list)
             assert len(data) == 1
-            assert data[0]["category_name"] == "Sports"
+            assert data[0]["category_name"] == "Test Category"
 
     def test_get_live_streams(self, app, client, xtream_credential, test_channels):
         """Test get_live_streams endpoint"""
@@ -273,7 +256,7 @@ class TestXtreamPlayerAPI:
                     "username": "xtream_user",
                     "password": "xtream_pass",
                     "action": "get_live_streams",
-                    "category_id": str(test_category.id),
+                    "category_id": str(test_category),
                 },
             )
             assert response.status_code == 200
@@ -732,7 +715,7 @@ class TestXtreamChannelFiltering:
                     stream_id=f"{2000 + i}",
                     name=f"Test Channel {quality}",
                     cleaned_name="Test Channel",
-                    category_id=test_category.id,
+                    category_id=test_category,
                     is_active=True,
                     is_visible=True,
                 )

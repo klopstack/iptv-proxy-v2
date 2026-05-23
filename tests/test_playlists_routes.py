@@ -10,23 +10,6 @@ from services.channel_query_service import ChannelQueryService
 
 
 @pytest.fixture
-def test_account(app):
-    """Create a test account and return its ID"""
-    with app.app_context():
-        account = Account(
-            name="Test Account",
-            username="test_user",
-            password="test_pass",
-            server="example.com",
-            enabled=True,
-        )
-        db.session.add(account)
-        db.session.commit()
-        account_id = account.id
-    yield account_id
-
-
-@pytest.fixture
 def test_channel_with_tag(app, test_account):
     """Create a test channel with tags"""
     with app.app_context():
@@ -469,16 +452,14 @@ class TestM3UGeneration:
         response = client.get("/playlist/99999.m3u")
         assert response.status_code == 404
 
-    def test_generate_playlist_account_disabled(self, app, client, test_account):
+    def test_generate_playlist_account_disabled(self, app, client, test_account_with_channels):
         """Test generating playlist for disabled account"""
         with app.app_context():
-            from models import Account
-
-            account = db.session.get(Account, test_account)
+            account = db.session.get(Account, test_account_with_channels)
             account.enabled = False
             db.session.commit()
 
-        response = client.get(f"/playlist/{test_account}.m3u")
+        response = client.get(f"/playlist/{test_account_with_channels}.m3u")
         assert response.status_code == 403
 
     def test_generate_playlist_not_synced(self, app, client, test_account):
@@ -559,16 +540,14 @@ class TestEPGProxy:
         response = client.get("/epg/99999.xml")
         assert response.status_code == 404
 
-    def test_proxy_epg_account_disabled(self, app, client, test_account):
+    def test_proxy_epg_account_disabled(self, app, client, test_account_with_channels):
         """Test proxying EPG for disabled account"""
         with app.app_context():
-            from models import Account
-
-            account = db.session.get(Account, test_account)
+            account = db.session.get(Account, test_account_with_channels)
             account.enabled = False
             db.session.commit()
 
-        response = client.get(f"/epg/{test_account}.xml")
+        response = client.get(f"/epg/{test_account_with_channels}.xml")
         assert response.status_code == 403
 
     def test_generate_epg_config_not_found(self, app, client):

@@ -22,23 +22,6 @@ from services.stream_test_helpers import classify_error_and_get_status
 
 
 @pytest.fixture
-def test_account(app):
-    """Create a test account"""
-    with app.app_context():
-        account = Account(
-            name="Test Account",
-            username="test_user",
-            password="test_pass",
-            server="example.com",
-            enabled=True,
-        )
-        db.session.add(account)
-        db.session.commit()
-        account_id = account.id
-        yield account_id
-
-
-@pytest.fixture
 def test_account_with_credential(app, test_account):
     """Create a test account with a credential"""
     with app.app_context():

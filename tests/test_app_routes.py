@@ -162,10 +162,21 @@ class TestWebUIRoutes:
         response = client.get("/filters")
         assert response.status_code == 200
 
-    def test_test_page(self, client):
-        """Test test page loads"""
-        response = client.get("/test")
+    def test_preview_channels_page(self, client):
+        """Test preview channels page loads"""
+        response = client.get("/preview")
         assert response.status_code == 200
+
+    def test_preview_redirect_from_test(self, client):
+        """Legacy /test URL redirects to /preview"""
+        response = client.get("/test", follow_redirects=False)
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/preview")
+
+        response_with_query = client.get("/test?account=1&tag=sports", follow_redirects=False)
+        assert response_with_query.status_code == 302
+        assert "account=1" in response_with_query.headers["Location"]
+        assert "tag=sports" in response_with_query.headers["Location"]
 
     def test_rulesets_page(self, client):
         """Test rulesets page loads"""

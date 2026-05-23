@@ -8,22 +8,6 @@ import pytest
 from models import Account, Category, Channel, ChannelTag, Tag, db
 
 
-@pytest.fixture
-def test_account(app):
-    """Create a test account"""
-    with app.app_context():
-        account = Account(
-            name="Test Account",
-            username="test_user",
-            password="test_pass",
-            server="http://example.com",
-            enabled=True,
-        )
-        db.session.add(account)
-        db.session.commit()
-        yield account
-
-
 # ============================================================================
 # Scheduler API Tests
 # ============================================================================
@@ -300,7 +284,7 @@ class TestCacheAPI:
 
     def test_clear_account_cache_success(self, app, client, test_account):
         """Test clearing cache for specific account"""
-        response = client.post(f"/api/cache/clear/{test_account.id}")
+        response = client.post(f"/api/cache/clear/{test_account}")
         assert response.status_code == 200
         assert response.json["success"] is True
 
@@ -323,7 +307,7 @@ class TestCategoriesAPI:
         """Test getting categories with data"""
         with app.app_context():
             category = Category(
-                account_id=test_account.id,
+                account_id=test_account,
                 category_id="cat1",
                 category_name="Movies",
             )
@@ -332,7 +316,7 @@ class TestCategoriesAPI:
 
             # Add a visible channel to the category - note: category.id is the FK
             channel = Channel(
-                account_id=test_account.id,
+                account_id=test_account,
                 stream_id="ch1",
                 name="Movie Channel",
                 category_id=category.id,
@@ -353,14 +337,14 @@ class TestCategoriesAPI:
         """Test getting categories filtered by account"""
         with app.app_context():
             category = Category(
-                account_id=test_account.id,
+                account_id=test_account,
                 category_id="cat1",
                 category_name="Movies",
             )
             db.session.add(category)
 
             channel = Channel(
-                account_id=test_account.id,
+                account_id=test_account,
                 stream_id="ch1",
                 name="Movie Channel",
                 category_id=category.id,
@@ -370,14 +354,14 @@ class TestCategoriesAPI:
             db.session.add(channel)
             db.session.commit()
 
-        response = client.get(f"/api/categories?account_id={test_account.id}")
+        response = client.get(f"/api/categories?account_id={test_account}")
         assert response.status_code == 200
 
     def test_get_categories_include_empty(self, app, client, test_account):
         """Test getting categories including empty ones"""
         with app.app_context():
             category = Category(
-                account_id=test_account.id,
+                account_id=test_account,
                 category_id="cat1",
                 category_name="Empty Category",
             )
@@ -391,14 +375,14 @@ class TestCategoriesAPI:
         """Test getting categories with EPG coverage info"""
         with app.app_context():
             category = Category(
-                account_id=test_account.id,
+                account_id=test_account,
                 category_id="cat1",
                 category_name="Movies",
             )
             db.session.add(category)
 
             channel = Channel(
-                account_id=test_account.id,
+                account_id=test_account,
                 stream_id="ch1",
                 name="Movie Channel",
                 category_id=category.id,
@@ -437,7 +421,7 @@ class TestChannelPreviewAPI:
         """Test channel preview with data"""
         with app.app_context():
             category = Category(
-                account_id=test_account.id,
+                account_id=test_account,
                 category_id="cat1",
                 category_name="Movies",
             )
@@ -445,7 +429,7 @@ class TestChannelPreviewAPI:
             db.session.flush()
 
             channel = Channel(
-                account_id=test_account.id,
+                account_id=test_account,
                 stream_id="ch1",
                 name="Movie Channel",
                 cleaned_name="Movie Channel",
@@ -466,7 +450,7 @@ class TestChannelPreviewAPI:
         """Test channel preview filtered by account"""
         with app.app_context():
             category = Category(
-                account_id=test_account.id,
+                account_id=test_account,
                 category_id="cat1",
                 category_name="Movies",
             )
@@ -474,7 +458,7 @@ class TestChannelPreviewAPI:
             db.session.flush()
 
             channel = Channel(
-                account_id=test_account.id,
+                account_id=test_account,
                 stream_id="ch1",
                 name="Movie Channel",
                 category_id=category.id,
@@ -484,14 +468,14 @@ class TestChannelPreviewAPI:
             db.session.add(channel)
             db.session.commit()
 
-        response = client.get(f"/api/channels/preview?account_id={test_account.id}")
+        response = client.get(f"/api/channels/preview?account_id={test_account}")
         assert response.status_code == 200
 
     def test_preview_channels_with_category_filter(self, app, client, test_account):
         """Test channel preview filtered by category"""
         with app.app_context():
             category = Category(
-                account_id=test_account.id,
+                account_id=test_account,
                 category_id="cat1",
                 category_name="Movies",
             )
@@ -499,7 +483,7 @@ class TestChannelPreviewAPI:
             db.session.flush()
 
             channel = Channel(
-                account_id=test_account.id,
+                account_id=test_account,
                 stream_id="ch1",
                 name="Movie Channel",
                 category_id=category.id,
@@ -518,7 +502,7 @@ class TestChannelPreviewAPI:
         """Test channel preview filtered by tags"""
         with app.app_context():
             category = Category(
-                account_id=test_account.id,
+                account_id=test_account,
                 category_id="cat1",
                 category_name="Movies",
             )
@@ -526,7 +510,7 @@ class TestChannelPreviewAPI:
             db.session.flush()
 
             channel = Channel(
-                account_id=test_account.id,
+                account_id=test_account,
                 stream_id="ch1",
                 name="HD Movie Channel",
                 category_id=category.id,
@@ -542,7 +526,7 @@ class TestChannelPreviewAPI:
             db.session.flush()
 
             channel_tag = ChannelTag(
-                account_id=test_account.id,
+                account_id=test_account,
                 stream_id="ch1",
                 tag_id=tag.id,
             )
@@ -558,7 +542,7 @@ class TestChannelPreviewAPI:
         """Test channel preview pagination"""
         with app.app_context():
             category = Category(
-                account_id=test_account.id,
+                account_id=test_account,
                 category_id="cat1",
                 category_name="Movies",
             )
@@ -568,7 +552,7 @@ class TestChannelPreviewAPI:
             # Create multiple channels
             for i in range(10):
                 channel = Channel(
-                    account_id=test_account.id,
+                    account_id=test_account,
                     stream_id=f"ch{i}",
                     name=f"Channel {i}",
                     category_id=category.id,

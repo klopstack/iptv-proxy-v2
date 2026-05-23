@@ -14,7 +14,7 @@ from services.tag_service import TagService
 
 
 @pytest.fixture
-def test_account(app):
+def cleaned_names_account(app):
     """Create test account"""
     with app.app_context():
         account = Account(
@@ -72,11 +72,11 @@ def test_ruleset(app):
         db.session.commit()
 
 
-def test_sync_computes_cleaned_names(app, test_account, test_ruleset):
+def test_sync_computes_cleaned_names(app, cleaned_names_account, test_ruleset):
     """Test that sync computes and stores cleaned names"""
     with app.app_context():
         # Create category
-        category = Category(account_id=test_account.id, category_id="100", category_name="Movies")
+        category = Category(account_id=cleaned_names_account.id, category_id="100", category_name="Movies")
         db.session.add(category)
         db.session.flush()
 
@@ -90,11 +90,11 @@ def test_sync_computes_cleaned_names(app, test_account, test_ruleset):
         }
 
         # Manually create channel to simulate sync
-        tag_rules = TagService.get_rules_for_account(test_account)
+        tag_rules = TagService.get_rules_for_account(cleaned_names_account)
         _, cleaned_name, _, _ = TagService.extract_tags(channel_data["name"], "Movies", tag_rules)
 
         channel = Channel(
-            account_id=test_account.id,
+            account_id=cleaned_names_account.id,
             stream_id=channel_data["stream_id"],
             name=channel_data["name"],
             cleaned_name=cleaned_name,
@@ -112,16 +112,16 @@ def test_sync_computes_cleaned_names(app, test_account, test_ruleset):
         assert "ᴴᴰ" not in channel.cleaned_name
 
 
-def test_cleaned_name_stored_in_database(app, test_account, test_ruleset):
+def test_cleaned_name_stored_in_database(app, cleaned_names_account, test_ruleset):
     """Test that cleaned names persist in database"""
     with app.app_context():
         # Create channel with cleaned name
-        category = Category(account_id=test_account.id, category_id="100", category_name="Sports")
+        category = Category(account_id=cleaned_names_account.id, category_id="100", category_name="Sports")
         db.session.add(category)
         db.session.flush()
 
         channel = Channel(
-            account_id=test_account.id,
+            account_id=cleaned_names_account.id,
             stream_id="54321",
             name="US| ESPN Sports ᴴᴰ",
             cleaned_name="ESPN Sports",
@@ -142,16 +142,16 @@ def test_cleaned_name_stored_in_database(app, test_account, test_ruleset):
         assert reloaded.name == "US| ESPN Sports ᴴᴰ"
 
 
-def test_preview_uses_cleaned_names(app, client, test_account, test_ruleset):
+def test_preview_uses_cleaned_names(app, client, cleaned_names_account, test_ruleset):
     """Test that preview endpoint uses stored cleaned names"""
     with app.app_context():
         # Create channel
-        category = Category(account_id=test_account.id, category_id="200", category_name="News")
+        category = Category(account_id=cleaned_names_account.id, category_id="200", category_name="News")
         db.session.add(category)
         db.session.flush()
 
         channel = Channel(
-            account_id=test_account.id,
+            account_id=cleaned_names_account.id,
             stream_id="99999",
             name="US| CNN News ᴴᴰ",
             cleaned_name="CNN News",
@@ -163,7 +163,7 @@ def test_preview_uses_cleaned_names(app, client, test_account, test_ruleset):
         db.session.commit()
 
         # Request preview
-        response = client.get(f"/api/accounts/{test_account.id}/preview?limit=10")
+        response = client.get(f"/api/accounts/{cleaned_names_account.id}/preview?limit=10")
 
         assert response.status_code == 200
         data = response.json
@@ -175,16 +175,16 @@ def test_preview_uses_cleaned_names(app, client, test_account, test_ruleset):
         assert data["channels"][0]["name"] == "US| CNN News ᴴᴰ"
 
 
-def test_playlist_uses_cleaned_names(app, client, test_account, test_ruleset):
+def test_playlist_uses_cleaned_names(app, client, cleaned_names_account, test_ruleset):
     """Test that M3U playlist generation uses cleaned names"""
     with app.app_context():
         # Create channel
-        category = Category(account_id=test_account.id, category_id="300", category_name="Entertainment")
+        category = Category(account_id=cleaned_names_account.id, category_id="300", category_name="Entertainment")
         db.session.add(category)
         db.session.flush()
 
         channel = Channel(
-            account_id=test_account.id,
+            account_id=cleaned_names_account.id,
             stream_id="88888",
             name="US| HBO Entertainment ᴴᴰ",
             cleaned_name="HBO Entertainment",
@@ -196,7 +196,7 @@ def test_playlist_uses_cleaned_names(app, client, test_account, test_ruleset):
         db.session.commit()
 
         # Generate playlist
-        response = client.get(f"/playlist/{test_account.id}.m3u")
+        response = client.get(f"/playlist/{cleaned_names_account.id}.m3u")
 
         assert response.status_code == 200
         playlist_text = response.data.decode("utf-8")
@@ -207,16 +207,16 @@ def test_playlist_uses_cleaned_names(app, client, test_account, test_ruleset):
         assert 'tvg-name="HBO Entertainment"' in playlist_text
 
 
-def test_tag_processing_updates_cleaned_names(app, client, test_account, test_ruleset):
+def test_tag_processing_updates_cleaned_names(app, client, cleaned_names_account, test_ruleset):
     """Test that tag processing updates cleaned names"""
     with app.app_context():
         # Create channel with old cleaned name
-        category = Category(account_id=test_account.id, category_id="400", category_name="Kids")
+        category = Category(account_id=cleaned_names_account.id, category_id="400", category_name="Kids")
         db.session.add(category)
         db.session.flush()
 
         channel = Channel(
-            account_id=test_account.id,
+            account_id=cleaned_names_account.id,
             stream_id="77777",
             name="US| Disney Channel ᴴᴰ",
             cleaned_name="Old Name",  # Wrong cleaned name
@@ -227,7 +227,7 @@ def test_tag_processing_updates_cleaned_names(app, client, test_account, test_ru
         db.session.commit()
 
         # Process tags (which should update cleaned names)
-        response = client.post(f"/api/accounts/{test_account.id}/process-tags")
+        response = client.post(f"/api/accounts/{cleaned_names_account.id}/process-tags")
 
         assert response.status_code == 200
         data = response.json
@@ -240,16 +240,16 @@ def test_tag_processing_updates_cleaned_names(app, client, test_account, test_ru
         assert updated_channel.cleaned_name != "Old Name"
 
 
-def test_cleaned_name_fallback_to_original(app, client, test_account):
+def test_cleaned_name_fallback_to_original(app, client, cleaned_names_account):
     """Test that original name is used when cleaned_name is None"""
     with app.app_context():
         # Create channel without cleaned name
-        category = Category(account_id=test_account.id, category_id="500", category_name="Music")
+        category = Category(account_id=cleaned_names_account.id, category_id="500", category_name="Music")
         db.session.add(category)
         db.session.flush()
 
         channel = Channel(
-            account_id=test_account.id,
+            account_id=cleaned_names_account.id,
             stream_id="66666",
             name="MTV Music",
             cleaned_name=None,  # No cleaned name
@@ -261,7 +261,7 @@ def test_cleaned_name_fallback_to_original(app, client, test_account):
         db.session.commit()
 
         # Request preview
-        response = client.get(f"/api/accounts/{test_account.id}/preview")
+        response = client.get(f"/api/accounts/{cleaned_names_account.id}/preview")
 
         assert response.status_code == 200
         data = response.json

@@ -23,7 +23,7 @@ from models import (
 
 
 @pytest.fixture
-def test_account(app):
+def health_test_account(app):
     """Create a test account with credentials."""
     with app.app_context():
         account = Account(
@@ -47,12 +47,12 @@ def test_account(app):
 
 
 @pytest.fixture
-def test_channel(app, test_account):
+def test_channel(app, health_test_account):
     """Create a test channel."""
     with app.app_context():
         # Create category first
         category = Category(
-            account_id=test_account,
+            account_id=health_test_account,
             category_id="1",
             category_name="Test Category",
         )
@@ -60,7 +60,7 @@ def test_channel(app, test_account):
         db.session.commit()
 
         channel = Channel(
-            account_id=test_account,
+            account_id=health_test_account,
             stream_id="12345",
             name="Test Channel",
             cleaned_name="Test Channel",
@@ -346,28 +346,28 @@ class TestChannelHealthRoutes:
 class TestChannelHealthService:
     """Test channel health service."""
 
-    def test_get_available_scan_connections(self, app, test_account):
+    def test_get_available_scan_connections(self, app, health_test_account):
         """Test getting available scan connections."""
         from services.channel_health_service import ChannelHealthService
 
         with app.app_context():
             # With 3 max connections and 1 reserved, should have 2 available
-            available = ChannelHealthService.get_available_scan_connections(test_account)
+            available = ChannelHealthService.get_available_scan_connections(health_test_account)
             assert available == 2
 
-    def test_get_available_scan_connections_disabled_account(self, app, test_account):
+    def test_get_available_scan_connections_disabled_account(self, app, health_test_account):
         """Test getting connections for disabled account returns 0."""
         from services.channel_health_service import ChannelHealthService
 
         with app.app_context():
-            account = db.session.get(Account, test_account)
+            account = db.session.get(Account, health_test_account)
             account.enabled = False
             db.session.commit()
 
-            available = ChannelHealthService.get_available_scan_connections(test_account)
+            available = ChannelHealthService.get_available_scan_connections(health_test_account)
             assert available == 0
 
-    def test_get_channels_to_scan(self, app, test_account, test_channel):
+    def test_get_channels_to_scan(self, app, health_test_account, test_channel):
         """Test getting channels to scan."""
         from services.channel_health_service import ChannelHealthService
 
@@ -375,11 +375,11 @@ class TestChannelHealthService:
             # Enable scanning
             ChannelHealthConfig.set("scanning_enabled", "true")
 
-            channels = ChannelHealthService.get_channels_to_scan(test_account)
+            channels = ChannelHealthService.get_channels_to_scan(health_test_account)
             assert len(channels) > 0
             assert channels[0].id == test_channel
 
-    def test_get_channels_to_scan_excludes_down(self, app, test_account, test_channel):
+    def test_get_channels_to_scan_excludes_down(self, app, health_test_account, test_channel):
         """Test that down channels are excluded from scanning."""
         from services.channel_health_service import ChannelHealthService
 
@@ -392,7 +392,7 @@ class TestChannelHealthService:
             db.session.add(status)
             db.session.commit()
 
-            channels = ChannelHealthService.get_channels_to_scan(test_account)
+            channels = ChannelHealthService.get_channels_to_scan(health_test_account)
             assert len(channels) == 0
 
     def test_get_health_report(self, app, test_channel):
@@ -405,13 +405,13 @@ class TestChannelHealthService:
             assert "channels" in report
             assert report["summary"]["total"] > 0
 
-    def test_get_health_report_with_filters(self, app, test_account, test_channel):
+    def test_get_health_report_with_filters(self, app, health_test_account, test_channel):
         """Test getting health report with filters."""
         from services.channel_health_service import ChannelHealthService
 
         with app.app_context():
             report = ChannelHealthService.get_health_report(
-                account_id=test_account,
+                account_id=health_test_account,
                 status_filter="unknown",
             )
             assert len(report["channels"]) > 0
@@ -489,19 +489,19 @@ class TestChannelHealthService:
             assert status.consecutive_failures == 1
             assert status.status == ChannelHealthStatus.STATUS_DEGRADED
 
-    def test_scan_channels_disabled(self, app, test_account):
+    def test_scan_channels_disabled(self, app, health_test_account):
         """Test scanning when disabled returns message."""
         from services.channel_health_service import ChannelHealthService
 
         with app.app_context():
             ChannelHealthConfig.set("scanning_enabled", "false")
 
-            result = ChannelHealthService.scan_channels(test_account)
+            result = ChannelHealthService.scan_channels(health_test_account)
             assert result["success"] is False
             assert "disabled" in result["message"]
 
     @patch("services.channel_health_service.ChannelHealthService.check_channel_health")
-    def test_scan_channels_success(self, mock_check, app, test_account, test_channel):
+    def test_scan_channels_success(self, mock_check, app, health_test_account, test_channel):
         """Test successful channel scanning."""
         from services.channel_health_service import ChannelHealthService
 
@@ -513,7 +513,7 @@ class TestChannelHealthService:
         with app.app_context():
             ChannelHealthConfig.set("scanning_enabled", "true")
 
-            result = ChannelHealthService.scan_channels(test_account, max_channels=1)
+            result = ChannelHealthService.scan_channels(health_test_account, max_channels=1)
             assert result["success"] is True
             assert result["scanned"] == 1
 
@@ -555,7 +555,7 @@ class TestChannelHealthService:
             result = ChannelHealthService.update_config("unknown_key_xyz", "value")
             assert result["success"] is False
 
-    def test_get_scan_status(self, app, test_account):
+    def test_get_scan_status(self, app, health_test_account):
         """Test getting scan status."""
         from services.channel_health_service import ChannelHealthService
 
@@ -564,13 +564,13 @@ class TestChannelHealthService:
             assert "scanning_enabled" in status
             assert "accounts" in status
 
-    def test_get_scan_status_for_account(self, app, test_account):
+    def test_get_scan_status_for_account(self, app, health_test_account):
         """Test getting scan status for specific account."""
         from services.channel_health_service import ChannelHealthService
 
         with app.app_context():
-            status = ChannelHealthService.get_scan_status(test_account)
-            assert status["account_id"] == test_account
+            status = ChannelHealthService.get_scan_status(health_test_account)
+            assert status["account_id"] == health_test_account
             assert "available_connections" in status
 
 

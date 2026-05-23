@@ -180,7 +180,8 @@ test_stream
 index
 accounts_page
 filters_page
-test_page
+preview_channels_page
+test_page_redirect
 categories_page
 rulesets_page
 settings_page

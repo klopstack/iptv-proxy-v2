@@ -124,4 +124,4 @@ venv/bin/pytest tests/ --collect-only -q | tail -1  # compare test count
 |-------|-------|
 | Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | Removed 26 skipped legacy PPV tests; added shared `test_account`, `test_category`, and `test_account_with_channels` fixtures to conftest; deduplicated fixtures in 7 test files; deleted commented slug/disabled-config tests (slug support not yet implemented). 2340 tests collected, all passing. |
+| Notes | Removed 26 skipped legacy PPV tests; added shared `test_account`, `test_category`, and `test_account_with_channels` fixtures to conftest; deduplicated fixtures in 13 test files (epg_routes, streams_routes, scheduler, playlists_routes, api_routes, api_scheduler, xtream, ppv_enrichment_routes, plus renamed file-specific fixtures in connection_manager, channel_health, phase1/2/4); deleted commented slug/disabled-config tests. Only conftest defines `test_account`. 2340 tests collected, all passing. |

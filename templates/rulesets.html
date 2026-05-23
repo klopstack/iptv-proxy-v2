@@ -352,9 +352,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadAccounts();
     await loadRulesets();
     
-    // Check for URL parameters (from test page manual tag rule creation)
+    // Check for URL parameters (from preview page manual tag rule creation)
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('from_test_page') === 'true') {
+    if (urlParams.get('from_preview_page') === 'true') {
         // Pre-fill and show the tag rule modal
         await handleManualTagRuleCreation(urlParams);
     }
@@ -1191,7 +1191,7 @@ async function loadTags() {
 
 function navigateToPreview(accountId, tagName) {
     // Navigate to test page with account and tag filters
-    window.location.href = `/test?account=${accountId}&tag=${encodeURIComponent(tagName)}`;
+    window.location.href = `/preview?account=${accountId}&tag=${encodeURIComponent(tagName)}`;
 }
 
 async function processAccountTags() {

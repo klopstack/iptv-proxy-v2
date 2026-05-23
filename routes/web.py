@@ -1,7 +1,7 @@
 """
 Web UI routes (template rendering)
 """
-from flask import Blueprint, render_template
+from flask import Blueprint, redirect, render_template, request
 
 # Create blueprint
 web_bp = Blueprint("web", __name__)
@@ -25,10 +25,20 @@ def filters_page():
     return render_template("filters.html")
 
 
+@web_bp.route("/preview")
+def preview_channels_page():
+    """Channel preview page"""
+    return render_template("preview_channels.html")
+
+
 @web_bp.route("/test")
-def test_page():
-    """Test and preview page"""
-    return render_template("test.html")
+def test_page_redirect():
+    """Legacy URL redirect for bookmarks"""
+    query_string = request.query_string.decode()
+    destination = "/preview"
+    if query_string:
+        destination = f"/preview?{query_string}"
+    return redirect(destination, code=302)
 
 
 @web_bp.route("/categories")

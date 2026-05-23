@@ -15,7 +15,7 @@ from models import Account, Category, Channel, db
 
 
 @pytest.fixture
-def test_account(app):
+def phase4_account(app):
     """Create test account"""
     with app.app_context():
         account = Account(
@@ -33,18 +33,18 @@ def test_account(app):
 
 
 @pytest.fixture
-def synced_account_with_channels(app, test_account):
+def synced_account_with_channels(app, phase4_account):
     """Create account with synced channels"""
     with app.app_context():
         # Create category
-        category = Category(account_id=test_account.id, category_id="100", category_name="Test Category")
+        category = Category(account_id=phase4_account.id, category_id="100", category_name="Test Category")
         db.session.add(category)
         db.session.flush()
 
         # Create channels
         channels = [
             Channel(
-                account_id=test_account.id,
+                account_id=phase4_account.id,
                 stream_id=f"ch{i}",
                 name=f"Test Channel {i}",
                 cleaned_name=f"Test Channel {i}",
@@ -57,7 +57,7 @@ def synced_account_with_channels(app, test_account):
         db.session.add_all(channels)
         db.session.commit()
 
-        yield test_account
+        yield phase4_account
 
 
 # ============================================================================
@@ -65,15 +65,15 @@ def synced_account_with_channels(app, test_account):
 # ============================================================================
 
 
-def test_tag_processing_returns_503_when_not_synced(app, client, test_account):
+def test_tag_processing_returns_503_when_not_synced(app, client, phase4_account):
     """Test that tag processing requires synced channels"""
     with app.app_context():
         # No channels synced for this account
-        channel_count = Channel.query.filter_by(account_id=test_account.id, is_active=True).count()
+        channel_count = Channel.query.filter_by(account_id=phase4_account.id, is_active=True).count()
         assert channel_count == 0
 
         # Try to process tags
-        response = client.post(f"/api/accounts/{test_account.id}/process-tags")
+        response = client.post(f"/api/accounts/{phase4_account.id}/process-tags")
 
         # Should return 503 Service Unavailable
         assert response.status_code == 503
@@ -104,15 +104,15 @@ def test_tag_processing_works_when_synced(app, client, synced_account_with_chann
 # ============================================================================
 
 
-def test_preview_returns_503_when_not_synced(app, client, test_account):
+def test_preview_returns_503_when_not_synced(app, client, phase4_account):
     """Test that preview requires synced channels"""
     with app.app_context():
         # No channels synced
-        channel_count = Channel.query.filter_by(account_id=test_account.id, is_active=True).count()
+        channel_count = Channel.query.filter_by(account_id=phase4_account.id, is_active=True).count()
         assert channel_count == 0
 
         # Try to preview
-        response = client.get(f"/api/accounts/{test_account.id}/preview")
+        response = client.get(f"/api/accounts/{phase4_account.id}/preview")
 
         # Should return 503 with standardized error format
         assert response.status_code == 503
@@ -159,15 +159,15 @@ def test_preview_with_pagination(app, client, synced_account_with_channels):
 # ============================================================================
 
 
-def test_playlist_returns_503_when_not_synced(app, client, test_account):
+def test_playlist_returns_503_when_not_synced(app, client, phase4_account):
     """Test that playlist generation requires synced channels"""
     with app.app_context():
         # No channels synced
-        channel_count = Channel.query.filter_by(account_id=test_account.id, is_active=True).count()
+        channel_count = Channel.query.filter_by(account_id=phase4_account.id, is_active=True).count()
         assert channel_count == 0
 
         # Try to generate playlist
-        response = client.get(f"/playlist/{test_account.id}.m3u")
+        response = client.get(f"/playlist/{phase4_account.id}.m3u")
 
         # Should return 503 with text error (M3U endpoint)
         assert response.status_code == 503
@@ -196,11 +196,11 @@ def test_playlist_works_when_synced(app, client, synced_account_with_channels):
 # ============================================================================
 
 
-def test_no_api_fallback_in_tag_processing(app, client, test_account):
+def test_no_api_fallback_in_tag_processing(app, client, phase4_account):
     """Test that tag processing does not fall back to API"""
     with app.app_context():
         # Without synced channels, should get 503, not try API
-        response = client.post(f"/api/accounts/{test_account.id}/process-tags")
+        response = client.post(f"/api/accounts/{phase4_account.id}/process-tags")
 
         # Should fail immediately with 503, not attempt API call
         assert response.status_code == 503
@@ -211,10 +211,10 @@ def test_no_api_fallback_in_tag_processing(app, client, test_account):
         assert "error" in data
 
 
-def test_no_api_fallback_in_preview(app, client, test_account):
+def test_no_api_fallback_in_preview(app, client, phase4_account):
     """Test that preview does not fall back to API"""
     with app.app_context():
-        response = client.get(f"/api/accounts/{test_account.id}/preview")
+        response = client.get(f"/api/accounts/{phase4_account.id}/preview")
 
         # Should return 503, not try API
         assert response.status_code == 503
@@ -225,30 +225,30 @@ def test_no_api_fallback_in_preview(app, client, test_account):
         assert "error" in data
 
 
-def test_database_first_workflow(app, client, test_account):
+def test_database_first_workflow(app, client, phase4_account):
     """Test the enforced database-first workflow"""
     with app.app_context():
         # Step 1: Account exists but not synced - operations should fail
 
         # Tag processing fails
-        tag_response = client.post(f"/api/accounts/{test_account.id}/process-tags")
+        tag_response = client.post(f"/api/accounts/{phase4_account.id}/process-tags")
         assert tag_response.status_code == 503
 
         # Preview fails
-        preview_response = client.get(f"/api/accounts/{test_account.id}/preview")
+        preview_response = client.get(f"/api/accounts/{phase4_account.id}/preview")
         assert preview_response.status_code == 503
 
         # Playlist fails
-        playlist_response = client.get(f"/playlist/{test_account.id}.m3u")
+        playlist_response = client.get(f"/playlist/{phase4_account.id}.m3u")
         assert playlist_response.status_code == 503
 
         # Step 2: Create synced channels (simulating sync)
-        category = Category(account_id=test_account.id, category_id="200", category_name="Synced Category")
+        category = Category(account_id=phase4_account.id, category_id="200", category_name="Synced Category")
         db.session.add(category)
         db.session.flush()
 
         channel = Channel(
-            account_id=test_account.id,
+            account_id=phase4_account.id,
             stream_id="synced_ch1",
             name="Synced Channel",
             cleaned_name="Synced Channel",
@@ -262,48 +262,48 @@ def test_database_first_workflow(app, client, test_account):
         # Step 3: Now operations should work
 
         # Tag processing works
-        tag_response2 = client.post(f"/api/accounts/{test_account.id}/process-tags")
+        tag_response2 = client.post(f"/api/accounts/{phase4_account.id}/process-tags")
         assert tag_response2.status_code == 200
 
         # Preview works
-        preview_response2 = client.get(f"/api/accounts/{test_account.id}/preview")
+        preview_response2 = client.get(f"/api/accounts/{phase4_account.id}/preview")
         assert preview_response2.status_code == 200
 
         # Playlist works
-        playlist_response2 = client.get(f"/playlist/{test_account.id}.m3u")
+        playlist_response2 = client.get(f"/playlist/{phase4_account.id}.m3u")
         assert playlist_response2.status_code == 200
 
 
-def test_error_messages_are_clear(app, client, test_account):
+def test_error_messages_are_clear(app, client, phase4_account):
     """Test that 503 errors have clear, actionable messages"""
     with app.app_context():
         # Tag processing error
-        tag_response = client.post(f"/api/accounts/{test_account.id}/process-tags")
+        tag_response = client.post(f"/api/accounts/{phase4_account.id}/process-tags")
         tag_data = tag_response.json
         assert "sync" in tag_data["error"].lower()
         assert "first" in tag_data["error"].lower()
 
         # Preview error
-        preview_response = client.get(f"/api/accounts/{test_account.id}/preview")
+        preview_response = client.get(f"/api/accounts/{phase4_account.id}/preview")
         preview_data = preview_response.json
         assert "sync" in preview_data["error"].lower()
 
         # Playlist error (text response)
-        playlist_response = client.get(f"/playlist/{test_account.id}.m3u")
+        playlist_response = client.get(f"/playlist/{phase4_account.id}.m3u")
         playlist_text = playlist_response.data.decode("utf-8")
         assert "sync" in playlist_text.lower()
 
 
-def test_inactive_channels_ignored(app, client, test_account):
+def test_inactive_channels_ignored(app, client, phase4_account):
     """Test that only active channels are considered for sync status"""
     with app.app_context():
         # Create inactive channel
-        category = Category(account_id=test_account.id, category_id="300", category_name="Test")
+        category = Category(account_id=phase4_account.id, category_id="300", category_name="Test")
         db.session.add(category)
         db.session.flush()
 
         inactive_channel = Channel(
-            account_id=test_account.id,
+            account_id=phase4_account.id,
             stream_id="inactive_ch",
             name="Inactive Channel",
             category_id=category.id,
@@ -313,5 +313,5 @@ def test_inactive_channels_ignored(app, client, test_account):
         db.session.commit()
 
         # Should still be considered "not synced" since no active channels
-        response = client.get(f"/api/accounts/{test_account.id}/preview")
+        response = client.get(f"/api/accounts/{phase4_account.id}/preview")
         assert response.status_code == 503

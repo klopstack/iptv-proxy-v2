@@ -5,23 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from models import Account, Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
-
-
-@pytest.fixture
-def test_account(app):
-    """Create a test account"""
-    with app.app_context():
-        account = Account(
-            name="Test Account",
-            username="test_user",
-            password="test_pass",
-            server="example.com",
-            enabled=True,
-        )
-        db.session.add(account)
-        db.session.commit()
-        yield account.id
+from models import Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
 
 
 @pytest.fixture

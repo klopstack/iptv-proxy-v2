@@ -311,7 +311,7 @@ function renderCategoryCard(cat, activeFilters = []) {
                 </div>
                 <div class="card-footer bg-transparent border-top-0">
                     <div class="btn-group btn-group-sm w-100" role="group">
-                        <a href="/test?account=${cat.account_id}&category=${encodeURIComponent(cat.cleaned_name || cat.category_name)}" 
+                        <a href="/preview?account=${cat.account_id}&category=${encodeURIComponent(cat.cleaned_name || cat.category_name)}" 
                            class="btn btn-outline-primary" 
                            title="Preview channels in this category">
                             <i class="bi bi-eye"></i> Preview

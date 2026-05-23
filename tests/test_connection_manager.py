@@ -10,7 +10,7 @@ from services.connection_manager import ConnectionManager
 
 
 @pytest.fixture
-def test_account(app):
+def legacy_account(app):
     """Create a test account"""
     with app.app_context():
         account = Account(
@@ -26,18 +26,18 @@ def test_account(app):
 
 
 @pytest.fixture
-def test_account_with_credentials(app, test_account):
+def legacy_account_with_credentials(app, legacy_account):
     """Create a test account with multiple credentials"""
     with app.app_context():
         cred1 = Credential(
-            account_id=test_account,
+            account_id=legacy_account,
             username="user1",
             password="pass1",
             max_connections=2,
             enabled=True,
         )
         cred2 = Credential(
-            account_id=test_account,
+            account_id=legacy_account,
             username="user2",
             password="pass2",
             max_connections=1,
@@ -45,7 +45,7 @@ def test_account_with_credentials(app, test_account):
         )
         db.session.add_all([cred1, cred2])
         db.session.commit()
-        yield test_account, cred1.id, cred2.id
+        yield legacy_account, cred1.id, cred2.id
 
 
 @pytest.fixture
@@ -84,21 +84,21 @@ class TestGetAvailableCredential:
             result = ConnectionManager.get_available_credential(test_disabled_account)
             assert result is None
 
-    def test_get_credential_legacy_mode(self, app, test_account):
+    def test_get_credential_legacy_mode(self, app, legacy_account):
         """Test returns legacy credential when no credentials configured"""
         with app.app_context():
             # Delete any credentials that might have been created
-            Credential.query.filter_by(account_id=test_account).delete()
+            Credential.query.filter_by(account_id=legacy_account).delete()
             db.session.commit()
 
-            result = ConnectionManager.get_available_credential(test_account)
+            result = ConnectionManager.get_available_credential(legacy_account)
             assert result is not None
             assert result.username == "legacy_user"
             assert result.password == "legacy_pass"
 
-    def test_get_credential_selects_least_loaded(self, app, test_account_with_credentials):
+    def test_get_credential_selects_least_loaded(self, app, legacy_account_with_credentials):
         """Test selects credential with lowest utilization"""
-        account_id, cred1_id, cred2_id = test_account_with_credentials
+        account_id, cred1_id, cred2_id = legacy_account_with_credentials
         with app.app_context():
             # Add one active stream to cred1
             stream = ActiveStream(
@@ -115,9 +115,9 @@ class TestGetAvailableCredential:
             assert result is not None
             assert result.id == cred2_id
 
-    def test_get_credential_all_maxed_out(self, app, test_account_with_credentials):
+    def test_get_credential_all_maxed_out(self, app, legacy_account_with_credentials):
         """Test returns None when all credentials are at max capacity"""
-        account_id, cred1_id, cred2_id = test_account_with_credentials
+        account_id, cred1_id, cred2_id = legacy_account_with_credentials
         with app.app_context():
             # Max out cred1 (2 connections)
             for i in range(2):
@@ -166,9 +166,9 @@ class TestAcquireConnection:
             assert token is None
             assert "not found" in error.lower()
 
-    def test_acquire_credential_disabled(self, app, test_account_with_credentials):
+    def test_acquire_credential_disabled(self, app, legacy_account_with_credentials):
         """Test returns error for disabled credential"""
-        account_id, cred1_id, _ = test_account_with_credentials
+        account_id, cred1_id, _ = legacy_account_with_credentials
         with app.app_context():
             cred = db.session.get(Credential, cred1_id)
             cred.enabled = False
@@ -178,9 +178,9 @@ class TestAcquireConnection:
             assert token is None
             assert "disabled" in error.lower()
 
-    def test_acquire_no_slots(self, app, test_account_with_credentials):
+    def test_acquire_no_slots(self, app, legacy_account_with_credentials):
         """Test returns error when no slots available"""
-        account_id, cred1_id, cred2_id = test_account_with_credentials
+        account_id, cred1_id, cred2_id = legacy_account_with_credentials
         with app.app_context():
             # Max out cred2 (1 connection)
             stream = ActiveStream(
@@ -196,9 +196,9 @@ class TestAcquireConnection:
             assert token is None
             assert "no available" in error.lower()
 
-    def test_acquire_success(self, app, test_account_with_credentials):
+    def test_acquire_success(self, app, legacy_account_with_credentials):
         """Test successful connection acquisition"""
-        account_id, cred1_id, _ = test_account_with_credentials
+        account_id, cred1_id, _ = legacy_account_with_credentials
         with app.app_context():
             token, error = ConnectionManager.acquire_connection(cred1_id, "stream1", "127.0.0.1")
             assert token is not None
@@ -230,9 +230,9 @@ class TestReleaseConnection:
             result = ConnectionManager.release_connection("nonexistent_token")
             assert result is False
 
-    def test_release_success(self, app, test_account_with_credentials):
+    def test_release_success(self, app, legacy_account_with_credentials):
         """Test successful connection release"""
-        account_id, cred1_id, _ = test_account_with_credentials
+        account_id, cred1_id, _ = legacy_account_with_credentials
         with app.app_context():
             # Create active stream
             stream = ActiveStream(
@@ -272,9 +272,9 @@ class TestUpdateActivity:
             result = ConnectionManager.update_activity("nonexistent")
             assert result is False
 
-    def test_update_success(self, app, test_account_with_credentials):
+    def test_update_success(self, app, legacy_account_with_credentials):
         """Test successful activity update"""
-        account_id, cred1_id, _ = test_account_with_credentials
+        account_id, cred1_id, _ = legacy_account_with_credentials
         with app.app_context():
             # Create active stream with old activity time
             old_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=5)
@@ -304,9 +304,9 @@ class TestUpdateActivity:
 class TestCleanupStaleConnections:
     """Tests for ConnectionManager.cleanup_stale_connections"""
 
-    def test_cleanup_removes_stale(self, app, test_account_with_credentials):
+    def test_cleanup_removes_stale(self, app, legacy_account_with_credentials):
         """Test cleanup removes stale connections"""
-        account_id, cred1_id, _ = test_account_with_credentials
+        account_id, cred1_id, _ = legacy_account_with_credentials
         with app.app_context():
             # Create stale stream (old activity)
             old_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=5)
@@ -337,9 +337,9 @@ class TestCleanupStaleConnections:
             assert ActiveStream.query.filter_by(session_token="stale_token").first() is None
             assert ActiveStream.query.filter_by(session_token="active_token").first() is not None
 
-    def test_cleanup_respects_account_filter(self, app, test_account_with_credentials):
+    def test_cleanup_respects_account_filter(self, app, legacy_account_with_credentials):
         """Test cleanup only affects specified account"""
-        account_id, cred1_id, _ = test_account_with_credentials
+        account_id, cred1_id, _ = legacy_account_with_credentials
         with app.app_context():
             # Create a fresh (not stale) stream for this account
             stream = ActiveStream(
@@ -374,20 +374,20 @@ class TestGetConnectionStatus:
             result = ConnectionManager.get_connection_status(999)
             assert "error" in result
 
-    def test_status_legacy_mode(self, app, test_account):
+    def test_status_legacy_mode(self, app, legacy_account):
         """Test returns legacy mode for account without credentials"""
         with app.app_context():
             # Remove any credentials
-            Credential.query.filter_by(account_id=test_account).delete()
+            Credential.query.filter_by(account_id=legacy_account).delete()
             db.session.commit()
 
-            result = ConnectionManager.get_connection_status(test_account)
+            result = ConnectionManager.get_connection_status(legacy_account)
             assert result["legacy_mode"] is True
             assert result["total_max_connections"] == 1
 
-    def test_status_with_credentials(self, app, test_account_with_credentials):
+    def test_status_with_credentials(self, app, legacy_account_with_credentials):
         """Test returns correct status for account with credentials"""
-        account_id, cred1_id, cred2_id = test_account_with_credentials
+        account_id, cred1_id, cred2_id = legacy_account_with_credentials
         with app.app_context():
             result = ConnectionManager.get_connection_status(account_id)
             # cred1 has max_connections=2, cred2 has max_connections=1
@@ -409,9 +409,9 @@ class TestGetActiveStreams:
             result = ConnectionManager.get_active_streams()
             assert result == []
 
-    def test_active_streams_with_filter(self, app, test_account_with_credentials):
+    def test_active_streams_with_filter(self, app, legacy_account_with_credentials):
         """Test returns filtered streams"""
-        account_id, cred1_id, _ = test_account_with_credentials
+        account_id, cred1_id, _ = legacy_account_with_credentials
         with app.app_context():
             # Create active stream
             stream = ActiveStream(

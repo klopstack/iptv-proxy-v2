@@ -10,33 +10,17 @@ from models import Account, Category, Channel, ChannelTag, Event, EventChannelLi
 
 
 @pytest.fixture
-def test_account(app):
-    """Create a test account"""
-    with app.app_context():
-        account = Account(
-            name="Test Account",
-            username="test_user",
-            password="test_pass",
-            server="http://example.com",
-            enabled=True,
-        )
-        db.session.add(account)
-        db.session.commit()
-        yield account
-
-
-@pytest.fixture
 def test_channel_with_tags(app, test_account):
     """Create a test channel with tags"""
     with app.app_context():
         # Create category
-        category = Category(account_id=test_account.id, category_id="100", category_name="Test Category")
+        category = Category(account_id=test_account, category_id="100", category_name="Test Category")
         db.session.add(category)
         db.session.flush()
 
         # Create channel
         channel = Channel(
-            account_id=test_account.id,
+            account_id=test_account,
             stream_id="ch1",
             name="Test Channel",
             cleaned_name="Test Channel",
@@ -54,8 +38,8 @@ def test_channel_with_tags(app, test_account):
         db.session.flush()
 
         # Link tags to channel
-        channel_tag1 = ChannelTag(account_id=test_account.id, stream_id="ch1", tag_id=tag1.id)
-        channel_tag2 = ChannelTag(account_id=test_account.id, stream_id="ch1", tag_id=tag2.id)
+        channel_tag1 = ChannelTag(account_id=test_account, stream_id="ch1", tag_id=tag1.id)
+        channel_tag2 = ChannelTag(account_id=test_account, stream_id="ch1", tag_id=tag2.id)
         db.session.add_all([channel_tag1, channel_tag2])
         db.session.commit()
 
@@ -72,7 +56,7 @@ def test_sync_all_accounts_success(app, client, test_account):
     with app.app_context():
         # Mock the sync service
         with patch("services.sync_service.ChannelSyncService.sync_all_accounts") as mock_sync:
-            mock_sync.return_value = [{"account_id": test_account.id, "success": True, "channels_synced": 5}]
+            mock_sync.return_value = [{"account_id": test_account, "success": True, "channels_synced": 5}]
 
             response = client.post("/api/sync/all")
             assert response.status_code == 200
@@ -184,7 +168,7 @@ def test_get_tags_filtered_by_account(app, client, test_channel_with_tags, test_
         db.session.commit()
 
         # Query tags for first account only
-        response = client.get(f"/api/tags?account_id={test_account.id}")
+        response = client.get(f"/api/tags?account_id={test_account}")
         assert response.status_code == 200
 
         data = response.json
@@ -197,7 +181,7 @@ def test_get_tags_filtered_by_account(app, client, test_channel_with_tags, test_
 def test_get_tags_with_counts_filtered_by_account(app, client, test_channel_with_tags, test_account):
     """Test getting tags with counts filtered by account"""
     with app.app_context():
-        response = client.get(f"/api/tags?account_id={test_account.id}&with_counts=true")
+        response = client.get(f"/api/tags?account_id={test_account}&with_counts=true")
         assert response.status_code == 200
 
         data = response.json
@@ -232,15 +216,15 @@ def test_clear_account_cache(app, client, test_account):
     """Test clearing cache for specific account"""
     with app.app_context():
         with patch("routes.api.cache_service.clear_account_cache") as mock_clear:
-            response = client.post(f"/api/cache/clear/{test_account.id}")
+            response = client.post(f"/api/cache/clear/{test_account}")
             assert response.status_code == 200
 
             data = response.json
             assert data["success"] is True
-            assert str(test_account.id) in data["message"]
+            assert str(test_account) in data["message"]
 
             # Verify clear was called with correct account ID
-            mock_clear.assert_called_once_with(test_account.id)
+            mock_clear.assert_called_once_with(test_account)
 
 
 def test_clear_account_cache_nonexistent_account(app, client):
@@ -289,13 +273,13 @@ def test_preview_channels_with_pagination(app, client, test_account):
     """Test channel preview with pagination"""
     with app.app_context():
         # Create multiple channels
-        category = Category(account_id=test_account.id, category_id="100", category_name="Test Category")
+        category = Category(account_id=test_account, category_id="100", category_name="Test Category")
         db.session.add(category)
         db.session.flush()
 
         for i in range(5):
             channel = Channel(
-                account_id=test_account.id,
+                account_id=test_account,
                 stream_id=f"ch{i}",
                 name=f"Channel {i}",
                 category_id=category.id,
@@ -365,13 +349,13 @@ def test_preview_channels_filtered_by_account(app, client, test_channel_with_tag
         db.session.commit()
 
         # Query only test_account channels
-        response = client.get(f"/api/channels/preview?account_id={test_account.id}")
+        response = client.get(f"/api/channels/preview?account_id={test_account}")
         assert response.status_code == 200
 
         data = response.json
         assert data["total"] == 1
         assert len(data["channels"]) == 1
-        assert data["channels"][0]["account_id"] == test_account.id
+        assert data["channels"][0]["account_id"] == test_account
 
 
 def test_preview_channels_nonexistent_account(app, client):
@@ -384,13 +368,13 @@ def test_preview_channels_nonexistent_account(app, client):
 def test_preview_channels_only_visible_and_active(app, client, test_account):
     """Test channel preview only shows visible and active channels"""
     with app.app_context():
-        category = Category(account_id=test_account.id, category_id="100", category_name="Test Category")
+        category = Category(account_id=test_account, category_id="100", category_name="Test Category")
         db.session.add(category)
         db.session.flush()
 
         # Create visible+active channel
         visible_channel = Channel(
-            account_id=test_account.id,
+            account_id=test_account,
             stream_id="visible",
             name="Visible Channel",
             category_id=category.id,
@@ -399,7 +383,7 @@ def test_preview_channels_only_visible_and_active(app, client, test_account):
         )
         # Create invisible channel
         invisible_channel = Channel(
-            account_id=test_account.id,
+            account_id=test_account,
             stream_id="invisible",
             name="Invisible Channel",
             category_id=category.id,
@@ -408,7 +392,7 @@ def test_preview_channels_only_visible_and_active(app, client, test_account):
         )
         # Create inactive channel
         inactive_channel = Channel(
-            account_id=test_account.id,
+            account_id=test_account,
             stream_id="inactive",
             name="Inactive Channel",
             category_id=category.id,
@@ -434,14 +418,14 @@ def test_preview_channels_only_visible_and_active(app, client, test_account):
 def test_get_channel_details(app, client, test_channel_with_tags, test_account):
     """Test getting detailed information for a specific channel"""
     with app.app_context():
-        response = client.get(f"/api/accounts/{test_account.id}/channels/ch1")
+        response = client.get(f"/api/accounts/{test_account}/channels/ch1")
         assert response.status_code == 200
 
         data = response.json
         assert data["stream_id"] == "ch1"
         assert data["name"] == "Test Channel"
         assert data["cleaned_name"] == "Test Channel"
-        assert data["account_id"] == test_account.id
+        assert data["account_id"] == test_account
         assert data["account_name"] == "Test Account"
         assert data["category"] == "Test Category"
 
@@ -468,7 +452,7 @@ def test_get_channel_details(app, client, test_channel_with_tags, test_account):
 def test_get_channel_details_not_found(app, client, test_account):
     """Test getting channel details for non-existent channel"""
     with app.app_context():
-        response = client.get(f"/api/accounts/{test_account.id}/channels/nonexistent")
+        response = client.get(f"/api/accounts/{test_account}/channels/nonexistent")
         assert response.status_code == 404
 
 
