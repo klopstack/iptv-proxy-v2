@@ -162,6 +162,65 @@ class TestPlaylistConfigCRUD:
         )
         assert response.status_code == 404
 
+    def test_update_playlist_config_invalid_tag_match_mode(self, app, client, test_playlist_config):
+        """Test updating with invalid tag_match_mode returns 400"""
+        response = client.put(
+            f"/api/playlist-configs/{test_playlist_config}",
+            json={"tag_match_mode": "invalid"},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        assert "validation_errors" in response.json
+
+    def test_update_playlist_config_tag_overlap(self, app, client, test_playlist_config):
+        """Test updating with overlapping include/exclude tags returns 400"""
+        response = client.put(
+            f"/api/playlist-configs/{test_playlist_config}",
+            json={"include_tags": ["HD"], "exclude_tags": ["HD"]},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        assert "include_tags" in response.json["validation_errors"]
+
+    def test_update_playlist_config_partial_name_only(self, app, client, test_playlist_config):
+        """Test partial update with name only"""
+        response = client.put(
+            f"/api/playlist-configs/{test_playlist_config}",
+            json={"name": "Renamed Playlist"},
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = response.json
+        assert data["name"] == "Renamed Playlist"
+        assert data["slug"] == "renamed-playlist"
+
+    def test_update_playlist_config_slug_collision(self, app, client, test_account):
+        """Test slug collision gets numeric suffix"""
+        with app.app_context():
+            first = PlaylistConfig(
+                name="Sports Mix",
+                include_accounts=json.dumps([test_account]),
+                enabled=True,
+            )
+            second = PlaylistConfig(
+                name="Sports Mix!",
+                include_accounts=json.dumps([test_account]),
+                enabled=True,
+            )
+            db.session.add_all([first, second])
+            db.session.commit()
+            second_id = second.id
+            second_slug = second.slug
+
+        response = client.put(
+            f"/api/playlist-configs/{second_id}",
+            json={"name": "Sports Mix"},
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        assert response.json["slug"] == second_slug
+        assert second_slug.endswith("-2")
+
     def test_delete_playlist_config(self, app, client, test_playlist_config):
         """Test deleting a playlist config"""
         response = client.delete(f"/api/playlist-configs/{test_playlist_config}")
@@ -358,7 +417,7 @@ class TestPlaylistPreview:
 
 
 class TestSlugify:
-    """Tests for slug generation"""
+    """Tests for slug generation and slug-based routes"""
 
     def test_slug_in_response(self, app, client, test_playlist_config):
         """Test that slug is included in playlist config response"""
@@ -366,7 +425,27 @@ class TestSlugify:
         assert response.status_code == 200
         data = response.json
         assert len(data) == 1
-        assert data[0]["slug"] == "test-playlist"  # "Test Playlist" -> "test-playlist"
+        assert data[0]["slug"] == "test-playlist"
+
+    def test_generate_m3u_by_slug(self, app, client, test_playlist_config, test_channel_with_tag):
+        """Test M3U generation via persisted slug"""
+        with app.app_context():
+            config = db.session.get(PlaylistConfig, test_playlist_config)
+            slug = config.slug
+
+        response = client.get(f"/playlist/config/{slug}.m3u?proxy_icons=false")
+        assert response.status_code == 200
+        assert b"#EXTM3U" in response.data
+
+    def test_generate_epg_by_slug(self, app, client, test_playlist_config, test_channel_with_tag):
+        """Test EPG generation via persisted slug"""
+        with app.app_context():
+            config = db.session.get(PlaylistConfig, test_playlist_config)
+            slug = config.slug
+
+        response = client.get(f"/epg/config/{slug}.xml")
+        assert response.status_code == 200
+        assert b"<?xml version=" in response.data
 
 
 # ============================================================================

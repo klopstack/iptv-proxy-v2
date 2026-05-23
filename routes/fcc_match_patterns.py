@@ -28,7 +28,7 @@ from models import (
     db,
 )
 from services.cache_service import CacheService
-from services.epg_match_rules_service import clear_fcc_pattern_cache
+from services.epg.match_rules import clear_fcc_pattern_cache
 
 logger = logging.getLogger(__name__)
 
@@ -487,7 +487,7 @@ def test_fcc_patterns():
     channel_name = data.get("channel_name", "")
     tags = set(data.get("tags", []))
 
-    from services.epg_match_rules_service import EpgMatchRulesService
+    from services.epg.match_rules import EpgMatchRulesService
 
     # Test channel number extraction
     channel_number = EpgMatchRulesService._extract_channel_number(channel_name)

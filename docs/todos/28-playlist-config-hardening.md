@@ -1,7 +1,7 @@
 # TODO 28: Harden Playlist Config API and Slug Routing
 
 **Priority:** P2  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Medium
 
 ---
@@ -123,11 +123,11 @@ Document in route docstrings:
 
 ## Acceptance criteria
 
-- [ ] PUT uses `PlaylistConfigUpdateSchema`; invalid payloads return 400 with field errors
-- [ ] Slug routes use indexed DB lookup — no `query.all()` for slug resolution
-- [ ] Migration backfills slugs for existing configs; unique constraint enforced
-- [ ] Renaming config updates slug (or documented exception if slug pinned)
-- [ ] Tests cover validation errors and slug collision handling
+- [x] PUT uses `PlaylistConfigUpdateSchema`; invalid payloads return 400 with field errors
+- [x] Slug routes use indexed DB lookup — no `query.all()` for slug resolution
+- [x] Migration backfills slugs for existing configs; unique constraint enforced
+- [x] Renaming config updates slug (or documented exception if slug pinned)
+- [x] Tests cover validation errors and slug collision handling
 
 ---
 
@@ -151,6 +151,6 @@ venv/bin/pytest tests/test_playlists_routes.py tests/test_playlist_generation.py
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | PUT uses `PlaylistConfigUpdateSchema` with partial updates and overlap checks; added indexed `playlist_configs.slug` column + migration; moved slugify to `services/text_utils.py`; slug routes use `get_playlist_config_by_slug`; renaming updates slug with collision suffixes. |

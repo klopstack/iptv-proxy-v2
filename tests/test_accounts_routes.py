@@ -462,7 +462,7 @@ class TestAccountCategories:
         response = client.get("/api/accounts/999/categories")
         assert response.status_code == 404
 
-    @patch("services.iptv_service.get_iptv_service_for_account")
+    @patch("routes.accounts.get_iptv_service_for_account")
     @patch("routes.accounts.cache_service")
     def test_get_categories_empty(self, mock_cache, mock_get_service, app, client, test_account):
         """Test getting categories when none exist"""
@@ -475,7 +475,7 @@ class TestAccountCategories:
         assert response.status_code == 200
         assert response.json == []
 
-    @patch("services.iptv_service.get_iptv_service_for_account")
+    @patch("routes.accounts.get_iptv_service_for_account")
     @patch("routes.accounts.cache_service")
     def test_get_categories(self, mock_cache, mock_get_service, app, client, test_account):
         """Test getting categories"""

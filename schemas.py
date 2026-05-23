@@ -207,6 +207,26 @@ class AccountRuleSetAssignSchema(Schema):
 # ============================================================================
 
 
+def check_playlist_filter_overlap(
+    include_accounts,
+    exclude_accounts,
+    include_tags,
+    exclude_tags,
+) -> None:
+    """Raise ValidationError if include/exclude lists overlap."""
+    account_overlap = set(include_accounts) & set(exclude_accounts)
+    if account_overlap:
+        raise ValidationError(
+            {"include_accounts": [f"Accounts cannot be in both include and exclude: {account_overlap}"]}
+        )
+
+    tag_overlap = set(include_tags) & set(exclude_tags)
+    if tag_overlap:
+        raise ValidationError(
+            {"include_tags": [f"Tags cannot be in both include and exclude: {tag_overlap}"]}
+        )
+
+
 class PlaylistConfigCreateSchema(Schema):
     """Schema for creating a new playlist config"""
 
@@ -221,26 +241,16 @@ class PlaylistConfigCreateSchema(Schema):
     @validates_schema
     def validate_accounts(self, data, **kwargs):
         """Ensure accounts don't overlap"""
-        include = set(data.get("include_accounts", []))
-        exclude = set(data.get("exclude_accounts", []))
-        overlap = include & exclude
-        if overlap:
-            raise ValidationError(
-                f"Accounts cannot be in both include and exclude: {overlap}", field_name="include_accounts"
-            )
-
-    @validates_schema
-    def validate_tags(self, data, **kwargs):
-        """Ensure tags don't overlap"""
-        include = set(data.get("include_tags", []))
-        exclude = set(data.get("exclude_tags", []))
-        overlap = include & exclude
-        if overlap:
-            raise ValidationError(f"Tags cannot be in both include and exclude: {overlap}", field_name="include_tags")
+        check_playlist_filter_overlap(
+            data.get("include_accounts", []),
+            data.get("exclude_accounts", []),
+            data.get("include_tags", []),
+            data.get("exclude_tags", []),
+        )
 
 
 class PlaylistConfigUpdateSchema(Schema):
-    """Schema for updating a playlist config"""
+    """Schema for updating a playlist config (partial updates supported)."""
 
     name = fields.Str(validate=lambda x: 1 <= len(x) <= 200)
     description = fields.Str(validate=lambda x: len(x) <= 500)
@@ -249,6 +259,9 @@ class PlaylistConfigUpdateSchema(Schema):
     include_tags = fields.List(fields.Str(validate=lambda x: 1 <= len(x) <= 100))
     exclude_tags = fields.List(fields.Str(validate=lambda x: 1 <= len(x) <= 100))
     tag_match_mode = fields.Str(validate=lambda x: x in ("all", "any"))
+
+    class Meta:
+        unknown = EXCLUDE
 
 
 # ============================================================================
@@ -501,7 +514,7 @@ class EpgChannelNameMappingUpdateSchema(Schema):
 # ============================================================================
 
 
-def validate_request_data(schema_class):
+def validate_request_data(schema_class, *, partial=False):
     """
     Decorator to validate request data using a Marshmallow schema
 
@@ -523,7 +536,7 @@ def validate_request_data(schema_class):
         def wrapper(*args, **kwargs):
             try:
                 schema = schema_class()
-                validated_data = schema.load(request.json or {})
+                validated_data = schema.load(request.json or {}, partial=partial)
                 request.validated_data = validated_data
                 return f(*args, **kwargs)
             except ValidationError as err:

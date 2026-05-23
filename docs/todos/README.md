@@ -97,9 +97,9 @@ Follow-up audit after TODOs 01–21. Focus: dead shims, test duplication, semant
 | 25 | [25-refactor-epg-service-and-phase-tests.md](./25-refactor-epg-service-and-phase-tests.md) | ✅ | Split `test_epg_service.py` (3.4k lines); rename phase-era tests |
 | 26 | [26-mediaflow-stream-backend-tests.md](./26-mediaflow-stream-backend-tests.md) | ✅ | Test stream factory + MediaFlow service (zero tests today) |
 | 27 | [27-clarify-is-visible-semantics.md](./27-clarify-is-visible-semantics.md) | ✅ | Resolve `is_visible` cache vs live filters; channel health UI |
-| 28 | [28-playlist-config-hardening.md](./28-playlist-config-hardening.md) | ⬜ | PUT schema validation; indexed slug column (replace O(n) scan) |
+| 28 | [28-playlist-config-hardening.md](./28-playlist-config-hardening.md) | ✅ | PUT schema validation; indexed slug column (replace O(n) scan) |
 | 29 | [29-deduplicate-shared-helpers.md](./29-deduplicate-shared-helpers.md) | ✅ | Single `get_iptv_service_for_account`; Xtream CQS cleanup |
-| 30 | [30-split-epg-match-rules-service.md](./30-split-epg-match-rules-service.md) | ⬜ | Split 2k-line `epg_match_rules_service.py` |
+| 30 | [30-split-epg-match-rules-service.md](./30-split-epg-match-rules-service.md) | ✅ | Split 2k-line `epg_match_rules_service.py` into `services/epg/match_rules/` |
 | 31 | [31-deprecate-provider-epg-ui.md](./31-deprecate-provider-epg-ui.md) | ⬜ | Align EPG management UI with deprecated provider EPG |
 | 32 | [32-expand-frontend-js-tests.md](./32-expand-frontend-js-tests.md) | ⬜ | Extend Vitest beyond 2 files / 18 JS modules |
 | 33 | [33-error-handling-and-logging-hygiene.md](./33-error-handling-and-logging-hygiene.md) | ⬜ | Replace silent `except` blocks in routes/services |

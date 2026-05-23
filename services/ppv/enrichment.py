@@ -345,7 +345,7 @@ class PPVCalendarEnrichmentService:
                     logger.info(f"Synced PPV events to EPG: {created} created, {updated} updated")
 
                     # Auto-match PPV channels to the EPG
-                    from services.epg_match_rules_service import EpgMatchRulesService
+                    from services.epg.match_rules import EpgMatchRulesService
 
                     match_stats = EpgMatchRulesService.match_ppv_channels_to_epg(source_id=source_id, batch_size=100)
                     logger.info(

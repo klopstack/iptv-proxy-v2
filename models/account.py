@@ -3,6 +3,8 @@
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy import event
+
 from models._base import db
 
 class Account(db.Model):  # type: ignore[name-defined]
@@ -129,6 +131,7 @@ class PlaylistConfig(db.Model):  # type: ignore[name-defined]
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    slug = db.Column(db.String(220), unique=True, nullable=False, index=True)
     description = db.Column(db.Text)
 
     # Account filters (JSON array of account IDs to include/exclude)
@@ -152,6 +155,15 @@ class PlaylistConfig(db.Model):  # type: ignore[name-defined]
 
     def __repr__(self):
         return f"<PlaylistConfig {self.name}>"
+
+
+@event.listens_for(PlaylistConfig, "before_insert")
+def _set_playlist_config_slug(mapper, connection, target):
+    """Assign a unique slug before insert when tests or callers omit it."""
+    if not target.slug:
+        from services.playlist_config_service import assign_slug
+
+        assign_slug(target)
 
 
 # ============================================================================

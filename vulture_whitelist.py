@@ -40,7 +40,6 @@ unknown
 CredentialCreateSchema
 CredentialUpdateSchema
 AccountRuleSetAssignSchema
-PlaylistConfigUpdateSchema
 
 # Flask route functions - registered via @blueprint.route() decorators
 # accounts.py

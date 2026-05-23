@@ -566,7 +566,7 @@ def load_country_tags_for_channels(account_id: int, channels: List[Any]) -> Dict
         Dict mapping stream_id to set of country tags (e.g., {'US'})
     """
     from models import ChannelTag, Tag, db
-    from services.epg_match_rules_service import EpgMatchRulesService
+    from services.epg.match_rules import EpgMatchRulesService
 
     BATCH_SIZE = 500
     country_tags_by_stream: Dict[str, Set[str]] = {}

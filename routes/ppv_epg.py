@@ -182,7 +182,7 @@ def match_ppv_channels_to_epg(source_id):
         JSON with matching statistics
     """
     from models import EpgSource
-    from services.epg_match_rules_service import EpgMatchRulesService
+    from services.epg.match_rules import EpgMatchRulesService
 
     # Verify source exists and is PPV type
     epg_source = db.session.get(EpgSource, source_id)

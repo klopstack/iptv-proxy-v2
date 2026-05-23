@@ -40,7 +40,7 @@ class TestChannelSyncService:
             assert result["success"] is False
             assert "disabled" in result["error"].lower()
 
-    @patch("services.sync_service.IPTVService")
+    @patch("services.sync_service.get_iptv_service_for_account")
     def test_sync_account_success(self, mock_iptv_class, app):
         """Test successful account sync"""
         with app.app_context():
@@ -69,7 +69,7 @@ class TestChannelSyncService:
             assert result["categories_added"] >= 0
             assert result["channels_added"] >= 0
 
-    @patch("services.sync_service.IPTVService")
+    @patch("services.sync_service.get_iptv_service_for_account")
     def test_sync_account_categories_error(self, mock_iptv_class, app):
         """Test sync with categories fetch error"""
         with app.app_context():
@@ -91,7 +91,7 @@ class TestChannelSyncService:
             # Should still succeed but with errors noted
             assert "Categories sync error" in str(result.get("errors", []))
 
-    @patch("services.sync_service.IPTVService")
+    @patch("services.sync_service.get_iptv_service_for_account")
     def test_sync_account_channels_error(self, mock_iptv_class, app):
         """Test sync with channels fetch error"""
         with app.app_context():
@@ -114,7 +114,7 @@ class TestChannelSyncService:
             assert result["success"] is False
             assert "Channels sync error" in str(result.get("errors", []))
 
-    @patch("services.sync_service.IPTVService")
+    @patch("services.sync_service.get_iptv_service_for_account")
     def test_sync_categories_new(self, mock_iptv_class, app):
         """Test syncing new categories"""
         with app.app_context():
@@ -142,7 +142,7 @@ class TestChannelSyncService:
             categories = Category.query.filter_by(account_id=account_id).all()
             assert len(categories) == 2
 
-    @patch("services.sync_service.IPTVService")
+    @patch("services.sync_service.get_iptv_service_for_account")
     def test_sync_categories_existing(self, mock_iptv_class, app):
         """Test syncing existing categories (updates)"""
         with app.app_context():
@@ -176,7 +176,7 @@ class TestChannelSyncService:
             updated_cat = Category.query.filter_by(account_id=account_id, category_id="1").first()
             assert updated_cat.category_name == "New Sports Name"
 
-    @patch("services.sync_service.IPTVService")
+    @patch("services.sync_service.get_iptv_service_for_account")
     def test_sync_channels_new(self, mock_iptv_class, app):
         """Test syncing new channels"""
         with app.app_context():
@@ -205,7 +205,7 @@ class TestChannelSyncService:
             assert channel.name == "ESPN"
             assert channel.is_active is True
 
-    @patch("services.sync_service.IPTVService")
+    @patch("services.sync_service.get_iptv_service_for_account")
     def test_sync_channels_existing(self, mock_iptv_class, app):
         """Test syncing existing channels (updates)"""
         with app.app_context():
@@ -249,7 +249,7 @@ class TestChannelSyncService:
             updated_channel = Channel.query.filter_by(account_id=account_id, stream_id="101").first()
             assert updated_channel.name == "New ESPN Name"
 
-    @patch("services.sync_service.IPTVService")
+    @patch("services.sync_service.get_iptv_service_for_account")
     def test_sync_deactivates_old_channels(self, mock_iptv_class, app):
         """Test that channels not seen in sync are deactivated"""
         with app.app_context():
@@ -286,7 +286,7 @@ class TestChannelSyncService:
             deactivated = Channel.query.filter_by(account_id=account_id, stream_id="999").first()
             assert deactivated.is_active is False
 
-    @patch("services.sync_service.IPTVService")
+    @patch("services.sync_service.get_iptv_service_for_account")
     def test_sync_all_enabled_accounts(self, mock_iptv_class, app):
         """Test syncing all enabled accounts"""
         with app.app_context():
@@ -312,7 +312,7 @@ class TestChannelSyncService:
             assert "Account3" in synced_names
             assert "Account2" not in synced_names
 
-    @patch("services.sync_service.IPTVService")
+    @patch("services.sync_service.get_iptv_service_for_account")
     def test_ppv_channel_name_change_resets_enrichment(self, mock_iptv_class, app):
         """Test that PPV channel name change resets enrichment status and removes event links"""
         with app.app_context():
@@ -407,7 +407,7 @@ class TestChannelSyncService:
             links_after = EventChannelLink.query.filter_by(channel_id=channel_id).count()
             assert links_after == 0
 
-    @patch("services.sync_service.IPTVService")
+    @patch("services.sync_service.get_iptv_service_for_account")
     def test_non_ppv_channel_name_change_does_not_reset_enrichment(self, mock_iptv_class, app):
         """Test that non-PPV channel name change does NOT reset enrichment fields"""
         with app.app_context():

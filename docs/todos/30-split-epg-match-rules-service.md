@@ -1,7 +1,7 @@
 # TODO 30: Split `EpgMatchRulesService` Monolith
 
 **Priority:** P3  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Large (multi-PR refactor)
 
 ---
@@ -97,10 +97,10 @@ Extract JSON serialization helpers from `routes/epg/match_rules.py` into service
 
 ## Acceptance criteria
 
-- [ ] No single file >600 lines in match rules package
-- [ ] `EpgMatchRulesService` public API unchanged for routes (behavior parity)
-- [ ] All `test_epg_match_rules.py` tests pass (possibly relocated)
-- [ ] Legacy constants documented or moved to DB-only configuration
+- [x] No single file >600 lines in match rules package
+- [x] `EpgMatchRulesService` public API unchanged for routes (behavior parity)
+- [x] All `test_epg_match_rules.py` tests pass (possibly relocated)
+- [x] Legacy constants documented or moved to DB-only configuration
 
 ---
 
@@ -125,6 +125,6 @@ venv/bin/pytest tests/ -q --no-cov
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Split into `services/epg/match_rules/` (patterns, exclusion, normalization, fcc_integration, matching, orchestrator); thin shim at `services/epg_match_rules_service.py` |

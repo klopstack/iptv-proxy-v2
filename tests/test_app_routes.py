@@ -73,16 +73,16 @@ class TestAccountRoutes:
         assert data["success"] is False
         assert "error" in data
 
-    @patch("routes.accounts.IPTVService")
+    @patch("routes.accounts.get_iptv_service_for_account")
     @patch("routes.accounts.cache_service")
-    def test_get_account_categories(self, mock_cache, mock_iptv_service, client, sample_account):
+    def test_get_account_categories(self, mock_cache, mock_get_service, client, sample_account):
         """Test fetching account categories"""
         mock_service = Mock()
         mock_service.get_live_categories.return_value = [
             {"category_id": "1", "category_name": "Sports"},
             {"category_id": "2", "category_name": "Movies"},
         ]
-        mock_iptv_service.return_value = mock_service
+        mock_get_service.return_value = mock_service
         mock_cache.get_cached_streams.return_value = None
 
         response = client.get(f"/api/accounts/{sample_account['id']}/categories")
@@ -92,12 +92,12 @@ class TestAccountRoutes:
         assert len(data) == 2
         assert data[0]["category_name"] == "Sports"
 
-    @patch("routes.accounts.IPTVService")
-    def test_get_account_categories_error(self, mock_iptv_service, client, sample_account):
+    @patch("routes.accounts.get_iptv_service_for_account")
+    def test_get_account_categories_error(self, mock_get_service, client, sample_account):
         """Test fetching account categories - error"""
         mock_service = Mock()
         mock_service.get_live_categories.side_effect = Exception("API Error")
-        mock_iptv_service.return_value = mock_service
+        mock_get_service.return_value = mock_service
 
         response = client.get(f"/api/accounts/{sample_account['id']}/categories")
 
@@ -105,9 +105,9 @@ class TestAccountRoutes:
         data = response.json
         assert "error" in data
 
-    @patch("routes.accounts.IPTVService")
+    @patch("routes.accounts.get_iptv_service_for_account")
     @patch("routes.accounts.cache_service")
-    def test_get_account_stats(self, mock_cache, mock_iptv_service, client, sample_account):
+    def test_get_account_stats(self, mock_cache, mock_get_service, client, sample_account):
         """Test fetching account statistics"""
         mock_service = Mock()
         mock_service.get_live_streams.return_value = [
@@ -118,7 +118,7 @@ class TestAccountRoutes:
             {"category_id": "1", "category_name": "Sports"},
             {"category_id": "2", "category_name": "News"},
         ]
-        mock_iptv_service.return_value = mock_service
+        mock_get_service.return_value = mock_service
         mock_cache.get_cached_streams.return_value = None
         mock_cache.get_cached_categories.return_value = None
 
@@ -130,12 +130,12 @@ class TestAccountRoutes:
         assert data["total_categories"] == 2
         assert "category_counts" in data
 
-    @patch("routes.accounts.IPTVService")
-    def test_get_account_stats_error(self, mock_iptv_service, client, sample_account):
+    @patch("routes.accounts.get_iptv_service_for_account")
+    def test_get_account_stats_error(self, mock_get_service, client, sample_account):
         """Test fetching account stats - error"""
         mock_service = Mock()
         mock_service.get_live_streams.side_effect = Exception("API Error")
-        mock_iptv_service.return_value = mock_service
+        mock_get_service.return_value = mock_service
 
         response = client.get(f"/api/accounts/{sample_account['id']}/stats")
 

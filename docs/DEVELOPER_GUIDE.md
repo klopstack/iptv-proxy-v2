@@ -336,6 +336,7 @@ Use package imports for EPG and PPV services:
 from services.epg import EpgService  # legacy facade class
 from services.epg.generation import generate_epg_for_channels
 from services.epg.matching import EpgMatcher
+from services.epg.match_rules import EpgMatchRulesService
 from services.epg.parsing import parse_xmltv
 from services.epg.ppv import is_ppv_channel, is_ppv_category
 from services.epg.utils import normalize_xmltv_url, make_sd_xmltv_id

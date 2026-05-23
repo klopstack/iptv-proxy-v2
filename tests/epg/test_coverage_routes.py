@@ -54,7 +54,7 @@ class TestEpgMatching:
         response = client.post("/api/epg/match/999")
         assert response.status_code == 404
 
-    @patch("services.epg_match_rules_service.EpgMatchRulesService.match_channels_with_rules")
+    @patch("services.epg.match_rules.EpgMatchRulesService.match_channels_with_rules")
     def test_match_channels_success(self, mock_match, app, client, test_account):
         """Test successful channel matching (redirects to rule-based matching)"""
         mock_match.return_value = {

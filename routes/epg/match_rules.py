@@ -32,7 +32,7 @@ from schemas import (
     validate_request_data,
 )
 from services.cache_service import CacheService
-from services.epg_match_rules_service import clear_fcc_pattern_cache
+from services.epg.match_rules import clear_fcc_pattern_cache
 
 logger = logging.getLogger(__name__)
 

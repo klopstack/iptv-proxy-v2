@@ -3,15 +3,21 @@ Playlist configuration and M3U generation routes
 """
 import json
 import logging
-import re
 
 from flask import Blueprint, Response, jsonify, request
 
 from error_handling import ServiceUnavailableError, handle_errors, handle_xml_errors
+from marshmallow import ValidationError
 from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Settings, db
-from schemas import PlaylistConfigCreateSchema, validate_request_data
+from schemas import (
+    PlaylistConfigCreateSchema,
+    PlaylistConfigUpdateSchema,
+    check_playlist_filter_overlap,
+    validate_request_data,
+)
 from services.channel_query_service import ChannelQueryService
 from services.image_cache_service import ImageCacheService
+from services.playlist_config_service import assign_slug, get_playlist_config_by_slug
 from services.playlist_format_service import render_account_m3u_playlist, render_config_m3u_playlist
 from services.url_service import get_proxy_base_url
 
@@ -21,14 +27,31 @@ logger = logging.getLogger(__name__)
 playlists_bp = Blueprint("playlists", __name__)
 
 
-def slugify(text):
-    """Convert text to URL-safe slug."""
-    # Convert to lowercase and replace spaces/special chars with hyphens
-    text = text.lower().strip()
-    text = re.sub(r"[^\w\s-]", "", text)  # Remove non-word chars except hyphens
-    text = re.sub(r"[\s_]+", "-", text)  # Replace spaces/underscores with hyphens
-    text = re.sub(r"-+", "-", text)  # Collapse multiple hyphens
-    return text.strip("-")
+def _playlist_json_lists(config):
+    """Parse JSON list fields from a PlaylistConfig."""
+    return {
+        "include_accounts": json.loads(config.include_accounts) if config.include_accounts else [],
+        "exclude_accounts": json.loads(config.exclude_accounts) if config.exclude_accounts else [],
+        "include_tags": json.loads(config.include_tags) if config.include_tags else [],
+        "exclude_tags": json.loads(config.exclude_tags) if config.exclude_tags else [],
+    }
+
+
+def playlist_to_dict(c):
+    """Convert a PlaylistConfig to a dictionary with slug."""
+    lists = _playlist_json_lists(c)
+    return {
+        "id": c.id,
+        "name": c.name,
+        "slug": c.slug,
+        "description": c.description,
+        "include_accounts": lists["include_accounts"],
+        "exclude_accounts": lists["exclude_accounts"],
+        "include_tags": lists["include_tags"],
+        "exclude_tags": lists["exclude_tags"],
+        "tag_match_mode": c.tag_match_mode,
+        "enabled": c.enabled,
+    }
 
 
 def _ensure_accounts_synced(accounts):
@@ -47,22 +70,6 @@ def _ensure_accounts_synced(accounts):
 # ============================================================================
 # API Routes - Playlist Configurations CRUD
 # ============================================================================
-
-
-def playlist_to_dict(c):
-    """Convert a PlaylistConfig to a dictionary with slug."""
-    return {
-        "id": c.id,
-        "name": c.name,
-        "slug": slugify(c.name),
-        "description": c.description,
-        "include_accounts": json.loads(c.include_accounts) if c.include_accounts else [],
-        "exclude_accounts": json.loads(c.exclude_accounts) if c.exclude_accounts else [],
-        "include_tags": json.loads(c.include_tags) if c.include_tags else [],
-        "exclude_tags": json.loads(c.exclude_tags) if c.exclude_tags else [],
-        "tag_match_mode": c.tag_match_mode,
-        "enabled": c.enabled,
-    }
 
 
 @playlists_bp.route("/api/playlist-configs", methods=["GET"])
@@ -90,20 +97,44 @@ def create_playlist_config():
     )
 
     db.session.add(config)
+    assign_slug(config)
     db.session.commit()
 
     return jsonify(playlist_to_dict(config)), 201
 
 
 @playlists_bp.route("/api/playlist-configs/<int:config_id>", methods=["PUT"])
+@validate_request_data(PlaylistConfigUpdateSchema, partial=True)
 def update_playlist_config(config_id):
-    """Update playlist configuration"""
+    """Update playlist configuration.
+
+    Slug is recomputed from name when the name changes, so public by-name URLs
+    follow the current display name.
+    """
     config = PlaylistConfig.query.get_or_404(config_id)
-    data = request.json
+    data = request.validated_data
 
-    config.name = data.get("name", config.name)
-    config.description = data.get("description", config.description)
+    current = _playlist_json_lists(config)
+    merged = {
+        "include_accounts": data.get("include_accounts", current["include_accounts"]),
+        "exclude_accounts": data.get("exclude_accounts", current["exclude_accounts"]),
+        "include_tags": data.get("include_tags", current["include_tags"]),
+        "exclude_tags": data.get("exclude_tags", current["exclude_tags"]),
+    }
+    try:
+        check_playlist_filter_overlap(
+            merged["include_accounts"],
+            merged["exclude_accounts"],
+            merged["include_tags"],
+            merged["exclude_tags"],
+        )
+    except ValidationError as err:
+        return jsonify({"error": "Validation failed", "validation_errors": err.messages}), 400
 
+    if "name" in data:
+        config.name = data["name"]
+    if "description" in data:
+        config.description = data["description"]
     if "include_accounts" in data:
         config.include_accounts = json.dumps(data["include_accounts"])
     if "exclude_accounts" in data:
@@ -112,9 +143,13 @@ def update_playlist_config(config_id):
         config.include_tags = json.dumps(data["include_tags"])
     if "exclude_tags" in data:
         config.exclude_tags = json.dumps(data["exclude_tags"])
+    if "tag_match_mode" in data:
+        config.tag_match_mode = data["tag_match_mode"]
+    if "enabled" in data:
+        config.enabled = data["enabled"]
 
-    config.tag_match_mode = data.get("tag_match_mode", config.tag_match_mode)
-    config.enabled = data.get("enabled", config.enabled)
+    if "name" in data:
+        assign_slug(config)
 
     db.session.commit()
 
@@ -281,18 +316,11 @@ def generate_playlist_from_config_by_id(config_id):
 @playlists_bp.route("/playlist/config/<slug>.m3u")
 @handle_errors(return_json=False, default_message="Error generating playlist from config")
 def generate_playlist_from_config_by_name(slug):
-    """Generate M3U playlist from config by name slug.
+    """Generate M3U playlist from config by slug.
 
-    The slug is matched against the playlist name (case-insensitive, slugified).
+    The slug is persisted when the config is created or renamed.
     """
-    # Find config by matching slugified name
-    configs = PlaylistConfig.query.all()
-    config = None
-    for c in configs:
-        if slugify(c.name) == slug.lower():
-            config = c
-            break
-
+    config = get_playlist_config_by_slug(slug)
     if not config:
         from flask import abort
 
@@ -461,18 +489,11 @@ def generate_epg_from_config(config_id):
 @playlists_bp.route("/epg/config/<slug>.xml")
 @handle_xml_errors(default_message="Error generating EPG from config")
 def generate_epg_from_config_by_name(slug):
-    """Generate XMLTV EPG for playlist configuration by name slug.
+    """Generate XMLTV EPG for playlist configuration by slug.
 
-    The slug is matched against the playlist name (case-insensitive, slugified).
+    The slug is persisted when the config is created or renamed.
     """
-    # Find config by matching slugified name
-    configs = PlaylistConfig.query.all()
-    config = None
-    for c in configs:
-        if slugify(c.name) == slug.lower():
-            config = c
-            break
-
+    config = get_playlist_config_by_slug(slug)
     if not config:
         from flask import abort
 
