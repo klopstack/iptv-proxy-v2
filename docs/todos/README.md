@@ -59,41 +59,69 @@ These items close gaps where **behavioral parity exists** (TODO 08 tests) but **
 | # | Document | Status | Summary |
 |---|----------|--------|---------|
 | 17 | [17-route-preview-through-cqs.md](./17-route-preview-through-cqs.md) | ✅ | Preview endpoints call CQS entry points, not inline FilterService + PPV |
-| 18 | [18-config-epg-collapse-duplicates.md](./18-config-epg-collapse-duplicates.md) | ⬜ | Add `?collapse_duplicates=true` to config EPG (parity with config M3U) |
+| 18 | [18-config-epg-collapse-duplicates.md](./18-config-epg-collapse-duplicates.md) | ✅ | Add `?collapse_duplicates=true` to config EPG (parity with config M3U) |
 | 19 | [19-extract-m3u-generation-helper.md](./19-extract-m3u-generation-helper.md) | ✅ | Shared M3U EXTINF/URL formatting for account vs config routes |
 | 20 | [20-align-admin-visible-channel-semantics.md](./20-align-admin-visible-channel-semantics.md) | ✅ | Align or document filter-only counts in stats/categories/EPG admin APIs |
 | 21 | [21-remove-dead-channel-selection-code.md](./21-remove-dead-channel-selection-code.md) | ✅ | Remove `_matches_tag_filter`, orphan tests, sync stale todo statuses |
 
 ---
 
-## Dependencies between items
+## Dependencies between items (first pass — complete)
+
+All P0–P3 items **01–21** are ✅. The graph below is kept for historical context.
 
 ```
 01-unify-epg ──────────┐
-02-unify-preview ──────┼──► 08-parity-tests ──► 17-preview-through-cqs
+02-unify-preview ──────┼──► 08-parity-tests ──► 17-preview-through-cqs ──► 20-admin-visible-semantics
 03-config-preview ─────┤                      └──► 21-dead-code-cleanup
 04-tag-id-detection ───┘
 
-01 + 02 ──► 10-deduplicate-channel-processing ──► 18-config-epg-collapse
-                                              └──► 19-m3u-format-helper
+01 + 02 ──► 10-deduplicate-channel-processing ──► 18-config-epg-collapse, 19-m3u-format-helper
 
-08-parity-tests ──► 18-config-epg-collapse
+09-models-py-refs ── (independent)
 
-17-preview-through-cqs ──► 20-admin-visible-semantics
-
-09-models-py-refs ── (independent, do anytime)
-
-07-test-db-isolation ──► should be done before 08 (reliable CI)
+07-test-db-isolation ──► 08 (reliable CI)
 ```
 
-### Recommended order for items 17–21
+---
 
-1. **17** — structural preview unification (highest drift risk)
-2. **18** — user-visible config EPG gap
-3. **10** — shared collapse/tag helpers (unblocks 18/19 cleanup)
-4. **19** — M3U formatting dedup
-5. **20** — product decision on admin counts
-6. **21** — cleanup after parity tests are canonical
+## P1–P3 — Second-pass audit (May 2026)
+
+Follow-up audit after TODOs 01–21. Focus: dead shims, test duplication, semantic footguns, missing backend coverage, UI/doc drift.
+
+| # | Document | Status | Summary |
+|---|----------|--------|---------|
+| 22 | [22-audit-index-and-doc-sync.md](./22-audit-index-and-doc-sync.md) | ✅ | Sync stale index (incl. TODO 18 ✅), fix misleading docstrings |
+| 23 | [23-remove-backward-compat-shims.md](./23-remove-backward-compat-shims.md) | ⬜ | Delete 6 facade shims, `models/_core.py`, `account_xml_cache` param |
+| 24 | [24-consolidate-epg-route-tests.md](./24-consolidate-epg-route-tests.md) | ⬜ | Merge 3 overlapping EPG route test modules (~2,700 lines) |
+| 25 | [25-refactor-epg-service-and-phase-tests.md](./25-refactor-epg-service-and-phase-tests.md) | ⬜ | Split `test_epg_service.py` (3.4k lines); rename phase-era tests |
+| 26 | [26-mediaflow-stream-backend-tests.md](./26-mediaflow-stream-backend-tests.md) | ⬜ | Test stream factory + MediaFlow service (zero tests today) |
+| 27 | [27-clarify-is-visible-semantics.md](./27-clarify-is-visible-semantics.md) | ⬜ | Resolve `is_visible` cache vs live filters; channel health UI |
+| 28 | [28-playlist-config-hardening.md](./28-playlist-config-hardening.md) | ⬜ | PUT schema validation; indexed slug column (replace O(n) scan) |
+| 29 | [29-deduplicate-shared-helpers.md](./29-deduplicate-shared-helpers.md) | ⬜ | Single `get_iptv_service_for_account`; Xtream CQS cleanup |
+| 30 | [30-split-epg-match-rules-service.md](./30-split-epg-match-rules-service.md) | ⬜ | Split 2k-line `epg_match_rules_service.py` |
+| 31 | [31-deprecate-provider-epg-ui.md](./31-deprecate-provider-epg-ui.md) | ⬜ | Align EPG management UI with deprecated provider EPG |
+| 32 | [32-expand-frontend-js-tests.md](./32-expand-frontend-js-tests.md) | ⬜ | Extend Vitest beyond 2 files / 18 JS modules |
+| 33 | [33-error-handling-and-logging-hygiene.md](./33-error-handling-and-logging-hygiene.md) | ⬜ | Replace silent `except` blocks in routes/services |
+| 34 | [34-post-cleanup-simplifications.md](./34-post-cleanup-simplifications.md) | ⬜ | Final layer removal after 22–33 (EpgService facade, FilterService) |
+
+### Recommended order for items 22–34
+
+```
+22-doc-sync ──► 23-shim-removal ──► 34-simplifications
+     │                │
+     ├──► 24-epg-route-tests ──► 31-provider-epg-ui
+     ├──► 25-epg-service-tests
+     ├──► 26-mediaflow-tests
+     ├──► 27-is-visible ──► 34-simplifications
+     ├──► 28-playlist-config
+     ├──► 29-shared-helpers ──► 34-simplifications
+     ├──► 30-match-rules-split
+     ├──► 32-frontend-tests
+     └──► 33-error-handling
+```
+
+**Highest impact first:** 22 (truth in docs) → 26 (untested MediaFlow) → 27 (visibility semantics) → 24 (CI time / maintainability).
 
 ## How to use these documents
 
@@ -105,8 +133,23 @@ These items close gaps where **behavioral parity exists** (TODO 08 tests) but **
 
 ## Audit source
 
-These items were derived from a full codebase review covering:
-- Antipatterns and incomplete implementations after EPG/PPV/`ChannelQueryService` restructuring
-- Useless or misleading tests
-- Strange UI/codepaths
-- Broken or inconsistent functionality (EPG vs M3U divergence being the highest-impact finding)
+These items were derived from full codebase reviews covering:
+- **First pass (TODOs 01–21):** EPG/M3U/preview divergence, parity tests, deduplication, UI/nav cleanup
+- **Second pass (TODOs 22–34):** Dead shims, test monoliths, MediaFlow gaps, `is_visible` semantics, provider EPG UI drift, silent error handling
+
+### Second-pass findings summary (healthy vs debt)
+
+**Healthy (guarded by tests):**
+- Channel selection unified via `ChannelQueryService` for M3U, EPG, Xtream, previews
+- Parity contract tests in `tests/test_channel_output_parity.py`
+- Config EPG `collapse_duplicates` implemented (TODO 18 — index was stale)
+- Models package split; proxy defaults aligned; admin visible counts use CQS (TODO 20)
+
+**Remaining debt:**
+- Six unused Python deprecation shims + `models/_core.py`
+- ~6,500 lines of overlapping EPG tests across 4 files
+- Zero MediaFlow/stream-factory tests
+- `is_visible` column semantics contradict FilterService docstrings
+- Playlist config PUT lacks schema validation; slug lookup is O(n)
+- Provider EPG promoted in UI but marked deprecated in architecture
+- 2 Vitest files vs 18 JS modules

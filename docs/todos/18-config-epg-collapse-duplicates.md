@@ -1,7 +1,7 @@
 # TODO 18: Add Config EPG `collapse_duplicates` Parity
 
 **Priority:** P1  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Small (1 route function + tests)
 
 ---
@@ -15,7 +15,7 @@ Account outputs support `?collapse_duplicates=true` consistently:
 | `GET /playlist/<account_id>.m3u` | ✅ |
 | `GET /epg/<account_id>.xml` | ✅ |
 | `GET /playlist/config/<id>.m3u` | ✅ |
-| `GET /epg/config/<id>.xml` | ❌ |
+| `GET /epg/config/<id>.xml` | ✅ |
 
 Config EPG (`_generate_epg_from_config`) calls `ChannelQueryService.channels_for_playlist_config` but never applies duplicate collapse, even when the matching config M3U would collapse duplicates.
 
@@ -72,10 +72,10 @@ Update route docstrings and any UI copy that describes config EPG query params.
 
 ## Acceptance criteria
 
-- [ ] `GET /epg/config/<id>.xml?collapse_duplicates=true` channel count matches config M3U with same param
-- [ ] Without param, behavior unchanged (no collapse)
-- [ ] `tvg-id` / XMLTV `<channel id>` sets match between config M3U and config EPG after collapse
-- [ ] Existing config EPG tests pass
+- [x] `GET /epg/config/<id>.xml?collapse_duplicates=true` channel count matches config M3U with same param
+- [x] Without param, behavior unchanged (no collapse)
+- [x] `tvg-id` / XMLTV `<channel id>` sets match between config M3U and config EPG after collapse
+- [x] Existing config EPG tests pass
 
 ---
 
@@ -91,6 +91,6 @@ venv/bin/pytest tests/test_channel_output_parity.py tests/test_playlist_generati
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Implemented in `_generate_epg_from_config` via `ChannelQueryService.collapse_config_channels_if_requested`. Parity guarded by `tests/test_channel_output_parity.py::test_config_m3u_epg_same_stream_ids_after_collapse`. |

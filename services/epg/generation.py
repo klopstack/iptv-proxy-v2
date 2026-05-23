@@ -506,11 +506,12 @@ def generate_epg_for_channels(
     2. ChannelLink - inherit EPG from linked source channel (also from DB)
     3. Synthetic - create minimal channel entry with no programmes
 
-    Note: account_xml_cache is deprecated and ignored. Kept for API compatibility.
+    Note: account_xml_cache is deprecated, ignored at runtime, and scheduled for
+    removal (see docs/todos/23-remove-backward-compat-shims.md).
 
     Args:
         channels: List of Channel objects to generate EPG for
-        account_xml_cache: DEPRECATED - ignored, kept for compatibility
+        account_xml_cache: Deprecated — ignored; will be removed in a future release
         use_channel_links: Whether to use ChannelLink for linked channel EPG
         east_west_fallback: When set, overrides use_channel_links for east/west
             channel-link EPG inheritance.

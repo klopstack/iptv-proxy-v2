@@ -307,11 +307,12 @@ def generate_playlist_from_config_by_name(slug):
 
 
 def _generate_playlist_from_config(config):
-    """Generate M3U playlist from config (combines multiple accounts, uses tag filtering).
+    """Generate M3U playlist from a multi-account PlaylistConfig.
 
-    Uses database-first approach with pre-computed cleaned_name and is_visible.
-    Requires accounts to be synced before playlist generation.
-    Generates HLS-compatible playlist with .ts stream URLs for broad player compatibility.
+    Channel selection uses ``ChannelQueryService.channels_for_playlist_config`` with
+    ``apply_filters=True`` and ``apply_ppv_visibility=True`` (same rules as account
+    M3U, config EPG, and preview APIs). Requires included accounts to be synced
+    before generation.
 
     Query Parameters:
     - proxy: "true" (default) to use proxy URLs for streams; "false" for direct provider URLs
@@ -486,10 +487,12 @@ def generate_epg_from_config_by_name(slug):
 
 
 def _generate_epg_from_config(config):
-    """Generate XMLTV EPG from playlist config.
+    """Generate XMLTV EPG from a multi-account PlaylistConfig.
 
-    Uses the same channel filtering logic as playlist generation to ensure
-    the EPG matches the playlist content.
+    Channel selection uses ``ChannelQueryService.channels_for_playlist_config`` with
+    ``apply_filters=True`` and ``apply_ppv_visibility=True``, then optional duplicate
+    collapse via ``ChannelQueryService.collapse_config_channels_if_requested`` so the
+    EPG channel set matches config M3U output.
 
     Query Parameters:
     - collapse_duplicates: "true" to collapse duplicate channels keeping highest quality

@@ -476,18 +476,21 @@ Generation is handled by `services/epg/generation.py`:
 ```python
 def generate_epg_for_channels(
     channels: List[Channel],
-    account_xml_cache: Optional[Dict[int, bytes]] = None,  # Deprecated
     use_channel_links: bool = True,
 ) -> bytes:
     """
     Generate XMLTV from database-stored programs.
-    
+
     Resolution order:
     1. ChannelEpgMapping -> EpgProgram (database)
     2. ChannelLink -> inherit from source channel
     3. Synthetic channel (no programmes)
     """
 ```
+
+> **Note:** The legacy `account_xml_cache` parameter still exists on the function
+> signature for backward compatibility but is ignored at runtime. It will be removed
+> in a future release (see [TODO 23](./todos/23-remove-backward-compat-shims.md)).
 
 **Key helper functions:**
 ```python

@@ -43,7 +43,7 @@ IPTV Proxy v2 is a Flask-based IPTV proxy that sits between Xtream Codes API ser
 ## Core Components
 
 ### Entry Point
-- **`app.py`**: Clean entry point (177 lines) with blueprint registration and scheduler setup
+- **`app.py`**: Clean entry point (~200 lines) with blueprint registration and scheduler setup
 
 ### Routes Layer
 - **`routes/`**: Flask blueprints organized by feature (17 blueprints)
@@ -53,13 +53,14 @@ IPTV Proxy v2 is a Flask-based IPTV proxy that sits between Xtream Codes API ser
   - `routes/xtream.py` - Xtream Codes API compatibility (TiviMate, IPTV Smarters)
 
 ### Business Logic
-- **`services/`**: Business logic services (29 files, ~18,500 lines)
+- **`services/`**: Business logic services (66 Python modules, ~25,000 lines)
   - `IPTVService` - Xtream Codes API integration
   - `TagService` - Tag extraction and rule processing
-  - `EPGService` - EPG data management and XMLTV generation
+  - `services/epg/` - EPG package (14 modules: `generation`, `matching`, `parsing`, `programs`, `sd_programs`, etc.); `services/epg_service.py` is a deprecated re-export shim
+  - `ChannelQueryService` - Unified channel selection for M3U, EPG, Xtream, and previews
   - `services/ppv/` - PPV enrichment, visibility, and event-based EPG
   - `CacheService` - Simple in-memory caching (3600s TTL)
-  - `FilterService` - Channel filtering logic
+  - `FilterService` - Channel filtering logic (used internally by `ChannelQueryService`)
 
 ### Data Layer
 - **`models/`**: SQLAlchemy models split by domain (`__init__.py` re-exports all 44 models; `_core.py` is a deprecated shim)
@@ -186,7 +187,7 @@ Background scheduler (`services/scheduler.py`) syncs EPG data:
 - Updates existing programs, adds new ones, deletes old ones
 
 **Provider EPG (Legacy):**
-- Direct passthrough from IPTV provider (deprecated)
+- Direct passthrough from IPTV provider (deprecated in architecture; admin UI still exposes it — see [TODO 31](./todos/31-deprecate-provider-epg-ui.md))
 - Recommendation: Use EPG mappings to Schedules Direct or XMLTV sources instead
 
 ### EPG Generation Flow
