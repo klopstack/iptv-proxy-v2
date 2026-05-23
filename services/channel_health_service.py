@@ -29,6 +29,7 @@ from models import (
     EpgChannel,
     db,
 )
+from services.channel_query_service import ChannelQueryService
 from services.connection_manager import ConnectionManager
 
 logger = logging.getLogger(__name__)
@@ -503,11 +504,37 @@ class ChannelHealthService:
 
     @staticmethod
     def _auto_disable_channel(channel_id: int) -> None:
-        """Auto-disable a channel by setting is_visible to False."""
+        """Auto-disable a channel after repeated health failures (admin hide, not filter hide)."""
         channel = db.session.get(Channel, channel_id)
         if channel and channel.is_visible:
             channel.is_visible = False
             logger.info(f"Channel {channel_id} ({channel.name}) auto-disabled due to health failures")
+
+    @staticmethod
+    def _apply_playlist_visibility_filter(query, playlist_visible_keys, *, hidden_only: bool = False):
+        """Restrict a channel query to playlist-visible or filter-hidden channels."""
+        from sqlalchemy import String, cast, tuple_
+
+        if not playlist_visible_keys:
+            return query.filter(db.false())
+
+        key_expr = tuple_(Channel.account_id, cast(Channel.stream_id, String))
+        if hidden_only:
+            return query.filter(~key_expr.in_(playlist_visible_keys))
+        return query.filter(key_expr.in_(playlist_visible_keys))
+
+    @staticmethod
+    def _channel_visibility_fields(channel: Channel, playlist_visible_keys) -> Dict[str, bool]:
+        playlist_visible = ChannelQueryService.channel_is_playlist_visible(channel, playlist_visible_keys)
+        status = channel.health_status
+        admin_disabled = bool(status and status.auto_disabled_at)
+        return {
+            "playlist_visible": playlist_visible,
+            "filter_hidden": not playlist_visible,
+            "admin_disabled": admin_disabled,
+            # Legacy field: filter cache only; do not use for playlist semantics
+            "is_visible": channel.is_visible,
+        }
 
     @staticmethod
     def get_channels_to_scan(account_id: int, limit: int = 100) -> List[Channel]:
@@ -524,7 +551,7 @@ class ChannelHealthService:
         - Marked as ignored
         - Inactive
         - PPV channels (they only have content during specific events)
-        - Hidden channels (if scan_hidden_channels config is false)
+        - Hidden channels (if scan_hidden_channels config is false; filter-hidden only)
 
         Args:
             account_id: Account to get channels for
@@ -537,8 +564,12 @@ class ChannelHealthService:
         scan_interval = ChannelHealthConfig.get_int("scan_interval_minutes", 30)
         scan_cutoff = datetime.now(timezone.utc) - timedelta(minutes=scan_interval)
 
-        # Check if we should scan hidden channels
+        # Check if we should scan filter-hidden channels
         scan_hidden = ChannelHealthConfig.get_bool("scan_hidden_channels", False)
+
+        playlist_visible_keys = ChannelQueryService.playlist_visible_keys_for_scope(account_id)
+
+        from sqlalchemy import String, cast, tuple_
 
         # Get channels that need scanning
         # Subquery to get channels with their health status
@@ -549,9 +580,11 @@ class ChannelHealthService:
             Channel.is_ppv == False,  # noqa: E712 - Exclude PPV channels
         )
 
-        # Optionally exclude hidden channels
+        # By default scan playlist-visible channels only
         if not scan_hidden:
-            channels_query = channels_query.filter(Channel.is_visible == True)  # noqa: E712
+            channels_query = ChannelHealthService._apply_playlist_visibility_filter(
+                channels_query, playlist_visible_keys
+            )
 
         channels_query = (
             channels_query.filter(
@@ -576,9 +609,12 @@ class ChannelHealthService:
                 )
             )
             .order_by(
-                # Prioritize visible channels first
+                # Prioritize playlist-visible channels first
                 db.case(
-                    (Channel.is_visible == True, 0),  # noqa: E712
+                    (
+                        tuple_(Channel.account_id, cast(Channel.stream_id, String)).in_(playlist_visible_keys),
+                        0,
+                    ),
                     else_=1,
                 ),
                 # Then: never checked, then degraded, then oldest check
@@ -772,6 +808,8 @@ class ChannelHealthService:
             else:
                 query = query.filter(ChannelHealthStatus.status == status_filter)
 
+        playlist_visible_keys = ChannelQueryService.playlist_visible_keys_for_scope(account_id)
+
         channels_data = []
         status_counts = {
             ChannelHealthStatus.STATUS_UNKNOWN: 0,
@@ -807,9 +845,9 @@ class ChannelHealthService:
                 "stream_id": channel.stream_id,
                 "name": channel.name,
                 "cleaned_name": channel.cleaned_name,
-                "is_visible": channel.is_visible,
                 "status": current_status,
                 "epg_info": epg_info,
+                **ChannelHealthService._channel_visibility_fields(channel, playlist_visible_keys),
             }
 
             if status:
@@ -850,7 +888,7 @@ class ChannelHealthService:
         Get a summary of channel health counts without channel details.
 
         This is much faster than get_health_report for large datasets.
-        Only counts visible (non-filtered) channels, matching what the scanner processes.
+        Only counts playlist-visible channels, matching what the scanner processes by default.
 
         Args:
             account_id: Filter by account (None for all accounts)
@@ -861,13 +899,18 @@ class ChannelHealthService:
         """
         from sqlalchemy import func
 
-        # Build base query for counting - only visible channels
+        playlist_visible_keys = ChannelQueryService.playlist_visible_keys_for_scope(account_id)
+
+        # Build base query for counting - playlist-visible channels only
         base_query = (
             db.session.query(Channel)
             .join(Account)
             .outerjoin(ChannelHealthStatus)
             .filter(Account.enabled == True)  # noqa: E712
-            .filter(Channel.is_visible == True)  # noqa: E712  # Only count visible (non-filtered) channels
+            .filter(Channel.is_active == True)  # noqa: E712
+        )
+        base_query = ChannelHealthService._apply_playlist_visibility_filter(
+            base_query, playlist_visible_keys
         )
 
         if account_id:
@@ -877,7 +920,6 @@ class ChannelHealthService:
             base_query = base_query.filter(Channel.category_id == category_id)
 
         # Count by status using a single query with conditional aggregation
-        # Only count visible (non-filtered) channels to match what gets scanned
         status_counts = (
             db.session.query(
                 func.sum(
@@ -916,7 +958,10 @@ class ChannelHealthService:
             .join(Account)
             .outerjoin(ChannelHealthStatus)
             .filter(Account.enabled == True)  # noqa: E712
-            .filter(Channel.is_visible == True)  # noqa: E712  # Only count visible (non-filtered) channels
+            .filter(Channel.is_active == True)  # noqa: E712
+        )
+        status_counts = ChannelHealthService._apply_playlist_visibility_filter(
+            status_counts, playlist_visible_keys
         )
 
         if account_id:
@@ -967,6 +1012,7 @@ class ChannelHealthService:
         category_id: Optional[int] = None,
         status_filter: Optional[str] = None,
         visibility_filter: Optional[str] = None,
+        show_filter_hidden: bool = False,
         epg_filter: Optional[str] = None,
         ppv_filter: Optional[str] = None,
         search: Optional[str] = None,
@@ -981,7 +1027,8 @@ class ChannelHealthService:
             account_id: Filter by account (None for all accounts)
             category_id: Filter by category (None for all categories)
             status_filter: Filter by status (down, degraded, healthy, unknown, ignored)
-            visibility_filter: Filter by visibility (visible, hidden)
+            visibility_filter: Filter by visibility (visible=playlist-visible, hidden=filter-hidden)
+            show_filter_hidden: Include filter-hidden channels in the default listing
             epg_filter: Filter by EPG presence (with, without)
             ppv_filter: Filter by PPV status (ppv, non-ppv, all)
             search: Search by channel name
@@ -992,13 +1039,28 @@ class ChannelHealthService:
         Returns:
             Dict with paginated channels and metadata
         """
-        # Build base query - only include visible (non-filtered) channels by default
+        # Build base query - active channels on enabled accounts
         query = (
             Channel.query.join(Account)
             .outerjoin(ChannelHealthStatus)
             .filter(Account.enabled == True)  # noqa: E712
-            .filter(Channel.is_visible == True)  # noqa: E712  # Only show visible channels
+            .filter(Channel.is_active == True)  # noqa: E712
         )
+
+        playlist_visible_keys = ChannelQueryService.playlist_visible_keys_for_scope(account_id)
+
+        if visibility_filter == "hidden":
+            query = ChannelHealthService._apply_playlist_visibility_filter(
+                query, playlist_visible_keys, hidden_only=True
+            )
+        elif visibility_filter == "visible":
+            query = ChannelHealthService._apply_playlist_visibility_filter(
+                query, playlist_visible_keys
+            )
+        elif not show_filter_hidden:
+            query = ChannelHealthService._apply_playlist_visibility_filter(
+                query, playlist_visible_keys
+            )
 
         # Apply filters
         if account_id:
@@ -1012,12 +1074,6 @@ class ChannelHealthService:
                 query = query.filter(ChannelHealthStatus.id.is_(None))
             else:
                 query = query.filter(ChannelHealthStatus.status == status_filter)
-
-        if visibility_filter:
-            if visibility_filter == "visible":
-                query = query.filter(Channel.is_visible == True)  # noqa: E712
-            elif visibility_filter == "hidden":
-                query = query.filter(Channel.is_visible == False)  # noqa: E712
 
         if search:
             search_term = f"%{search}%"
@@ -1087,10 +1143,10 @@ class ChannelHealthService:
                 "stream_id": channel.stream_id,
                 "name": channel.name,
                 "cleaned_name": channel.cleaned_name,
-                "is_visible": channel.is_visible,
                 "status": current_status,
                 "category": category_info,
                 "epg_info": epg_info,
+                **ChannelHealthService._channel_visibility_fields(channel, playlist_visible_keys),
             }
 
             if status:

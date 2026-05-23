@@ -166,7 +166,7 @@ class Channel(db.Model):  # type: ignore[name-defined]
     # Sync metadata
     last_seen = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     is_active = db.Column(db.Boolean, default=True)
-    is_visible = db.Column(db.Boolean, default=True)  # Pre-computed filter result
+    is_visible = db.Column(db.Boolean, default=True)  # Cached filter result (admin/index only)
     is_ppv = db.Column(db.Boolean, default=False, index=True)  # PPV channel (set at sync based on category)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at = db.Column(

@@ -479,14 +479,14 @@ class TestEPGGeneration:
 
     def test_epg_config_generation(self, app, client, tag_filter_config):
         """Test generating EPG for playlist config"""
-        with patch("services.epg.EpgService") as mock_epg:
-            mock_epg.generate_epg_for_channels.return_value = b'<?xml version="1.0"?><tv></tv>'
+        with patch("services.epg.generation.generate_epg_for_channels") as mock_generate:
+            mock_generate.return_value = b'<?xml version="1.0"?><tv></tv>'
 
             response = client.get(f"/epg/config/{tag_filter_config}.xml")
 
             assert response.status_code == 200
             assert response.mimetype == "application/xml"
-            mock_epg.generate_epg_for_channels.assert_called_once()
+            mock_generate.assert_called_once()
 
     def test_epg_config_empty_channels(self, app, client, exclude_tag_config):
         """Test EPG generation when no channels match"""
@@ -501,25 +501,24 @@ class TestEPGGeneration:
 
     def test_epg_east_west_fallback(self, app, client, tag_filter_config):
         """Test EPG generation with east/west fallback parameter"""
-        with patch("services.epg.EpgService") as mock_epg:
-            mock_epg.generate_epg_for_channels.return_value = b'<?xml version="1.0"?><tv></tv>'
+        with patch("services.epg.generation.generate_epg_for_channels") as mock_generate:
+            mock_generate.return_value = b'<?xml version="1.0"?><tv></tv>'
 
             response = client.get(f"/epg/config/{tag_filter_config}.xml?east_west_fallback=true")
 
             assert response.status_code == 200
-            # Check that fallback was passed to service
-            call_kwargs = mock_epg.generate_epg_for_channels.call_args[1]
+            call_kwargs = mock_generate.call_args[1]
             assert call_kwargs["east_west_fallback"] is True
 
     def test_epg_no_east_west_fallback(self, app, client, tag_filter_config):
         """Test EPG generation with fallback disabled"""
-        with patch("services.epg.EpgService") as mock_epg:
-            mock_epg.generate_epg_for_channels.return_value = b'<?xml version="1.0"?><tv></tv>'
+        with patch("services.epg.generation.generate_epg_for_channels") as mock_generate:
+            mock_generate.return_value = b'<?xml version="1.0"?><tv></tv>'
 
             response = client.get(f"/epg/config/{tag_filter_config}.xml?east_west_fallback=false")
 
             assert response.status_code == 200
-            call_kwargs = mock_epg.generate_epg_for_channels.call_args[1]
+            call_kwargs = mock_generate.call_args[1]
             assert call_kwargs["east_west_fallback"] is False
 
 

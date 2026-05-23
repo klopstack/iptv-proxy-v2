@@ -1,7 +1,7 @@
 # TODO 25: Refactor EPG Service Monolith and Phase-Era Tests
 
 **Priority:** P2  
-**Status:** ⬜ Not started  
+**Status:** ✅ Complete  
 **Estimated scope:** Large (incremental over multiple PRs)
 
 ---
@@ -121,11 +121,11 @@ Replace patches of monolithic paths with:
 
 ## Acceptance criteria
 
-- [ ] No file named `test_epg_service.py` (or <200 lines facade-only)
-- [ ] No files named `test_phase*.py`
-- [ ] `test_recent_fixes.py` and `test_additional_routes.py` deleted
-- [ ] No test imports from deleted shim modules
-- [ ] Full suite passes; coverage ≥75%
+- [x] No file named `test_epg_service.py` (or <200 lines facade-only)
+- [x] No files named `test_phase*.py`
+- [x] `test_recent_fixes.py` and `test_additional_routes.py` deleted
+- [x] No test imports from deleted shim modules
+- [x] Full suite passes; coverage ≥75%
 
 ---
 
@@ -152,6 +152,6 @@ venv/bin/pytest tests/ --cov=services/epg --cov-report=term-missing
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Split `test_epg_service.py` (3,424 lines) into `tests/epg_service/` (`test_epg_parsing.py`, `test_epg_matching.py`, `test_epg_ppv.py`, `test_epg_facade.py`; 139 tests). Renamed phase files → `test_cleaned_names.py`, `test_database_first_outputs.py` (phase2 already `test_filter_visibility.py`). Merged/deleted `test_recent_fixes.py` and `test_additional_routes.py`. Updated playlist EPG mocks to `services.epg.generation.generate_epg_for_channels`. Full suite: 2087 passed, 78.77% coverage. |

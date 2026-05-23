@@ -1,11 +1,5 @@
 """
-Test Phase 1: Cleaned Name Storage Optimization
-
-Tests that cleaned names are:
-1. Computed during sync
-2. Stored in database
-3. Updated during tag processing
-4. Used in preview/playlist generation
+Tests for cleaned name storage during sync and tag processing.
 """
 import pytest
 

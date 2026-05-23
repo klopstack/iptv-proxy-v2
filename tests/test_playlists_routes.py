@@ -505,7 +505,9 @@ class TestEPGProxy:
         assert b"<tv" in response.data
 
     def test_proxy_epg_no_channels(self, app, client, test_account):
-        """Test proxying EPG returns minimal XMLTV when no visible channels"""
+        """Test proxying EPG returns minimal XMLTV when no playlist-visible channels"""
+        from models import Filter
+
         with app.app_context():
             category = Category(
                 account_id=test_account,
@@ -515,16 +517,23 @@ class TestEPGProxy:
             db.session.add(category)
             db.session.flush()
 
-            # Create channel but mark as not visible
             channel = Channel(
                 account_id=test_account,
                 stream_id="ch1",
                 name="Test Channel",
                 category_id=category.id,
                 is_active=True,
-                is_visible=False,  # Not visible
+                is_visible=True,  # Stale cache; live filter hides the channel
             )
-            db.session.add(channel)
+            hide_filter = Filter(
+                account_id=test_account,
+                name="Hide Test Channel",
+                filter_type="channel_name",
+                filter_action="blacklist",
+                filter_value="Test Channel",
+                enabled=True,
+            )
+            db.session.add_all([channel, hide_filter])
             db.session.commit()
 
         response = client.get(f"/epg/{test_account}.xml")

@@ -98,7 +98,8 @@ def get_channels_paginated():
     - account_id (optional): Filter by account ID
     - category_id (optional): Filter by category ID
     - status (optional): Filter by status (down, degraded, healthy, unknown, ignored)
-    - visibility (optional): Filter by visibility (visible, hidden)
+    - visibility (optional): Filter by visibility (visible=playlist-visible, hidden=filter-hidden)
+    - show_filter_hidden (optional): Include filter-hidden channels in the default listing
     - epg (optional): Filter by EPG presence (with, without)
     - ppv (optional): Filter by PPV status (ppv, non-ppv, all). Default: non-ppv (excludes PPV)
     - search (optional): Search by channel name
@@ -110,6 +111,7 @@ def get_channels_paginated():
     category_id = request.args.get("category_id", type=int)
     status_filter = request.args.get("status")
     visibility_filter = request.args.get("visibility")
+    show_filter_hidden = request.args.get("show_filter_hidden", "false").lower() == "true"
     epg_filter = request.args.get("epg")
     ppv_filter = request.args.get("ppv")
     search = request.args.get("search", "").strip()
@@ -142,6 +144,7 @@ def get_channels_paginated():
         category_id=category_id,
         status_filter=status_filter,
         visibility_filter=visibility_filter,
+        show_filter_hidden=show_filter_hidden,
         epg_filter=epg_filter,
         ppv_filter=ppv_filter,
         search=search,

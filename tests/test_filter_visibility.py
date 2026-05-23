@@ -1,12 +1,10 @@
 """
-Test Phase 2: Pre-Computed Filter Visibility
+Test filter visibility semantics.
 
-Tests that filter visibility is:
-1. Computed by FilterService
-2. Stored in is_visible column
-3. Recomputed on filter changes
-4. Recomputed on tag changes
-5. Used in preview/playlist queries
+Filter visibility is:
+1. Computed and cached in ``is_visible`` for admin/index queries
+2. Re-evaluated live for playlist, preview, EPG, and Xtream output
+3. Recomputed on filter and tag changes
 """
 import pytest
 
@@ -522,8 +520,8 @@ def test_filter_delete_triggers_recomputation(app, client, filter_test_account, 
         assert visible_after == 4
 
 
-def test_preview_uses_is_visible(app, client, filter_test_account, test_channels):
-    """Test that preview queries use is_visible column"""
+def test_preview_uses_live_filters(app, client, filter_test_account, test_channels):
+    """Test that preview applies filters live (not only cached is_visible)."""
     with app.app_context():
         # Create filter
         filter_obj = Filter(
@@ -550,8 +548,8 @@ def test_preview_uses_is_visible(app, client, filter_test_account, test_channels
         assert data["channels"][0]["name"] == "ESPN Sports Network"
 
 
-def test_playlist_uses_is_visible(app, client, filter_test_account, test_channels):
-    """Test that playlist generation uses is_visible column"""
+def test_playlist_uses_live_filters(app, client, filter_test_account, test_channels):
+    """Test that playlist generation applies filters live."""
     with app.app_context():
         # Create filter
         filter_obj = Filter(
@@ -580,3 +578,61 @@ def test_playlist_uses_is_visible(app, client, filter_test_account, test_channel
         # Should NOT contain sports
         assert "ESPN" not in playlist
         assert "Fox Sports" not in playlist
+
+
+def test_playlist_reflects_filter_change_without_manual_recompute(app, client, filter_test_account, test_channels):
+    """Filter CRUD should change M3U output without POST /recompute-visibility."""
+    with app.app_context():
+        response = client.get(f"/playlist/{filter_test_account.id}.m3u")
+        assert response.status_code == 200
+        initial_playlist = response.data.decode("utf-8")
+        assert "ESPN Sports Network" in initial_playlist
+        assert "HBO Movies" in initial_playlist
+
+        create_response = client.post(
+            "/api/filters",
+            json={
+                "account_id": filter_test_account.id,
+                "name": "Sports Only",
+                "filter_type": "category",
+                "filter_action": "whitelist",
+                "filter_value": "Sports",
+                "enabled": True,
+            },
+        )
+        assert create_response.status_code == 201
+
+        filtered_response = client.get(f"/playlist/{filter_test_account.id}.m3u")
+        assert filtered_response.status_code == 200
+        filtered_playlist = filtered_response.data.decode("utf-8")
+        assert "ESPN Sports Network" in filtered_playlist
+        assert "Fox Sports" in filtered_playlist
+        assert "HBO Movies" not in filtered_playlist
+        assert "Showtime Cinema" not in filtered_playlist
+
+        filter_id = create_response.get_json()["id"]
+        delete_response = client.delete(f"/api/filters/{filter_id}")
+        assert delete_response.status_code == 204
+
+        restored_response = client.get(f"/playlist/{filter_test_account.id}.m3u")
+        assert restored_response.status_code == 200
+        restored_playlist = restored_response.data.decode("utf-8")
+        assert "HBO Movies" in restored_playlist
+        assert "Showtime Cinema" in restored_playlist
+
+
+def test_stale_is_visible_does_not_block_playlist(app, client, filter_test_account, test_channels):
+    """Stale is_visible=False must not hide channels when live filters would include them."""
+    with app.app_context():
+        for channel in test_channels:
+            channel.is_visible = False
+        db.session.commit()
+
+        response = client.get(f"/playlist/{filter_test_account.id}.m3u")
+        assert response.status_code == 200
+        playlist = response.data.decode("utf-8")
+
+        assert "ESPN Sports Network" in playlist
+        assert "Fox Sports" in playlist
+        assert "HBO Movies" in playlist
+        assert "Showtime Cinema" in playlist

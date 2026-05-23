@@ -60,7 +60,7 @@
         <div class="card bg-info text-white h-100">
             <div class="card-body text-center py-2">
                 <h2 class="card-title mb-0" id="total-count">-</h2>
-                <p class="card-text mb-0 small"><i class="bi bi-collection"></i> Total Visible</p>
+                <p class="card-text mb-0 small"><i class="bi bi-collection"></i> In Playlist</p>
             </div>
         </div>
     </div>
@@ -142,7 +142,7 @@
                             Scan hidden channels
                         </label>
                         <small class="form-text text-muted d-block">
-                            By default, only visible channels are scanned. Enable to also scan channels hidden by filters.
+                            By default, only playlist-visible channels are scanned. Enable to also scan channels hidden by account filters.
                         </small>
                     </div>
                     
@@ -200,10 +200,9 @@
                         </select>
                     </div>
                     <div class="col-auto">
-                        <select class="form-select form-select-sm" id="filter-visibility" style="min-width: 100px;">
-                            <option value="">Visibility</option>
-                            <option value="visible">Visible</option>
-                            <option value="hidden">Hidden</option>
+                        <select class="form-select form-select-sm" id="filter-visibility" style="min-width: 120px;">
+                            <option value="">In Playlist</option>
+                            <option value="hidden">Filter-hidden</option>
                         </select>
                     </div>
                     <div class="col-auto">
@@ -779,6 +778,14 @@ function renderChannels(channels, append = false) {
         const categoryName = channel.category ? escapeHtml(channel.category.cleaned_name || channel.category.category_name) : '-';
         const channelNameEscaped = escapeHtml(channel.cleaned_name || channel.name).replace(/'/g, "\\'");
         
+        const visibilityBadges = [];
+        if (channel.filter_hidden) {
+            visibilityBadges.push('<span class="badge bg-warning text-dark ms-1">Filter-hidden</span>');
+        }
+        if (channel.admin_disabled) {
+            visibilityBadges.push('<span class="badge bg-danger ms-1">Auto-disabled</span>');
+        }
+
         return `
             <tr data-channel="${channel.id}">
                 <td>
@@ -787,7 +794,7 @@ function renderChannels(channels, append = false) {
                 <td>
                     <div>
                         <strong>${escapeHtml(channel.cleaned_name || channel.name)}</strong>
-                        ${!channel.is_visible ? '<span class="badge bg-warning text-dark ms-1">Hidden</span>' : ''}
+                        ${visibilityBadges.join('')}
                     </div>
                     <small class="text-muted">${escapeHtml(channel.account_name || '')} • #${channel.stream_id}</small>
                 </td>
@@ -804,7 +811,7 @@ function renderChannels(channels, append = false) {
                         <button class="btn btn-outline-info btn-sm" onclick="showHistory(${channel.id}, '${channelNameEscaped}')" title="View History">
                             <i class="bi bi-clock-history"></i>
                         </button>
-                        ${channel.status === 'down' || !channel.is_visible ? `
+                        ${channel.status === 'down' || channel.admin_disabled ? `
                             <button class="btn btn-outline-success btn-sm" onclick="reenableChannel(${channel.id})" title="Re-enable">
                                 <i class="bi bi-arrow-repeat"></i>
                             </button>

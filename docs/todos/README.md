@@ -93,10 +93,10 @@ Follow-up audit after TODOs 01–21. Focus: dead shims, test duplication, semant
 |---|----------|--------|---------|
 | 22 | [22-audit-index-and-doc-sync.md](./22-audit-index-and-doc-sync.md) | ✅ | Sync stale index (incl. TODO 18 ✅), fix misleading docstrings |
 | 23 | [23-remove-backward-compat-shims.md](./23-remove-backward-compat-shims.md) | ⬜ | Delete 6 facade shims, `models/_core.py`, `account_xml_cache` param |
-| 24 | [24-consolidate-epg-route-tests.md](./24-consolidate-epg-route-tests.md) | ⬜ | Merge 3 overlapping EPG route test modules (~2,700 lines) |
-| 25 | [25-refactor-epg-service-and-phase-tests.md](./25-refactor-epg-service-and-phase-tests.md) | ⬜ | Split `test_epg_service.py` (3.4k lines); rename phase-era tests |
-| 26 | [26-mediaflow-stream-backend-tests.md](./26-mediaflow-stream-backend-tests.md) | ⬜ | Test stream factory + MediaFlow service (zero tests today) |
-| 27 | [27-clarify-is-visible-semantics.md](./27-clarify-is-visible-semantics.md) | ⬜ | Resolve `is_visible` cache vs live filters; channel health UI |
+| 24 | [24-consolidate-epg-route-tests.md](./24-consolidate-epg-route-tests.md) | ✅ | Merge 3 overlapping EPG route test modules (~2,700 lines) |
+| 25 | [25-refactor-epg-service-and-phase-tests.md](./25-refactor-epg-service-and-phase-tests.md) | ✅ | Split `test_epg_service.py` (3.4k lines); rename phase-era tests |
+| 26 | [26-mediaflow-stream-backend-tests.md](./26-mediaflow-stream-backend-tests.md) | ✅ | Test stream factory + MediaFlow service (zero tests today) |
+| 27 | [27-clarify-is-visible-semantics.md](./27-clarify-is-visible-semantics.md) | ✅ | Resolve `is_visible` cache vs live filters; channel health UI |
 | 28 | [28-playlist-config-hardening.md](./28-playlist-config-hardening.md) | ⬜ | PUT schema validation; indexed slug column (replace O(n) scan) |
 | 29 | [29-deduplicate-shared-helpers.md](./29-deduplicate-shared-helpers.md) | ⬜ | Single `get_iptv_service_for_account`; Xtream CQS cleanup |
 | 30 | [30-split-epg-match-rules-service.md](./30-split-epg-match-rules-service.md) | ⬜ | Split 2k-line `epg_match_rules_service.py` |

@@ -365,8 +365,12 @@ def test_preview_channels_nonexistent_account(app, client):
         assert response.status_code == 404
 
 
-def test_preview_channels_only_visible_and_active(app, client, test_account):
-    """Test channel preview only shows visible and active channels"""
+def test_preview_channels_excludes_inactive(app, client, test_account):
+    """Test channel preview excludes inactive channels.
+
+    Preview applies live account filters via ChannelQueryService; the cached
+    ``is_visible`` column alone does not hide channels when no filters are set.
+    """
     with app.app_context():
         category = Category(account_id=test_account, category_id="100", category_name="Test Category")
         db.session.add(category)
@@ -381,7 +385,7 @@ def test_preview_channels_only_visible_and_active(app, client, test_account):
             is_active=True,
             is_visible=True,
         )
-        # Create invisible channel
+        # Create invisible channel (still active; shown unless account filters exclude it)
         invisible_channel = Channel(
             account_id=test_account,
             stream_id="invisible",
@@ -406,8 +410,11 @@ def test_preview_channels_only_visible_and_active(app, client, test_account):
         assert response.status_code == 200
 
         data = response.json
-        assert data["total"] == 1  # Only visible + active
-        assert data["channels"][0]["stream_id"] == "visible"
+        stream_ids = {ch["stream_id"] for ch in data["channels"]}
+        assert data["total"] == 2  # Both active channels; inactive excluded by SQL filter
+        assert "visible" in stream_ids
+        assert "invisible" in stream_ids
+        assert "inactive" not in stream_ids
 
 
 # ============================================================================

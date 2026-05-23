@@ -439,11 +439,14 @@ class TestAccountSync:
         response = client.post(f"/api/accounts/{test_account}/sync")
         assert response.status_code == 200
 
-    def test_sync_status(self, app, client, test_account):
-        """Test getting sync status"""
-        response = client.get(f"/api/accounts/{test_account}/sync/status")
+    def test_sync_status(self, app, client, test_account_with_channels):
+        """Test getting sync status returns channel count."""
+        response = client.get(f"/api/accounts/{test_account_with_channels}/sync/status")
         assert response.status_code == 200
-        assert "channel_count" in response.json
+        data = response.json
+        assert "channel_count" in data
+        assert "last_sync" in data
+        assert data["channel_count"] == 5
 
 
 # ============================================================================
@@ -807,3 +810,190 @@ class TestAccountStatsPlaylistVisible:
         assert data["total_channels"] == 2
         assert data["visible_channels"] == 1
         assert data["hidden_channels"] == 1
+
+    def test_stats_include_visibility_counts(self, app, client, test_account):
+        """Stats report visible/hidden counts using playlist-visible semantics."""
+        with app.app_context():
+            account = db.session.get(Account, test_account)
+            account.ppv_visibility = "hide_all"
+            category = Category(
+                account_id=test_account,
+                category_id="1",
+                category_name="Test",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            for i in range(5):
+                db.session.add(
+                    Channel(
+                        account_id=test_account,
+                        stream_id=f"reg{i}",
+                        name=f"Channel {i}",
+                        category_id=category.id,
+                        is_active=True,
+                        is_ppv=False,
+                    )
+                )
+            for i in range(3):
+                db.session.add(
+                    Channel(
+                        account_id=test_account,
+                        stream_id=f"ppv{i}",
+                        name=f"PPV {i}",
+                        category_id=category.id,
+                        is_active=True,
+                        is_ppv=True,
+                    )
+                )
+            db.session.commit()
+
+        response = client.get(f"/api/accounts/{test_account}/stats")
+        assert response.status_code == 200
+        data = response.json
+        assert data["total_channels"] == 8
+        assert data["visible_channels"] == 5
+        assert data["hidden_channels"] == 3
+
+
+# ============================================================================
+# Account Ruleset Assignment Tests
+# ============================================================================
+
+
+@pytest.fixture
+def sample_ruleset(client):
+    """Create a sample ruleset via API."""
+    response = client.post(
+        "/api/rulesets",
+        json={
+            "name": "Test Ruleset",
+            "description": "For testing",
+            "is_default": False,
+            "enabled": True,
+            "priority": 100,
+        },
+    )
+    return response.json
+
+
+class TestAccountRulesetRoutes:
+    """Test account ruleset assignment routes."""
+
+    def test_get_account_rulesets_empty(self, client, test_account):
+        """Test getting rulesets for account with none assigned."""
+        response = client.get(f"/api/accounts/{test_account}/rulesets")
+        assert response.status_code == 200
+        assert response.json == []
+
+    def test_assign_ruleset_to_account(self, client, test_account, sample_ruleset):
+        """Test assigning a ruleset to an account."""
+        response = client.post(
+            f"/api/accounts/{test_account}/rulesets",
+            json={"ruleset_id": sample_ruleset["id"], "priority": 50},
+        )
+        assert response.status_code == 201
+        assert response.json["success"] is True
+
+    def test_assign_ruleset_update_priority(self, client, test_account, sample_ruleset):
+        """Test updating priority of assigned ruleset."""
+        client.post(
+            f"/api/accounts/{test_account}/rulesets",
+            json={"ruleset_id": sample_ruleset["id"], "priority": 50},
+        )
+        response = client.post(
+            f"/api/accounts/{test_account}/rulesets",
+            json={"ruleset_id": sample_ruleset["id"], "priority": 100},
+        )
+        assert response.status_code == 201
+        assert response.json["success"] is True
+
+    def test_unassign_ruleset_from_account(self, client, test_account, sample_ruleset):
+        """Test unassigning a ruleset from an account."""
+        client.post(
+            f"/api/accounts/{test_account}/rulesets",
+            json={"ruleset_id": sample_ruleset["id"], "priority": 50},
+        )
+        response = client.delete(f"/api/accounts/{test_account}/rulesets/{sample_ruleset['id']}")
+        assert response.status_code == 204
+
+    def test_unassign_nonexistent_ruleset(self, client, test_account):
+        """Test unassigning a ruleset that isn't assigned."""
+        response = client.delete(f"/api/accounts/{test_account}/rulesets/99999")
+        assert response.status_code == 204
+
+    def test_get_account_rulesets_with_assignments(self, client, test_account, sample_ruleset):
+        """Test getting rulesets for account with assignments."""
+        client.post(
+            f"/api/accounts/{test_account}/rulesets",
+            json={"ruleset_id": sample_ruleset["id"], "priority": 50},
+        )
+        response = client.get(f"/api/accounts/{test_account}/rulesets")
+        assert response.status_code == 200
+        data = response.json
+        assert len(data) == 1
+        assert data[0]["id"] == sample_ruleset["id"]
+        assert data[0]["priority"] == 50
+
+
+class TestAccountPreviewMetadata:
+    """Account preview response shape and metadata."""
+
+    def test_preview_includes_pagination_fields(self, app, client, test_account_with_channels):
+        """Preview returns showing, has_more, and total fields."""
+        response = client.get(f"/api/accounts/{test_account_with_channels}/preview?limit=2")
+        assert response.status_code == 200
+        data = response.json
+        assert data["showing"] == 2
+        assert data["has_more"] is True
+        assert data["total"] == 5
+
+    def test_preview_includes_category_and_tags(self, app, client, test_account):
+        """Preview returns category name and tags for each channel."""
+        with app.app_context():
+            category = Category(
+                account_id=test_account,
+                category_id="1",
+                category_name="Test Category",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=test_account,
+                stream_id="1",
+                name="Test Channel",
+                category_id=category.id,
+                is_active=True,
+                is_visible=True,
+            )
+            db.session.add(channel)
+            db.session.flush()
+
+            tag = Tag(name="test_tag")
+            db.session.add(tag)
+            db.session.commit()
+
+            db.session.add(
+                ChannelTag(
+                    account_id=test_account,
+                    stream_id=channel.stream_id,
+                    tag_id=tag.id,
+                )
+            )
+            db.session.commit()
+
+        response = client.get(f"/api/accounts/{test_account}/preview")
+        assert response.status_code == 200
+        channel_data = response.json["channels"][0]
+        assert channel_data["category"] == "Test Category"
+        assert "test_tag" in channel_data["tags"]
+
+
+class TestProcessTagsTimezone:
+    """Tag processing must not fail on timezone-aware datetime comparisons."""
+
+    def test_process_tags_uses_naive_datetime(self, app, client, test_account_with_channels):
+        """Processing tags should not raise timezone comparison errors."""
+        response = client.post(f"/api/accounts/{test_account_with_channels}/process-tags")
+        assert response.status_code in [200, 503]

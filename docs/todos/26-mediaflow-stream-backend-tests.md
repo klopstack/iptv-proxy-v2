@@ -1,7 +1,7 @@
 # TODO 26: Add MediaFlow Stream Backend Test Coverage
 
 **Priority:** P1  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Medium
 
 ---
@@ -115,10 +115,10 @@ Add workflow step or matrix job:
 
 ## Acceptance criteria
 
-- [ ] Factory tests cover `ffmpeg`, `mediaflow`, and unknown backend fallback
-- [ ] MediaFlow service has ≥10 unit tests with mocked HTTP (no live service required)
-- [ ] Default CI runs factory + MediaFlow unit tests without external services
-- [ ] `.env.example` variables referenced in test docstrings
+- [x] Factory tests cover `ffmpeg`, `mediaflow`, and unknown backend fallback
+- [x] MediaFlow service has ≥10 unit tests with mocked HTTP (no live service required)
+- [x] Default CI runs factory + MediaFlow unit tests without external services
+- [x] `.env.example` variables referenced in test docstrings
 
 ---
 
@@ -135,6 +135,6 @@ STREAM_BACKEND=mediaflow venv/bin/pytest tests/test_stream_service_factory.py -v
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Added `test_stream_service_factory.py` (5 tests) and `test_mediaflow_stream_service.py` (17 tests). Registered `integration` pytest marker. Documented stream backend tests in DEVELOPER_GUIDE. Optional CI ffmpeg job and live MediaFlow integration marker deferred. |

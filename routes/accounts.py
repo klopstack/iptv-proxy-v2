@@ -937,7 +937,8 @@ def preview_account_playlist(account_id):
                 "category": ch.category.cleaned_name or ch.category.category_name if ch.category else "Uncategorized",
                 "category_id": ch.category_id,
                 "icon": image_cache.get_proxy_url(ch.stream_icon, proxy_base) if ch.stream_icon else None,
-                "is_visible": True,  # All channels here passed filters
+                "is_visible": True,  # Legacy field; all channels here are playlist-visible
+                "playlist_visible": True,
                 "tags": tags_map.get(ch.stream_id, []),
             }
             for ch in all_channels
@@ -1009,7 +1010,8 @@ def preview_account_playlist(account_id):
                         else "Uncategorized",
                         "category_id": ch.category_id,
                         "icon": image_cache.get_proxy_url(ch.stream_icon, proxy_base) if ch.stream_icon else None,
-                        "is_visible": ch.is_visible,
+                        "is_visible": True,  # Legacy field; all channels here are playlist-visible
+                        "playlist_visible": True,
                         "tags": tags_map.get(ch.stream_id, []),
                     }
                     for ch in channels

@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
-from models import Account, Category, Channel, ChannelTag, EventChannelLink, PlaylistConfig, Tag, XtreamCredential, db
+from models import Account, Category, Channel, ChannelTag, ChannelHealthStatus, EventChannelLink, PlaylistConfig, Tag, XtreamCredential, db
 from services.filter_service import FilterService
 from services.ppv.visibility import PPVVisibilityService
 
@@ -428,6 +428,48 @@ class ChannelQueryService:
         return visible
 
     @staticmethod
+    def _exclude_health_auto_disabled(channels: List[Channel]) -> List[Channel]:
+        """Drop channels auto-disabled by the health monitor."""
+        if not channels:
+            return []
+
+        channel_ids = [ch.id for ch in channels]
+        disabled_ids = {
+            row[0]
+            for row in db.session.query(ChannelHealthStatus.channel_id)
+            .filter(
+                ChannelHealthStatus.channel_id.in_(channel_ids),
+                ChannelHealthStatus.auto_disabled_at.isnot(None),
+            )
+            .all()
+        }
+        if not disabled_ids:
+            return channels
+        return [ch for ch in channels if ch.id not in disabled_ids]
+
+    @staticmethod
+    def playlist_visible_keys_for_scope(account_id: Optional[int] = None) -> Set[Tuple[int, str]]:
+        """(account_id, stream_id) keys for channels visible in playlist output."""
+        if account_id is not None:
+            return ChannelQueryService.visible_channel_set_for_account(account_id)
+
+        account_ids = [
+            row[0]
+            for row in db.session.query(Account.id).filter(Account.enabled.is_(True)).all()
+        ]
+        keys: Set[Tuple[int, str]] = set()
+        for acc_id in account_ids:
+            keys.update(ChannelQueryService.visible_channel_set_for_account(acc_id))
+        return keys
+
+    @staticmethod
+    def channel_is_playlist_visible(
+        channel: Channel,
+        playlist_visible_keys: Set[Tuple[int, str]],
+    ) -> bool:
+        return (channel.account_id, str(channel.stream_id)) in playlist_visible_keys
+
+    @staticmethod
     def channels_for_account_candidates(
         account_id: int,
         candidates: List[Channel],
@@ -440,6 +482,7 @@ class ChannelQueryService:
             candidates = FilterService.apply_filters_to_channels(candidates, account_id)
         if apply_ppv_visibility:
             candidates = ChannelQueryService.apply_ppv_visibility_to_channels(candidates)
+        candidates = ChannelQueryService._exclude_health_auto_disabled(candidates)
         return candidates
 
     @staticmethod
@@ -471,7 +514,7 @@ class ChannelQueryService:
         if apply_ppv_visibility:
             filtered = ChannelQueryService.apply_ppv_visibility_to_channels(filtered)
 
-        return filtered
+        return ChannelQueryService._exclude_health_auto_disabled(filtered)
 
     @staticmethod
     def visible_channel_set_for_account(account_id: int) -> Set[Tuple[int, str]]:

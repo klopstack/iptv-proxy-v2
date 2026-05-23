@@ -7,58 +7,18 @@ import re
 from typing import Dict, List, Optional
 
 from models import Account, Channel, ChannelTag, Filter, Tag, db
+from services.epg.constants import PPV_PLACEHOLDER_PATTERNS
 
 logger = logging.getLogger(__name__)
 
-
-# PPV placeholder patterns - channels matching these are inactive PPV events
-# Imported from epg_service patterns but kept here for filter use
-PPV_PLACEHOLDER_PATTERNS = [
-    # Explicit "NO EVENT" markers (very common)
-    r"NO\s+EVENT\s+STREAMING",
-    r"NO\s+EVENT\s+SCHEDULED",
-    r"NO\s+SCHEDULED\s+EVENT",
-    # Basic numbered PPV channels without event info: "PPV 1", "PPV 2", "PPV-01"
-    r"^(?:[A-Z]{2}[:\s])?(?:[A-Z0-9\+\s]+)?PPV[\s\-]*\d+\s*(?:ᴿᴬᵂ|ᴴᴰ|⁴ᴷ|4K|HD|SD)?$",
-    # Event channels with just numbers: "EVENT 1", "VIDIO EVENT 1"
-    r"EVENT\s+\d+\s*$",
-    # Empty event slots: "PPV 1 -", "UFC 09:", ":MAX NL 05"
-    r"(?:PPV|UFC|NBA|NHL|MLB|MLS|WNBA)\s*\d+\s*[:\-]?\s*$",
-    # Placeholder colon format: ":Viaplay NL  14", ":MAX US 03"
-    r"^:?\s*(?:[A-Z]+\s+)?(?:Viaplay|MAX|ESPN)\s+[A-Z]{2}\s+\d+\s*$",
-    # Coming Soon/TBA placeholders
-    r"^(?:COMING\s+SOON|TBA|TBD|OFFLINE).*$",
-    # Florugby/generic sport numbered: "Florugby 00", "Florugby 01"
-    r"^[A-Za-z]+\s+\d{2}\s*$",
-    # Empty fixture slots: "GaaGo Fixtures 10:", "LOI 06 |"
-    r"Fixtures?\s+\d+\s*[:\|]?\s*$",
-    # NIFL/GAA empty: "NIFL 5 |", "ULSTER GAA 06 |"
-    r"(?:NIFL|GAA|ULSTER)\s*\d+\s*\|?\s*$",
-    # Heading/separator channels: ### ... ###, #### ... ####
-    r"^#{2,}.*#{2,}$",
-]
-
-# Compile PPV patterns once for efficiency
 _PPV_COMPILED_PATTERNS = [re.compile(p, re.IGNORECASE) for p in PPV_PLACEHOLDER_PATTERNS]
 
 
 def is_ppv_placeholder_name(channel_name: str) -> bool:
-    """
-    Check if a channel name indicates an inactive/placeholder PPV event.
-
-    Args:
-        channel_name: The channel name to check
-
-    Returns:
-        True if the channel name matches a PPV placeholder pattern
-    """
+    """Return True if the channel name matches a PPV placeholder pattern."""
     if not channel_name:
         return False
-
-    for pattern in _PPV_COMPILED_PATTERNS:
-        if pattern.search(channel_name):
-            return True
-    return False
+    return any(pattern.search(channel_name) for pattern in _PPV_COMPILED_PATTERNS)
 
 
 class FilterService:
@@ -67,10 +27,11 @@ class FilterService:
     @staticmethod
     def compute_visibility_for_account(account_id: int) -> Dict:
         """
-        Compute and store filter results for all channels in an account
+        Compute and cache filter results for all channels in an account.
 
-        Sets the is_visible column on each channel based on whether it passes
-        all enabled filters for the account.
+        Writes the ``is_visible`` column as an admin/index cache of filter
+        results. Playlist and EPG output do **not** read this column; they
+        re-evaluate filters live via ``apply_filters_to_channels``.
 
         Args:
             account_id: Account ID to process
@@ -277,10 +238,11 @@ class FilterService:
         channel_tags_map: Optional[Dict[str, List[str]]] = None,
     ) -> List[Channel]:
         """
-        Apply filters to a list of channels dynamically without updating database.
+        Apply enabled account filters to channels without updating the database.
 
-        This is used for real-time filtering in previews and playlist generation.
-        Respects the is_visible flag for explicit channel hiding.
+        Used for playlist, preview, EPG, and Xtream output. Evaluates filters
+        live on every call; the cached ``is_visible`` column is not consulted
+        here (see ``compute_visibility_for_account`` for the admin cache).
 
         Args:
             channels: List of Channel objects to filter
@@ -293,10 +255,6 @@ class FilterService:
         """
         if not channels:
             return []
-
-        # First, filter out explicitly hidden channels (is_visible=False)
-        # This flag is used for explicit channel hiding feature, separate from filters
-        channels = [ch for ch in channels if ch.is_visible]
 
         # Get enabled filters for this account
         filters = Filter.query.filter_by(account_id=account_id, enabled=True).all()

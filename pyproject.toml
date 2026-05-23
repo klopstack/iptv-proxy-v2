@@ -42,6 +42,9 @@ filterwarnings = [
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "--verbose --cov=. --cov-report=html --cov-report=term-missing --cov-fail-under=75"
+markers = [
+    "integration: marks tests requiring external services (deselect with '-m \"not integration\"')",
+]
 norecursedirs = ["services", "routes", "migrations", "static", "templates", "data", "instance", "venv"]
 
 [tool.coverage.run]

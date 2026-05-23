@@ -92,6 +92,33 @@ make test  # Creates htmlcov/ directory
 - **`tests/test_tag_service.py`**: Tag extraction, pattern matching, ruleset logic
 - **`tests/test_rulesets_api.py`**: Ruleset and TagRule CRUD operations
 - **`test_tags.py`**: Standalone tag extraction validation (uses mock objects)
+- **`tests/test_stream_service_factory.py`**: `STREAM_BACKEND` selection (`ffmpeg` vs `mediaflow`)
+- **`tests/test_mediaflow_stream_service.py`**: MediaFlow proxy URL construction and streaming (mocked HTTP)
+- **`tests/test_ffmpeg_stream_service.py`**: FFmpeg stream service (skipped when `ffmpeg` binary absent)
+
+### Stream backend tests
+
+Stream proxying supports two backends via `.env` / environment variables (see `.env.example`):
+
+| Variable | Purpose |
+|----------|---------|
+| `STREAM_BACKEND` | `ffmpeg` (default) or `mediaflow` |
+| `MEDIAFLOW_PROXY_URL` | MediaFlow Proxy base URL when using `mediaflow` |
+| `MEDIAFLOW_API_PASSWORD` | Optional API password for MediaFlow Proxy |
+
+Factory and MediaFlow unit tests use mocked HTTP and run in default CI with no external services:
+
+```bash
+pytest tests/test_stream_service_factory.py tests/test_mediaflow_stream_service.py -v --no-cov
+```
+
+FFmpeg integration tests require the `ffmpeg` and `ffprobe` binaries on `PATH`; they are skipped automatically when missing. To run them locally after installing ffmpeg:
+
+```bash
+pytest tests/test_ffmpeg_stream_service.py -v --no-cov
+```
+
+For a live MediaFlow stack, use `docker-compose.mediaflow.yml` and set `STREAM_BACKEND=mediaflow`.
 
 ### Writing Tests
 
@@ -320,6 +347,23 @@ from services.ppv.epg import PPVEpgService
 from services.ppv.extraction import PPVEventExtractor
 from services.ppv.matching.enhanced import EnhancedPPVMatcher
 ```
+
+### Channel visibility (`is_visible` vs playlist output)
+
+Playlist, preview, EPG, and Xtream routes use **`ChannelQueryService`** with **live filter evaluation**. They do **not** read the cached `Channel.is_visible` column.
+
+| Mechanism | Purpose |
+|-----------|---------|
+| `FilterService.apply_filters_to_channels` | Live filter + PPV-placeholder evaluation for client output |
+| `FilterService.compute_visibility_for_account` | Writes `is_visible` as an **admin/index cache** after filter CRUD |
+| `ChannelQueryService.channels_for_account` | Single entry point for playlist-visible channels (live filters + PPV visibility + health auto-disable) |
+
+**Rules for new code:**
+
+- Use `ChannelQueryService` (or `visible_channel_set_for_account`) when counting or listing channels that appear in M3U/EPG/Xtream output.
+- Treat `is_visible` as a filter cache for admin queries only; it may lag until recompute but must not gate playlists.
+- Health auto-disable hides channels via `ChannelHealthStatus.auto_disabled_at`; CQS excludes those from output.
+- PPV placeholder patterns live in `services/epg/constants.py` (re-exported from `services/ppv/constants.py`); import via `services.ppv.detection.is_ppv_placeholder_name`.
 
 ### JSON Field Handling
 

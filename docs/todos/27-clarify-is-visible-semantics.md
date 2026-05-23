@@ -1,7 +1,7 @@
 # TODO 27: Clarify `is_visible` Semantics and Close Filter Staleness Gaps
 
 **Priority:** P1  
-**Status:** ⬜ Not started  
+**Status:** ✅ Complete  
 **Estimated scope:** Medium (design decision + tests + UI labels)
 
 ---
@@ -62,13 +62,7 @@ Pick a single **documented model** for `is_visible`, fix misleading comments, al
 
 ### Step 1: Product decision (document in this todo when chosen)
 
-**Option A — Cache is optimization only:** Remove step 1 from `apply_filters_to_channels`; rely entirely on live filter evaluation. Keep `is_visible` for admin queries/indexes only.
-
-**Option B — Cache is gate:** Keep step 1 but guarantee recompute on every filter-affecting mutation (tags, rulesets?). Add staleness detector in sync.
-
-**Option C — Rename concepts:** `is_visible` → `filter_cache_visible`; add `passes_playlist_filters` computed field in API responses.
-
-Recommend **Option A** long-term (simplest mental model); **Option C** short-term for UI clarity.
+**Chosen: Option A — Cache is optimization only.** Playlist/EPG/Xtream/preview paths evaluate filters live via `FilterService.apply_filters_to_channels` and do not read the cached `is_visible` column. The column remains written by `compute_visibility_for_account` for admin/index queries. Health auto-disable excludes channels via `ChannelHealthStatus.auto_disabled_at` in `ChannelQueryService`.
 
 ### Step 2: Fix docstrings
 
@@ -127,11 +121,11 @@ def test_stale_is_visible_blocks_playlist_if_cache_gate_kept(...):
 
 ## Acceptance criteria
 
-- [ ] Documented decision on `is_visible` vs live filters (in DEVELOPER_GUIDE)
-- [ ] No contradictory docstrings in FilterService
-- [ ] Filter create/delete changes M3U output without manual recompute (integration test)
-- [ ] Channel health UI does not label DB `is_visible=False` as "playlist hidden" unless accurate
-- [ ] PPV placeholder patterns defined in one module
+- [x] Documented decision on `is_visible` vs live filters (in DEVELOPER_GUIDE)
+- [x] No contradictory docstrings in FilterService
+- [x] Filter create/delete changes M3U output without manual recompute (integration test)
+- [x] Channel health UI does not label DB `is_visible=False` as "playlist hidden" unless accurate
+- [x] PPV placeholder patterns defined in one module
 
 ---
 
@@ -147,6 +141,6 @@ venv/bin/pytest tests/test_filter_visibility.py tests/test_channel_output_parity
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Option A: live filters for client output; `is_visible` is admin cache only. Renamed `test_phase2_filter_visibility.py` → `test_filter_visibility.py`. Channel health UI/API use `playlist_visible` / `filter_hidden` / `admin_disabled`. |

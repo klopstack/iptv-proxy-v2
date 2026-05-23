@@ -1,7 +1,7 @@
 # TODO 24: Consolidate Overlapping EPG Route Tests
 
 **Priority:** P2  
-**Status:** ⬜ Not started  
+**Status:** ✅ Complete  
 **Estimated scope:** Large (test refactor only)
 
 ---
@@ -126,10 +126,10 @@ Must stay ≥75%. Replace deleted mock-only tests with one meaningful integratio
 
 ## Acceptance criteria
 
-- [ ] No duplicate test class names across EPG route test files
-- [ ] Each EPG route blueprint endpoint has ≥1 meaningful test (not mock-only status check)
-- [ ] Total test count reduced by ≥15% in EPG route area without coverage drop below 75%
-- [ ] Full suite passes: `venv/bin/pytest tests/ -q --no-cov`
+- [x] No duplicate test class names across EPG route test files
+- [x] Each EPG route blueprint endpoint has ≥1 meaningful test (not mock-only status check)
+- [x] Total test count reduced by ≥15% in EPG route area without coverage drop below 75%
+- [x] Full suite passes: `venv/bin/pytest tests/ -q --no-cov`
 
 ---
 
@@ -154,6 +154,6 @@ venv/bin/pytest tests/ --cov=routes/epg --cov-report=term-missing
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Merged 3 modules (~156 tests) into `tests/epg/` (88 tests, −44%). Shared fixtures in `tests/epg/conftest.py`. Full suite: 2107 passed, 78.77% coverage. |
