@@ -5,9 +5,9 @@ import json
 import logging
 
 from flask import Blueprint, Response, jsonify, request
+from marshmallow import ValidationError
 
 from error_handling import ServiceUnavailableError, handle_errors, handle_xml_errors
-from marshmallow import ValidationError
 from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Settings, db
 from schemas import (
     PlaylistConfigCreateSchema,
@@ -213,9 +213,7 @@ def preview_playlist_config(config_id):
                 "stream_id": channel.stream_id,
                 "original_name": channel.name,
                 "cleaned_name": channel.cleaned_name if channel.cleaned_name is not None else channel.name,
-                "category": channel.category.cleaned_name or channel.category.category_name
-                if channel.category
-                else "",
+                "category": channel.category.cleaned_name or channel.category.category_name if channel.category else "",
                 "tags": tag_names,
                 "icon": image_cache.get_proxy_url(channel.stream_icon, proxy_base) if channel.stream_icon else "",
             }

@@ -86,9 +86,7 @@ def discover_migrations():
     if not migrations_dir.exists():
         return []
 
-    return sorted(
-        [f for f in migrations_dir.glob("*.py") if f.name != "__init__.py" and not f.name.startswith(".")]
-    )
+    return sorted([f for f in migrations_dir.glob("*.py") if f.name != "__init__.py" and not f.name.startswith(".")])
 
 
 def load_migration(migration_file):

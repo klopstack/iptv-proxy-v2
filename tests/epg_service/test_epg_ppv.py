@@ -2,12 +2,8 @@
 import pytest
 
 from models import Account, Category, Channel, db
-from services.epg.ppv import (
-    get_ppv_event_title,
-    is_ppv_category,
-    is_ppv_channel,
-    is_ppv_placeholder_name,
-)
+from services.epg.ppv import get_ppv_event_title, is_ppv_category, is_ppv_channel, is_ppv_placeholder_name
+
 
 class TestIsPpvCategory:
     """Tests for is_ppv_category function"""
@@ -37,7 +33,6 @@ class TestIsPpvCategory:
         assert is_ppv_category("uk| dazn ppv") is True
         assert is_ppv_category("UK| DAZN PPV") is True
         assert is_ppv_category("Uk| DaZn PpV") is True
-
 
 
 class TestIsPpvPlaceholderName:
@@ -97,7 +92,6 @@ class TestIsPpvPlaceholderName:
         assert is_ppv_placeholder_name("no event streaming") is True
         assert is_ppv_placeholder_name("ppv 1") is True
         assert is_ppv_placeholder_name("EVENT 1") is True
-
 
 
 class TestIsPpvChannel:
@@ -166,7 +160,6 @@ class TestIsPpvChannel:
             db.session.delete(channel)
             db.session.delete(account)
             db.session.commit()
-
 
 
 class TestGetPpvEventTitle:
@@ -269,5 +262,3 @@ class TestGetPpvEventTitle:
             db.session.delete(category)
             db.session.delete(account)
             db.session.commit()
-
-

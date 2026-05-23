@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from models._base import db
 
+
 class EpgSource(db.Model):  # type: ignore[name-defined]
     """EPG data sources - provider XMLTV, Schedules Direct, external XMLTV files, XMLTV grabbers, PPV events, etc."""
 
@@ -299,7 +300,9 @@ class SdLineup(db.Model):  # type: ignore[name-defined]
     __tablename__ = "sd_lineups"
 
     id = db.Column(db.Integer, primary_key=True)
-    epg_source_id = db.Column(db.Integer, db.ForeignKey("epg_sources.id", ondelete="CASCADE"), nullable=False, index=True)
+    epg_source_id = db.Column(
+        db.Integer, db.ForeignKey("epg_sources.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     lineup_id = db.Column(db.String(100), nullable=False)  # SD lineup ID (e.g., "USA-NY12345-X")
     name = db.Column(db.String(200))  # Display name
     location = db.Column(db.String(200))  # Location description
@@ -397,5 +400,3 @@ class CachedImage(db.Model):  # type: ignore[name-defined]
 
     def __repr__(self):
         return f"<CachedImage {self.url_hash[:8]}... ({self.status})>"
-
-

@@ -9,12 +9,7 @@ Public API:
     detection helpers: is_ppv_category, is_ppv_channel, is_ppv_placeholder_name
 """
 
-from services.ppv.detection import (
-    is_generic_channel_name,
-    is_ppv_category,
-    is_ppv_channel,
-    is_ppv_placeholder_name,
-)
+from services.ppv.detection import is_generic_channel_name, is_ppv_category, is_ppv_channel, is_ppv_placeholder_name
 from services.ppv.enrichment import (
     PPVCalendarEnrichmentService,
     enrich_ppv_channels_batch,

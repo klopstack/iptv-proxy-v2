@@ -10,8 +10,8 @@ from error_handling import handle_errors
 from models import Account, Category, Channel, ChannelTag, Credential, Filter, Tag, db
 from schemas import AccountCreateSchema, AccountUpdateSchema, validate_request_data
 from services.cache_service import CacheService
-from services.connection_manager import ConnectionManager
 from services.channel_query_service import ChannelQueryService
+from services.connection_manager import ConnectionManager
 from services.filter_service import FilterService
 from services.iptv_service import IPTVService, get_iptv_service_for_account
 from services.tag_service import TagService

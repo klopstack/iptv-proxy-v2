@@ -24,9 +24,7 @@ class TestEpgSources:
         assert sources[0]["name"] == "Test EPG Source"
         assert sources[0]["deprecated"] is True
 
-    def test_get_epg_sources_marks_provider_deprecated(
-        self, app, client, test_epg_source, test_xmltv_url_source
-    ):
+    def test_get_epg_sources_marks_provider_deprecated(self, app, client, test_epg_source, test_xmltv_url_source):
         """Provider sources are flagged deprecated; other types are not."""
         response = client.get("/api/epg/sources")
         assert response.status_code == 200
@@ -396,4 +394,3 @@ class TestEpgSources:
         data = response.json
         assert len(data["mappings"]) == 2
         assert data["offset"] == 2
-

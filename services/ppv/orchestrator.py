@@ -43,11 +43,7 @@ class PPVEnrichmentOrchestrator:
             return {"skipped": True, "reason": "disabled"}
 
         service = self._get_enrichment_service()
-        accounts = (
-            [db.session.get(Account, account_id)]
-            if account_id
-            else Account.query.filter_by(enabled=True).all()
-        )
+        accounts = [db.session.get(Account, account_id)] if account_id else Account.query.filter_by(enabled=True).all()
 
         total_stats: Dict[str, Any] = {
             "accounts_processed": 0,

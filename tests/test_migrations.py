@@ -39,9 +39,7 @@ class TestMigrationRunner:
         try:
             ensure_schema_migrations_table(path)
             conn = sqlite3.connect(path)
-            cursor = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'"
-            )
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'")
             assert cursor.fetchone() is not None
             conn.close()
         finally:
@@ -55,10 +53,7 @@ class TestMigrationRunner:
             os.environ.pop("DATABASE_URL", None)
 
         conn = sqlite3.connect(temp_db)
-        tables = {
-            row[0]
-            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-        }
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
         assert "schema_migrations" in tables
         assert "accounts" in tables
         assert "channels" in tables

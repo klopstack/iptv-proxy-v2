@@ -34,6 +34,7 @@ COUNTRY_TAG_TO_SUFFIX_FALLBACK = {
 QUALITY_TAGS_FALLBACK = {"HD", "SD", "4K", "UHD", "FHD", "RAW", "60FPS"}
 COUNTRY_TAGS_FALLBACK = {"US", "USA", "UK", "CA"}
 
+
 @dataclass
 class CachedFccNetwork:
     """Cached FCC network data to avoid SQLAlchemy DetachedInstanceError.
@@ -246,7 +247,6 @@ def clear_fcc_pattern_cache():
     _callsign_suffixes_cache = None
     _channel_name_mappings_cache = None
     _exclusion_patterns_cache = None
-
 
 
 class PatternMixin:

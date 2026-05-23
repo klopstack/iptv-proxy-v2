@@ -6,7 +6,18 @@ import json
 import logging
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
-from models import Account, Category, Channel, ChannelTag, ChannelHealthStatus, EventChannelLink, PlaylistConfig, Tag, XtreamCredential, db
+from models import (
+    Account,
+    Category,
+    Channel,
+    ChannelHealthStatus,
+    ChannelTag,
+    EventChannelLink,
+    PlaylistConfig,
+    Tag,
+    XtreamCredential,
+    db,
+)
 from services.filter_service import FilterService
 from services.ppv.visibility import PPVVisibilityService
 
@@ -62,9 +73,7 @@ class ChannelQueryService:
         if all(ids):
             return True
         if any(ids):
-            logger.warning(
-                "Playlist config has mixed tag IDs and names; using name-based filtering"
-            )
+            logger.warning("Playlist config has mixed tag IDs and names; using name-based filtering")
         return False
 
     @staticmethod
@@ -149,11 +158,7 @@ class ChannelQueryService:
             else ChannelQueryService._load_tag_names_for_channels
         )
         raw = loader(channels)
-        return {
-            stream_id: list(tags)
-            for (acc_id, stream_id), tags in raw.items()
-            if acc_id == account_id
-        }
+        return {stream_id: list(tags) for (acc_id, stream_id), tags in raw.items() if acc_id == account_id}
 
     @staticmethod
     def load_tags_for_channels(
@@ -292,6 +297,7 @@ class ChannelQueryService:
         if not channels:
             return []
 
+        tags_map: dict
         if account_id is not None:
             tags_map = ChannelQueryService.load_tags_for_account_channels(account_id, channels)
         else:
@@ -339,9 +345,7 @@ class ChannelQueryService:
         original_count = len(channels)
         collapsed = ChannelQueryService.collapse_channels(channels, account_id)
         suffix = f" {context}" if context else ""
-        logger.info(
-            f"Collapsed {original_count} channels to {len(collapsed)} unique channels{suffix}"
-        )
+        logger.info(f"Collapsed {original_count} channels to {len(collapsed)} unique channels{suffix}")
         return collapsed
 
     @staticmethod
@@ -358,9 +362,7 @@ class ChannelQueryService:
         original_count = len(channels)
         collapsed = ChannelQueryService.collapse_channels(channels)
         suffix = f" {context}" if context else ""
-        logger.info(
-            f"Collapsed {original_count} channels to {len(collapsed)} unique channels{suffix}"
-        )
+        logger.info(f"Collapsed {original_count} channels to {len(collapsed)} unique channels{suffix}")
         return collapsed
 
     @staticmethod
@@ -386,9 +388,7 @@ class ChannelQueryService:
         """Build per-channel rows for multi-account playlist output, optionally collapsed."""
 
         def account_extra(ch: Channel) -> Dict[str, Any]:
-            return {
-                "account_data": ChannelQueryService._account_data_for_playlist(account_by_id, ch)
-            }
+            return {"account_data": ChannelQueryService._account_data_for_playlist(account_by_id, ch)}
 
         if collapse_duplicates:
             original_count = len(eligible_channels)
@@ -396,9 +396,7 @@ class ChannelQueryService:
                 eligible_channels,
                 extra_fields_fn=account_extra,
             )
-            logger.info(
-                f"Collapsed {original_count} channels to {len(channel_data)} unique channels"
-            )
+            logger.info(f"Collapsed {original_count} channels to {len(channel_data)} unique channels")
             return channel_data
 
         return ChannelQueryService.prepare_collapse_input(
@@ -453,10 +451,7 @@ class ChannelQueryService:
         if account_id is not None:
             return ChannelQueryService.visible_channel_set_for_account(account_id)
 
-        account_ids = [
-            row[0]
-            for row in db.session.query(Account.id).filter(Account.enabled.is_(True)).all()
-        ]
+        account_ids = [row[0] for row in db.session.query(Account.id).filter(Account.enabled.is_(True)).all()]
         keys: Set[Tuple[int, str]] = set()
         for acc_id in account_ids:
             keys.update(ChannelQueryService.visible_channel_set_for_account(acc_id))
@@ -535,15 +530,11 @@ class ChannelQueryService:
             query = query.filter(Channel.account_id == account_id)
 
         if category:
-            query = query.filter(
-                db.or_(Category.category_name == category, Category.cleaned_name == category)
-            )
+            query = query.filter(db.or_(Category.category_name == category, Category.cleaned_name == category))
 
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
-                db.or_(Channel.name.ilike(search_pattern), Channel.cleaned_name.ilike(search_pattern))
-            )
+            query = query.filter(db.or_(Channel.name.ilike(search_pattern), Channel.cleaned_name.ilike(search_pattern)))
 
         if filter_tags:
             tag_subquery = (
@@ -621,10 +612,7 @@ class ChannelQueryService:
         account_ids: List[int],
     ) -> Dict[int, Set[Tuple[int, str]]]:
         """Per-account playlist-visible channel keys for multi-account admin views."""
-        return {
-            acc_id: ChannelQueryService.visible_channel_set_for_account(acc_id)
-            for acc_id in account_ids
-        }
+        return {acc_id: ChannelQueryService.visible_channel_set_for_account(acc_id) for acc_id in account_ids}
 
     @staticmethod
     def channels_for_account(
@@ -661,12 +649,8 @@ class ChannelQueryService:
         apply_ppv_visibility: bool = True,
     ) -> List[Channel]:
         """Merge channels from multiple accounts per playlist config rules."""
-        include_accounts = (
-            json.loads(playlist_config.include_accounts) if playlist_config.include_accounts else []
-        )
-        exclude_accounts = (
-            json.loads(playlist_config.exclude_accounts) if playlist_config.exclude_accounts else []
-        )
+        include_accounts = json.loads(playlist_config.include_accounts) if playlist_config.include_accounts else []
+        exclude_accounts = json.loads(playlist_config.exclude_accounts) if playlist_config.exclude_accounts else []
         include_tags = json.loads(playlist_config.include_tags) if playlist_config.include_tags else []
         exclude_tags = json.loads(playlist_config.exclude_tags) if playlist_config.exclude_tags else []
 

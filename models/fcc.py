@@ -5,6 +5,7 @@ from typing import Optional
 
 from models._base import db
 
+
 class FccFacility(db.Model):  # type: ignore[name-defined]
     """FCC TV station facility data from the LMS database.
 
@@ -291,5 +292,3 @@ class FccMatchStrategy(db.Model):  # type: ignore[name-defined]
 
     def __repr__(self):
         return f"<FccMatchStrategy {self.name}: {self.strategy_type}>"
-
-

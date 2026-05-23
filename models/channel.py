@@ -5,6 +5,7 @@ from typing import Optional
 
 from models._base import db
 
+
 class Filter(db.Model):  # type: ignore[name-defined]
     """Filter rules for accounts"""
 
@@ -443,5 +444,3 @@ class CallsignSuffix(db.Model):  # type: ignore[name-defined]
 # ============================================================================
 # Channel Health Monitoring
 # ============================================================================
-
-

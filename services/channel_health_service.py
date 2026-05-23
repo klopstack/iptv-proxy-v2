@@ -909,9 +909,7 @@ class ChannelHealthService:
             .filter(Account.enabled == True)  # noqa: E712
             .filter(Channel.is_active == True)  # noqa: E712
         )
-        base_query = ChannelHealthService._apply_playlist_visibility_filter(
-            base_query, playlist_visible_keys
-        )
+        base_query = ChannelHealthService._apply_playlist_visibility_filter(base_query, playlist_visible_keys)
 
         if account_id:
             base_query = base_query.filter(Channel.account_id == account_id)
@@ -960,9 +958,7 @@ class ChannelHealthService:
             .filter(Account.enabled == True)  # noqa: E712
             .filter(Channel.is_active == True)  # noqa: E712
         )
-        status_counts = ChannelHealthService._apply_playlist_visibility_filter(
-            status_counts, playlist_visible_keys
-        )
+        status_counts = ChannelHealthService._apply_playlist_visibility_filter(status_counts, playlist_visible_keys)
 
         if account_id:
             status_counts = status_counts.filter(Channel.account_id == account_id)
@@ -1054,13 +1050,9 @@ class ChannelHealthService:
                 query, playlist_visible_keys, hidden_only=True
             )
         elif visibility_filter == "visible":
-            query = ChannelHealthService._apply_playlist_visibility_filter(
-                query, playlist_visible_keys
-            )
+            query = ChannelHealthService._apply_playlist_visibility_filter(query, playlist_visible_keys)
         elif not show_filter_hidden:
-            query = ChannelHealthService._apply_playlist_visibility_filter(
-                query, playlist_visible_keys
-            )
+            query = ChannelHealthService._apply_playlist_visibility_filter(query, playlist_visible_keys)
 
         # Apply filters
         if account_id:
@@ -1402,9 +1394,7 @@ def cleanup_old_health_checks(days_old: Optional[int] = None) -> int:
         days_old = ChannelHealthConfig.get_int("health_check_retention_days", 30)
 
     cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days_old)
-    deleted = ChannelHealthCheck.query.filter(ChannelHealthCheck.checked_at < cutoff).delete(
-        synchronize_session=False
-    )
+    deleted = ChannelHealthCheck.query.filter(ChannelHealthCheck.checked_at < cutoff).delete(synchronize_session=False)
     db.session.commit()
     logger.info("Cleaned up %s health check records older than %s days", deleted, days_old)
     return deleted

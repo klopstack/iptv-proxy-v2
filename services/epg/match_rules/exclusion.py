@@ -4,7 +4,6 @@ import re
 from typing import List, Optional, Set, Tuple
 
 from models import Channel
-
 from services.epg.match_rules.normalization import NormalizationMixin
 from services.epg.match_rules.patterns import CachedExclusionPattern, PatternMixin
 

@@ -131,9 +131,9 @@ class TestChannelInfoExtraction:
         """Test date extraction."""
         current_date = datetime(2026, 1, 5)
         matcher = EnhancedPPVMatcher(
-            event_extractor=__import__(
-                "services.ppv.extraction", fromlist=["PPVEventExtractor"]
-            ).PPVEventExtractor(current_date=current_date)
+            event_extractor=__import__("services.ppv.extraction", fromlist=["PPVEventExtractor"]).PPVEventExtractor(
+                current_date=current_date
+            )
         )
 
         test_cases = [

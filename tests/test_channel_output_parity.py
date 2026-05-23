@@ -282,9 +282,7 @@ def ppv_hide_inactive_account(app):
             ]
         )
         db.session.flush()
-        ppv_channel = Channel.query.filter_by(
-            account_id=account.id, stream_id="past_ppv"
-        ).one()
+        ppv_channel = Channel.query.filter_by(account_id=account.id, stream_id="past_ppv").one()
         db.session.add(EventChannelLink(channel_id=ppv_channel.id, event_id=event.id))
         db.session.commit()
         yield account.id
@@ -336,9 +334,7 @@ def tag_include_config(app):
         )
         db.session.add_all([hd_channel, plain_channel])
         db.session.flush()
-        db.session.add(
-            ChannelTag(account_id=account.id, stream_id="hd1", tag_id=hd_tag.id)
-        )
+        db.session.add(ChannelTag(account_id=account.id, stream_id="hd1", tag_id=hd_tag.id))
 
         config = PlaylistConfig(
             name="HD Only Parity",
@@ -402,9 +398,7 @@ def tag_exclude_id_config(app):
             ]
         )
         db.session.flush()
-        db.session.add(
-            ChannelTag(account_id=account.id, stream_id="ppv", tag_id=ppv_tag.id)
-        )
+        db.session.add(ChannelTag(account_id=account.id, stream_id="ppv", tag_id=ppv_tag.id))
 
         config = PlaylistConfig(
             name="No PPV Parity",
@@ -544,9 +538,7 @@ class TestBlacklistFilterParity:
         assert epg.status_code == 200
         assert_m3u_epg_channel_parity(m3u.data, epg.data)
 
-        preview = client.get(
-            f"/api/accounts/{blacklist_account}/preview?limit=100"
-        )
+        preview = client.get(f"/api/accounts/{blacklist_account}/preview?limit=100")
         assert preview.status_code == 200
         preview_data = preview.json
         preview_ids = stream_ids_from_preview(preview_data)
@@ -568,9 +560,7 @@ class TestPpvHideAllParity:
         assert epg.status_code == 200
         assert_m3u_epg_channel_parity(m3u.data, epg.data)
 
-        preview = client.get(
-            f"/api/accounts/{ppv_hide_all_account}/preview?limit=100"
-        )
+        preview = client.get(f"/api/accounts/{ppv_hide_all_account}/preview?limit=100")
         assert preview.status_code == 200
         preview_ids = stream_ids_from_preview(preview.json)
 
@@ -582,9 +572,7 @@ class TestPpvHideInactiveParity:
     """Scenario 4: hide_inactive with past PPV event."""
 
     def test_m3u_epg_hide_inactive_ppv(self, client, ppv_hide_inactive_account):
-        m3u = client.get(
-            f"/playlist/{ppv_hide_inactive_account}.m3u?proxy_icons=false"
-        )
+        m3u = client.get(f"/playlist/{ppv_hide_inactive_account}.m3u?proxy_icons=false")
         assert m3u.status_code == 200
         m3u_ids = stream_ids_from_m3u(m3u.data)
 
@@ -617,9 +605,7 @@ class TestPlaylistConfigTagExcludeIdParity:
     """Scenario 6: playlist config with tag exclude by ID."""
 
     def test_config_m3u_epg_exclude_tag_ids(self, client, tag_exclude_id_config):
-        m3u = client.get(
-            f"/playlist/config/{tag_exclude_id_config}.m3u?proxy_icons=false"
-        )
+        m3u = client.get(f"/playlist/config/{tag_exclude_id_config}.m3u?proxy_icons=false")
         assert m3u.status_code == 200
         m3u_ids = stream_ids_from_m3u(m3u.data)
 

@@ -7,7 +7,6 @@ import pytest
 
 from models import Account, Category, Channel, ChannelTag, Tag, db
 
-
 # ============================================================================
 # Scheduler API Tests
 # ============================================================================

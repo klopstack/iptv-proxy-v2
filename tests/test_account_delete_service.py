@@ -62,9 +62,7 @@ def account_with_data(app):
         tag = Tag(name="SPORTS")
         db.session.add(tag)
         db.session.flush()
-        db.session.add(
-            ChannelTag(account_id=account.id, stream_id="100", tag_id=tag.id)
-        )
+        db.session.add(ChannelTag(account_id=account.id, stream_id="100", tag_id=tag.id))
 
         epg_source = EpgSource(
             name="Provider EPG",

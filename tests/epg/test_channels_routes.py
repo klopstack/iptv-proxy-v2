@@ -86,6 +86,7 @@ class TestEpgChannels:
         assert data["total"] == 5
         assert len(data["channels"]) == 2
 
+
 class TestAccountEpgSource:
     """Tests for account EPG source endpoints"""
 

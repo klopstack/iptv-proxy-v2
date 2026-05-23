@@ -62,12 +62,7 @@ def get_epg_sources():
     )
     mapping_count_map = {row.id: row.mapping_count for row in mapping_counts}
 
-    return jsonify(
-        [
-            _serialize_epg_source(s, mapping_count=mapping_count_map.get(s.id, 0))
-            for s in sources
-        ]
-    )
+    return jsonify([_serialize_epg_source(s, mapping_count=mapping_count_map.get(s.id, 0)) for s in sources])
 
 
 @epg_sources_bp.route("/sources", methods=["POST"])
@@ -296,7 +291,7 @@ def get_epg_coverage():
 
 
 @epg_sources_bp.route("/coverage/categories/<int:account_id>", methods=["GET"])
-def get_category_epg_coverage(account_id):
+def get_category_epg_coverage_route(account_id):
     """Get EPG coverage broken down by category for an account"""
     Account.query.get_or_404(account_id)
 

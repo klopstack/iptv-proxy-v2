@@ -17,6 +17,7 @@ from services.epg import EpgService
 from services.epg.constants import EAST_TAGS, WEST_TAGS
 from services.epg.utils import shift_xmltv_time
 
+
 class TestMatchChannelsToEpg:
     """Tests for EpgService.match_channels_to_epg"""
 
@@ -157,7 +158,6 @@ class TestMatchChannelsToEpg:
             # Run matching with higher threshold - should NOT skip
             stats = EpgService.match_channels_to_epg(test_account, skip_matched_threshold=0.99)
             assert stats["skipped_existing"] == 0
-
 
 
 class TestMatchingStrategies:
@@ -313,7 +313,6 @@ class TestMatchingStrategies:
 # ============================================================================
 
 
-
 class TestChannelLinkHandling:
     """Tests for channel link EPG handling and time shifting"""
 
@@ -419,7 +418,6 @@ class TestChannelLinkHandling:
 
             # East channel should not be in the map (it's the source, not target)
             assert "hbo-east.us" not in result
-
 
 
 class TestFccEnhancedEpgMatching:
@@ -1208,7 +1206,6 @@ class TestFccEnhancedEpgMatching:
                 db.session.commit()
 
 
-
 class TestEastWestTags:
     """Tests for EAST_TAGS and WEST_TAGS constants"""
 
@@ -1227,7 +1224,6 @@ class TestEastWestTags:
         east_set = set(EAST_TAGS)
         west_set = set(WEST_TAGS)
         assert east_set.isdisjoint(west_set)
-
 
 
 class TestPrepareChannelsAndEpg:
@@ -1327,7 +1323,6 @@ class TestPrepareChannelsAndEpg:
             db.session.commit()
 
 
-
 class TestBuildEpgLookupIndices:
     """Tests for _build_epg_lookup_indices helper method"""
 
@@ -1370,7 +1365,6 @@ class TestBuildEpgLookupIndices:
             db.session.delete(epg_ch)
             db.session.delete(source)
             db.session.commit()
-
 
 
 class TestLoadExistingMappings:
@@ -1467,7 +1461,6 @@ class TestLoadExistingMappings:
             db.session.commit()
 
 
-
 class TestLoadCountryTagsForChannels:
     """Tests for _load_country_tags_for_channels helper method"""
 
@@ -1543,7 +1536,6 @@ class TestLoadCountryTagsForChannels:
             db.session.commit()
 
 
-
 class TestLoadFccFacilities:
     """Tests for _load_fcc_facilities helper method"""
 
@@ -1578,7 +1570,6 @@ class TestLoadFccFacilities:
             db.session.delete(channel)
             db.session.delete(account)
             db.session.commit()
-
 
 
 class TestMatchChannelStrategies:
@@ -1689,7 +1680,6 @@ class TestMatchChannelStrategies:
             db.session.commit()
 
 
-
 class TestSaveChannelMapping:
     """Tests for _save_channel_mapping helper method"""
 
@@ -1771,7 +1761,6 @@ class TestSaveChannelMapping:
             result = EpgService._save_channel_mapping(channel, None, None, 0.0, {})
 
             assert result is False
-
 
 
 class TestMatchChannelsToEpgFccEnhanced:
@@ -1955,5 +1944,3 @@ class TestMatchChannelsToEpgFccEnhanced:
             db.session.delete(source)
             db.session.delete(account)
             db.session.commit()
-
-

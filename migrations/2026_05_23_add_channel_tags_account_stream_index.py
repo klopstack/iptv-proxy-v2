@@ -11,15 +11,12 @@ def migrate(db_path):
     cursor = conn.cursor()
 
     try:
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_channel_tags_account_stream'"
-        )
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_channel_tags_account_stream'")
         if cursor.fetchone():
             return True, "idx_channel_tags_account_stream already exists, skipping"
 
         cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_channel_tags_account_stream "
-            "ON channel_tags (account_id, stream_id)"
+            "CREATE INDEX IF NOT EXISTS idx_channel_tags_account_stream " "ON channel_tags (account_id, stream_id)"
         )
         conn.commit()
         return True, "Created idx_channel_tags_account_stream on channel_tags"

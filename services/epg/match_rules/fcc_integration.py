@@ -4,9 +4,9 @@ import re
 from typing import List, Optional, Set, Tuple
 
 from models import Channel, FccFacility, db
-from services.fcc_facility_service import FccFacilityService
 from services.epg.match_rules.normalization import NormalizationMixin
 from services.epg.match_rules.patterns import CachedFccNetwork, CachedFccStrategy, PatternMixin
+from services.fcc_facility_service import FccFacilityService
 
 logger = logging.getLogger(__name__)
 

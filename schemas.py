@@ -222,9 +222,7 @@ def check_playlist_filter_overlap(
 
     tag_overlap = set(include_tags) & set(exclude_tags)
     if tag_overlap:
-        raise ValidationError(
-            {"include_tags": [f"Tags cannot be in both include and exclude: {tag_overlap}"]}
-        )
+        raise ValidationError({"include_tags": [f"Tags cannot be in both include and exclude: {tag_overlap}"]})
 
 
 class PlaylistConfigCreateSchema(Schema):

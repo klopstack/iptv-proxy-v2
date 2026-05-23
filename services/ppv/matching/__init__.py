@@ -1,7 +1,7 @@
 """PPV matching strategies."""
 
+from services.ppv.matching.enhanced import EnhancedMatchResult, EnhancedPPVMatcher, get_enhanced_ppv_matcher
 from services.reverse_event_matcher import ReverseEventMatcher, get_reverse_matcher
-from services.ppv.matching.enhanced import EnhancedPPVMatcher, EnhancedMatchResult, get_enhanced_ppv_matcher
 
 __all__ = [
     "ReverseEventMatcher",

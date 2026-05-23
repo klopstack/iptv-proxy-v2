@@ -5,15 +5,8 @@ import re
 from difflib import SequenceMatcher
 from typing import Dict, List, Optional, Set, Tuple
 
-from models import (
-    AccountEpgMatchRuleSet,
-    Channel,
-    EpgChannel,
-    EpgMatchRule,
-    EpgMatchRuleSet,
-    db,
-)
-from services.epg.match_rules.fcc_integration import FccIntegrationMixin, MAJOR_BROADCAST_NETWORKS
+from models import AccountEpgMatchRuleSet, Channel, EpgChannel, EpgMatchRule, EpgMatchRuleSet, db
+from services.epg.match_rules.fcc_integration import MAJOR_BROADCAST_NETWORKS, FccIntegrationMixin
 from services.epg.match_rules.normalization import NormalizationMixin
 from services.epg.match_rules.patterns import CachedChannelNameMapping, PatternMixin
 

@@ -3,15 +3,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Set
 
-from models import (
-    Channel,
-    ChannelEpgMapping,
-    ChannelTag,
-    EpgChannel,
-    EpgMatchRule,
-    Tag,
-    db,
-)
+from models import Channel, ChannelEpgMapping, ChannelTag, EpgChannel, EpgMatchRule, Tag, db
 from services.epg.match_rules.exclusion import ExclusionMixin
 from services.epg.match_rules.fcc_integration import FccIntegrationMixin
 from services.epg.match_rules.matching import MatchingMixin

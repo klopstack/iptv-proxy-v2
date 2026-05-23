@@ -88,6 +88,7 @@ GENERIC_CHANNEL_PATTERNS = [
     r"^\(.*\)$",  # Just provider info like "(ESPN)" or "(Fanatiz 012)"
 ]
 
+
 class EnrichmentResult:
     """Result of attempting to enrich a channel."""
 

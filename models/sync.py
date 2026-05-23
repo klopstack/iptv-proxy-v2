@@ -5,6 +5,7 @@ from typing import Optional
 
 from models._base import db
 
+
 class SyncMetadata(db.Model):  # type: ignore[name-defined]
     """Stores scheduler sync state to persist across restarts"""
 
@@ -187,5 +188,3 @@ class Settings(db.Model):  # type: ignore[name-defined]
 
     def __repr__(self):
         return f"<Settings {self.key}={self.value}>"
-
-

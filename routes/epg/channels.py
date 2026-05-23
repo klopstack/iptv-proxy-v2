@@ -7,10 +7,10 @@ from flask import Blueprint, jsonify, make_response, request
 
 from error_handling import handle_errors
 from models import Account, Channel, ChannelEpgMapping, EpgChannel, EpgSource, Event, EventChannelLink, db
+from services.channel_query_service import ChannelQueryService
 from services.epg.match_rules import EpgMatchRulesService
 from services.epg.matching_legacy import create_provider_epg_source
 from services.epg.parsing import sync_epg_source
-from services.channel_query_service import ChannelQueryService
 from services.iptv_service import IPTVService
 
 logger = logging.getLogger(__name__)
@@ -117,9 +117,7 @@ def match_channels_to_epg(account_id):
     # Redirect to the rule-based matching endpoint
     response = make_response(match_channels_to_epg_with_rules(account_id))
     response.headers["Deprecation"] = "true"
-    response.headers["Link"] = (
-        f'</api/epg/match-with-rules/{account_id}>; rel="successor-version"'
-    )
+    response.headers["Link"] = f'</api/epg/match-with-rules/{account_id}>; rel="successor-version"'
     return response
 
 
@@ -320,9 +318,7 @@ def get_epg_mappings():
 
         if not show_filtered and account_id:
             channels = [m.channel for m in all_mappings if m.channel]
-            visible_channels = ChannelQueryService.channels_for_account_candidates(
-                account_id, channels
-            )
+            visible_channels = ChannelQueryService.channels_for_account_candidates(account_id, channels)
             visible_ids = {ch.id for ch in visible_channels}
             mappings = [m for m in all_mappings if m.channel and m.channel.id in visible_ids]
         else:
@@ -926,9 +922,7 @@ def get_mappings_with_current_programs():
 
     if not show_filtered:
         channels = [r[0] for r in results]
-        visible_channels = ChannelQueryService.channels_for_account_candidates(
-            account_id, channels
-        )
+        visible_channels = ChannelQueryService.channels_for_account_candidates(account_id, channels)
         visible_ids = {ch.id for ch in visible_channels}
         results = [r for r in results if r[0].id in visible_ids]
 

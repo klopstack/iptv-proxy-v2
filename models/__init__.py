@@ -1,13 +1,7 @@
 """SQLAlchemy models — domain modules with unified public API."""
 
 from models._base import db
-from models.account import (
-    Account,
-    ActiveStream,
-    Credential,
-    PlaylistConfig,
-    XtreamCredential,
-)
+from models.account import Account, ActiveStream, Credential, PlaylistConfig, XtreamCredential
 from models.channel import (
     AccountRuleSet,
     CallsignSuffix,
@@ -22,15 +16,7 @@ from models.channel import (
     Tag,
     TagRule,
 )
-from models.epg import (
-    CachedImage,
-    ChannelEpgMapping,
-    EpgChannel,
-    EpgProgram,
-    EpgSource,
-    SdLineup,
-    SdStation,
-)
+from models.epg import CachedImage, ChannelEpgMapping, EpgChannel, EpgProgram, EpgSource, SdLineup, SdStation
 from models.epg_match import (
     AccountEpgMatchRuleSet,
     EpgChannelNameMapping,

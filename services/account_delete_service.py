@@ -149,4 +149,4 @@ class AccountDeleteService:
     @staticmethod
     def _exec_delete(statement) -> int:
         result = db.session.execute(statement)
-        return result.rowcount or 0
+        return getattr(result, "rowcount", 0) or 0

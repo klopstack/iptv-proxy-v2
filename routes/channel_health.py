@@ -182,9 +182,7 @@ def get_categories():
     for category in categories_with_channels:
         channels = Channel.query.filter_by(category_id=category.id, is_active=True).all()
         if channels:
-            visible = ChannelQueryService.channels_for_account_candidates(
-                category.account_id, channels
-            )
+            visible = ChannelQueryService.channels_for_account_candidates(category.account_id, channels)
             if visible:
                 visible_category_ids.add(category.id)
 

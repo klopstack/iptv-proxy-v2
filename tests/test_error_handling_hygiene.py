@@ -97,9 +97,7 @@ class TestMatchRulesPreviewErrorHandling:
 
     def test_preview_name_mapping_query_failure_returns_error_json(self, app, client):
         with patch("models.Channel.query") as mock_query:
-            mock_query.filter.return_value.limit.return_value.all.side_effect = RuntimeError(
-                "database unavailable"
-            )
+            mock_query.filter.return_value.limit.return_value.all.side_effect = RuntimeError("database unavailable")
             response = client.post(
                 "/api/epg-match-rules/name-mappings/preview",
                 json={"old_name": "ESPN", "match_type": "contains"},

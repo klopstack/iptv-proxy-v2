@@ -110,9 +110,7 @@ def test_channels_for_account_consistency(app):
         account = Account(name="CQ", server="s", username="u", password="p", enabled=True)
         db.session.add(account)
         db.session.commit()
-        db.session.add(
-            Channel(account_id=account.id, stream_id=42, name="Test Ch", is_active=True)
-        )
+        db.session.add(Channel(account_id=account.id, stream_id=42, name="Test Ch", is_active=True))
         db.session.commit()
 
         channels = ChannelQueryService.channels_for_account(
@@ -544,9 +542,7 @@ def test_playlist_and_xtream_channel_counts_match(app, client):
         db.session.add_all([acc1, acc2])
         db.session.commit()
         for acc, sid in [(acc1, 10), (acc2, 20)]:
-            db.session.add(
-                Channel(account_id=acc.id, stream_id=str(sid), name=f"Ch{sid}", is_active=True)
-            )
+            db.session.add(Channel(account_id=acc.id, stream_id=str(sid), name=f"Ch{sid}", is_active=True))
         db.session.commit()
 
         cfg = PlaylistConfig(
@@ -582,9 +578,7 @@ def test_multi_account_xtream_stream_routes_to_channel_account(app, client):
         acc2 = Account(name="S2", server="s2", username="u", password="p", enabled=True)
         db.session.add_all([acc1, acc2])
         db.session.commit()
-        db.session.add(
-            Channel(account_id=acc2.id, stream_id="555", name="Acc2 Ch", is_active=True)
-        )
+        db.session.add(Channel(account_id=acc2.id, stream_id="555", name="Acc2 Ch", is_active=True))
         db.session.commit()
 
         cfg = PlaylistConfig(

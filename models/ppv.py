@@ -5,6 +5,7 @@ from typing import Optional
 
 from models._base import db
 
+
 class Event(db.Model):  # type: ignore[name-defined]
     """
     Sports events from TheSportsDB or other event sources.
@@ -277,4 +278,3 @@ class SportsTeam(db.Model):  # type: ignore[name-defined]
 
     def __repr__(self):
         return f"<SportsTeam {self.sport.upper()}: {self.name} ({self.abbreviation})>"
-

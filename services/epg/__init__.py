@@ -40,7 +40,6 @@ Usage:
 """
 # Import submodules for direct access
 from services.epg import cache, constants, coverage, fcc, generation, matching, parsing, ppv, programs, utils
-from services.epg.facade import EpgService
 
 # Re-export commonly used constants for convenience
 from services.epg.constants import (
@@ -52,6 +51,7 @@ from services.epg.constants import (
     STRIP_WORDS,
     WEST_TAGS,
 )
+from services.epg.facade import EpgService
 
 __all__ = [
     # Submodules

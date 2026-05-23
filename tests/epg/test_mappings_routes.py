@@ -115,9 +115,7 @@ class TestEpgMappings:
             db.session.commit()
             account_id = account.id
 
-        response = client.get(
-            f"/api/epg/mappings?view_mode=unmapped&account_id={account_id}"
-        )
+        response = client.get(f"/api/epg/mappings?view_mode=unmapped&account_id={account_id}")
         assert response.status_code == 200
         stream_ids = {ch["stream_id"] for ch in response.json["unmapped_channels"]}
         assert stream_ids == {"reg1"}

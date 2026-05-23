@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from models._base import db
 
+
 class EpgMatchRuleSet(db.Model):  # type: ignore[name-defined]
     """
     Collection of EPG matching rules that define how channels are matched to EPG data.
@@ -354,5 +355,3 @@ class EpgCountrySuffix(db.Model):  # type: ignore[name-defined]
 
     def __repr__(self):
         return f"<EpgCountrySuffix {self.country_code}>"
-
-

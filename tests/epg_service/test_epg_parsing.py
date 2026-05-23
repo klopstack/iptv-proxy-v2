@@ -14,6 +14,7 @@ from services.epg.utils import (
     shift_xmltv_time,
 )
 
+
 class TestGetDecompressingStream:
     """Tests for get_decompressing_stream function"""
 
@@ -47,7 +48,6 @@ class TestGetDecompressingStream:
         assert result == b""
 
 
-
 class TestExtractCallsign:
     """Tests for extract_callsign_from_xmltv_id function"""
 
@@ -77,7 +77,6 @@ class TestExtractCallsign:
         assert result is not None  # Should extract first segment
 
 
-
 class TestMakeSdXmltvId:
     """Tests for make_sd_xmltv_id function"""
 
@@ -85,7 +84,6 @@ class TestMakeSdXmltvId:
         """Test that SD XMLTV ID is created correctly"""
         result = make_sd_xmltv_id("10021")
         assert result == "I10021.json.schedulesdirect.org"
-
 
 
 class TestNormalizeXmltvUrl:
@@ -128,7 +126,6 @@ class TestNormalizeXmltvUrl:
         assert result == url
 
 
-
 class TestDecompressContent:
     """Tests for decompress_content function"""
 
@@ -162,7 +159,6 @@ class TestDecompressContent:
 # ============================================================================
 # Parse XMLTV Tests
 # ============================================================================
-
 
 
 class TestParseXmltv:
@@ -266,7 +262,6 @@ class TestParseXmltv:
         # Only the channel with ID should be parsed
         assert len(result["channels"]) == 1
         assert result["channels"][0]["channel_id"] == "ValidChannel"
-
 
 
 class TestParseXmltvStreaming:
@@ -542,7 +537,6 @@ class TestSyncEpgSource:
 # ============================================================================
 
 
-
 class TestParseXmltvTime:
     """Tests for EpgService._parse_xmltv_time"""
 
@@ -575,7 +569,6 @@ class TestParseXmltvTime:
 # ============================================================================
 # EPG Coverage Stats Tests
 # ============================================================================
-
 
 
 class TestShiftXmltvTime:
@@ -613,7 +606,6 @@ class TestShiftXmltvTime:
         assert result == ""
 
 
-
 class TestDecompressContentExtended:
     """Extended tests for decompress_content utility function"""
 
@@ -634,7 +626,6 @@ class TestDecompressContentExtended:
         """Test decompressing empty content"""
         result = decompress_content(b"")
         assert result == b""
-
 
 
 class TestExtractCallsignEdgeCases:
@@ -658,7 +649,6 @@ class TestExtractCallsignEdgeCases:
         assert result is not None or result is None
 
 
-
 class TestShiftXmltvTimeEdgeCases:
     """Additional edge case tests for shift_xmltv_time"""
 
@@ -680,7 +670,6 @@ class TestShiftXmltvTimeEdgeCases:
         assert len(parts[0]) >= 8
 
 
-
 class TestParseXmltvTimeEdgeCases:
     """Additional edge case tests for _parse_xmltv_time"""
 
@@ -693,5 +682,3 @@ class TestParseXmltvTimeEdgeCases:
         """Test parsing shorter time formats"""
         result = EpgService._parse_xmltv_time("202401011200")
         assert result is None or isinstance(result, object)
-
-

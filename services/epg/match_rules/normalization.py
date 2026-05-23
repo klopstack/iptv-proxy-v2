@@ -26,6 +26,7 @@ class NormalizationMixin:
             .all()
         )
         return {row[0].upper() for row in tag_rows}
+
     # US State name to abbreviation mapping
     US_STATE_NAMES = {
         "ALABAMA": "AL",
@@ -136,6 +137,7 @@ class NormalizationMixin:
         "VI",
         "GU",
     }
+
     @staticmethod
     def _extract_callsign(channel_id: str) -> Optional[str]:
         """Extract callsign from EPG channel ID"""

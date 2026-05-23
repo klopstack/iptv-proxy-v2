@@ -4,6 +4,7 @@ import pytest
 from models import Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
 from services.epg import EpgService
 
+
 class TestGetEpgCoverageStats:
     """Tests for EpgService.get_epg_coverage_stats"""
 
@@ -66,5 +67,3 @@ class TestGetEpgCoverageStats:
 # ============================================================================
 # Channel Matching Tests
 # ============================================================================
-
-

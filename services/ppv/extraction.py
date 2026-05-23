@@ -582,4 +582,3 @@ class PPVEventExtractor:
             "dec": 12,
         }
         return months.get(month_str.lower(), 1)
-

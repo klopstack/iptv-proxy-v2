@@ -5,6 +5,7 @@ from typing import Optional
 
 from models._base import db
 
+
 class ChannelHealthCheck(db.Model):  # type: ignore[name-defined]
     """
     Individual health check results for channels.
@@ -288,5 +289,3 @@ class ChannelHealthConfig(db.Model):  # type: ignore[name-defined]
 
     def __repr__(self):
         return f"<ChannelHealthConfig {self.key}={self.value}>"
-
-

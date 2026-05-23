@@ -7,11 +7,7 @@ import re
 from typing import Optional
 
 from models import Channel
-from services.ppv.constants import (
-    GENERIC_CHANNEL_PATTERNS,
-    PPV_CATEGORY_PATTERNS,
-    PPV_PLACEHOLDER_PATTERNS,
-)
+from services.ppv.constants import GENERIC_CHANNEL_PATTERNS, PPV_CATEGORY_PATTERNS, PPV_PLACEHOLDER_PATTERNS
 
 logger = logging.getLogger(__name__)
 

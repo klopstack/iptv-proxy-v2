@@ -17,8 +17,8 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from models import Channel, ChannelEpgMapping, ChannelTag, EpgChannel, Tag, db
 from services.epg.constants import MAJOR_BROADCAST_NETWORKS, NETWORK_FALLBACK_EPG_IDS, STRIP_WORDS
-from services.epg.utils import extract_callsign_from_xmltv_id, normalize_channel_name
 from services.epg.match_rules import EpgMatchRulesService
+from services.epg.utils import extract_callsign_from_xmltv_id, normalize_channel_name
 
 logger = logging.getLogger(__name__)
 

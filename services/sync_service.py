@@ -84,12 +84,13 @@ def sync_lock(account_id: int):
     )
     db.session.commit()
 
-    if result.rowcount == 0:
+    if (getattr(result, "rowcount", 0) or 0) == 0:
         account = db.session.get(Account, account_id)
         raise ValueError(f"Sync already in progress for account {account.name if account else account_id}")
 
     account = db.session.get(Account, account_id)
-    logger.info(f"Acquired sync lock for account {account.name} (ID: {account_id})")
+    account_name = account.name if account else str(account_id)
+    logger.info(f"Acquired sync lock for account {account_name} (ID: {account_id})")
 
     try:
         yield account
@@ -247,7 +248,7 @@ class ChannelSyncService:
             )
         )
         db.session.commit()
-        deleted = result.rowcount or 0
+        deleted = getattr(result, "rowcount", 0) or 0
         if deleted:
             logger.info(
                 "Pruned %s channel_tag row(s) for inactive streams on account %s",

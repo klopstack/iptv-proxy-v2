@@ -40,7 +40,8 @@ TEST_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 # Import app and models AFTER setting environment
 import app as app_module
-from models import Account, Category, Channel, db as _db
+from models import Account, Category, Channel
+from models import db as _db
 
 
 @pytest.fixture(scope="function")

@@ -3,7 +3,6 @@
 Prefer: from services.epg.match_rules import EpgMatchRulesService
 """
 from models import EpgMatchRule  # noqa: F401 — exposed by legacy monolith via models import
-
 from services.epg.match_rules import (
     CachedChannelNameMapping,
     CachedChannelPattern,

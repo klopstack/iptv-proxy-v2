@@ -37,10 +37,7 @@ def migrated_db():
 class TestSchemaParity:
     def test_critical_tables_exist(self, migrated_db):
         conn = sqlite3.connect(migrated_db)
-        tables = {
-            row[0]
-            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-        }
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
         for name in (
             "accounts",
             "channels",

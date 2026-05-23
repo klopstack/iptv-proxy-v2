@@ -7,6 +7,7 @@ from sqlalchemy import event
 
 from models._base import db
 
+
 class Account(db.Model):  # type: ignore[name-defined]
     """IPTV service account - can have multiple credentials for stream multiplexing"""
 
@@ -206,5 +207,3 @@ class XtreamCredential(db.Model):  # type: ignore[name-defined]
     def __repr__(self):
         source = f"account={self.account_id}" if self.account_id else f"config={self.playlist_config_id}"
         return f"<XtreamCredential {self.username} ({source})>"
-
-
