@@ -62,7 +62,7 @@ These items close gaps where **behavioral parity exists** (TODO 08 tests) but **
 | 18 | [18-config-epg-collapse-duplicates.md](./18-config-epg-collapse-duplicates.md) | ⬜ | Add `?collapse_duplicates=true` to config EPG (parity with config M3U) |
 | 19 | [19-extract-m3u-generation-helper.md](./19-extract-m3u-generation-helper.md) | ✅ | Shared M3U EXTINF/URL formatting for account vs config routes |
 | 20 | [20-align-admin-visible-channel-semantics.md](./20-align-admin-visible-channel-semantics.md) | ✅ | Align or document filter-only counts in stats/categories/EPG admin APIs |
-| 21 | [21-remove-dead-channel-selection-code.md](./21-remove-dead-channel-selection-code.md) | ⬜ | Remove `_matches_tag_filter`, orphan tests, sync stale todo statuses |
+| 21 | [21-remove-dead-channel-selection-code.md](./21-remove-dead-channel-selection-code.md) | ✅ | Remove `_matches_tag_filter`, orphan tests, sync stale todo statuses |
 
 ---
 

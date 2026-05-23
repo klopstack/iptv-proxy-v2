@@ -202,30 +202,6 @@ def preview_playlist_config(config_id):
     )
 
 
-def _matches_tag_filter(channel_tags, include_tags, exclude_tags, match_mode):
-    """Check if channel tags match the filter criteria"""
-    # Convert to uppercase for case-insensitive matching
-    channel_tags = {t.upper() for t in channel_tags}
-    include_tags = [t.upper() for t in include_tags]
-    exclude_tags = [t.upper() for t in exclude_tags]
-
-    # Exclude tags take precedence
-    if exclude_tags and any(tag in channel_tags for tag in exclude_tags):
-        return False
-
-    # Include tags
-    if include_tags:
-        if match_mode == "all":
-            # Must have ALL include tags
-            return all(tag in channel_tags for tag in include_tags)
-        else:  # "any"
-            # Must have AT LEAST ONE include tag
-            return any(tag in channel_tags for tag in include_tags)
-
-    # No include tags specified = include all (that aren't excluded)
-    return True
-
-
 # ============================================================================
 # Playlist Generation Routes
 # ============================================================================

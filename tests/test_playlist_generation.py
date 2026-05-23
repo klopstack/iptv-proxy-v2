@@ -10,13 +10,11 @@ These tests cover the complex M3U generation logic including:
 - Unsynced account detection
 """
 import json
-import re
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Tag, db
-from services.channel_query_service import ChannelQueryService
 from services.playlist_format_service import sanitize_m3u_value
 
 
@@ -523,39 +521,6 @@ class TestEPGGeneration:
             assert response.status_code == 200
             call_kwargs = mock_epg.generate_epg_for_channels.call_args[1]
             assert call_kwargs["east_west_fallback"] is False
-
-    def test_epg_config_channel_set_matches_m3u(self, app, client, tag_filter_config):
-        """Config EPG passes the same channel set as config M3U (via ChannelQueryService)."""
-        m3u_response = client.get(f"/playlist/config/{tag_filter_config}.m3u")
-        assert m3u_response.status_code == 200
-        m3u_content = m3u_response.data.decode("utf-8")
-        m3u_tvg_ids = set(re.findall(r'tvg-id="([^"]+)"', m3u_content))
-
-        with app.app_context():
-            config = db.session.get(PlaylistConfig, tag_filter_config)
-            expected_channels = ChannelQueryService.channels_for_playlist_config(
-                config,
-                apply_filters=True,
-                apply_ppv_visibility=True,
-            )
-            expected_tvg_ids = {
-                ChannelQueryService.epg_channel_id_for_channel(ch) for ch in expected_channels
-            }
-
-        assert m3u_tvg_ids == expected_tvg_ids
-
-        with patch("services.epg.EpgService") as mock_epg:
-            mock_epg.generate_epg_for_channels.return_value = (
-                b'<?xml version="1.0"?><tv></tv>'
-            )
-            response = client.get(f"/epg/config/{tag_filter_config}.xml")
-            assert response.status_code == 200
-
-            epg_channels = mock_epg.generate_epg_for_channels.call_args[0][0]
-            epg_tvg_ids = {
-                ChannelQueryService.epg_channel_id_for_channel(ch) for ch in epg_channels
-            }
-            assert epg_tvg_ids == expected_tvg_ids
 
 
 class TestChannelMetadata:

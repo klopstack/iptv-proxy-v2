@@ -1,7 +1,7 @@
 # TODO 21: Remove Dead Channel Selection Code and Orphan Tests
 
 **Priority:** P3  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Small (cleanup + test migration)
 
 ---
@@ -84,10 +84,10 @@ Mark TODO 01 ✅ in index and document body with completion date and note that T
 
 ## Acceptance criteria
 
-- [ ] `_matches_tag_filter` removed; no references remain
-- [ ] Tag filter behavior still covered by `test_channel_query_service.py` and/or parity tests
-- [ ] No reduction in meaningful test coverage (coverage audit in TODO 13 may follow)
-- [ ] TODO 01 marked complete in index
+- [x] `_matches_tag_filter` removed; no references remain
+- [x] Tag filter behavior still covered by `test_channel_query_service.py` and/or parity tests
+- [x] No reduction in meaningful test coverage (coverage audit in TODO 13 may follow)
+- [x] TODO 01 marked complete in index
 
 ---
 
@@ -103,6 +103,6 @@ venv/bin/pytest tests/test_channel_query_service.py tests/test_channel_output_pa
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Removed dead `_matches_tag_filter`; migrated tag-filter edge cases to CQS unit tests; deduplicated config EPG/M3U parity test in favor of `test_channel_output_parity.py`. |

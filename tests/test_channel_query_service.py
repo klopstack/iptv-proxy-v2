@@ -38,6 +38,72 @@ def test_apply_tag_filter_exclude_precedence():
     )
 
 
+def test_apply_tag_filter_all_mode():
+    assert (
+        ChannelQueryService.apply_tag_filter(
+            {"US", "HD"},
+            include_tags=["US", "HD", "4K"],
+            exclude_tags=[],
+            match_mode="all",
+        )
+        is False
+    )
+    assert (
+        ChannelQueryService.apply_tag_filter(
+            {"US", "HD", "4K"},
+            include_tags=["US", "HD", "4K"],
+            exclude_tags=[],
+            match_mode="all",
+        )
+        is True
+    )
+
+
+def test_apply_tag_filter_any_mode():
+    assert (
+        ChannelQueryService.apply_tag_filter(
+            {"US", "HD"},
+            include_tags=["UK", "CA"],
+            exclude_tags=[],
+            match_mode="any",
+        )
+        is False
+    )
+    assert (
+        ChannelQueryService.apply_tag_filter(
+            {"US", "HD"},
+            include_tags=["US", "UK"],
+            exclude_tags=[],
+            match_mode="any",
+        )
+        is True
+    )
+
+
+def test_apply_tag_filter_no_include_includes_all():
+    assert (
+        ChannelQueryService.apply_tag_filter(
+            {"US", "HD"},
+            include_tags=[],
+            exclude_tags=[],
+            match_mode="any",
+        )
+        is True
+    )
+
+
+def test_apply_tag_filter_case_insensitive():
+    assert (
+        ChannelQueryService.apply_tag_filter(
+            {"us", "hd"},
+            include_tags=["US", "HD"],
+            exclude_tags=[],
+            match_mode="all",
+        )
+        is True
+    )
+
+
 def test_channels_for_account_consistency(app):
     """Single-account query returns active filtered channels."""
     with app.app_context():
