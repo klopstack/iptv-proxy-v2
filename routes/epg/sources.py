@@ -9,16 +9,10 @@ from error_handling import handle_errors
 from models import Account, ChannelEpgMapping, EpgChannel, EpgSource, db
 from services.epg import EpgService
 
-# Import common helper functions
-from .common import sync_sd_channels_to_epg as _sync_sd_channels_to_epg
-
 logger = logging.getLogger(__name__)
 
 # Create blueprint
 epg_sources_bp = Blueprint("epg_sources", __name__, url_prefix="/api/epg")
-
-# Export helper function for tests (for backward compatibility)
-__all__ = ["epg_sources_bp", "_sync_sd_channels_to_epg"]
 
 
 # ============================================================================

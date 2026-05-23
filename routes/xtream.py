@@ -10,12 +10,11 @@ from functools import wraps
 from flask import Blueprint, jsonify, redirect, request
 
 from error_handling import handle_errors, handle_xml_errors
-from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Settings, Tag, XtreamCredential, db
+from models import Account, PlaylistConfig, XtreamCredential, db
 from services.channel_query_service import ChannelQueryService
 from services.epg.ppv import is_ppv_category
-from services.filter_service import FilterService
 from services.image_cache_service import ImageCacheService
-from services.ppv.visibility import PPVVisibilityService
+from services.url_service import get_proxy_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -69,13 +68,6 @@ def require_xtream_auth(f):
         return f(xtream_cred, account, playlist_config, *args, **kwargs)
 
     return decorated_function
-
-
-def get_proxy_base_url():
-    """Get the proxy base URL, using custom proxy hostname if configured."""
-    from services.url_service import get_proxy_base_url as _base
-
-    return _base()
 
 
 # ============================================================================
@@ -390,7 +382,6 @@ def get_simple_data_table(xtream_cred, account, playlist_config):
 
 def get_channels_for_credential(xtream_cred, account, playlist_config):
     """Get filtered channels for a credential via ChannelQueryService."""
-    from services.channel_query_service import ChannelQueryService
 
     def _collapse(channels, account_id=None):
         if account_id is not None:
@@ -403,13 +394,6 @@ def get_channels_for_credential(xtream_cred, account, playlist_config):
         playlist_config,
         collapse_duplicates_fn=_collapse if xtream_cred.collapse_duplicates else None,
     )
-
-
-def get_channels_for_playlist_config(playlist_config):
-    """Get channels for a playlist configuration."""
-    from services.channel_query_service import ChannelQueryService
-
-    return ChannelQueryService.channels_for_playlist_config(playlist_config)
 
 
 def collapse_duplicate_channels(channels, account_id):

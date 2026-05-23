@@ -13,7 +13,7 @@ from services.cache_service import CacheService
 from services.connection_manager import ConnectionManager
 from services.channel_query_service import ChannelQueryService
 from services.filter_service import FilterService
-from services.iptv_service import IPTVService
+from services.iptv_service import IPTVService, get_iptv_service_for_account
 from services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
@@ -36,15 +36,6 @@ def credential_to_dict(cred):
         "exp_date": cred.exp_date,
         "enabled": cred.enabled,
     }
-
-
-def get_iptv_service_for_account(account):
-    """Create an IPTVService instance for an account using the best available credential."""
-    cred = account.get_primary_credential()
-    if cred:
-        return IPTVService(account.server, cred.username, cred.password, account.user_agent or "okhttp/3.14.9")
-    # Fallback for legacy accounts
-    return IPTVService(account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9")
 
 
 # ============================================================================

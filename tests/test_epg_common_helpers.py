@@ -7,7 +7,8 @@ from unittest.mock import Mock, patch
 import pytest
 
 from models import EpgChannel, EpgSource, SdLineup, SdStation, db
-from routes.epg.common import sync_sd_channels_to_epg, sync_sd_lineup_impl
+from routes.epg.common import sync_sd_lineup_impl
+from services.epg.sources import sync_sd_channels_to_epg
 from services.schedules_direct import SchedulesDirectError
 
 

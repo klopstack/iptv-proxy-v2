@@ -196,7 +196,7 @@ class EpgSyncService:
             return False, "No Schedules Direct lineup selected", {}
 
         try:
-            from routes.epg.sources import _sync_sd_channels_to_epg  # type: ignore[attr-defined]
+            from services.epg.sources import sync_sd_channels_to_epg
 
             # Initialize SD client and authenticate
             sd_client = SchedulesDirectClient(source.sd_username, source.sd_password)
@@ -209,7 +209,7 @@ class EpgSyncService:
                 return False, "No channels found in lineup", {}
 
             # Sync channels to EpgChannel records
-            stats = _sync_sd_channels_to_epg(source, channels)
+            stats = sync_sd_channels_to_epg(source, channels)
             logger.info(f"Synced SD EPG channels for source {source.id}: {stats}")
 
             # Sync program data from SD to database

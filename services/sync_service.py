@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from models import Account, Category, Channel, ChannelLink, ChannelTag, EventChannelLink, Tag, db
-from services.iptv_service import IPTVService
+from services.iptv_service import get_iptv_service_for_account
 from services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
@@ -59,15 +59,6 @@ def sync_lock(account_id: int):
         except Exception as e:
             logger.error(f"Error releasing sync lock for account {account_id}: {e}")
             db.session.rollback()
-
-
-def get_iptv_service_for_account(account):
-    """Create an IPTVService instance for an account using the best available credential."""
-    cred = account.get_primary_credential()
-    if cred:
-        return IPTVService(account.server, cred.username, cred.password, account.user_agent or "okhttp/3.14.9")
-    # Fallback for legacy accounts
-    return IPTVService(account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9")
 
 
 class ChannelSyncService:

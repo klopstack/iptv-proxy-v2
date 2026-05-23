@@ -770,7 +770,7 @@ class TestXtreamHelpers:
     def test_get_proxy_base_url_default(self, app, client):
         """Test getting proxy base URL without custom hostname"""
         with app.app_context():
-            from routes.xtream import get_proxy_base_url
+            from services.url_service import get_proxy_base_url
 
             with client:
                 client.get("/")  # Establish request context
@@ -781,7 +781,7 @@ class TestXtreamHelpers:
         """Test getting proxy base URL with custom hostname"""
         with app.app_context():
             from models import Settings
-            from routes.xtream import get_proxy_base_url
+            from services.url_service import get_proxy_base_url
 
             # Set custom proxy hostname
             Settings.set("proxy_hostname", "proxy.example.com")

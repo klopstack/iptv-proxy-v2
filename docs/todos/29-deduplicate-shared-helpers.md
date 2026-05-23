@@ -1,7 +1,7 @@
 # TODO 29: Deduplicate Shared Route and Service Helpers
 
 **Priority:** P2  
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Estimated scope:** Small–medium
 
 ---
@@ -102,10 +102,10 @@ Move exported helper from `routes/epg/sources.py` to `services/epg/sources.py` o
 
 ## Acceptance criteria
 
-- [ ] Exactly one definition of `get_iptv_service_for_account` in codebase
-- [ ] `rg "def get_iptv_service_for_account"` returns one hit
-- [ ] Xtream routes import FilterService/PPVVisibilityService only if justified in comment
-- [ ] Full test suite passes
+- [x] Exactly one definition of `get_iptv_service_for_account` in codebase
+- [x] `rg "def get_iptv_service_for_account"` returns one hit
+- [x] Xtream routes import FilterService/PPVVisibilityService only if justified in comment
+- [x] Full test suite passes
 
 ---
 
@@ -122,6 +122,6 @@ rg "def get_iptv_service_for_account"
 
 | Field | Value |
 |-------|-------|
-| Completed | — |
+| Completed | 2026-05-22 |
 | PR/Commit | — |
-| Notes | — |
+| Notes | Centralized `get_iptv_service_for_account` in `services/iptv_service.py`; removed unused FilterService/PPVVisibilityService imports and dead wrappers from `routes/xtream.py`; dropped proxy URL wrappers in xtream/playlists; moved `sync_sd_channels_to_epg` to `services/epg/sources.py`. |

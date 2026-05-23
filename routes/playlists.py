@@ -13,7 +13,7 @@ from schemas import PlaylistConfigCreateSchema, validate_request_data
 from services.channel_query_service import ChannelQueryService
 from services.image_cache_service import ImageCacheService
 from services.playlist_format_service import render_account_m3u_playlist, render_config_m3u_playlist
-from services.url_service import get_proxy_base_url as _proxy_base_url
+from services.url_service import get_proxy_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +29,6 @@ def slugify(text):
     text = re.sub(r"[\s_]+", "-", text)  # Replace spaces/underscores with hyphens
     text = re.sub(r"-+", "-", text)  # Collapse multiple hyphens
     return text.strip("-")
-
-
-def get_proxy_base_url():
-    """Get the proxy base URL, using custom proxy hostname if configured."""
-    return _proxy_base_url()
 
 
 def _ensure_accounts_synced(accounts):

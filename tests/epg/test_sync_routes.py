@@ -121,7 +121,7 @@ class TestEpgSourceSync:
         assert "lineup" in response.json["error"].lower()
 
     @patch("services.epg_sync_service.SchedulesDirectClient")
-    @patch("routes.epg.sources._sync_sd_channels_to_epg")
+    @patch("services.epg.sources.sync_sd_channels_to_epg")
     def test_sync_schedules_direct_success(self, mock_sync, mock_sd_client_class, app, client):
         """Test successful Schedules Direct sync"""
         with app.app_context():

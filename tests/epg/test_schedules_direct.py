@@ -5,17 +5,17 @@ import json
 import pytest
 
 from models import EpgChannel, EpgSource, db
-from routes.epg.sources import _sync_sd_channels_to_epg
+from services.epg.sources import sync_sd_channels_to_epg
 
 
 class TestSyncSdChannelsHelper:
-    """Tests for the _sync_sd_channels_to_epg helper function."""
+    """Tests for the sync_sd_channels_to_epg helper function."""
 
     def test_sync_empty_channels(self, app, test_epg_source):
         """Test syncing empty channel list."""
         with app.app_context():
             source = db.session.get(EpgSource, test_epg_source)
-            stats = _sync_sd_channels_to_epg(source, [])
+            stats = sync_sd_channels_to_epg(source, [])
 
             assert stats["channels_added"] == 0
             assert stats["channels_updated"] == 0
@@ -41,7 +41,7 @@ class TestSyncSdChannelsHelper:
                 },
             ]
 
-            stats = _sync_sd_channels_to_epg(source, channels)
+            stats = sync_sd_channels_to_epg(source, channels)
 
             assert stats["channels_added"] == 2
             assert stats["channels_updated"] == 0
@@ -71,7 +71,7 @@ class TestSyncSdChannelsHelper:
                 }
             ]
 
-            stats = _sync_sd_channels_to_epg(source, channels)
+            stats = sync_sd_channels_to_epg(source, channels)
 
             assert stats["channels_added"] == 0
             assert stats["channels_updated"] == 1
@@ -108,7 +108,7 @@ class TestSyncSdChannelsHelper:
                 },
             ]
 
-            stats = _sync_sd_channels_to_epg(source, channels)
+            stats = sync_sd_channels_to_epg(source, channels)
 
             assert stats["channels_added"] == 1
             assert stats["channels_updated"] == 1
@@ -123,7 +123,7 @@ class TestSyncSdChannelsHelper:
                 {"stationID": "67890", "callsign": "TEST"},
             ]
 
-            stats = _sync_sd_channels_to_epg(source, channels)
+            stats = sync_sd_channels_to_epg(source, channels)
             assert stats["channels_added"] == 2
 
             epg_channels = EpgChannel.query.filter_by(source_id=test_epg_source).all()
@@ -144,7 +144,7 @@ class TestSyncSdChannelsHelper:
                 },
             ]
 
-            _sync_sd_channels_to_epg(source, channels)
+            sync_sd_channels_to_epg(source, channels)
 
             epg_ch = EpgChannel.query.filter_by(source_id=test_epg_source).first()
             assert epg_ch.display_names_json is not None
