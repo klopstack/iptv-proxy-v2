@@ -600,9 +600,15 @@ async function loadScanStatus() {
         
         if (data.success) {
             let html = '';
+            const scanningOn = data.scanning_enabled === true;
+            html += `<div class="mb-2">
+                <span class="badge bg-${scanningOn ? 'success' : 'secondary'}">
+                    Background scanning ${scanningOn ? 'ON' : 'OFF'}
+                </span>
+            </div>`;
             
             if (data.accounts) {
-                html = '<div class="small">';
+                html += '<div class="small">';
                 data.accounts.forEach(acc => {
                     const statusClass = acc.available_connections > 0 ? 'success' : 'warning';
                     html += `

@@ -456,15 +456,24 @@ class SyncScheduler:
 
                     # Scan a batch of channels
                     result = ChannelHealthService.scan_channels(account.id, max_channels=5)
+                    scanned = result.get("scanned", 0)
 
-                    if result.get("scanned", 0) > 0:
+                    if scanned > 0:
                         logger.info(
                             f"Health scan for {account.name}: "
-                            f"{result.get('scanned', 0)} scanned, "
+                            f"{scanned} scanned, "
                             f"{result.get('healthy', 0)} healthy, "
                             f"{result.get('failed', 0)} failed, "
                             f"{result.get('skipped', 0)} skipped"
                         )
+                    elif result.get("errors"):
+                        logger.warning(
+                            "Health scan for %s: 0 scanned (%s)",
+                            account.name,
+                            "; ".join(result["errors"][:3]),
+                        )
+                    elif result.get("message"):
+                        logger.debug("Health scan for %s: %s", account.name, result["message"])
 
                 except Exception as e:
                     logger.error(f"Error scanning health for account {account.name}: {e}")

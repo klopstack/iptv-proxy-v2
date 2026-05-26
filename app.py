@@ -137,9 +137,8 @@ _disable_scheduler = (
     os.getenv("DISABLE_SCHEDULER", "false").lower() == "true" or os.getenv("PYTEST_CURRENT_TEST") is not None
 )
 
-# Scheduler will be started lazily on first request in worker 0 only
+# Scheduler will be started lazily on first request when no other worker's heartbeat is active
 _startup_tasks_done = False
-_scheduler_started = False
 
 
 def _run_startup_tasks():
@@ -161,22 +160,19 @@ def _run_startup_tasks():
 
 
 def _ensure_scheduler_started():
-    """Lazy initialization of scheduler - one instance per deployment via heartbeat."""
-    global _scheduler_started
-    if _scheduler_started or _disable_scheduler:
-        return
+    """Start the background scheduler when no other worker's heartbeat is active.
 
-    _scheduler_started = True
+    Re-checked on every request so workers recover after a restart or crash left a
+    stale heartbeat that later expired (previously a one-shot flag could skip forever).
+    """
+    if _disable_scheduler:
+        return
 
     if sync_scheduler.running:
         return
 
     with app.app_context():
         if sync_scheduler._is_scheduler_alive():
-            logger.info(
-                "Sync scheduler already active in another worker (pid=%s skipped)",
-                os.getpid(),
-            )
             return
 
     sync_scheduler.start()
