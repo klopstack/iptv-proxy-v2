@@ -781,6 +781,81 @@ class ChannelHealthService:
         return results
 
     @staticmethod
+    def run_scheduled_scan_pass(max_channels_per_account: int = 5) -> Dict[str, Any]:
+        """
+        Run one background health scan pass for all enabled accounts.
+
+        Used by the sync scheduler and when scanning is re-enabled in the UI.
+        """
+        from models import Account
+        from services.connection_manager import ConnectionManager
+
+        if not ChannelHealthConfig.get_bool("scanning_enabled", False):
+            logger.info("Channel health scan pass skipped (scanning disabled)")
+            return {"success": True, "message": "Scanning disabled", "accounts": []}
+
+        logger.info("Channel health scan pass starting")
+        ConnectionManager.cleanup_stale_connections()
+
+        accounts_summary = []
+        for account in Account.query.filter_by(enabled=True).all():
+            available = ChannelHealthService.get_available_scan_connections(account.id)
+            if available <= 0:
+                logger.info(
+                    "Channel health scan for %s: skipped (no connections available)",
+                    account.name,
+                )
+                accounts_summary.append(
+                    {
+                        "account_id": account.id,
+                        "account_name": account.name,
+                        "scanned": 0,
+                        "message": "No connections available",
+                    }
+                )
+                continue
+
+            result = ChannelHealthService.scan_channels(account.id, max_channels=max_channels_per_account)
+            scanned = result.get("scanned", 0)
+            accounts_summary.append(
+                {
+                    "account_id": account.id,
+                    "account_name": account.name,
+                    "scanned": scanned,
+                    "healthy": result.get("healthy", 0),
+                    "failed": result.get("failed", 0),
+                    "skipped": result.get("skipped", 0),
+                    "message": result.get("message"),
+                    "errors": result.get("errors", [])[:3],
+                }
+            )
+
+            if scanned > 0:
+                logger.info(
+                    "Channel health scan for %s: %s scanned, %s healthy, %s failed, %s skipped",
+                    account.name,
+                    scanned,
+                    result.get("healthy", 0),
+                    result.get("failed", 0),
+                    result.get("skipped", 0),
+                )
+            elif result.get("errors"):
+                logger.warning(
+                    "Channel health scan for %s: 0 scanned (%s)",
+                    account.name,
+                    "; ".join(result["errors"][:3]),
+                )
+            else:
+                logger.info(
+                    "Channel health scan for %s: 0 scanned (%s)",
+                    account.name,
+                    result.get("message", "no details"),
+                )
+
+        logger.info("Channel health scan pass finished")
+        return {"success": True, "accounts": accounts_summary}
+
+    @staticmethod
     def get_health_report(
         account_id: Optional[int] = None,
         status_filter: Optional[str] = None,
@@ -1339,7 +1414,29 @@ class ChannelHealthService:
 
         ChannelHealthConfig.set(key, value)
         logger.info(f"Health config updated: {key}={value}")
+
+        if key == "scanning_enabled" and str(value).lower() in ("true", "1", "yes"):
+            ChannelHealthService._kick_background_scan_pass()
+
         return {"success": True, "key": key, "value": value}
+
+    @staticmethod
+    def _kick_background_scan_pass() -> None:
+        """Run one scan pass in a background thread (e.g. right after enabling scanning)."""
+        import threading
+
+        from flask import current_app
+
+        app = current_app._get_current_object()  # type: ignore[attr-defined]
+
+        def _run() -> None:
+            with app.app_context():
+                try:
+                    ChannelHealthService.run_scheduled_scan_pass()
+                except Exception as exc:
+                    logger.error("Background health scan pass failed: %s", exc)
+
+        threading.Thread(target=_run, daemon=True, name="health-scan-kick").start()
 
     @staticmethod
     def get_scan_status(account_id: Optional[int] = None) -> Dict[str, Any]:

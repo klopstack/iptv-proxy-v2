@@ -153,6 +153,51 @@ class TestEpgSources:
         assert response.status_code == 200
         assert response.json["success"] is True
 
+    def test_delete_sd_epg_source_deletes_lineups_and_stations(self, app, client, test_account):
+        """Schedules Direct source deletion should remove sd_lineups/sd_stations rows."""
+        from models import EpgSource, SdLineup, SdStation, db
+
+        with app.app_context():
+            source = EpgSource(
+                name="SD Source",
+                source_type="schedules_direct",
+                enabled=True,
+                sd_username="u",
+                sd_password="p",
+            )
+            db.session.add(source)
+            db.session.flush()
+
+            lineup = SdLineup(
+                epg_source_id=source.id,
+                lineup_id="USA-TEST-X",
+                name="Test Lineup",
+            )
+            db.session.add(lineup)
+            db.session.flush()
+
+            station = SdStation(
+                lineup_id=lineup.id,
+                station_id="12345",
+                callsign="TEST",
+                name="Test Station",
+            )
+            db.session.add(station)
+            db.session.commit()
+
+            source_id = source.id
+            lineup_id = lineup.id
+            station_id = station.id
+
+        resp = client.delete(f"/api/epg/sources/{source_id}")
+        assert resp.status_code == 200
+        assert resp.json["success"] is True
+
+        with app.app_context():
+            assert db.session.get(EpgSource, source_id) is None
+            assert db.session.get(SdLineup, lineup_id) is None
+            assert db.session.get(SdStation, station_id) is None
+
     def test_get_epg_sources_includes_used_mapping_count(self, app, client, test_account):
         """Test that EPG sources include used_mapping_count"""
         with app.app_context():

@@ -39,6 +39,16 @@ if [ $? -ne 0 ]; then
 fi
 echo ""
 
+# A fresh container cannot still be running the previous process's scheduler.
+echo "Resetting scheduler heartbeat from prior run..."
+python -c '
+from app import app
+from models import SyncMetadata
+from services.scheduler import SYNC_KEY_SCHEDULER_HEARTBEAT
+with app.app_context():
+    SyncMetadata.delete(SYNC_KEY_SCHEDULER_HEARTBEAT)
+'
+
 # Start gunicorn with gevent workers for efficient stream proxying
 # Use gunicorn.conf.py for configuration (ensures only one worker runs scheduler)
 # Gevent allows handling many concurrent I/O-bound connections per worker

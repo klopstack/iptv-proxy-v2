@@ -323,7 +323,11 @@ class SdLineup(db.Model):  # type: ignore[name-defined]
     )
 
     # Relationships
-    source = db.relationship("EpgSource", backref="sd_lineups")
+    source = db.relationship(
+        "EpgSource",
+        backref=db.backref("sd_lineups", cascade="all, delete-orphan", passive_deletes=True),
+        passive_deletes=True,
+    )
 
     __table_args__ = (db.UniqueConstraint("epg_source_id", "lineup_id", name="_source_lineup_uc"),)
 

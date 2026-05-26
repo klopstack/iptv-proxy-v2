@@ -254,34 +254,41 @@ class TestTriggerSync:
 
 
 class TestEnsureSchedulerStarted:
-    """Scheduler startup retries after a stale heartbeat (multi-worker / restart safety)."""
+    """Scheduler startup is attempted on each request until this worker is running."""
 
-    def test_ensure_scheduler_starts_after_stale_heartbeat(self, app, monkeypatch):
+    def test_ensure_scheduler_calls_start_when_not_running(self, app, monkeypatch):
         import app as app_module
 
         monkeypatch.setattr(app_module, "_disable_scheduler", False)
         starts = []
 
-        def fake_start():
-            starts.append(True)
+        monkeypatch.setattr(app_module.sync_scheduler, "running", False)
+        monkeypatch.setattr(app_module.sync_scheduler, "start", lambda: starts.append(True))
 
-        with app.app_context():
-            SyncMetadata.set(SYNC_KEY_SCHEDULER_HEARTBEAT, datetime.now(timezone.utc).isoformat())
+        app_module._ensure_scheduler_started()
+        assert starts == [True]
 
-            monkeypatch.setattr(app_module.sync_scheduler, "running", False)
-            monkeypatch.setattr(app_module.sync_scheduler, "start", fake_start)
-            app_module._ensure_scheduler_started()
-            assert starts == []
+        monkeypatch.setattr(app_module.sync_scheduler, "running", True)
+        app_module._ensure_scheduler_started()
+        assert starts == [True]
 
-            stale = datetime.now(timezone.utc) - timedelta(seconds=SCHEDULER_HEARTBEAT_TIMEOUT_SECONDS + 60)
-            SyncMetadata.set(SYNC_KEY_SCHEDULER_HEARTBEAT, stale.isoformat())
 
-            app_module._ensure_scheduler_started()
-            assert starts == [True]
+class TestSchedulerLock:
+    """Only one process in the container should hold the scheduler lock."""
 
-            monkeypatch.setattr(app_module.sync_scheduler, "running", True)
-            app_module._ensure_scheduler_started()
-            assert starts == [True]
+    def test_second_lock_attempt_fails(self, tmp_path):
+        from services.scheduler_lock import SchedulerLock
+
+        lock_path = tmp_path / "scheduler.lock"
+        first = SchedulerLock(lock_path)
+        second = SchedulerLock(lock_path)
+
+        assert first.try_acquire() is True
+        assert second.try_acquire() is False
+
+        first.release()
+        assert second.try_acquire() is True
+        second.release()
 
 
 class TestSchedulerHeartbeat:

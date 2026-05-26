@@ -611,6 +611,18 @@ class TestChannelHealthService:
             result = ChannelHealthService.update_config("unknown_key_xyz", "value")
             assert result["success"] is False
 
+    def test_enabling_scanning_kicks_background_pass(self, app):
+        """Enabling scanning should trigger an immediate scan pass."""
+        from unittest.mock import patch
+
+        from services.channel_health_service import ChannelHealthService
+
+        with app.app_context():
+            with patch.object(ChannelHealthService, "_kick_background_scan_pass") as kick:
+                result = ChannelHealthService.update_config("scanning_enabled", "true")
+                assert result["success"] is True
+                kick.assert_called_once()
+
     def test_get_scan_status(self, app, health_test_account):
         """Test getting scan status."""
         from services.channel_health_service import ChannelHealthService

@@ -3,6 +3,7 @@ Background scheduler for periodic channel synchronization
 """
 
 import logging
+import os
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -15,6 +16,7 @@ from services.epg.parsing import sync_epg_source
 from services.epg.utils import normalize_xmltv_url
 from services.iptv_service import IPTVService
 from services.sync_service import ChannelSyncService
+from services.scheduler_lock import SchedulerLock
 from services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
@@ -75,6 +77,7 @@ class SyncScheduler:
         self.interval_seconds = interval_hours * 3600
         self.running = False
         self.thread = None
+        self._lock = SchedulerLock()
         # Check every minute for work to do
         self._check_interval = 60
 
@@ -164,7 +167,9 @@ class SyncScheduler:
                 }
 
             return {
-                "running": self._is_scheduler_alive(),
+                "running": self.running or self._is_scheduler_alive(),
+                "local_running": self.running,
+                "lock_held": self._lock.held,
                 # Legacy compatibility
                 "interval_hours": self.interval_hours,
                 "interval_seconds": self.interval_seconds,
@@ -180,25 +185,31 @@ class SyncScheduler:
             }
 
     def start(self):
-        """Start the scheduler"""
+        """Start the scheduler in this worker if the cross-process lock is available."""
         if self.running:
-            logger.warning("Scheduler already running")
+            return
+
+        if not self._lock.try_acquire():
+            logger.debug("Scheduler lock held by another worker (pid=%s)", os.getpid())
             return
 
         self.running = True
-        # Set initial heartbeat
         with self.app.app_context():
             self._update_heartbeat()
-        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread = threading.Thread(target=self._run, daemon=True, name="sync-scheduler")
         self.thread.start()
-        logger.info(f"Sync scheduler started (interval: {self.interval_hours} hours)")
+        logger.info(
+            "Sync scheduler started in worker pid=%s (interval: %s hours)",
+            os.getpid(),
+            self.interval_hours,
+        )
 
     def stop(self):
         """Stop the scheduler"""
         self.running = False
         if self.thread:
             self.thread.join(timeout=5)
-        # Clear heartbeat
+        self._lock.release()
         with self.app.app_context():
             SyncMetadata.delete(SYNC_KEY_SCHEDULER_HEARTBEAT)
         logger.info("Sync scheduler stopped")
@@ -304,6 +315,9 @@ class SyncScheduler:
     def _check_and_sync(self):
         """Check if any syncs are due and run them"""
         with self.app.app_context():
+            # Health scans first so long EPG/account sync jobs cannot starve them
+            self._scan_channel_health()
+
             # Check if account/channel sync is needed
             if self._needs_sync(SYNC_KEY_LAST_ACCOUNT_SYNC, self._account_interval_hours):
                 logger.info(f"Account sync due (interval: {self._account_interval_hours} hours)")
@@ -361,8 +375,6 @@ class SyncScheduler:
                 self._set_last_sync_time(SYNC_KEY_LAST_HEALTH_CHECK_CLEANUP)
                 self._touch_heartbeat()
 
-            # Run channel health scanning (runs continuously when idle)
-            self._scan_channel_health()
             self._touch_heartbeat()
 
     def _sync_accounts(self):
@@ -420,66 +432,13 @@ class SyncScheduler:
             logger.error(f"Error processing tags for account {account.name}: {e}")
 
     def _scan_channel_health(self):
-        """
-        Scan channel health for all enabled accounts.
-
-        This runs continuously when idle, checking channels for:
-        - Connection failures
-        - Black screens
-        - Invalid streams
-
-        Respects connection limits and reserves connections for client requests.
-        """
+        """Run one channel health scan pass for all enabled accounts."""
         try:
-            from models import ChannelHealthConfig
             from services.channel_health_service import ChannelHealthService
-            from services.connection_manager import ConnectionManager
 
-            # Check if scanning is enabled
-            if not ChannelHealthConfig.get_bool("scanning_enabled", False):
-                return
-
-            # Clean up stale connections before scanning
-            # This prevents stuck health check sessions from blocking new scans
-            ConnectionManager.cleanup_stale_connections()
-
-            # Get all enabled accounts
-            accounts = Account.query.filter_by(enabled=True).all()
-
-            for account in accounts:
-                try:
-                    # Check available connections
-                    available = ChannelHealthService.get_available_scan_connections(account.id)
-                    if available <= 0:
-                        logger.debug(f"No connections available for health scanning account {account.name}")
-                        continue
-
-                    # Scan a batch of channels
-                    result = ChannelHealthService.scan_channels(account.id, max_channels=5)
-                    scanned = result.get("scanned", 0)
-
-                    if scanned > 0:
-                        logger.info(
-                            f"Health scan for {account.name}: "
-                            f"{scanned} scanned, "
-                            f"{result.get('healthy', 0)} healthy, "
-                            f"{result.get('failed', 0)} failed, "
-                            f"{result.get('skipped', 0)} skipped"
-                        )
-                    elif result.get("errors"):
-                        logger.warning(
-                            "Health scan for %s: 0 scanned (%s)",
-                            account.name,
-                            "; ".join(result["errors"][:3]),
-                        )
-                    elif result.get("message"):
-                        logger.debug("Health scan for %s: %s", account.name, result["message"])
-
-                except Exception as e:
-                    logger.error(f"Error scanning health for account {account.name}: {e}")
-
+            ChannelHealthService.run_scheduled_scan_pass()
         except Exception as e:
-            logger.error(f"Error in channel health scanning: {e}")
+            logger.error("Error in channel health scanning: %s", e)
 
     def _sync_fcc_data(self):
         """Sync FCC facility data (runs weekly)"""

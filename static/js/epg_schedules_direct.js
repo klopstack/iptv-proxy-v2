@@ -269,7 +269,8 @@ async function syncSdLineup(lineupId) {
         
         if (response.ok) {
             loadSdLineups();
-            alert(`✓ Synced ${result.channels_synced || 0} channels`);
+            const msg = result.message || `Synced ${(result.channels_synced || 0) + (result.channels_updated || 0)} channels`;
+            alert(`✓ ${msg}`);
         } else {
             alert('Error: ' + (result.error || 'Sync failed'));
         }

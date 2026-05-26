@@ -160,27 +160,14 @@ def _run_startup_tasks():
 
 
 def _ensure_scheduler_started():
-    """Start the background scheduler when no other worker's heartbeat is active.
-
-    Re-checked on every request so workers recover after a restart or crash left a
-    stale heartbeat that later expired (previously a one-shot flag could skip forever).
-    """
+    """Start the background scheduler in one gunicorn worker (file lock)."""
     if _disable_scheduler:
         return
 
     if sync_scheduler.running:
         return
 
-    with app.app_context():
-        if sync_scheduler._is_scheduler_alive():
-            return
-
     sync_scheduler.start()
-    logger.info(
-        "Sync scheduler started in worker pid=%s (interval: %s hours)",
-        os.getpid(),
-        sync_interval,
-    )
 
 
 # Register a before_request handler to ensure scheduler starts
