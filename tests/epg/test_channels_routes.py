@@ -90,41 +90,7 @@ class TestEpgChannels:
 class TestAccountEpgSource:
     """Tests for account EPG source endpoints"""
 
-    def test_create_account_epg_source_not_found(self, app, client):
-        """Test creating EPG source for non-existent account"""
-        response = client.post("/api/accounts/999/epg-source")
-        assert response.status_code == 404
-
-    @patch("routes.epg.channels.create_provider_epg_source")
-    def test_create_account_epg_source_success(self, mock_create, app, client, test_account):
-        """Test successful account EPG source creation"""
-        mock_source = MagicMock()
-        mock_source.id = 1
-        mock_create.return_value = mock_source
-
+    def test_create_account_epg_source_removed(self, app, client, test_account):
+        """Provider EPG source helper endpoint is removed (UI-only cleanup)."""
         response = client.post(f"/api/accounts/{test_account}/epg-source")
-        assert response.status_code == 200
-        assert response.json["success"] is True
-        assert response.json["source_id"] == 1
-
-    @patch("services.epg_sync_orchestrator.EpgSyncOrchestrator")
-    @patch("routes.epg.channels.create_provider_epg_source")
-    def test_create_account_epg_source_with_sync(self, mock_create, mock_orchestrator_cls, app, client, test_account):
-        """Test creating account EPG source with immediate sync via orchestrator"""
-        mock_source = MagicMock()
-        mock_source.id = 1
-        mock_create.return_value = mock_source
-
-        mock_orchestrator = MagicMock()
-        mock_orchestrator.sync_source_by_id.return_value = {
-            "success": True,
-            "message": "Synced 15 channels",
-            "stats": {"channels_added": 10, "channels_updated": 5},
-        }
-        mock_orchestrator_cls.return_value = mock_orchestrator
-
-        response = client.post(f"/api/accounts/{test_account}/epg-source?sync=true")
-        assert response.status_code == 200
-        assert response.json["success"] is True
-        assert "synced" in response.json["message"].lower()
-        mock_orchestrator.sync_source_by_id.assert_called_once_with(1, force=False)
+        assert response.status_code == 404

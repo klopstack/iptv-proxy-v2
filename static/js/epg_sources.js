@@ -448,15 +448,33 @@ async function loadSdLineupsInline(sourceId) {
             return;
         }
 
-        let html = '<p class="small text-muted mb-2 px-3">Lineup sync updates channels for this lineup only; it does not show on the source progress bar above.</p>';
+        let statuses = {};
+        try {
+            const statusResp = await fetch(`/api/epg/sd/lineups/status?source_id=${sourceId}`);
+            const statusJson = await statusResp.json();
+            if (statusResp.ok && statusJson && Array.isArray(statusJson.statuses)) {
+                for (const st of statusJson.statuses) statuses[st.lineup_id] = st;
+            }
+        } catch (_) {}
+
+        let html = '<p class="small text-muted mb-2 px-3">Lineup sync shows per-lineup progress below. Source-level sync progress is separate.</p>';
         html += '<div class="list-group list-group-flush">';
         for (const lineup of lineups) {
+            const st = statuses[lineup.id];
+            const badge = st?.sync_in_progress
+                ? '<span class="badge bg-primary ms-2">Syncing</span>'
+                : st?.last_sync_status === 'error'
+                    ? '<span class="badge bg-danger ms-2">Error</span>'
+                    : st?.last_sync_status === 'success'
+                        ? '<span class="badge bg-success ms-2">OK</span>'
+                        : '';
+            const detail = st?.progress?.message ? `<br><small class="text-muted">${escapeHtml(st.progress.message)}</small>` : '';
             html += `
                 <div class="list-group-item px-3 py-2 d-flex justify-content-between align-items-center">
                     <div>
-                        <strong>${lineup.name || lineup.lineup_id}</strong>
+                        <strong>${lineup.name || lineup.lineup_id}</strong>${badge}
                         ${lineup.location ? '<br><small class="text-muted">' + lineup.location + '</small>' : ''}
-                        <br><small class="text-muted">${lineup.channel_count || 0} channels</small>
+                        <br><small class="text-muted">${lineup.channel_count || 0} channels</small>${detail}
                         ${lineup.last_sync ? '<small class="text-muted"> | Last sync: ' + formatLocalDateTime(lineup.last_sync) + '</small>' : ''}
                     </div>
                     <div class="btn-group btn-group-sm">

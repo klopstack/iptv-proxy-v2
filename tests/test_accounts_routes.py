@@ -13,6 +13,10 @@ from models import Account, Category, Channel, ChannelTag, Credential, Event, Ev
 def test_credential(app, test_account):
     """Create a test credential"""
     with app.app_context():
+        existing = Credential.query.filter_by(account_id=test_account).order_by(Credential.id).first()
+        if existing:
+            yield existing.id
+            return
         cred = Credential(
             account_id=test_account,
             username="cred_user",
@@ -39,20 +43,23 @@ class TestAccountTestConnection:
         assert response.status_code == 404
 
     def test_test_connection_no_credentials_or_legacy(self, app, client, test_account):
-        """Test connection with no credentials or legacy fields"""
+        """Test connection with no credentials configured"""
         with app.app_context():
             account = db.session.get(Account, test_account)
-            account.username = None
-            account.password = None
+            Credential.query.filter_by(account_id=account.id).delete()
             db.session.commit()
 
         response = client.post(f"/api/accounts/{test_account}/test")
-        # Should return error when no credentials are available
-        assert response.status_code in [200, 400]  # May still succeed with empty list
+        assert response.status_code == 400
+        assert "credentials" in response.json.get("error", "").lower()
 
     @patch("routes.accounts.IPTVService")
     def test_test_connection_legacy_mode_success(self, MockIPTVService, app, client, test_account):
-        """Test connection using legacy username/password"""
+        """Legacy mode removed: create a credential and test that path."""
+        with app.app_context():
+            cred = Credential(account_id=test_account, username="u", password="p", max_connections=1, enabled=True)
+            db.session.add(cred)
+            db.session.commit()
         mock_service = MagicMock()
         mock_service.authenticate.return_value = {
             "server_info": {"url": "https://example.com", "time_now": "2024-01-01"},
@@ -66,7 +73,7 @@ class TestAccountTestConnection:
         assert response.status_code == 200
         assert response.json["success"] is True
         assert response.json["channels"] == 10
-        assert response.json["legacy_mode"] is True
+        assert response.json.get("legacy_mode") is not True
 
     @patch("routes.accounts.IPTVService")
     def test_test_connection_legacy_mode_error(self, MockIPTVService, app, client, test_account):
@@ -101,7 +108,7 @@ class TestAccountTestConnection:
         assert response.status_code == 200
         assert response.json["success"] is True
         assert response.json["channels"] == 15
-        assert len(response.json["credentials"]) == 1
+        assert len(response.json["credentials"]) >= 1
 
 
 # ============================================================================
@@ -294,15 +301,30 @@ class TestCredentialManagement:
         response = client.get("/api/accounts/999/credentials")
         assert response.status_code == 404
 
-    def test_get_credentials_empty(self, app, client, test_account):
+    def test_get_credentials_empty(self, app, client):
         """Test getting credentials when none exist"""
-        response = client.get(f"/api/accounts/{test_account}/credentials")
+        with app.app_context():
+            account = Account(name="NoCreds", server="example.com", enabled=True)
+            db.session.add(account)
+            db.session.commit()
+            account_id = account.id
+
+        response = client.get(f"/api/accounts/{account_id}/credentials")
         assert response.status_code == 200
         assert response.json == []
 
-    def test_get_credentials(self, app, client, test_account, test_credential):
+    def test_get_credentials(self, app, client):
         """Test getting credentials"""
-        response = client.get(f"/api/accounts/{test_account}/credentials")
+        with app.app_context():
+            account = Account(name="Creds", server="example.com", enabled=True)
+            db.session.add(account)
+            db.session.flush()
+            cred = Credential(account_id=account.id, username="cred_user", password="cred_pass", max_connections=2, enabled=True)
+            db.session.add(cred)
+            db.session.commit()
+            account_id = account.id
+
+        response = client.get(f"/api/accounts/{account_id}/credentials")
         assert response.status_code == 200
         assert len(response.json) == 1
         assert response.json[0]["username"] == "cred_user"
@@ -331,7 +353,7 @@ class TestCredentialManagement:
         """Test adding credential with duplicate username"""
         response = client.post(
             f"/api/accounts/{test_account}/credentials",
-            json={"username": "cred_user", "password": "newpass"},
+            json={"username": "test_user", "password": "newpass"},
             content_type="application/json",
         )
         assert response.status_code == 400

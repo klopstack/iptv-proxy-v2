@@ -14,11 +14,11 @@ logger = logging.getLogger(__name__)
 
 
 def get_iptv_service_for_account(account: "Account") -> "IPTVService":
-    """Build IPTVService from account credentials (multi-cred or legacy)."""
+    """Build IPTVService from account credentials."""
     cred = account.get_primary_credential()
-    if cred:
-        return IPTVService(account.server, cred.username, cred.password, account.user_agent or "okhttp/3.14.9")
-    return IPTVService(account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9")
+    if not cred:
+        raise ValueError(f"Account {account.id} has no credentials configured")
+    return IPTVService(account.server, cred.username, cred.password, account.user_agent or "okhttp/3.14.9")
 
 
 class IPTVService:

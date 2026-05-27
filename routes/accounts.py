@@ -69,11 +69,7 @@ def get_accounts():
             "total_max_connections": a.get_total_max_connections(),
             "channel_count": channel_count_map.get(a.id, 0),
         }
-        # Include legacy username for backward compatibility
-        if a.credentials:
-            account_data["username"] = a.credentials[0].username
-        else:
-            account_data["username"] = a.username
+        account_data["username"] = a.credentials[0].username if a.credentials else None
         result.append(account_data)
     return jsonify(result)
 
@@ -87,9 +83,6 @@ def create_account():
     account = Account(
         name=data["name"],
         server=data["server"],
-        # Store in legacy fields for backward compatibility
-        username=data["username"],
-        password=data["password"],
         user_agent=data.get(
             "user_agent",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -117,7 +110,7 @@ def create_account():
                 "id": account.id,
                 "name": account.name,
                 "server": account.server,
-                "username": account.username,
+                "username": credential.username,
                 "user_agent": account.user_agent,
                 "enabled": account.enabled,
                 "credentials": [credential_to_dict(credential)],
@@ -137,9 +130,13 @@ def update_account(account_id):
 
     account.name = data.get("name", account.name)
     account.server = data.get("server", account.server)
-    account.username = data.get("username", account.username)
-    if "password" in data:
-        account.password = data["password"]
+    # Account username/password live on credentials; update the primary credential if requested.
+    if account.credentials and ("username" in data or "password" in data):
+        cred = account.credentials[0]
+        if "username" in data:
+            cred.username = data["username"]
+        if "password" in data:
+            cred.password = data["password"]
     if "user_agent" in data:
         account.user_agent = data["user_agent"]
     account.enabled = data.get("enabled", account.enabled)
@@ -152,7 +149,7 @@ def update_account(account_id):
             "id": account.id,
             "name": account.name,
             "server": account.server,
-            "username": account.username,
+            "username": account.credentials[0].username if account.credentials else None,
             "user_agent": account.user_agent,
             "enabled": account.enabled,
         }
@@ -221,38 +218,8 @@ def test_account(account_id):
     # Get credentials to test
     credentials = account.credentials if account.credentials else []
 
-    # If no credentials, test using legacy fields
-    if not credentials and account.username and account.password:
-        try:
-            service = IPTVService(
-                account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9"
-            )
-            auth_info = service.authenticate()
-            streams = service.get_live_streams()
-            categories = service.get_live_categories()
-
-            return jsonify(
-                {
-                    "success": True,
-                    "channels": len(streams),
-                    "categories": len(categories),
-                    "server_info": {
-                        "url": auth_info.get("server_info", {}).get("url", ""),
-                        "time": auth_info.get("server_info", {}).get("time_now", ""),
-                    },
-                    "user_info": {
-                        "username": auth_info.get("user_info", {}).get("username", ""),
-                        "status": auth_info.get("user_info", {}).get("status", ""),
-                        "exp_date": auth_info.get("user_info", {}).get("exp_date", ""),
-                        "max_connections": auth_info.get("user_info", {}).get("max_connections", "1"),
-                    },
-                    "credentials": [],
-                    "legacy_mode": True,
-                }
-            )
-        except Exception as e:
-            logger.error(f"Error testing account {account_id}: {e}")
-            return jsonify({"success": False, "error": str(e)}), 400
+    if not credentials:
+        return jsonify({"success": False, "error": "No credentials configured"}), 400
 
     # Test each credential
     credential_results = []

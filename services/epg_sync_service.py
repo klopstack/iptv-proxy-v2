@@ -115,55 +115,6 @@ class EpgSyncService:
         return message
 
     @staticmethod
-    def sync_provider_source(source: EpgSource, progress: ProgressCallback = None) -> Tuple[bool, str, Dict]:
-        """
-        Sync EPG from an IPTV provider account.
-
-        Args:
-            source: EpgSource with type='provider'
-
-        Returns:
-            Tuple of (success, message, stats)
-        """
-        if not source.account:
-            return False, "Provider source has no associated account", {}
-
-        try:
-            if progress:
-                progress(PHASE_FETCHING, message="Fetching XMLTV from provider")
-
-            account = source.account
-            cred = account.get_primary_credential()
-
-            if cred:
-                service = IPTVService(
-                    account.server, cred.username, cred.password, account.user_agent or "okhttp/3.14.9"
-                )
-            else:
-                service = IPTVService(
-                    account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9"
-                )
-
-            xml_content = service.get_xmltv()
-            logger.info(f"Fetched {len(xml_content)} bytes of XMLTV from provider for source {source.id}")
-
-            if progress:
-                progress(PHASE_CHANNELS, message="Parsing channels")
-
-            stats = sync_epg_source(source, xml_content)
-            logger.info(f"Synced EPG channels for source {source.id}: {stats}")
-
-            save_to_cache(source.id, xml_content)
-            message = EpgSyncService._sync_programs_with_progress(
-                source, xml_content, stats, progress, programmes_total_estimate=stats.get("programs")
-            )
-            return (True, message, stats)
-
-        except Exception as e:
-            logger.error(f"Error syncing provider EPG source {source.id}: {e}", exc_info=True)
-            return False, str(e), {}
-
-    @staticmethod
     def sync_xmltv_url_source(source: EpgSource, progress: ProgressCallback = None) -> Tuple[bool, str, Dict]:
         """
         Sync EPG from an XMLTV URL.
@@ -224,8 +175,9 @@ class EpgSyncService:
         if not source.sd_username or not source.sd_password:
             return False, "Schedules Direct credentials not configured", {}
 
-        if not source.sd_lineup:
-            return False, "No Schedules Direct lineup selected", {}
+        lineups = list(getattr(source, "sd_lineups", []) or [])
+        if not lineups:
+            return False, "No Schedules Direct lineups configured", {}
 
         try:
             if progress:
@@ -237,20 +189,31 @@ class EpgSyncService:
             sd_client = SchedulesDirectClient(source.sd_username, source.sd_password)
             sd_client.authenticate()
 
-            # Get channels from the configured lineup
-            channels = sd_client.get_lineup_channels(source.sd_lineup)
+            stats = {"channels_added": 0, "channels_updated": 0}
+            lineups_total = len(lineups)
+            lineups_completed = 0
 
-            if not channels:
-                return False, "No channels found in lineup", {}
+            for lineup in lineups:
+                if progress:
+                    progress(
+                        PHASE_CHANNELS,
+                        message=f"Syncing lineup {lineup.name or lineup.lineup_id} ({lineups_completed + 1}/{lineups_total})",
+                        lineups_total=lineups_total,
+                        lineups_completed=lineups_completed,
+                        current_lineup_id=lineup.id,
+                    )
 
-            if progress:
-                progress(PHASE_CHANNELS, message="Syncing Schedules Direct channels")
+                channels = sd_client.get_lineup_channels(lineup.lineup_id)
+                if not channels:
+                    continue
 
-            stats = sync_sd_channels_to_epg(source, channels)
-            logger.info(f"Synced SD EPG channels for source {source.id}: {stats}")
+                lineup_stats = sync_sd_channels_to_epg(source, channels)
+                stats["channels_added"] += lineup_stats.get("channels_added", 0)
+                stats["channels_updated"] += lineup_stats.get("channels_updated", 0)
+                lineups_completed += 1
 
             channels_synced = stats["channels_added"] + stats["channels_updated"]
-            message = f"Synced {channels_synced} channels from Schedules Direct"
+            message = f"Synced {channels_synced} channels from Schedules Direct ({lineups_completed}/{lineups_total} lineups)"
             try:
                 from services.epg.sd_programs import sync_sd_programs_for_source
 
@@ -261,14 +224,22 @@ class EpgSyncService:
                 if progress:
                     progress(PHASE_PROGRAMS, message="Syncing Schedules Direct programmes")
 
-                program_stats = sync_sd_programs_for_source(
-                    source,
-                    sd_client,
-                    days_ahead=14,
-                    fetch_program_details=True,
-                    use_md5_cache=True,
-                    progress_callback=program_progress,
-                )
+                program_stats = {"programs_added": 0, "programs_updated": 0, "channels_processed": 0}
+                for lineup in lineups:
+                    setattr(source, "sd_lineup_db_id", lineup.id)
+                    ps = sync_sd_programs_for_source(
+                        source,
+                        sd_client,
+                        days_ahead=14,
+                        fetch_program_details=True,
+                        use_md5_cache=True,
+                        progress_callback=program_progress,
+                    )
+                    program_stats["programs_added"] += ps.get("programs_added", 0)
+                    program_stats["programs_updated"] += ps.get("programs_updated", 0)
+                    program_stats["channels_processed"] += ps.get("channels_processed", 0)
+                if hasattr(source, "sd_lineup_db_id"):
+                    delattr(source, "sd_lineup_db_id")
                 logger.info(
                     "Synced SD programs for source %s: added=%s, updated=%s, channels=%s",
                     source.id,
@@ -429,9 +400,7 @@ class EpgSyncService:
         Returns:
             Tuple of (success, message, stats)
         """
-        if source.source_type == "provider":
-            return EpgSyncService.sync_provider_source(source, progress=progress)
-        elif source.source_type == "xmltv_url":
+        if source.source_type == "xmltv_url":
             return EpgSyncService.sync_xmltv_url_source(source, progress=progress)
         elif source.source_type == "schedules_direct":
             return EpgSyncService.sync_schedules_direct_source(source, progress=progress)

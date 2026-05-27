@@ -113,12 +113,10 @@ def render_account_m3u_playlist(
     else:
         cred = primary_cred
         server = account.server
-        if cred:
-            username = cred.username
-            password = cred.password
-        else:
-            username = account.username
-            password = account.password
+        if not cred:
+            raise ValueError(f"Account {account.id} has no credentials configured")
+        username = cred.username
+        password = cred.password
 
     m3u_lines = ["#EXTM3U"]
     for channel in channels:

@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from models import Account, EpgChannel, EpgProgram, EpgSource
+from models import Account, EpgChannel, EpgProgram, EpgSource, SdLineup, SdStation
 from services.epg.sd_programs import (
     convert_sd_program_to_epg_data,
     get_sd_station_ids_for_source,
@@ -43,9 +43,15 @@ def sample_sd_source(db, sample_account):
         source_type="schedules_direct",
         sd_username="sd_user",
         sd_password="sd_pass",
-        sd_lineup="USA-TEST-X",
     )
     db.session.add(source)
+    db.session.commit()
+    lineup = SdLineup(epg_source_id=source.id, lineup_id="USA-TEST-X", name="Test Lineup")
+    db.session.add(lineup)
+    db.session.commit()
+    station1 = SdStation(lineup_id=lineup.id, station_id="12345", callsign="ESPN", name="ESPN HD")
+    station2 = SdStation(lineup_id=lineup.id, station_id="67890", callsign="FOXNEWS", name="Fox News")
+    db.session.add_all([station1, station2])
     db.session.commit()
     return source
 

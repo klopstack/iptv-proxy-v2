@@ -369,14 +369,14 @@ class ChannelQueryService:
     def _account_data_for_playlist(account_by_id: dict, channel: Channel) -> Dict[str, Any]:
         account = account_by_id[channel.account_id]
         primary_cred = account.get_primary_credential()
+        if not primary_cred:
+            raise ValueError(f"Account {account.id} has no credentials configured")
         return {
             "id": account.id,
             "name": account.name,
             "server": account.server,
-            "username": account.username,
-            "password": account.password,
-            "primary_username": primary_cred.username if primary_cred else account.username,
-            "primary_password": primary_cred.password if primary_cred else account.password,
+            "primary_username": primary_cred.username,
+            "primary_password": primary_cred.password,
         }
 
     @staticmethod

@@ -41,7 +41,7 @@ TEST_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 # Import app and models AFTER setting environment
 import app as app_module
-from models import Account, Category, Channel
+from models import Account, Category, Channel, Credential
 from models import db as _db
 
 
@@ -98,12 +98,13 @@ def test_account(app):
     with app.app_context():
         account = Account(
             name="Test Account",
-            username="test_user",
-            password="test_pass",
             server="example.com",
             enabled=True,
         )
         _db.session.add(account)
+        _db.session.flush()
+        cred = Credential(account_id=account.id, username="test_user", password="test_pass", max_connections=1, enabled=True)
+        _db.session.add(cred)
         _db.session.commit()
         yield account.id
 

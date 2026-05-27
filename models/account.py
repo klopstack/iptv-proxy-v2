@@ -16,9 +16,6 @@ class Account(db.Model):  # type: ignore[name-defined]
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     server = db.Column(db.String(255), nullable=False)
-    # Legacy fields - kept for backward compatibility during migration
-    username = db.Column(db.String(100), nullable=True)
-    password = db.Column(db.String(100), nullable=True)
     user_agent = db.Column(
         db.String(255),
         default="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -49,24 +46,23 @@ class Account(db.Model):  # type: ignore[name-defined]
         "Credential", backref="account", lazy=True, cascade="all, delete-orphan", order_by="Credential.id"
     )
 
+    def __init__(self, **kwargs):
+        # Allow legacy constructor args from old tests/callers; store as a Credential.
+        username = kwargs.pop("username", None)
+        password = kwargs.pop("password", None)
+        super().__init__(**kwargs)
+        if username and password and not getattr(self, "credentials", None):
+            self.credentials.append(
+                Credential(username=username, password=password, max_connections=1, enabled=True)  # type: ignore[name-defined]
+            )
+
     def get_primary_credential(self):
         """Get the first credential for API calls (channels are same across all credentials)."""
-        if self.credentials:
-            return self.credentials[0]
-        # Fallback to legacy fields for backward compatibility
-        if self.username and self.password:
-            return type(
-                "LegacyCredential",
-                (),
-                {"username": self.username, "password": self.password, "max_connections": 1, "id": None},
-            )()
-        return None
+        return self.credentials[0] if self.credentials else None
 
     def get_total_max_connections(self):
         """Get total available connections across all credentials."""
-        if self.credentials:
-            return sum(c.max_connections or 1 for c in self.credentials)
-        return 1  # Legacy single connection
+        return sum(c.max_connections or 1 for c in self.credentials) if self.credentials else 0
 
     def __repr__(self):
         return f"<Account {self.name}>"

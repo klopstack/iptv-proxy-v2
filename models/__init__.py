@@ -16,7 +16,16 @@ from models.channel import (
     Tag,
     TagRule,
 )
-from models.epg import CachedImage, ChannelEpgMapping, EpgChannel, EpgProgram, EpgSource, SdLineup, SdStation
+from models.epg import (
+    CachedImage,
+    ChannelEpgMapping,
+    EpgChannel,
+    EpgProgram,
+    EpgSource,
+    SdLineup,
+    SdLineupSyncStatus,
+    SdStation,
+)
 from models.epg_match import (
     AccountEpgMatchRuleSet,
     EpgChannelNameMapping,
@@ -66,6 +75,7 @@ __all__ = [
     "EpgProgram",
     "ChannelEpgMapping",
     "SdLineup",
+    "SdLineupSyncStatus",
     "SdStation",
     "CachedImage",
     "EpgMatchRuleSet",

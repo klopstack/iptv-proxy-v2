@@ -2,17 +2,17 @@
 
 import pytest
 
-from models import Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
+from models import Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, SdLineup, db
 
 
 @pytest.fixture
 def test_epg_source(app, test_account):
-    """Create a provider-type EPG source."""
+    """Create a baseline XMLTV URL EPG source."""
     with app.app_context():
         source = EpgSource(
             name="Test EPG Source",
-            source_type="provider",
-            account_id=test_account,
+            source_type="xmltv_url",
+            url="http://example.com/epg.xml",
             priority=100,
             enabled=True,
         )
@@ -46,11 +46,13 @@ def test_sd_source(app):
             source_type="schedules_direct",
             sd_username="test_user",
             sd_password="test_pass",
-            sd_lineup="USA-NY12345-X",
             priority=100,
             enabled=True,
         )
         db.session.add(source)
+        db.session.commit()
+        lineup = SdLineup(epg_source_id=source.id, lineup_id="USA-NY12345-X", name="Test Lineup")
+        db.session.add(lineup)
         db.session.commit()
         yield source.id
 

@@ -251,30 +251,7 @@ def _fetch_epg_from_external_source(source: EpgSource, account: Optional[Account
     )
 
     try:
-        if source.source_type == "provider" or source.source_type == "upstream":
-            # Fetch from IPTV provider
-            if not account:
-                logger.warning(f"Cannot fetch provider EPG without account for source {source.name}")
-                return None
-
-            cred = account.get_primary_credential()
-            if cred:
-                service = IPTVService(
-                    account.server,
-                    cred.username,
-                    cred.password,
-                    account.user_agent or "okhttp/3.14.9",
-                )
-            else:
-                service = IPTVService(
-                    account.server,
-                    account.username,
-                    account.password,
-                    account.user_agent or "okhttp/3.14.9",
-                )
-            return service.get_xmltv()
-
-        elif source.source_type == "schedules_direct":
+        if source.source_type == "schedules_direct":
             # SD EPG should be fetched during sync, not on-demand
             logger.warning(f"Schedules Direct EPG not cached for source {source.name} - run EPG sync")
             return None

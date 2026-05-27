@@ -14,7 +14,7 @@ Submodules:
     - constants: EPG-related constants (PPV patterns, broadcast networks)
     - utils: Utility functions (XMLTV parsing helpers, normalization)
     - parsing: XMLTV parsing and EPG source syncing
-    - matching: Channel-to-EPG matching algorithms
+    - match_rules: Rule-based channel-to-EPG matching
     - generation: EPG XML generation for channels
     - ppv: PPV channel detection and EPG generation
     - coverage: EPG coverage statistics
@@ -25,7 +25,7 @@ Submodules:
 Usage:
     # Import specific modules
     from services.epg.generation import generate_epg_for_channels
-    from services.epg.matching import EpgMatcher
+    from services.epg.match_rules import EpgMatchRulesService
     from services.epg.parsing import parse_xmltv
     from services.epg.fcc import preview_fcc_epg_matches
     from services.epg.ppv import is_ppv_channel
@@ -35,11 +35,9 @@ Usage:
     # Import constants
     from services.epg.constants import PPV_CATEGORY_PATTERNS
 
-    # Legacy facade class (prefer submodule imports for new code)
-    from services.epg import EpgService
 """
 # Import submodules for direct access
-from services.epg import cache, constants, coverage, fcc, generation, matching, parsing, ppv, programs, utils
+from services.epg import cache, constants, coverage, fcc, generation, parsing, ppv, programs, utils
 
 # Re-export commonly used constants for convenience
 from services.epg.constants import (
@@ -51,22 +49,17 @@ from services.epg.constants import (
     STRIP_WORDS,
     WEST_TAGS,
 )
-from services.epg.facade import EpgService
-
 __all__ = [
     # Submodules
     "cache",
     "constants",
     "utils",
     "parsing",
-    "matching",
     "generation",
     "ppv",
     "coverage",
     "fcc",
     "programs",
-    # Legacy facade class
-    "EpgService",
     # Constants (re-exported for convenience)
     "MAJOR_BROADCAST_NETWORKS",
     "NETWORK_FALLBACK_EPG_IDS",

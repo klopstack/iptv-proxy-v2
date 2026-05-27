@@ -15,8 +15,6 @@ def legacy_account(app):
     with app.app_context():
         account = Account(
             name="Test Account",
-            username="legacy_user",
-            password="legacy_pass",
             server="example.com",
             enabled=True,
         )
@@ -54,8 +52,6 @@ def test_disabled_account(app):
     with app.app_context():
         account = Account(
             name="Disabled Account",
-            username="disabled_user",
-            password="disabled_pass",
             server="example.com",
             enabled=False,
         )
@@ -85,16 +81,14 @@ class TestGetAvailableCredential:
             assert result is None
 
     def test_get_credential_legacy_mode(self, app, legacy_account):
-        """Test returns legacy credential when no credentials configured"""
+        """No legacy mode: returns None when no credentials configured"""
         with app.app_context():
             # Delete any credentials that might have been created
             Credential.query.filter_by(account_id=legacy_account).delete()
             db.session.commit()
 
             result = ConnectionManager.get_available_credential(legacy_account)
-            assert result is not None
-            assert result.username == "legacy_user"
-            assert result.password == "legacy_pass"
+            assert result is None
 
     def test_get_credential_selects_least_loaded(self, app, legacy_account_with_credentials):
         """Test selects credential with lowest utilization"""
@@ -150,14 +144,6 @@ class TestGetAvailableCredential:
 
 class TestAcquireConnection:
     """Tests for ConnectionManager.acquire_connection"""
-
-    def test_acquire_legacy_mode(self, app):
-        """Test acquire in legacy mode returns token"""
-        with app.app_context():
-            token, error = ConnectionManager.acquire_connection(None, "stream1", "127.0.0.1")
-            assert token is not None
-            assert len(token) == 64  # 32 bytes hex
-            assert error == ""
 
     def test_acquire_credential_not_found(self, app):
         """Test returns error for non-existent credential"""

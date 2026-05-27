@@ -303,18 +303,6 @@ def generate_playlist(account_id):
     return Response(body, mimetype="application/x-mpegurl")
 
 
-# Keep old ID-based route for backward compatibility (redirects to slug when available)
-@playlists_bp.route("/playlist/config/<int:config_id>.m3u")
-@handle_errors(return_json=False, default_message="Error generating playlist from config")
-def generate_playlist_from_config_by_id(config_id):
-    """Generate M3U playlist from config by ID (deprecated — prefer slug URL)."""
-    config = PlaylistConfig.query.get_or_404(config_id)
-    response = _generate_playlist_from_config(config)
-    if config.slug:
-        response.headers["Deprecation"] = "Use /playlist/config/<slug>.m3u instead of numeric config IDs"
-    return response
-
-
 @playlists_bp.route("/playlist/config/<slug>.m3u")
 @handle_errors(return_json=False, default_message="Error generating playlist from config")
 def generate_playlist_from_config_by_name(slug):
@@ -468,17 +456,6 @@ def proxy_epg(account_id):
 # ============================================================================
 # EPG Routes for Playlist Configurations
 # ============================================================================
-
-
-@playlists_bp.route("/epg/config/<int:config_id>.xml")
-@handle_xml_errors(default_message="Error generating EPG from config")
-def generate_epg_from_config(config_id):
-    """Generate XMLTV EPG for playlist configuration by ID (deprecated — prefer slug URL)."""
-    config = PlaylistConfig.query.get_or_404(config_id)
-    response = _generate_epg_from_config(config)
-    if config.slug:
-        response.headers["Deprecation"] = "Use /epg/config/<slug>.xml instead of numeric config IDs"
-    return response
 
 
 @playlists_bp.route("/epg/config/<slug>.xml")

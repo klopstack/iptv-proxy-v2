@@ -9,7 +9,6 @@ from error_handling import handle_errors
 from models import Account, Channel, ChannelEpgMapping, EpgChannel, EpgSource, Event, EventChannelLink, db
 from services.channel_query_service import ChannelQueryService
 from services.epg.match_rules import EpgMatchRulesService
-from services.epg.matching_legacy import create_provider_epg_source
 from services.epg.parsing import sync_epg_source
 from services.iptv_service import IPTVService
 
@@ -101,26 +100,6 @@ def get_epg_channels():
 # ============================================================================
 
 
-@epg_channels_bp.route("/match/<int:account_id>", methods=["POST"])
-@handle_errors(return_json=True, default_message="Error matching channels to EPG")
-def match_channels_to_epg(account_id):
-    """Run automatic EPG matching for an account's channels
-
-    DEPRECATED: This endpoint now redirects to the rule-based matching system.
-    Use /api/epg/match-with-rules/<account_id> instead.
-
-    Query parameters:
-    - source_id: Optional EPG source to match against
-    - category_id: Optional category to limit matching to
-    - include_filtered: Include filtered out channels (default false)
-    """
-    # Redirect to the rule-based matching endpoint
-    response = make_response(match_channels_to_epg_with_rules(account_id))
-    response.headers["Deprecation"] = "true"
-    response.headers["Link"] = f'</api/epg/match-with-rules/{account_id}>; rel="successor-version"'
-    return response
-
-
 @epg_channels_bp.route("/match-with-rules/<int:account_id>", methods=["POST"])
 @handle_errors(return_json=True, default_message="Error matching channels to EPG with rules")
 def match_channels_to_epg_with_rules(account_id):
@@ -185,7 +164,6 @@ def get_epg_mappings():
     - category_id: Filter by category (internal DB id)
     - epg_source_id: Filter by EPG source (only affects 'mapped' view_mode)
     - view_mode: 'all', 'mapped', or 'unmapped' (default: 'all')
-    - unmapped_only: (deprecated) Show only unmapped channels if true
     - show_filtered: Include channels hidden from playlists (default: false)
     - limit: Max results
     - offset: Pagination offset
@@ -194,9 +172,6 @@ def get_epg_mappings():
     category_id = request.args.get("category_id", type=int)
     epg_source_id = request.args.get("epg_source_id", type=int)
     view_mode = request.args.get("view_mode", "all")
-    # Support legacy unmapped_only parameter
-    if request.args.get("unmapped_only", "false").lower() == "true":
-        view_mode = "unmapped"
     show_filtered = request.args.get("show_filtered", "false").lower() == "true"
     limit = request.args.get("limit", 100, type=int)
     offset = request.args.get("offset", 0, type=int)
@@ -657,75 +632,6 @@ def bulk_delete_epg_mappings():
     db.session.commit()
 
     return jsonify({"success": True, "deleted_count": deleted_count, "message": f"Deleted {deleted_count} mappings"})
-
-
-# ============================================================================
-# API Routes - Provider EPG Source Helper
-# ============================================================================
-
-
-@account_epg_channels_bp.route("/api/accounts/<int:account_id>/epg-source", methods=["POST"])
-@handle_errors(return_json=True, default_message="Error creating provider EPG source")
-def create_account_epg_source(account_id):
-    """Create or get an EPG source for a provider account, then sync it"""
-    Account.query.get_or_404(account_id)
-
-    source = create_provider_epg_source(account_id)
-
-    # Optionally sync immediately via orchestrator (channels, programmes, cache, locks)
-    if request.args.get("sync", "false").lower() == "true":
-        from flask import current_app
-
-        from services.epg_sync_orchestrator import EpgSyncOrchestrator
-
-        force = request.args.get("force", "false").lower() in ("1", "true", "yes")
-        app = current_app._get_current_object()
-        result = EpgSyncOrchestrator(app).sync_source_by_id(source.id, force=force)
-
-        if result.get("skipped"):
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "source_id": source.id,
-                        "error": result.get("message", "Sync already in progress"),
-                    }
-                ),
-                409,
-            )
-
-        if not result.get("success"):
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "source_id": source.id,
-                        "error": result.get("message", "Sync failed"),
-                    }
-                ),
-                400,
-            )
-
-        stats = result.get("stats") or {}
-        channels = stats.get("channels_added", 0) + stats.get("channels_updated", 0)
-
-        return jsonify(
-            {
-                "success": True,
-                "source_id": source.id,
-                "message": result.get("message") or f"EPG source created and synced ({channels} channels)",
-                "stats": stats,
-                "partial": bool(result.get("partial") or stats.get("partial")),
-            }
-        )
-
-    return jsonify(
-        {
-            "success": True,
-            "source_id": source.id,
-            "message": "EPG source created",
-        }
-    )
 
 
 # ============================================================================

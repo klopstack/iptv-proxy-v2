@@ -297,8 +297,7 @@ class TestStreamConnectivityTest:
         """Test connectivity check when no credentials are available"""
         with app.app_context():
             account = db.session.get(Account, test_account)
-            account.username = None
-            account.password = None
+            Credential.query.filter_by(account_id=account.id).delete()
             db.session.commit()
             account_id = account.id
 
@@ -313,12 +312,7 @@ class TestStreamConnectivityTest:
     @patch("services.stream_proxy_service.requests.head")
     def test_test_stream_upstream_success(self, mock_head, app, client, test_account):
         """Test connectivity check succeeds when upstream returns 200"""
-        with app.app_context():
-            account = db.session.get(Account, test_account)
-            account.username = "user"
-            account.password = "pass"
-            db.session.commit()
-            account_id = account.id
+        account_id = test_account
 
         # Mock successful HEAD request
         mock_response = Mock()
@@ -336,12 +330,7 @@ class TestStreamConnectivityTest:
         """Test connectivity check handles connection errors"""
         import requests
 
-        with app.app_context():
-            account = db.session.get(Account, test_account)
-            account.username = "user"
-            account.password = "pass"
-            db.session.commit()
-            account_id = account.id
+        account_id = test_account
 
         # Mock connection error
         mock_head.side_effect = requests.exceptions.ConnectionError("Connection refused")
@@ -354,12 +343,7 @@ class TestStreamConnectivityTest:
     @patch("services.stream_proxy_service.requests.head")
     def test_test_stream_upstream_404(self, mock_head, app, client, test_account):
         """Test connectivity check reports 404 from upstream"""
-        with app.app_context():
-            account = db.session.get(Account, test_account)
-            account.username = "user"
-            account.password = "pass"
-            db.session.commit()
-            account_id = account.id
+        account_id = test_account
 
         # Mock 404 response
         mock_response = Mock()
@@ -375,12 +359,7 @@ class TestStreamConnectivityTest:
     @patch("services.stream_proxy_service.requests.head")
     def test_test_stream_results_structure(self, mock_head, app, client, test_account):
         """Test connectivity check returns proper result structure"""
-        with app.app_context():
-            account = db.session.get(Account, test_account)
-            account.username = "user"
-            account.password = "pass"
-            db.session.commit()
-            account_id = account.id
+        account_id = test_account
 
         mock_response = Mock()
         mock_response.status_code = 200

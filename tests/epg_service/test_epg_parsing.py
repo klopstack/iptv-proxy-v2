@@ -4,7 +4,8 @@ import gzip
 import pytest
 
 from models import EpgChannel, EpgSource, db
-from services.epg import EpgService
+from services.epg.parsing import parse_xmltv, parse_xmltv_streaming, sync_epg_source
+from services.epg.utils import parse_xmltv_time
 from services.epg.utils import (
     decompress_content,
     extract_callsign_from_xmltv_id,
@@ -162,7 +163,7 @@ class TestDecompressContent:
 
 
 class TestParseXmltv:
-    """Tests for EpgService.parse_xmltv"""
+    """Tests for parse_xmltv"""
 
     def test_parse_simple_xmltv(self):
         """Test parsing simple XMLTV content"""
@@ -179,7 +180,7 @@ class TestParseXmltv:
         </tv>
         """
 
-        result = EpgService.parse_xmltv(xml_content)
+        result = parse_xmltv(xml_content)
 
         assert "channels" in result
         assert "programs_by_channel" in result
@@ -206,7 +207,7 @@ class TestParseXmltv:
         """
         compressed = gzip.compress(xml_content)
 
-        result = EpgService.parse_xmltv(compressed)
+        result = parse_xmltv(compressed)
         assert len(result["channels"]) == 1
         assert result["channels"][0]["channel_id"] == "GZ.test"
         assert result["channels"][0]["display_name"] == "Gzip Test Channel"
@@ -220,7 +221,7 @@ class TestParseXmltv:
         </tv>
         """
 
-        result = EpgService.parse_xmltv(xml_content)
+        result = parse_xmltv(xml_content)
 
         assert len(result["channels"]) == 1
         assert result["channels"][0]["display_name"] == "TestChannel"
@@ -230,7 +231,7 @@ class TestParseXmltv:
         xml_content = b"<invalid xml"
 
         with pytest.raises(ValueError, match="Invalid XMLTV"):
-            EpgService.parse_xmltv(xml_content)
+            parse_xmltv(xml_content)
 
     def test_parse_empty_channels(self):
         """Test parsing XML with no channels"""
@@ -239,7 +240,7 @@ class TestParseXmltv:
         </tv>
         """
 
-        result = EpgService.parse_xmltv(xml_content)
+        result = parse_xmltv(xml_content)
 
         assert result["channels"] == []
         assert result["programs_by_channel"] == {}
@@ -257,7 +258,7 @@ class TestParseXmltv:
         </tv>
         """
 
-        result = EpgService.parse_xmltv(xml_content)
+        result = parse_xmltv(xml_content)
 
         # Only the channel with ID should be parsed
         assert len(result["channels"]) == 1
@@ -265,7 +266,7 @@ class TestParseXmltv:
 
 
 class TestParseXmltvStreaming:
-    """Tests for EpgService.parse_xmltv_streaming"""
+    """Tests for parse_xmltv_streaming"""
 
     def test_streaming_parse_channels_and_programmes(self):
         """Test streaming parser yields channels and programmes correctly"""
@@ -287,7 +288,7 @@ class TestParseXmltvStreaming:
         </tv>
         """
 
-        elements = list(EpgService.parse_xmltv_streaming(xml_content))
+        elements = list(parse_xmltv_streaming(xml_content))
 
         # Should have 2 channels and 2 programmes
         channels = [e for e in elements if e[0] == "channel"]
@@ -316,7 +317,7 @@ class TestParseXmltvStreaming:
         """
         compressed = gzip.compress(xml_content)
 
-        elements = list(EpgService.parse_xmltv_streaming(compressed))
+        elements = list(parse_xmltv_streaming(compressed))
 
         channels = [e for e in elements if e[0] == "channel"]
         assert len(channels) == 1
@@ -327,7 +328,7 @@ class TestParseXmltvStreaming:
         xml_content = b"<invalid xml"
 
         with pytest.raises(ValueError, match="Invalid XMLTV"):
-            list(EpgService.parse_xmltv_streaming(xml_content))
+            list(parse_xmltv_streaming(xml_content))
 
     def test_streaming_clears_memory(self):
         """Test that streaming parser doesn't accumulate memory"""
@@ -349,7 +350,7 @@ class TestParseXmltvStreaming:
         # Process all elements - this should not accumulate memory
         channel_count = 0
         programme_count = 0
-        for element_type, data in EpgService.parse_xmltv_streaming(xml_content):
+        for element_type, data in parse_xmltv_streaming(xml_content):
             if element_type == "channel":
                 channel_count += 1
             elif element_type == "programme":
@@ -365,7 +366,7 @@ class TestParseXmltvStreaming:
 
 
 class TestSyncEpgSource:
-    """Tests for EpgService.sync_epg_source"""
+    """Tests for sync_epg_source"""
 
     def test_sync_creates_new_channels(self, app, test_epg_source):
         """Test that sync creates new EPG channels"""
@@ -383,7 +384,7 @@ class TestSyncEpgSource:
         with app.app_context():
             # Refresh source from db
             source = db.session.get(EpgSource, test_epg_source.id)
-            stats = EpgService.sync_epg_source(source, xml_content)
+            stats = sync_epg_source(source, xml_content)
 
             assert stats["channels_added"] == 2
             assert stats["channels_updated"] == 0
@@ -416,7 +417,7 @@ class TestSyncEpgSource:
 
         with app.app_context():
             source = db.session.get(EpgSource, test_epg_source.id)
-            stats = EpgService.sync_epg_source(source, xml_content)
+            stats = sync_epg_source(source, xml_content)
 
             assert stats["channels_added"] == 0
             assert stats["channels_updated"] == 1
@@ -444,7 +445,7 @@ class TestSyncEpgSource:
 
         with app.app_context():
             source = db.session.get(EpgSource, test_epg_source.id)
-            stats = EpgService.sync_epg_source(source, xml_content)
+            stats = sync_epg_source(source, xml_content)
 
             assert stats["total_programs"] == 2
 
@@ -463,7 +464,7 @@ class TestSyncEpgSource:
 
         with app.app_context():
             source = db.session.get(EpgSource, test_epg_source.id)
-            EpgService.sync_epg_source(source, xml_content)
+            sync_epg_source(source, xml_content)
 
             source = db.session.get(EpgSource, test_epg_source.id)
             assert source.last_sync is not None
@@ -477,7 +478,7 @@ class TestSyncEpgSource:
         with app.app_context():
             source = db.session.get(EpgSource, test_epg_source.id)
             with pytest.raises(ValueError):
-                EpgService.sync_epg_source(source, xml_content)
+                sync_epg_source(source, xml_content)
 
             # Verify source status was updated to error without advancing last_sync
             source = db.session.get(EpgSource, test_epg_source.id)
@@ -510,7 +511,7 @@ class TestSyncEpgSource:
 
         with app.app_context():
             source = db.session.get(EpgSource, test_epg_source.id)
-            stats = EpgService.sync_epg_source(source, xml_content)
+            stats = sync_epg_source(source, xml_content)
 
             # Should only create 2 unique channels (Cinemax.hu merged, HBO.hu separate)
             assert stats["channels_added"] == 2
@@ -539,11 +540,11 @@ class TestSyncEpgSource:
 
 
 class TestParseXmltvTime:
-    """Tests for EpgService._parse_xmltv_time"""
+    """Tests for parse_xmltv_time"""
 
     def test_full_format(self):
         """Test parsing full XMLTV time format"""
-        result = EpgService._parse_xmltv_time("20251221180000 +0000")
+        result = parse_xmltv_time("20251221180000 +0000")
         assert result is not None
         assert result.year == 2025
         assert result.month == 12
@@ -552,18 +553,18 @@ class TestParseXmltvTime:
 
     def test_short_format(self):
         """Test parsing short XMLTV time format"""
-        result = EpgService._parse_xmltv_time("202512211800")
+        result = parse_xmltv_time("202512211800")
         assert result is not None
         assert result.year == 2025
 
     def test_empty_input(self):
         """Test parsing empty input"""
-        result = EpgService._parse_xmltv_time("")
+        result = parse_xmltv_time("")
         assert result is None
 
     def test_invalid_format(self):
         """Test parsing invalid time format"""
-        result = EpgService._parse_xmltv_time("invalid")
+        result = parse_xmltv_time("invalid")
         assert result is None
 
 
@@ -676,10 +677,10 @@ class TestParseXmltvTimeEdgeCases:
 
     def test_parse_xmltv_time_with_timezone(self):
         """Test parsing time with timezone info"""
-        result = EpgService._parse_xmltv_time("20240101120000 +0100")
+        result = parse_xmltv_time("20240101120000 +0100")
         assert result is None or result is not None
 
     def test_parse_xmltv_time_short_format(self):
         """Test parsing shorter time formats"""
-        result = EpgService._parse_xmltv_time("202401011200")
+        result = parse_xmltv_time("202401011200")
         assert result is None or isinstance(result, object)

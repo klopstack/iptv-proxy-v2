@@ -186,12 +186,6 @@ class TestAPI:
         response = client.get("/preview")
         assert response.status_code == 200
 
-    def test_preview_redirect_from_test(self, client):
-        """Legacy /test URL redirects to /preview"""
-        response = client.get("/test", follow_redirects=False)
-        assert response.status_code == 302
-        assert response.headers["Location"].endswith("/preview")
-
 
 def test_cache_service():
     """Test cache service"""

@@ -5,6 +5,8 @@ import json
 import logging
 from datetime import datetime, timezone
 
+from typing import Any, Callable, Optional
+
 from models import EpgSource, SdLineup, SdStation, db
 from services.schedules_direct import SchedulesDirectClient, SchedulesDirectError
 
@@ -13,8 +15,11 @@ logger = logging.getLogger(__name__)
 __all__ = ["sync_sd_lineup_impl"]
 
 
-def sync_sd_lineup_impl(source: EpgSource, lineup: SdLineup) -> dict:
-    """Implementation of SD lineup sync"""
+ProgressCallback = Optional[Callable[..., None]]
+
+
+def sync_sd_lineup_impl(source: EpgSource, lineup: SdLineup, *, progress_callback: ProgressCallback = None) -> dict:
+    """Implementation of SD lineup sync (station + channel import)."""
     client = SchedulesDirectClient(source.sd_username, source.sd_password)
     client.authenticate()
 
@@ -47,6 +52,9 @@ def sync_sd_lineup_impl(source: EpgSource, lineup: SdLineup) -> dict:
     else:
         logger.info(f"Lineup {lineup.lineup_id} already on SD account, skipping add")
 
+    if progress_callback:
+        progress_callback("fetching", message="Fetching lineup channels", stations_total=None)
+
     # Get channels from SD
     logger.info(f"Fetching channels for lineup {lineup.lineup_id} from Schedules Direct")
     channels = client.get_lineup_channels(lineup.lineup_id)
@@ -54,8 +62,18 @@ def sync_sd_lineup_impl(source: EpgSource, lineup: SdLineup) -> dict:
 
     channels_synced = 0
     channels_updated = 0
+    stations_processed = 0
 
     for ch in channels:
+        stations_processed += 1
+        if progress_callback:
+            progress_callback(
+                "channels",
+                stations_total=len(channels),
+                stations_processed=stations_processed,
+                channels_synced=channels_synced,
+                channels_updated=channels_updated,
+            )
         # Find or create station record
         station = SdStation.query.filter_by(lineup_id=lineup.id, station_id=ch["stationID"]).first()
 

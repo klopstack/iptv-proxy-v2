@@ -277,7 +277,10 @@ class TestMultiAccountPlaylists:
 
     def test_generate_multi_account_playlist(self, app, client, multi_account_config):
         """Test generating playlist from multiple accounts"""
-        response = client.get(f"/playlist/config/{multi_account_config}.m3u")
+        with app.app_context():
+            cfg = db.session.get(PlaylistConfig, multi_account_config)
+            slug = cfg.slug
+        response = client.get(f"/playlist/config/{slug}.m3u")
 
         assert response.status_code == 200
         content = response.data.decode("utf-8")
@@ -290,7 +293,10 @@ class TestMultiAccountPlaylists:
 
     def test_generate_config_playlist_default_proxy(self, app, client, tag_filter_config):
         """Test that config playlists default to proxied stream URLs"""
-        response = client.get(f"/playlist/config/{tag_filter_config}.m3u")
+        with app.app_context():
+            cfg = db.session.get(PlaylistConfig, tag_filter_config)
+            slug = cfg.slug
+        response = client.get(f"/playlist/config/{slug}.m3u")
 
         assert response.status_code == 200
         content = response.data.decode("utf-8")
@@ -300,7 +306,10 @@ class TestMultiAccountPlaylists:
 
     def test_generate_config_playlist_direct_urls(self, app, client, tag_filter_config):
         """Test config playlist generation with direct provider URLs"""
-        response = client.get(f"/playlist/config/{tag_filter_config}.m3u?proxy=false")
+        with app.app_context():
+            cfg = db.session.get(PlaylistConfig, tag_filter_config)
+            slug = cfg.slug
+        response = client.get(f"/playlist/config/{slug}.m3u?proxy=false")
 
         assert response.status_code == 200
         content = response.data.decode("utf-8")
@@ -330,7 +339,10 @@ class TestMultiAccountPlaylists:
                 }
             ]
 
-            response = client.get(f"/playlist/config/{multi_account_config}.m3u?collapse_duplicates=true")
+            with app.app_context():
+                cfg = db.session.get(PlaylistConfig, multi_account_config)
+                slug = cfg.slug
+            response = client.get(f"/playlist/config/{slug}.m3u?collapse_duplicates=true")
 
             assert response.status_code == 200
 
@@ -339,7 +351,10 @@ class TestMultiAccountPlaylists:
 
     def test_multi_account_group_titles(self, app, client, multi_account_config):
         """Test that multi-account playlists include account names in groups"""
-        response = client.get(f"/playlist/config/{multi_account_config}.m3u")
+        with app.app_context():
+            cfg = db.session.get(PlaylistConfig, multi_account_config)
+            slug = cfg.slug
+        response = client.get(f"/playlist/config/{slug}.m3u")
 
         assert response.status_code == 200
         content = response.data.decode("utf-8")
@@ -353,7 +368,10 @@ class TestTagFiltering:
 
     def test_include_tags_any_mode(self, app, client, tag_filter_config):
         """Test filtering with include tags in 'any' mode"""
-        response = client.get(f"/playlist/config/{tag_filter_config}.m3u")
+        with app.app_context():
+            cfg = db.session.get(PlaylistConfig, tag_filter_config)
+            slug = cfg.slug
+        response = client.get(f"/playlist/config/{slug}.m3u")
 
         assert response.status_code == 200
         content = response.data.decode("utf-8")
@@ -365,7 +383,10 @@ class TestTagFiltering:
 
     def test_exclude_tags(self, app, client, exclude_tag_config):
         """Test filtering with exclude tags"""
-        response = client.get(f"/playlist/config/{exclude_tag_config}.m3u")
+        with app.app_context():
+            cfg = db.session.get(PlaylistConfig, exclude_tag_config)
+            slug = cfg.slug
+        response = client.get(f"/playlist/config/{slug}.m3u")
 
         assert response.status_code == 200
         content = response.data.decode("utf-8")
@@ -376,7 +397,10 @@ class TestTagFiltering:
 
     def test_include_tags_all_mode(self, app, client, all_tags_config):
         """Test filtering requiring all include tags"""
-        response = client.get(f"/playlist/config/{all_tags_config}.m3u")
+        with app.app_context():
+            cfg = db.session.get(PlaylistConfig, all_tags_config)
+            slug = cfg.slug
+        response = client.get(f"/playlist/config/{slug}.m3u")
 
         assert response.status_code == 200
         content = response.data.decode("utf-8")
@@ -402,7 +426,10 @@ class TestTagFiltering:
             db.session.commit()
             config_id = config.id
 
-        response = client.get(f"/playlist/config/{config_id}.m3u")
+        with app.app_context():
+            cfg = db.session.get(PlaylistConfig, config_id)
+            slug = cfg.slug
+        response = client.get(f"/playlist/config/{slug}.m3u")
 
         assert response.status_code == 200
         content = response.data.decode("utf-8")
@@ -458,7 +485,10 @@ class TestUnsyncedAccounts:
             db.session.commit()
             config_id = config.id
 
-        response = client.get(f"/playlist/config/{config_id}.m3u")
+        with app.app_context():
+            cfg = db.session.get(PlaylistConfig, config_id)
+            slug = cfg.slug
+        response = client.get(f"/playlist/config/{slug}.m3u")
 
         # Should return error for unsynced account
         assert response.status_code == 503
@@ -482,7 +512,10 @@ class TestEPGGeneration:
         with patch("routes.playlists.generate_epg_for_channels") as mock_generate:
             mock_generate.return_value = b'<?xml version="1.0"?><tv></tv>'
 
-            response = client.get(f"/epg/config/{tag_filter_config}.xml")
+            with app.app_context():
+                cfg = db.session.get(PlaylistConfig, tag_filter_config)
+                slug = cfg.slug
+            response = client.get(f"/epg/config/{slug}.xml")
 
             assert response.status_code == 200
             assert response.mimetype == "application/xml"
@@ -490,7 +523,10 @@ class TestEPGGeneration:
 
     def test_epg_config_empty_channels(self, app, client, exclude_tag_config):
         """Test EPG generation when no channels match"""
-        response = client.get(f"/epg/config/{exclude_tag_config}.xml")
+        with app.app_context():
+            cfg = db.session.get(PlaylistConfig, exclude_tag_config)
+            slug = cfg.slug
+        response = client.get(f"/epg/config/{slug}.xml")
 
         assert response.status_code == 200
         content = response.data.decode("utf-8")
@@ -504,7 +540,10 @@ class TestEPGGeneration:
         with patch("routes.playlists.generate_epg_for_channels") as mock_generate:
             mock_generate.return_value = b'<?xml version="1.0"?><tv></tv>'
 
-            response = client.get(f"/epg/config/{tag_filter_config}.xml?east_west_fallback=true")
+            with app.app_context():
+                cfg = db.session.get(PlaylistConfig, tag_filter_config)
+                slug = cfg.slug
+            response = client.get(f"/epg/config/{slug}.xml?east_west_fallback=true")
 
             assert response.status_code == 200
             call_kwargs = mock_generate.call_args[1]
@@ -515,7 +554,10 @@ class TestEPGGeneration:
         with patch("routes.playlists.generate_epg_for_channels") as mock_generate:
             mock_generate.return_value = b'<?xml version="1.0"?><tv></tv>'
 
-            response = client.get(f"/epg/config/{tag_filter_config}.xml?east_west_fallback=false")
+            with app.app_context():
+                cfg = db.session.get(PlaylistConfig, tag_filter_config)
+                slug = cfg.slug
+            response = client.get(f"/epg/config/{slug}.xml?east_west_fallback=false")
 
             assert response.status_code == 200
             call_kwargs = mock_generate.call_args[1]

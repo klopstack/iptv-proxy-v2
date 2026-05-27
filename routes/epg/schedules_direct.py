@@ -4,6 +4,7 @@ Schedules Direct API integration routes
 import logging
 
 from flask import Blueprint, jsonify, request
+from typing import Any
 
 from error_handling import handle_errors
 from models import Account, EpgSource, SdLineup, SdStation, db
@@ -283,8 +284,46 @@ def sync_sd_lineup(lineup_id):
         return jsonify({"error": "Source does not have SD credentials configured"}), 400
 
     try:
-        result = sync_sd_lineup_impl(source, lineup)
-        total_synced = result["channels_synced"] + result["channels_updated"]
+        from services.epg_sync_orchestrator import try_acquire_epg_sync_lock
+        from services.sd_lineup_sync_progress import (
+            PHASE_CHANNELS,
+            PHASE_COMPLETE,
+            PHASE_ERROR,
+            PHASE_FETCHING,
+            PHASE_QUEUED,
+            SdLineupSyncProgress,
+        )
+
+        force = request.args.get("force", "false").lower() in ("1", "true", "yes")
+        if not try_acquire_epg_sync_lock(source.id, force=force):
+            return jsonify({"error": "Sync already in progress for this source"}), 409
+
+        SdLineupSyncProgress.set_phase(lineup.id, PHASE_QUEUED, message="Waiting to start")
+
+        def on_progress(phase: str, message: str = "", **counts: Any) -> None:
+            mapped = {
+                "fetching": PHASE_FETCHING,
+                "channels": PHASE_CHANNELS,
+            }.get(phase, phase)
+            SdLineupSyncProgress.set_phase(lineup.id, mapped, message=message, **counts)
+
+        try:
+            result = sync_sd_lineup_impl(source, lineup, progress_callback=on_progress)
+            total_synced = result["channels_synced"] + result["channels_updated"]
+            SdLineupSyncProgress.set_phase(
+                lineup.id,
+                PHASE_COMPLETE,
+                message=f"Synced {total_synced} channels ({result['channels_synced']} new, {result['channels_updated']} updated)",
+                **result,
+            )
+        except Exception as exc:
+            SdLineupSyncProgress.set_phase(lineup.id, PHASE_ERROR, message=str(exc))
+            raise
+        finally:
+            # Release source lock (lineup-level sync uses source lock to enforce one-at-a-time).
+            source.sync_in_progress = False
+            db.session.commit()
+
         return jsonify(
             {
                 "success": True,
@@ -294,6 +333,28 @@ def sync_sd_lineup(lineup_id):
         )
     except SchedulesDirectError as e:
         return jsonify({"error": str(e), "code": e.code}), 400
+
+
+@schedules_direct_bp.route("/lineups/<int:lineup_id>/status", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error fetching SD lineup status")
+def get_sd_lineup_status(lineup_id):
+    from services.sd_lineup_sync_progress import SdLineupSyncProgress
+
+    lineup = SdLineup.query.get_or_404(lineup_id)
+    return jsonify({"success": True, "status": SdLineupSyncProgress.snapshot(lineup)})
+
+
+@schedules_direct_bp.route("/lineups/status", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error fetching SD lineup statuses")
+def get_sd_lineup_statuses():
+    from services.sd_lineup_sync_progress import SdLineupSyncProgress
+
+    source_id = request.args.get("source_id", type=int)
+    if not source_id:
+        return jsonify({"error": "source_id is required"}), 400
+
+    lineups = SdLineup.query.filter_by(epg_source_id=source_id).order_by(SdLineup.name, SdLineup.id).all()
+    return jsonify({"success": True, "statuses": [SdLineupSyncProgress.snapshot(l) for l in lineups]})
 
 
 @schedules_direct_bp.route("/lineups/<int:lineup_id>", methods=["DELETE"])

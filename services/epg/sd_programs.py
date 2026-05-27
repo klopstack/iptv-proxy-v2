@@ -16,7 +16,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from models import EpgChannel, EpgProgram, EpgSource, db
+from models import EpgChannel, EpgProgram, SdLineup, SdStation, db
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +60,41 @@ def get_sd_station_ids_for_source(source_id: int) -> Dict[str, int]:
             if channel.channel_id.isdigit():
                 result[channel.channel_id] = channel.id
 
+    return result
+
+
+def get_sd_station_ids_for_lineup(lineup_db_id: int) -> Dict[str, int]:
+    """
+    Get station_id -> epg_channel.id mapping for one SdLineup.
+
+    Uses SdStation.station_id for station ids and matches EpgChannel.channel_id in the same
+    format as get_sd_station_ids_for_source().
+    """
+    result: Dict[str, int] = {}
+    lineup = db.session.get(SdLineup, lineup_db_id)
+    if not lineup:
+        return result
+
+    # Build map from station_id to callsign/name/etc (stations table is the authoritative list).
+    station_ids = [s.station_id for s in SdStation.query.filter_by(lineup_id=lineup_db_id).all() if s.station_id]
+    if not station_ids:
+        return result
+
+    # EpgChannel rows are still keyed by source_id; narrow candidates by prefix and then filter.
+    # (Avoid huge IN queries; channel set is already limited per-source.)
+    channels = EpgChannel.query.filter_by(source_id=lineup.epg_source_id).all()
+    for ch in channels:
+        if not ch.channel_id:
+            continue
+        cid = ch.channel_id
+        if cid.startswith("I") and cid.endswith(".json.schedulesdirect.org"):
+            sid = cid[1:].split(".", 1)[0]
+        elif cid.isdigit():
+            sid = cid
+        else:
+            continue
+        if sid in station_ids:
+            result[sid] = ch.id
     return result
 
 
@@ -255,7 +290,11 @@ def sync_sd_programs_for_source(
     }
 
     # Get station ID -> epg_channel.id mapping
-    station_map = get_sd_station_ids_for_source(source.id)
+    lineup_db_id = getattr(source, "sd_lineup_db_id", None)
+    if lineup_db_id:
+        station_map = get_sd_station_ids_for_lineup(int(lineup_db_id))
+    else:
+        station_map = get_sd_station_ids_for_source(source.id)
     if not station_map:
         logger.warning(f"No SD stations found for source {source.id}")
         return stats

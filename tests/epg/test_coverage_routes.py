@@ -51,12 +51,12 @@ class TestEpgMatching:
 
     def test_match_channels_account_not_found(self, app, client):
         """Test matching channels for non-existent account"""
-        response = client.post("/api/epg/match/999")
+        response = client.post("/api/epg/match-with-rules/999")
         assert response.status_code == 404
 
     @patch("services.epg.match_rules.EpgMatchRulesService.match_channels_with_rules")
     def test_match_channels_success(self, mock_match, app, client, test_account):
-        """Test successful channel matching (redirects to rule-based matching)"""
+        """Test successful channel matching using rule-based matching"""
         mock_match.return_value = {
             "total_channels": 20,
             "skipped_existing": 2,
@@ -65,10 +65,8 @@ class TestEpgMatching:
             "unmatched": 0,
         }
 
-        response = client.post(f"/api/epg/match/{test_account}")
+        response = client.post(f"/api/epg/match-with-rules/{test_account}")
         assert response.status_code == 200
-        assert response.headers.get("Deprecation") == "true"
-        assert "match-with-rules" in response.headers.get("Link", "")
         assert response.json["success"] is True
         assert "18 channels" in response.json["message"]
         assert "skipped 2" in response.json["message"]

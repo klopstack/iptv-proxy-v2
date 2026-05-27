@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from models import Account, Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
+from models import Account, Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, SdLineup, db
 from services.epg_sync_progress import PHASE_COMPLETE, PHASE_FETCHING
 
 
@@ -16,23 +16,6 @@ class TestEpgSourceSync:
         """Test syncing non-existent source"""
         response = client.post("/api/epg/sources/999/sync")
         assert response.status_code == 404
-
-    def test_sync_provider_source_no_account(self, app, client):
-        """Test syncing provider source without account"""
-        with app.app_context():
-            source = EpgSource(
-                name="Provider Source",
-                source_type="provider",
-                account_id=None,
-                enabled=True,
-            )
-            db.session.add(source)
-            db.session.commit()
-            source_id = source.id
-
-        response = client.post(f"/api/epg/sources/{source_id}/sync")
-        assert response.status_code == 400
-        assert "account" in response.json["error"].lower()
 
     def test_sync_xmltv_url_no_url(self, app, client):
         """Test syncing XMLTV URL source without URL"""
@@ -50,16 +33,6 @@ class TestEpgSourceSync:
         response = client.post(f"/api/epg/sources/{source_id}/sync")
         assert response.status_code == 400
         assert "url" in response.json["error"].lower()
-
-    @patch("services.epg_sync_orchestrator.EpgSyncService.sync_source")
-    def test_sync_provider_source_success(self, mock_sync, app, client, test_epg_source, test_account):
-        """Test successful provider source sync via orchestrator"""
-        mock_sync.return_value = (True, "ok", {"channels_added": 10, "channels_updated": 5})
-
-        response = client.post(f"/api/epg/sources/{test_epg_source}/sync")
-        assert response.status_code == 200
-        assert response.json["success"] is True
-        mock_sync.assert_called_once()
 
     @patch("services.epg_sync_orchestrator.EpgSyncService.sync_source")
     def test_sync_xmltv_url_success(self, mock_sync, app, client):
@@ -126,10 +99,12 @@ class TestEpgSourceSync:
                 source_type="schedules_direct",
                 sd_username="testuser",
                 sd_password="testpass",
-                sd_lineup="USA-NY12345-X",
                 enabled=True,
             )
             db.session.add(source)
+            db.session.commit()
+            lineup = SdLineup(epg_source_id=source.id, lineup_id="USA-NY12345-X", name="Test Lineup")
+            db.session.add(lineup)
             db.session.commit()
             source_id = source.id
 
@@ -168,10 +143,12 @@ class TestEpgSourceSync:
                 source_type="schedules_direct",
                 sd_username="testuser",
                 sd_password="testpass",
-                sd_lineup="USA-NY12345-X",
                 enabled=True,
             )
             db.session.add(source)
+            db.session.commit()
+            lineup = SdLineup(epg_source_id=source.id, lineup_id="USA-NY12345-X", name="Test Lineup")
+            db.session.add(lineup)
             db.session.commit()
             source_id = source.id
 

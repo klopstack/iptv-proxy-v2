@@ -14,9 +14,6 @@ logger = logging.getLogger(__name__)
 # Create blueprint
 epg_sources_bp = Blueprint("epg_sources", __name__, url_prefix="/api/epg")
 
-PROVIDER_SOURCE_TYPE = "provider"
-
-
 def _serialize_epg_source(source, *, mapping_count=0):
     """Serialize an EpgSource for JSON responses."""
     return {
@@ -38,7 +35,6 @@ def _serialize_epg_source(source, *, mapping_count=0):
         "xmltv_days": source.xmltv_days,
         "xmltv_offset": source.xmltv_offset,
         "xmltv_extra_args": source.xmltv_extra_args,
-        "deprecated": source.source_type == PROVIDER_SOURCE_TYPE,
     }
 
 
@@ -76,15 +72,9 @@ def create_epg_source():
     if not data.get("source_type"):
         return jsonify({"error": "Source type is required"}), 400
 
-    valid_types = ["provider", "schedules_direct", "xmltv_url", "xmltv_grabber"]
+    valid_types = ["schedules_direct", "xmltv_url", "xmltv_grabber", "ppv_events"]
     if data["source_type"] not in valid_types:
         return jsonify({"error": f"Invalid source type. Must be one of: {valid_types}"}), 400
-
-    # Validate account_id for provider type
-    if data["source_type"] == "provider":
-        if not data.get("account_id"):
-            return jsonify({"error": "Account ID is required for provider sources"}), 400
-        Account.query.get_or_404(data["account_id"])
 
     # Validate xmltv_grabber fields
     if data["source_type"] == "xmltv_grabber":
@@ -98,7 +88,6 @@ def create_epg_source():
         url=data.get("url"),
         sd_username=data.get("sd_username"),
         sd_password=data.get("sd_password"),
-        sd_lineup=data.get("sd_lineup"),
         xmltv_grabber=data.get("xmltv_grabber"),
         xmltv_config_name=data.get("xmltv_config_name"),
         xmltv_days=data.get("xmltv_days", 7),
@@ -117,7 +106,6 @@ def create_epg_source():
                 "id": source.id,
                 "name": source.name,
                 "source_type": source.source_type,
-                "deprecated": source.source_type == PROVIDER_SOURCE_TYPE,
                 "message": "EPG source created successfully",
             }
         ),
@@ -144,8 +132,6 @@ def update_epg_source(source_id):
         source.sd_username = data["sd_username"]
     if "sd_password" in data:
         source.sd_password = data["sd_password"]
-    if "sd_lineup" in data:
-        source.sd_lineup = data["sd_lineup"]
     if "xmltv_grabber" in data:
         source.xmltv_grabber = data["xmltv_grabber"]
     if "xmltv_config_name" in data:

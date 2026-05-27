@@ -393,7 +393,10 @@ class TestPlaylistPreview:
     def test_preview_matches_m3u_channel_list(self, app, client, test_playlist_config, test_channel_with_tag):
         """Test preview channel list matches M3U generation for same config"""
         preview_response = client.get(f"/api/playlist-configs/{test_playlist_config}/preview")
-        m3u_response = client.get(f"/playlist/config/{test_playlist_config}.m3u?proxy_icons=false")
+        with app.app_context():
+            config = db.session.get(PlaylistConfig, test_playlist_config)
+            slug = config.slug
+        m3u_response = client.get(f"/playlist/config/{slug}.m3u?proxy_icons=false")
 
         assert preview_response.status_code == 200
         assert m3u_response.status_code == 200
@@ -491,11 +494,6 @@ class TestM3UGeneration:
 class TestPlaylistConfigM3U:
     """Tests for playlist config M3U generation"""
 
-    def test_generate_playlist_config_not_found(self, app, client):
-        """Test generating M3U for non-existent config"""
-        response = client.get("/playlist/config/99999.m3u")
-        assert response.status_code == 404
-
     def test_generate_playlist_config_by_slug_not_found(self, app, client):
         """Test generating M3U by slug for non-existent config"""
         response = client.get("/playlist/config/nonexistent-config.m3u")
@@ -509,15 +507,19 @@ class TestPlaylistConfigM3U:
             config = db.session.get(PlaylistConfig, test_playlist_config)
             config.enabled = False
             db.session.commit()
+            slug = config.slug
 
-        response = client.get(f"/playlist/config/{test_playlist_config}.m3u")
+        response = client.get(f"/playlist/config/{slug}.m3u")
         assert response.status_code == 403
 
     def test_generate_playlist_config_default_proxy(
         self, app, client, test_playlist_config, test_account, test_channel_with_tag
     ):
         """Test that config M3U defaults to proxied stream URLs"""
-        response = client.get(f"/playlist/config/{test_playlist_config}.m3u?proxy_icons=false")
+        with app.app_context():
+            config = db.session.get(PlaylistConfig, test_playlist_config)
+            slug = config.slug
+        response = client.get(f"/playlist/config/{slug}.m3u?proxy_icons=false")
 
         assert response.status_code == 200
         content = response.data.decode("utf-8")
@@ -532,8 +534,10 @@ class TestPlaylistConfigM3U:
             from models import Account
 
             account = db.session.get(Account, test_account)
+            config = db.session.get(PlaylistConfig, test_playlist_config)
+            slug = config.slug
 
-        response = client.get(f"/playlist/config/{test_playlist_config}.m3u?proxy=false&proxy_icons=false")
+        response = client.get(f"/playlist/config/{slug}.m3u?proxy=false&proxy_icons=false")
 
         assert response.status_code == 200
         content = response.data.decode("utf-8")
@@ -562,11 +566,6 @@ class TestEPGProxy:
 
         response = client.get(f"/epg/{test_account_with_channels}.xml")
         assert response.status_code == 403
-
-    def test_generate_epg_config_not_found(self, app, client):
-        """Test generating EPG for non-existent config"""
-        response = client.get("/epg/config/99999.xml")
-        assert response.status_code == 404
 
     def test_generate_epg_config_by_slug_not_found(self, app, client):
         """Test generating EPG by slug for non-existent config"""

@@ -22,16 +22,7 @@ class TestEpgSources:
         sources = response.json
         assert len(sources) == 1
         assert sources[0]["name"] == "Test EPG Source"
-        assert sources[0]["deprecated"] is True
-
-    def test_get_epg_sources_marks_provider_deprecated(self, app, client, test_epg_source, test_xmltv_url_source):
-        """Provider sources are flagged deprecated; other types are not."""
-        response = client.get("/api/epg/sources")
-        assert response.status_code == 200
-
-        by_id = {s["id"]: s for s in response.json}
-        assert by_id[test_epg_source]["deprecated"] is True
-        assert by_id[test_xmltv_url_source]["deprecated"] is False
+        assert sources[0]["source_type"] == "xmltv_url"
 
     def test_create_epg_source_missing_name(self, app, client):
         """Test creating EPG source without name"""
@@ -55,39 +46,20 @@ class TestEpgSources:
         assert response.status_code == 400
         assert "invalid" in response.json["error"].lower()
 
-    def test_create_epg_source_provider_no_account(self, app, client):
-        """Test creating provider source without account_id"""
-        response = client.post(
-            "/api/epg/sources",
-            json={"name": "Test", "source_type": "provider"},
-            content_type="application/json",
-        )
-        assert response.status_code == 400
-        assert "account" in response.json["error"].lower()
-
-    def test_create_epg_source_provider_invalid_account(self, app, client):
-        """Test creating provider source with non-existent account"""
-        response = client.post(
-            "/api/epg/sources",
-            json={"name": "Test", "source_type": "provider", "account_id": 99999},
-            content_type="application/json",
-        )
-        assert response.status_code == 404
-
     def test_create_epg_source_success(self, app, client, test_account):
         """Test successful EPG source creation"""
         response = client.post(
             "/api/epg/sources",
             json={
                 "name": "New EPG Source",
-                "source_type": "provider",
-                "account_id": test_account,
+                "source_type": "xmltv_url",
+                "url": "http://example.com/epg.xml",
             },
             content_type="application/json",
         )
         assert response.status_code == 201
         assert "id" in response.json
-        assert response.json["deprecated"] is True
+        assert response.json["source_type"] == "xmltv_url"
 
     def test_create_epg_source_xmltv_url(self, app, client):
         """Test creating XMLTV URL source"""
@@ -204,8 +176,8 @@ class TestEpgSources:
             # Create a source
             source = EpgSource(
                 name="Test Source With Mappings",
-                source_type="provider",
-                account_id=test_account,
+                source_type="xmltv_url",
+                url="http://example.com/epg.xml",
                 enabled=True,
             )
             db.session.add(source)

@@ -34,17 +34,6 @@ class TestSyncSourceDispatcher:
 
         assert success is False
 
-    def test_sync_source_dispatches_provider(self):
-        """Sync source dispatches to provider method for provider type"""
-        source = Mock()
-        source.source_type = "provider"
-
-        with patch.object(EpgSyncService, "sync_provider_source", return_value=(True, "OK", {})) as mock_sync:
-            success, message, stats = EpgSyncService.sync_source(source)
-
-            assert success is True
-            mock_sync.assert_called_once_with(source, progress=None)
-
     def test_sync_source_dispatches_xmltv_url(self):
         """Sync source dispatches to xmltv_url method"""
         source = Mock()
@@ -90,106 +79,6 @@ class TestSyncSourceDispatcher:
             mock_sync.assert_called_once_with(source, progress=None)
 
 
-class TestSyncProviderSource:
-    """Test sync_provider_source method"""
-
-    def test_sync_provider_source_no_account(self):
-        """Sync fails if source has no account"""
-        source = Mock()
-        source.account = None
-
-        success, message, stats = EpgSyncService.sync_provider_source(source)
-
-        assert success is False
-        assert "no associated account" in message.lower()
-        assert stats == {}
-
-    @patch("services.epg_sync_service.IPTVService")
-    @patch("services.epg_sync_service.sync_epg_source")
-    @patch("services.epg_sync_service.save_to_cache")
-    def test_sync_provider_source_with_credential(self, mock_cache, mock_sync_epg, mock_iptv_service):
-        """Sync provider with credential object"""
-        # Setup mocks
-        cred = Mock()
-        cred.username = "test_user"
-        cred.password = "test_pass"
-
-        account = Mock()
-        account.server = "http://example.com"
-        account.username = "account_user"
-        account.password = "account_pass"
-        account.user_agent = "test-agent"
-        account.get_primary_credential.return_value = cred
-
-        source = Mock()
-        source.id = 1
-        source.account = account
-
-        iptv_instance = Mock()
-        iptv_instance.get_xmltv.return_value = b"<xml>test</xml>"
-        mock_iptv_service.return_value = iptv_instance
-
-        mock_sync_epg.return_value = {"channels_added": 5, "channels_updated": 3}
-
-        # Execute
-        success, message, stats = EpgSyncService.sync_provider_source(source)
-
-        # Verify
-        assert success is True
-        assert "5" in message or "8" in message  # channels_synced count
-        mock_iptv_service.assert_called_once_with("http://example.com", "test_user", "test_pass", "test-agent")
-        mock_cache.assert_called_once_with(1, b"<xml>test</xml>")
-
-    @patch("services.epg_sync_service.IPTVService")
-    @patch("services.epg_sync_service.sync_epg_source")
-    @patch("services.epg_sync_service.save_to_cache")
-    def test_sync_provider_source_without_credential(self, mock_cache, mock_sync_epg, mock_iptv_service):
-        """Sync provider using account credentials if no credential object"""
-        account = Mock()
-        account.server = "http://example.com"
-        account.username = "account_user"
-        account.password = "account_pass"
-        account.user_agent = None
-        account.get_primary_credential.return_value = None
-
-        source = Mock()
-        source.id = 2
-        source.account = account
-
-        iptv_instance = Mock()
-        iptv_instance.get_xmltv.return_value = b"<xml>test</xml>"
-        mock_iptv_service.return_value = iptv_instance
-
-        mock_sync_epg.return_value = {"channels_added": 10, "channels_updated": 2}
-
-        success, message, stats = EpgSyncService.sync_provider_source(source)
-
-        assert success is True
-        mock_iptv_service.assert_called_once_with("http://example.com", "account_user", "account_pass", "okhttp/3.14.9")
-
-    @patch("services.epg_sync_service.IPTVService")
-    def test_sync_provider_source_exception(self, mock_iptv_service):
-        """Sync provider handles exceptions"""
-        account = Mock()
-        account.server = "http://example.com"
-        account.username = "user"
-        account.password = "pass"
-        account.user_agent = None
-        account.get_primary_credential.return_value = None
-
-        source = Mock()
-        source.id = 3
-        source.account = account
-
-        mock_iptv_service.side_effect = Exception("Network error")
-
-        success, message, stats = EpgSyncService.sync_provider_source(source)
-
-        assert success is False
-        assert "Network error" in message
-        assert stats == {}
-
-
 class TestSyncXmltvUrlSource:
     """Test sync_xmltv_url_source method"""
 
@@ -219,11 +108,11 @@ class TestSyncSchedulesDirectSource:
         assert "credentials" in message.lower()
 
     def test_sync_sd_source_no_lineup(self):
-        """Sync fails if no lineup selected"""
+        """Sync fails if no lineups configured"""
         source = Mock()
         source.sd_username = "user"
         source.sd_password = "pass"
-        source.sd_lineup = None
+        source.sd_lineups = []
 
         success, message, stats = EpgSyncService.sync_schedules_direct_source(source)
 
@@ -239,7 +128,11 @@ class TestSyncSchedulesDirectSource:
         source.id = 1
         source.sd_username = "user"
         source.sd_password = "pass"
-        source.sd_lineup = "USA-12345"
+        lineup = Mock()
+        lineup.id = 10
+        lineup.lineup_id = "USA-12345"
+        lineup.name = "Test"
+        source.sd_lineups = [lineup]
 
         mock_client = Mock()
         mock_sd_client_class.return_value = mock_client
@@ -257,7 +150,11 @@ class TestSyncSchedulesDirectSource:
         source.id = 1
         source.sd_username = "user"
         source.sd_password = "pass"
-        source.sd_lineup = "USA-12345"
+        lineup = Mock()
+        lineup.id = 10
+        lineup.lineup_id = "USA-12345"
+        lineup.name = "Test"
+        source.sd_lineups = [lineup]
 
         mock_client = Mock()
         mock_sd_client_class.return_value = mock_client
@@ -353,52 +250,7 @@ class TestSyncXmltvGrabberSource:
 class TestEpgSyncServiceProgress:
     """Verify sync_source forwards progress through channel and program phases."""
 
-    @patch("services.epg_sync_service.save_to_cache")
-    @patch("services.epg.programs.sync_programs_for_source")
-    @patch("services.epg_sync_service.sync_epg_source")
-    @patch("services.epg_sync_service.IPTVService")
-    def test_sync_provider_source_reports_progress(
-        self, mock_iptv_cls, mock_sync_channels, mock_sync_programs, mock_cache, app, db
-    ):
-        from models import Account, EpgSource
-
-        with app.app_context():
-            account = Account(
-                name="Prog Account",
-                server="http://test.example.com",
-                username="u",
-                password="p",
-            )
-            db.session.add(account)
-            db.session.commit()
-
-            source = EpgSource(
-                name="Provider",
-                source_type="provider",
-                account_id=account.id,
-                enabled=True,
-            )
-            db.session.add(source)
-            db.session.commit()
-
-            mock_iptv_cls.return_value.get_xmltv.return_value = b"<tv></tv>"
-            mock_sync_channels.return_value = {"channels_added": 1, "channels_updated": 0}
-            mock_sync_programs.return_value = {"programs_added": 2}
-
-            phases = []
-
-            def progress(phase, message="", **kwargs):
-                phases.append((phase, message, kwargs))
-
-            success, message, stats = EpgSyncService.sync_provider_source(source, progress=progress)
-
-            assert success is True
-            phase_names = [p[0] for p in phases]
-            assert PHASE_FETCHING in phase_names
-            assert PHASE_CHANNELS in phase_names
-            assert PHASE_PROGRAMS in phase_names
-            mock_sync_programs.assert_called_once()
-            assert mock_sync_programs.call_args[1]["progress_callback"] is not None
+    pass
 
 
 class TestSyncPpvEventsSource:

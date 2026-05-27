@@ -24,7 +24,6 @@ class EpgSource(db.Model):  # type: ignore[name-defined]
     # For Schedules Direct
     sd_username = db.Column(db.String(100))
     sd_password = db.Column(db.String(100))
-    sd_lineup = db.Column(db.String(100))  # Schedules Direct lineup ID
 
     # For XMLTV grabbers (e.g., tv_grab_zz_sdjson)
     xmltv_grabber = db.Column(db.String(100))  # Grabber executable name
@@ -376,6 +375,35 @@ class SdStation(db.Model):  # type: ignore[name-defined]
 
     def __repr__(self):
         return f"<SdStation {self.callsign} ({self.name})>"
+
+
+class SdLineupSyncStatus(db.Model):  # type: ignore[name-defined]
+    """Per-lineup Schedules Direct sync status + progress (JSON)."""
+
+    __tablename__ = "sd_lineup_sync_status"
+
+    lineup_id = db.Column(
+        db.Integer,
+        db.ForeignKey("sd_lineups.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    sync_in_progress = db.Column(db.Boolean, default=False)
+    sync_phase = db.Column(db.String(50))
+    sync_progress = db.Column(db.Text)  # JSON (message, counters, updated_at)
+    sync_started_at = db.Column(db.DateTime)
+
+    last_sync = db.Column(db.DateTime)
+    last_sync_status = db.Column(db.String(50))  # 'success', 'error', 'partial'
+    last_sync_message = db.Column(db.Text)
+
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+
+    lineup = db.relationship("SdLineup", backref=db.backref("sync_status", uselist=False, cascade="all, delete-orphan"))
 
 
 class CachedImage(db.Model):  # type: ignore[name-defined]

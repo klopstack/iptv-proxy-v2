@@ -16,7 +16,7 @@ class TestEpgMappings:
 
     def test_get_epg_mappings_unmapped_only(self, app, client, test_channel):
         """Test getting unmapped channels"""
-        response = client.get("/api/epg/mappings?unmapped_only=true")
+        response = client.get("/api/epg/mappings?view_mode=unmapped")
         assert response.status_code == 200
         data = response.json
         assert "unmapped_channels" in data
@@ -61,7 +61,7 @@ class TestEpgMappings:
 
             # Test filter by category 1
             response = client.get(
-                f"/api/epg/mappings?unmapped_only=true&account_id={test_account}&category_id={cat1.id}"
+                f"/api/epg/mappings?view_mode=unmapped&account_id={test_account}&category_id={cat1.id}"
             )
             assert response.status_code == 200
             data = response.json
@@ -72,7 +72,7 @@ class TestEpgMappings:
 
             # Test filter by category 2
             response = client.get(
-                f"/api/epg/mappings?unmapped_only=true&account_id={test_account}&category_id={cat2.id}"
+                f"/api/epg/mappings?view_mode=unmapped&account_id={test_account}&category_id={cat2.id}"
             )
             assert response.status_code == 200
             data = response.json
@@ -122,7 +122,7 @@ class TestEpgMappings:
 
     def test_get_epg_mappings_unmapped_includes_category_info(self, app, client, test_channel, test_account):
         """Test that unmapped channels include category info in response"""
-        response = client.get(f"/api/epg/mappings?unmapped_only=true&account_id={test_account}")
+        response = client.get(f"/api/epg/mappings?view_mode=unmapped&account_id={test_account}")
         assert response.status_code == 200
         data = response.json
         assert "unmapped_channels" in data

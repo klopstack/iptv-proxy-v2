@@ -49,23 +49,6 @@ class ConnectionManager:
         credentials = Credential.query.filter_by(account_id=account_id, enabled=True).all()
 
         if not credentials:
-            # Fallback to legacy credentials if no new credentials exist
-            if account.username and account.password:
-                logger.debug(f"Using legacy credentials for account {account_id}")
-                # Return a pseudo-credential object
-                return type(
-                    "LegacyCredential",
-                    (),
-                    {
-                        "id": None,
-                        "username": account.username,
-                        "password": account.password,
-                        "max_connections": 1,
-                        "active_connections": 0,
-                        "is_available": lambda: True,
-                        "account": account,
-                    },
-                )()
             return None
 
         # Count actual active streams per credential
@@ -89,9 +72,7 @@ class ConnectionManager:
         return selected
 
     @staticmethod
-    def acquire_connection(
-        credential_id: Optional[int], stream_id: str, client_ip: Optional[str] = None
-    ) -> Tuple[Optional[str], str]:
+    def acquire_connection(credential_id: int, stream_id: str, client_ip: Optional[str] = None) -> Tuple[Optional[str], str]:
         """
         Acquire a connection slot for a stream.
 
@@ -103,10 +84,6 @@ class ConnectionManager:
         Returns:
             Tuple of (session_token, error_message). Token is None on failure.
         """
-        if credential_id is None:
-            # Legacy mode - no tracking needed
-            return (secrets.token_hex(32), "")
-
         # Verify credential is still available
         credential = db.session.get(Credential, credential_id)
         if not credential:
