@@ -1115,6 +1115,17 @@ import {
     validateNameMappingPreviewInput,
     validateRulePreviewInput,
 } from "{{ url_for('static', filename='js/lib/match_rules_helpers.js') }}";
+import * as EpgProgress from "{{ url_for('static', filename='js/lib/epg_sync_progress.js') }}";
+import { createEpgSyncPoller } from "{{ url_for('static', filename='js/lib/epg_sync_progress_poll.js') }}";
+
+const epgSyncPoller = createEpgSyncPoller();
+window.EpgSyncProgress = {
+    ...EpgProgress,
+    poller: epgSyncPoller,
+    renderTable(container, sources, formatRelativeTime) {
+        EpgProgress.renderEpgSourcesProgressTable(container, sources, formatRelativeTime);
+    },
+};
 
 Object.assign(window, {
     parseUTCDateTime,
@@ -1184,6 +1195,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadSources(),
         loadMatchTypes()
     ]);
+
+    initEpgSourcesProgressPolling();
     
     // Populate account dropdown for mappings
     const mappingAccountSelect = document.getElementById('mappingAccountSelect');

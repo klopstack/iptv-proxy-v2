@@ -13,6 +13,9 @@ let currentSourceMappings = {
     search: ''
 };
 
+/** Live sync rows from GET /api/sync/epg/status (source_id -> snapshot) */
+let epgSyncStatusById = {};
+
 async function loadAccounts() {
     try {
         const response = await fetch('/api/accounts');
@@ -54,6 +57,7 @@ async function loadSources() {
         sources = data;
         renderSources();
         populateSourceSelects();
+        refreshSourceRowProgress();
     } catch (error) {
         document.getElementById('sources-list').innerHTML = `
             <div class="alert alert-danger">Error loading EPG sources: ${error.message}</div>
@@ -73,6 +77,53 @@ function populateSourceSelects() {
             });
         }
     });
+}
+
+function onEpgSourcesPageProgress(statusSources) {
+    if (!window.EpgSyncProgress) return;
+    epgSyncStatusById = window.EpgSyncProgress.indexSourcesById(statusSources);
+    refreshSourceRowProgress();
+}
+
+function refreshSourceRowProgress() {
+    if (!window.EpgSyncProgress) return;
+    document.querySelectorAll('tr[data-epg-source-id]').forEach((row) => {
+        const sourceId = parseInt(row.dataset.epgSourceId, 10);
+        const cell = row.querySelector('.epg-sync-status-cell');
+        if (!cell) return;
+        const source = sources.find((s) => s.id === sourceId);
+        if (source) {
+            cell.innerHTML = renderSourceStatusCell(source);
+        }
+    });
+}
+
+function renderSourceStatusCell(source) {
+    const live = epgSyncStatusById[source.id];
+    if (live && (window.EpgSyncProgress.isLiveSyncStatus(live) || live.sync_phase === 'error')) {
+        return window.EpgSyncProgress.renderSourceRowStatusHtml(live);
+    }
+
+    if (source.last_sync_status === 'success') {
+        return '<span class="badge bg-success">Success</span>';
+    }
+    if (source.last_sync_status === 'error') {
+        const msg = source.last_sync_message
+            ? `<div class="small text-muted mt-1">${escapeHtml(source.last_sync_message)}</div>`
+            : '';
+        return `<span class="badge bg-danger">Error</span>${msg}`;
+    }
+    if (source.last_sync_status == null || source.last_sync_status === undefined) {
+        return '<span class="badge bg-secondary">Never synced</span>';
+    }
+    return `<span class="badge bg-secondary">${escapeHtml(source.last_sync_status)}</span>`;
+}
+
+function escapeHtml(text) {
+    if (text == null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
 }
 
 function renderSources() {
@@ -107,14 +158,8 @@ function renderSources() {
     
     for (const source of sources) {
         const isLegacyProvider = isLegacyProviderSource(source);
-        const statusBadge = source.last_sync_status === 'success' 
-            ? '<span class="badge bg-success">Success</span>'
-            : source.last_sync_status === 'error'
-            ? '<span class="badge bg-danger">Error</span>'
-            : source.last_sync_status === null || source.last_sync_status === undefined
-            ? '<span class="badge bg-secondary">Never synced</span>'
-            : '<span class="badge bg-secondary">' + source.last_sync_status + '</span>';
-            
+        const statusBadge = renderSourceStatusCell(source);
+
         const sourceInfo = source.source_type === 'provider' 
             ? (source.account_name || 'Account ' + source.account_id)
             : source.source_type === 'xmltv_url'
@@ -133,7 +178,7 @@ function renderSources() {
             : '<span class="badge bg-secondary">0</span>';
             
         html += `
-            <tr>
+            <tr data-epg-source-id="${source.id}">
                 <td>
                     ${source.name}
                     ${!source.enabled ? '<span class="badge bg-secondary ms-2">Disabled</span>' : ''}
@@ -147,7 +192,7 @@ function renderSources() {
                 <td>${source.channel_count || 0}</td>
                 <td>${inUseHtml}</td>
                 <td>${source.last_sync ? formatLocalDateTime(source.last_sync) : 'Never'}</td>
-                <td>${statusBadge}</td>
+                <td class="epg-sync-status-cell">${statusBadge}</td>
                 <td>
                     <div class="btn-group btn-group-sm">
                         ${source.source_type === 'schedules_direct' 
@@ -316,20 +361,24 @@ async function syncSource(id) {
     const originalHtml = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
-    
+
+    const source = sources.find((s) => s.id === id);
+    if (source && source.source_type === 'schedules_direct') {
+        alert('⚠️ Schedules Direct Sync\n\nSchedules Direct sources are synced per-lineup.\n\nPlease go to the "Schedules Direct" tab and sync individual lineups.');
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        return;
+    }
+
+    window.EpgSyncProgress?.poller?.start(onEpgSourcesPageProgress);
+
     try {
-        const source = sources.find(s => s.id === id);
-        if (source && source.source_type === 'schedules_direct') {
-            alert('⚠️ Schedules Direct Sync\n\nSchedules Direct sources are synced per-lineup.\n\nPlease go to the "Schedules Direct" tab and sync individual lineups.');
-            btn.disabled = false;
-            btn.innerHTML = originalHtml;
-            return;
-        }
-        
         const response = await fetch(`/api/epg/sources/${id}/sync`, { method: 'POST' });
         const result = await response.json();
-        
-        if (response.ok) {
+
+        if (response.status === 409) {
+            alert('Sync already in progress for this source. Wait for it to finish or use force sync from Settings.');
+        } else if (response.ok) {
             await loadSources();
             alert(`✓ Synced! ${result.message}`);
         } else {
@@ -338,9 +387,15 @@ async function syncSource(id) {
     } catch (error) {
         alert('Error syncing: ' + error.message);
     } finally {
+        await window.EpgSyncProgress?.poller?.pollOnce();
         btn.disabled = false;
         btn.innerHTML = originalHtml;
     }
+}
+
+function initEpgSourcesProgressPolling() {
+    if (!window.EpgSyncProgress?.poller) return;
+    window.EpgSyncProgress.poller.start(onEpgSourcesPageProgress);
 }
 
 async function toggleSdLineups(sourceId) {

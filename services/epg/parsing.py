@@ -210,7 +210,6 @@ def sync_epg_source(source: EpgSource, xml_content: bytes) -> Dict[str, int]:
                                 )
 
     except ValueError as e:
-        source.last_sync = datetime.now(timezone.utc).replace(tzinfo=None)
         source.last_sync_status = "error"
         source.last_sync_message = str(e)
         db.session.commit()

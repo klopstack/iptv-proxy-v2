@@ -135,6 +135,39 @@ Follow-up audit after TODOs 01–21. Focus: dead shims, test duplication, semant
 | 38 | [38-data-retention-and-growth-control.md](./38-data-retention-and-growth-control.md) | ✅ | EPG/health cleanup scheduler, prune inactive channel_tags |
 | 39 | [39-indexing-test-parity-and-docs.md](./39-indexing-test-parity-and-docs.md) | ✅ | channel_tags index, schema parity tests, developer docs |
 
+## P1–P2 — EPG sync orchestration follow-up (May 2026)
+
+Audit of parallel EPG sync + per-source progress (orchestrator, `EpgSyncProgress`, settings UI). Items **40–51** address correctness bugs, integration gaps, test holes, and duplicated tests.
+
+| # | Document | Status | Summary |
+|---|----------|--------|---------|
+| 40 | [40-epg-sync-last-sync-on-failure.md](./40-epg-sync-last-sync-on-failure.md) | ✅ | Do not advance `last_sync` when per-source sync fails |
+| 41 | [41-epg-sync-global-metadata-on-failure.md](./41-epg-sync-global-metadata-on-failure.md) | ✅ | Do not set global `last_epg_sync` when all sources fail |
+| 42 | [42-epg-bulk-sync-concurrency-guard.md](./42-epg-bulk-sync-concurrency-guard.md) | ✅ | Atomic `sync_in_progress` / skip overlapping scheduler + API sync |
+| 43 | [43-per-source-epg-sync-orchestrator.md](./43-per-source-epg-sync-orchestrator.md) | ✅ | Route `POST /api/epg/sources/<id>/sync` through orchestrator + progress |
+| 44 | [44-epg-sources-page-progress-ui.md](./44-epg-sources-page-progress-ui.md) | ✅ | Show live sync progress on EPG sources page (not only Settings) |
+| 45 | [45-ppv-events-epg-progress-callbacks.md](./45-ppv-events-epg-progress-callbacks.md) | ✅ | Wire `progress` through `sync_ppv_events_source` |
+| 46 | [46-schedules-direct-program-progress.md](./46-schedules-direct-program-progress.md) | ✅ | Granular programme counters for SD program sync |
+| 47 | [47-epg-sync-phase-skipped.md](./47-epg-sync-phase-skipped.md) | ✅ | Implement or remove unused `PHASE_SKIPPED` |
+| 48 | [48-epg-sync-failure-semantics-tests.md](./48-epg-sync-failure-semantics-tests.md) | ✅ | Contract tests for `last_sync` + global metadata on failure |
+| 49 | [49-epg-orchestrator-integration-tests.md](./49-epg-orchestrator-integration-tests.md) | ✅ | Orchestrator + real `EpgSyncService` (mocked HTTP) integration tests |
+| 50 | [50-fix-stale-scheduler-epg-tests.md](./50-fix-stale-scheduler-epg-tests.md) | ✅ | Fix `_sync_epg_sources` stale mock; `run_scheduler` smoke tests |
+| 51 | [51-consolidate-bulk-epg-sync-api-tests.md](./51-consolidate-bulk-epg-sync-api-tests.md) | ✅ | Merge duplicate `POST /api/sync/epg` tests into one module |
+
+### Recommended order for items 40–51
+
+```
+40-last-sync ──┬──► 48-failure-tests
+41-metadata ───┘
+42-concurrency ──► 47-skipped (optional) ──► 43-per-source-route ──► 44-sources-ui
+45-ppv-progress ──► 46-sd-progress (independent)
+49-integration-tests (after 40–43)
+50-scheduler-tests
+51-dedupe-api-tests (anytime)
+```
+
+**Highest impact first:** 40 → 41 → 48 (correct retry + honest status) → 42 → 43 (safe concurrent sync + unified entry points).
+
 ## How to use these documents
 
 1. Open the next ⬜ item in order (or pick one explicitly).
@@ -157,7 +190,14 @@ These items were derived from full codebase reviews covering:
 - Config EPG `collapse_duplicates` implemented (TODO 18 — index was stale)
 - Models package split; proxy defaults aligned; admin visible counts use CQS (TODO 20)
 
-**Remaining debt:**
+**Remaining debt (EPG sync orchestration — see 40–51):**
+- ~~Failed sync advances `last_sync` and global `last_epg_sync` metadata~~ (fixed in 40–41)
+- ~~Per-source sync bypasses orchestrator/progress; progress UI only on Settings~~ (fixed in 43)
+- ~~Bulk sync can overlap scheduler; no EPG stale-lock recovery~~ (fixed in 42)
+- ~~Duplicate `POST /api/sync/epg` tests; stale `_sync_epg_sources` scheduler mock~~ (fixed in 50–51)
+- ~~Orchestrator integration tests only mocked `sync_source`~~ (fixed in 49)
+
+**Other remaining debt:**
 - ~6,500 lines of overlapping EPG tests across 4 files
 - Zero MediaFlow/stream-factory tests
 - `is_visible` column semantics contradict FilterService docstrings

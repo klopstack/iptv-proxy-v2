@@ -36,6 +36,7 @@ def _reset_test_db(flask_app) -> None:
 
 # Set test database URI BEFORE importing app
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
+os.environ["DISABLE_IN_WORKER_SCHEDULER"] = "true"
 TEST_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 # Import app and models AFTER setting environment

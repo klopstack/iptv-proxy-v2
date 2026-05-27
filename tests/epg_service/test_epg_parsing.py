@@ -479,9 +479,10 @@ class TestSyncEpgSource:
             with pytest.raises(ValueError):
                 EpgService.sync_epg_source(source, xml_content)
 
-            # Verify source status was updated to error
+            # Verify source status was updated to error without advancing last_sync
             source = db.session.get(EpgSource, test_epg_source.id)
             assert source.last_sync_status == "error"
+            assert source.last_sync is None
 
     def test_sync_handles_duplicate_channel_ids(self, app, test_epg_source):
         """Test that sync handles duplicate channel IDs in XMLTV data.

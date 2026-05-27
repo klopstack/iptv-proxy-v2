@@ -47,45 +47,38 @@ def sync_all_accounts():
 @api_bp.route("/api/sync/epg", methods=["POST"])
 @handle_errors(return_json=True, default_message="Error syncing EPG sources")
 def sync_all_epg_sources():
-    """Sync all enabled EPG sources"""
+    """Sync all enabled EPG sources in parallel with per-source progress."""
+    from flask import current_app, request
+
     from models import EpgSource
-    from services.epg_sync_service import EpgSyncService
+    from services.epg_sync_orchestrator import EpgSyncOrchestrator
 
-    sources = EpgSource.query.filter_by(enabled=True).all()
-    synced_count = 0
-    results = []
+    force = request.args.get("force", "false").lower() in ("1", "true", "yes")
+    sources = EpgSource.query.filter_by(enabled=True).order_by(EpgSource.priority, EpgSource.id).all()
+    app = current_app._get_current_object()
+    result = EpgSyncOrchestrator(app).sync_sources(sources, parallel=True, force=force)
+    return jsonify(result)
 
-    for source in sources:
-        # Capture source details before sync to avoid accessing expired objects
-        source_id = source.id
-        source_name = source.name
 
-        try:
-            success, message, stats = EpgSyncService.sync_source(source)
-            EpgSyncService.update_source_sync_status(source, success, message, stats)
+@api_bp.route("/api/sync/epg/status", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error fetching EPG sync status")
+def get_epg_sync_status():
+    """Per-source EPG sync progress for settings UI and monitoring."""
+    from flask import current_app
 
-            if success:
-                synced_count += 1
+    from models import EpgSource
+    from services.epg_sync_orchestrator import EpgSyncOrchestrator, source_needs_sync
+    from services.epg_sync_service import get_epg_sync_interval
 
-            results.append(
-                {
-                    "source_id": source_id,
-                    "source_name": source_name,
-                    "success": success,
-                    "message": message,
-                    "stats": stats,
-                }
-            )
-        except Exception as e:
-            # Rollback the session if there was a database error
-            db.session.rollback()
+    app = current_app._get_current_object()
+    interval_hours = _scheduler.epg_interval_hours if _scheduler else get_epg_sync_interval()
 
-            logger.error(f"Error syncing EPG source {source_name} (ID: {source_id}): {e}")
-            results.append(
-                {"source_id": source_id, "source_name": source_name, "success": False, "message": str(e), "stats": {}}
-            )
+    sources = EpgSyncOrchestrator(app).list_status()
+    for snap in sources:
+        source = db.session.get(EpgSource, snap["source_id"])
+        snap["due"] = bool(source and source.enabled and source_needs_sync(source, interval_hours))
 
-    return jsonify({"success": True, "sources_synced": synced_count, "total_sources": len(sources), "results": results})
+    return jsonify({"success": True, "interval_hours": interval_hours, "sources": sources})
 
 
 @api_bp.route("/api/sync/fcc", methods=["POST"])

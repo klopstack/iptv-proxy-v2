@@ -10,9 +10,10 @@ during EPG generation (avoiding re-fetches from external sources).
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from models import EpgSource, db
+from services.epg_sync_progress import PHASE_CHANNELS, PHASE_FETCHING, PHASE_PROGRAMS
 from services.epg.cache import save_to_cache
 from services.epg.parsing import sync_epg_source
 from services.iptv_service import IPTVService
@@ -20,6 +21,8 @@ from services.schedules_direct import SchedulesDirectClient, SchedulesDirectErro
 from services.xmltv_grabber_service import XmltvGrabberService
 
 logger = logging.getLogger(__name__)
+
+ProgressCallback = Optional[Callable[..., None]]
 
 # Default EPG sync interval (fallback if not configured)
 DEFAULT_EPG_INTERVAL_HOURS = 12
@@ -42,7 +45,7 @@ class EpgSyncService:
     """Handles EPG synchronization from various sources"""
 
     @staticmethod
-    def sync_provider_source(source: EpgSource) -> Tuple[bool, str, Dict]:
+    def sync_provider_source(source: EpgSource, progress: ProgressCallback = None) -> Tuple[bool, str, Dict]:
         """
         Sync EPG from an IPTV provider account.
 
@@ -56,6 +59,9 @@ class EpgSyncService:
             return False, "Provider source has no associated account", {}
 
         try:
+            if progress:
+                progress(PHASE_FETCHING, message="Fetching XMLTV from provider")
+
             account = source.account
             cred = account.get_primary_credential()
 
@@ -71,6 +77,9 @@ class EpgSyncService:
             xml_content = service.get_xmltv()
             logger.info(f"Fetched {len(xml_content)} bytes of XMLTV from provider for source {source.id}")
 
+            if progress:
+                progress(PHASE_CHANNELS, message="Parsing channels")
+
             stats = sync_epg_source(source, xml_content)
             logger.info(f"Synced EPG channels for source {source.id}: {stats}")
 
@@ -81,13 +90,25 @@ class EpgSyncService:
             try:
                 from services.epg.programs import sync_programs_for_source
 
-                # Use EPG sync interval for preview hours on unmatched channels
+                if progress:
+                    progress(
+                        PHASE_PROGRAMS,
+                        message="Syncing programmes",
+                        programmes_total_estimate=stats.get("programs"),
+                    )
+
                 preview_hours = get_epg_sync_interval()
+
+                def program_progress(**counts: Any) -> None:
+                    if progress:
+                        progress(PHASE_PROGRAMS, **counts)
+
                 program_stats = sync_programs_for_source(
                     source,
                     xml_content,
                     preview_hours=preview_hours,
                     load_all_for_matched=True,
+                    progress_callback=program_progress,
                 )
                 logger.info(
                     f"Synced EPG programs for source {source.id}: "
@@ -111,7 +132,7 @@ class EpgSyncService:
             return False, str(e), {}
 
     @staticmethod
-    def sync_xmltv_url_source(source: EpgSource) -> Tuple[bool, str, Dict]:
+    def sync_xmltv_url_source(source: EpgSource, progress: ProgressCallback = None) -> Tuple[bool, str, Dict]:
         """
         Sync EPG from an XMLTV URL.
 
@@ -134,10 +155,15 @@ class EpgSyncService:
             if url != source.url:
                 logger.info(f"Normalized XMLTV URL: {source.url} -> {url}")
 
-            # Use 10 minute timeout for large XMLTV files from rate-limited servers
+            if progress:
+                progress(PHASE_FETCHING, message=f"Downloading {url}")
+
             response = requests.get(url, timeout=600)
             response.raise_for_status()
             logger.info(f"Fetched {len(response.content)} bytes of XMLTV from URL for source {source.id}")
+
+            if progress:
+                progress(PHASE_CHANNELS, message="Parsing channels")
 
             stats = sync_epg_source(source, response.content)
             logger.info(f"Synced EPG channels for source {source.id}: {stats}")
@@ -149,13 +175,25 @@ class EpgSyncService:
             try:
                 from services.epg.programs import sync_programs_for_source
 
-                # Use EPG sync interval for preview hours on unmatched channels
+                if progress:
+                    progress(
+                        PHASE_PROGRAMS,
+                        message="Syncing programmes",
+                        programmes_total_estimate=stats.get("programs"),
+                    )
+
                 preview_hours = get_epg_sync_interval()
+
+                def program_progress(**counts: Any) -> None:
+                    if progress:
+                        progress(PHASE_PROGRAMS, **counts)
+
                 program_stats = sync_programs_for_source(
                     source,
                     response.content,
                     preview_hours=preview_hours,
                     load_all_for_matched=True,
+                    progress_callback=program_progress,
                 )
                 logger.info(
                     f"Synced EPG programs for source {source.id}: "
@@ -179,7 +217,7 @@ class EpgSyncService:
             return False, str(e), {}
 
     @staticmethod
-    def sync_schedules_direct_source(source: EpgSource) -> Tuple[bool, str, Dict]:
+    def sync_schedules_direct_source(source: EpgSource, progress: ProgressCallback = None) -> Tuple[bool, str, Dict]:
         """
         Sync EPG from Schedules Direct.
 
@@ -196,6 +234,9 @@ class EpgSyncService:
             return False, "No Schedules Direct lineup selected", {}
 
         try:
+            if progress:
+                progress(PHASE_FETCHING, message="Connecting to Schedules Direct")
+
             from services.epg.sources import sync_sd_channels_to_epg
 
             # Initialize SD client and authenticate
@@ -208,13 +249,21 @@ class EpgSyncService:
             if not channels:
                 return False, "No channels found in lineup", {}
 
-            # Sync channels to EpgChannel records
+            if progress:
+                progress(PHASE_CHANNELS, message="Syncing Schedules Direct channels")
+
             stats = sync_sd_channels_to_epg(source, channels)
             logger.info(f"Synced SD EPG channels for source {source.id}: {stats}")
 
-            # Sync program data from SD to database
             try:
                 from services.epg.sd_programs import sync_sd_programs_for_source
+
+                def program_progress(**counts: Any) -> None:
+                    if progress:
+                        progress(PHASE_PROGRAMS, **counts)
+
+                if progress:
+                    progress(PHASE_PROGRAMS, message="Syncing Schedules Direct programmes")
 
                 program_stats = sync_sd_programs_for_source(
                     source,
@@ -222,6 +271,7 @@ class EpgSyncService:
                     days_ahead=14,
                     fetch_program_details=True,
                     use_md5_cache=True,
+                    progress_callback=program_progress,
                 )
                 logger.info(
                     f"Synced SD programs for source {source.id}: "
@@ -246,7 +296,7 @@ class EpgSyncService:
             return False, str(e), {}
 
     @staticmethod
-    def sync_xmltv_grabber_source(source: EpgSource) -> Tuple[bool, str, Dict]:
+    def sync_xmltv_grabber_source(source: EpgSource, progress: ProgressCallback = None) -> Tuple[bool, str, Dict]:
         """
         Sync EPG using XMLTV grabber tool.
 
@@ -268,6 +318,9 @@ class EpgSyncService:
                 except json.JSONDecodeError:
                     logger.warning(f"Invalid xmltv_extra_args for source {source.id}")
 
+            if progress:
+                progress(PHASE_FETCHING, message=f"Running grabber {source.xmltv_grabber}")
+
             success, xml_content, error = XmltvGrabberService.run_grabber(
                 grabber_name=source.xmltv_grabber,
                 config_name=source.xmltv_config_name,
@@ -279,23 +332,36 @@ class EpgSyncService:
             if not success:
                 return False, f"XMLTV grabber failed: {error}", {}
 
+            if progress:
+                progress(PHASE_CHANNELS, message="Parsing channels")
+
             stats = sync_epg_source(source, xml_content)
             logger.info(f"Synced EPG channels for source {source.id}: {stats}")
 
-            # Cache the raw XMLTV for EPG generation
             save_to_cache(source.id, xml_content)
 
-            # Sync program data to database
             try:
                 from services.epg.programs import sync_programs_for_source
 
-                # Use EPG sync interval for preview hours on unmatched channels
+                if progress:
+                    progress(
+                        PHASE_PROGRAMS,
+                        message="Syncing programmes",
+                        programmes_total_estimate=stats.get("programs"),
+                    )
+
                 preview_hours = get_epg_sync_interval()
+
+                def program_progress(**counts: Any) -> None:
+                    if progress:
+                        progress(PHASE_PROGRAMS, **counts)
+
                 program_stats = sync_programs_for_source(
                     source,
                     xml_content,
                     preview_hours=preview_hours,
                     load_all_for_matched=True,
+                    progress_callback=program_progress,
                 )
                 logger.info(
                     f"Synced EPG programs for source {source.id}: "
@@ -319,7 +385,7 @@ class EpgSyncService:
             return False, str(e), {}
 
     @staticmethod
-    def sync_ppv_events_source(source: EpgSource) -> Tuple[bool, str, Dict]:
+    def sync_ppv_events_source(source: EpgSource, progress: ProgressCallback = None) -> Tuple[bool, str, Dict]:
         """
         Sync EPG from PPV Event records.
 
@@ -335,13 +401,23 @@ class EpgSyncService:
         try:
             from services.ppv.epg import PPVEpgService
 
-            # First, sync Event records to EpgChannel entries
+            if progress:
+                progress(PHASE_CHANNELS, message="Syncing PPV events to channels")
+
             created, updated = PPVEpgService.sync_ppv_events_to_epg_channels(source.id)
 
-            # Then generate XMLTV EPG data from those events
+            if progress:
+                progress(
+                    PHASE_PROGRAMS,
+                    message="Generating PPV XMLTV",
+                    channels_processed=created + updated,
+                )
+
             xml_content = PPVEpgService.generate_ppv_epg_xmltv()
 
-            # Cache the generated XMLTV for EPG generation
+            if progress:
+                progress(PHASE_PROGRAMS, message="Caching guide data")
+
             save_to_cache(source.id, xml_content)
 
             stats = {
@@ -369,35 +445,37 @@ class EpgSyncService:
             message: Status message
             stats: Sync statistics with 'channels_added' and 'channels_updated'
         """
-        source.last_sync = datetime.now(timezone.utc).replace(tzinfo=None)
         source.last_sync_status = "success" if success else "error"
         source.last_sync_message = message
-
-        if stats and success:
-            source.channel_count = stats.get("channels_added", 0) + stats.get("channels_updated", 0)
+        source.sync_in_progress = False
+        if success:
+            source.last_sync = datetime.now(timezone.utc).replace(tzinfo=None)
+            if stats:
+                source.channel_count = stats.get("channels_added", 0) + stats.get("channels_updated", 0)
 
         db.session.commit()
 
     @staticmethod
-    def sync_source(source: EpgSource) -> Tuple[bool, str, Dict]:
+    def sync_source(source: EpgSource, progress: ProgressCallback = None) -> Tuple[bool, str, Dict]:
         """
         Dispatch to appropriate sync method based on source type.
 
         Args:
             source: EpgSource to sync
+            progress: Optional callback(phase, message=..., **counts)
 
         Returns:
             Tuple of (success, message, stats)
         """
         if source.source_type == "provider":
-            return EpgSyncService.sync_provider_source(source)
+            return EpgSyncService.sync_provider_source(source, progress=progress)
         elif source.source_type == "xmltv_url":
-            return EpgSyncService.sync_xmltv_url_source(source)
+            return EpgSyncService.sync_xmltv_url_source(source, progress=progress)
         elif source.source_type == "schedules_direct":
-            return EpgSyncService.sync_schedules_direct_source(source)
+            return EpgSyncService.sync_schedules_direct_source(source, progress=progress)
         elif source.source_type == "xmltv_grabber":
-            return EpgSyncService.sync_xmltv_grabber_source(source)
+            return EpgSyncService.sync_xmltv_grabber_source(source, progress=progress)
         elif source.source_type == "ppv_events":
-            return EpgSyncService.sync_ppv_events_source(source)
+            return EpgSyncService.sync_ppv_events_source(source, progress=progress)
         else:
             return False, f"Unknown source type: {source.source_type}", {}

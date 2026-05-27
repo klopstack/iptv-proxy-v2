@@ -49,6 +49,14 @@ with app.app_context():
     SyncMetadata.delete(SYNC_KEY_SCHEDULER_HEARTBEAT)
 '
 
+# Background scheduler in its own process (not inside a gunicorn worker).
+# Long EPG syncs were triggering gunicorn worker timeouts (600s) and SIGKILL.
+if [ "${DISABLE_SCHEDULER:-false}" != "true" ]; then
+    echo "Starting background scheduler process..."
+    export DISABLE_IN_WORKER_SCHEDULER=true
+    python run_scheduler.py &
+fi
+
 # Start gunicorn with gevent workers for efficient stream proxying
 # Use gunicorn.conf.py for configuration (ensures only one worker runs scheduler)
 # Gevent allows handling many concurrent I/O-bound connections per worker

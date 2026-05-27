@@ -9,12 +9,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-import requests
-
 from models import Account, EpgSource, SyncMetadata
-from services.epg.parsing import sync_epg_source
-from services.epg.utils import normalize_xmltv_url
-from services.iptv_service import IPTVService
 from services.sync_service import ChannelSyncService
 from services.scheduler_lock import SchedulerLock
 from services.tag_service import TagService
@@ -57,7 +52,6 @@ DEFAULT_EPG_PROGRAM_RETENTION_DAYS = 7
 SYNC_KEY_SCHEDULER_HEARTBEAT = "scheduler_heartbeat"
 # Must exceed longest single sync step (EPG fetches use up to 600s timeouts)
 SCHEDULER_HEARTBEAT_TIMEOUT_SECONDS = 900
-
 
 class SyncScheduler:
     """Scheduler for periodic channel sync with persistent timing and separate intervals"""
@@ -166,6 +160,15 @@ class SyncScheduler:
                     "overdue": overdue,
                 }
 
+            from services.epg_sync_orchestrator import source_needs_sync
+            from services.epg_sync_progress import EpgSyncProgress
+
+            epg_sources = []
+            for source in EpgSource.query.order_by(EpgSource.priority, EpgSource.name).all():
+                snap = EpgSyncProgress.snapshot(source)
+                snap["due"] = source.enabled and source_needs_sync(source, self._epg_interval_hours)
+                epg_sources.append(snap)
+
             return {
                 "running": self.running or self._is_scheduler_alive(),
                 "local_running": self.running,
@@ -182,6 +185,7 @@ class SyncScheduler:
                         SYNC_KEY_LAST_PPV_ENRICHMENT, DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS
                     ),
                 },
+                "epg_sources": epg_sources,
             }
 
     def start(self):
@@ -325,12 +329,7 @@ class SyncScheduler:
                 self._set_last_sync_time(SYNC_KEY_LAST_ACCOUNT_SYNC)
                 self._touch_heartbeat()
 
-            # Check if EPG sync is needed (uses its own interval)
-            if self._needs_sync(SYNC_KEY_LAST_EPG_SYNC, self._epg_interval_hours):
-                logger.info(f"EPG sync due (interval: {self._epg_interval_hours} hours)")
-                self._sync_epg_sources()
-                self._set_last_sync_time(SYNC_KEY_LAST_EPG_SYNC)
-                self._touch_heartbeat()
+            self._sync_epg_sources_if_due()
 
             # Check if FCC sync is needed (configurable, default weekly)
             if self._needs_sync(SYNC_KEY_LAST_FCC_SYNC, self._fcc_interval_hours):
@@ -481,148 +480,30 @@ class SyncScheduler:
         except Exception as e:
             logger.error(f"Error applying FCC enrichment for account {account.name}: {e}")
 
-    def _sync_epg_sources(self):
-        """Sync all enabled EPG sources"""
-        sources = EpgSource.query.filter_by(enabled=True).all()
-        logger.info(f"Syncing {len(sources)} EPG source(s)")
+    def _sync_epg_sources_if_due(self):
+        """Sync enabled EPG sources that are past their interval (parallel, per-source progress)."""
+        try:
+            from services.epg_sync_orchestrator import EpgSyncOrchestrator, source_needs_sync
 
-        for source in sources:
-            try:
-                self._touch_heartbeat()
-                logger.info(f"Syncing EPG source: {source.name} ({source.source_type})")
-                stats = self._sync_single_epg_source(source)
-                if stats:
-                    logger.info(
-                        f"EPG source {source.name} synced: "
-                        f"{stats.get('channels_added', 0)} added, "
-                        f"{stats.get('channels_updated', 0)} updated"
-                    )
+            due = [
+                s
+                for s in EpgSource.query.filter_by(enabled=True).all()
+                if source_needs_sync(s, self._epg_interval_hours)
+            ]
+            if not due:
+                return
 
-            except Exception as e:
-                logger.error(f"Error syncing EPG source {source.name}: {e}")
-
-    def _sync_single_epg_source(self, source: EpgSource):
-        """
-        Sync a single EPG source.
-
-        Args:
-            source: The EpgSource to sync
-
-        Returns:
-            Dict with sync stats or None if sync failed/skipped
-        """
-        xml_content = None
-
-        if source.source_type == "provider":
-            if not source.account:
-                logger.warning(f"EPG source {source.name} has no associated account")
-                return None
-
-            account = source.account
-            cred = account.get_primary_credential()
-            if cred:
-                service = IPTVService(
-                    account.server, cred.username, cred.password, account.user_agent or "okhttp/3.14.9"
-                )
-            else:
-                service = IPTVService(
-                    account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9"
-                )
-
-            xml_content = service.get_xmltv()
-            stats = sync_epg_source(source, xml_content)
-
-        elif source.source_type == "xmltv_url":
-            if not source.url:
-                logger.warning(f"EPG source {source.name} has no URL configured")
-                return None
-
-            # Normalize URL (e.g., convert GitHub blob URLs to raw URLs)
-            url = normalize_xmltv_url(source.url)
-            if url != source.url:
-                logger.info(f"Normalized XMLTV URL: {source.url} -> {url}")
-
-            # Use 10 minute timeout for large XMLTV files from rate-limited servers
-            response = requests.get(url, timeout=600)
-            response.raise_for_status()
-            xml_content = response.content
-            stats = sync_epg_source(source, xml_content)
-
-        elif source.source_type == "schedules_direct":
-            # Schedules Direct - sync programs directly from SD API
-            if not source.sd_username or not source.sd_password:
-                logger.warning(f"Schedules Direct source {source.name} missing credentials")
-                return None
-
-            if not source.sd_lineup:
-                logger.warning(f"Schedules Direct source {source.name} has no lineup selected")
-                return None
-
-            try:
-                from services.epg.sd_programs import sync_sd_programs_for_source
-                from services.schedules_direct import SchedulesDirectClient
-
-                sd_client = SchedulesDirectClient(source.sd_username, source.sd_password)
-                sd_client.authenticate()
-
-                # Sync programs from SD to database
-                program_stats = sync_sd_programs_for_source(
-                    source,
-                    sd_client,
-                    days_ahead=14,
-                    fetch_program_details=True,
-                    use_md5_cache=True,
-                )
-
-                # Create stats compatible with other source types
-                stats = {
-                    "channels_added": 0,
-                    "channels_updated": program_stats.get("channels_processed", 0),
-                    "channels_removed": 0,
-                    "programs_added": program_stats.get("programs_added", 0),
-                    "programs_updated": program_stats.get("programs_updated", 0),
-                }
-                logger.info(
-                    f"SD programs synced for {source.name}: "
-                    f"added={program_stats.get('programs_added', 0)}, "
-                    f"updated={program_stats.get('programs_updated', 0)}, "
-                    f"channels={program_stats.get('channels_processed', 0)}"
-                )
-                return stats
-
-            except Exception as e:
-                logger.error(f"Failed to sync Schedules Direct source {source.name}: {e}", exc_info=True)
-                return None
-
-        else:
-            logger.warning(f"Unknown EPG source type: {source.source_type}")
-            return None
-
-        # Sync program data to database (if we have XML content)
-        if xml_content and stats:
-            try:
-                from services.epg.programs import sync_programs_for_source
-
-                # Use EPG sync interval for preview hours
-                preview_hours = self._epg_interval_hours
-                program_stats = sync_programs_for_source(
-                    source,
-                    xml_content,
-                    preview_hours=preview_hours,
-                    load_all_for_matched=True,
-                )
-                logger.info(
-                    f"EPG programs synced for {source.name}: "
-                    f"added={program_stats.get('programs_added', 0)}, "
-                    f"updated={program_stats.get('programs_updated', 0)}, "
-                    f"deleted={program_stats.get('programs_deleted', 0)}"
-                )
-                stats["programs_added"] = program_stats.get("programs_added", 0)
-                stats["programs_updated"] = program_stats.get("programs_updated", 0)
-            except Exception as e:
-                logger.warning(f"Failed to sync EPG programs for {source.name}: {e}")
-
-        return stats
+            logger.info("EPG sync: %s source(s) due (interval %sh)", len(due), self._epg_interval_hours)
+            self._touch_heartbeat()
+            result = EpgSyncOrchestrator(self.app).sync_sources(due, parallel=True)
+            self._touch_heartbeat()
+            logger.info(
+                "EPG sync pass complete: %s/%s succeeded",
+                result.get("sources_synced", 0),
+                result.get("total_sources", 0),
+            )
+        except Exception as e:
+            logger.error("Error in EPG source sync: %s", e)
 
     def _prefetch_ppv_events(self):
         """

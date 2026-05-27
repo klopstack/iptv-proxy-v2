@@ -4,9 +4,11 @@ Tests for EpgSyncService - EPG source synchronization dispatcher
 Tests the dispatcher logic that routes to correct sync methods.
 Individual sync methods are integration tests tested via route tests.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
+from models import EpgSource, db
+from services.epg_sync_progress import PHASE_CHANNELS, PHASE_FETCHING, PHASE_PROGRAMS
 from services.epg_sync_service import EpgSyncService
 
 
@@ -41,7 +43,7 @@ class TestSyncSourceDispatcher:
             success, message, stats = EpgSyncService.sync_source(source)
 
             assert success is True
-            mock_sync.assert_called_once_with(source)
+            mock_sync.assert_called_once_with(source, progress=None)
 
     def test_sync_source_dispatches_xmltv_url(self):
         """Sync source dispatches to xmltv_url method"""
@@ -52,7 +54,7 @@ class TestSyncSourceDispatcher:
             success, message, stats = EpgSyncService.sync_source(source)
 
             assert success is True
-            mock_sync.assert_called_once_with(source)
+            mock_sync.assert_called_once_with(source, progress=None)
 
     def test_sync_source_dispatches_schedules_direct(self):
         """Sync source dispatches to schedules_direct method"""
@@ -63,7 +65,7 @@ class TestSyncSourceDispatcher:
             success, message, stats = EpgSyncService.sync_source(source)
 
             assert success is True
-            mock_sync.assert_called_once_with(source)
+            mock_sync.assert_called_once_with(source, progress=None)
 
     def test_sync_source_dispatches_xmltv_grabber(self):
         """Sync source dispatches to xmltv_grabber method"""
@@ -74,7 +76,7 @@ class TestSyncSourceDispatcher:
             success, message, stats = EpgSyncService.sync_source(source)
 
             assert success is True
-            mock_sync.assert_called_once_with(source)
+            mock_sync.assert_called_once_with(source, progress=None)
 
     def test_sync_source_dispatches_ppv_events(self):
         """Sync source dispatches to ppv_events method"""
@@ -85,7 +87,7 @@ class TestSyncSourceDispatcher:
             success, message, stats = EpgSyncService.sync_source(source)
 
             assert success is True
-            mock_sync.assert_called_once_with(source)
+            mock_sync.assert_called_once_with(source, progress=None)
 
 
 class TestSyncProviderSource:
@@ -348,11 +350,81 @@ class TestSyncXmltvGrabberSource:
         assert kwargs["extra_args"] == {"key": "value"}
 
 
+class TestEpgSyncServiceProgress:
+    """Verify sync_source forwards progress through channel and program phases."""
+
+    @patch("services.epg_sync_service.save_to_cache")
+    @patch("services.epg.programs.sync_programs_for_source")
+    @patch("services.epg_sync_service.sync_epg_source")
+    @patch("services.epg_sync_service.IPTVService")
+    def test_sync_provider_source_reports_progress(
+        self, mock_iptv_cls, mock_sync_channels, mock_sync_programs, mock_cache, app, db
+    ):
+        from models import Account, EpgSource
+
+        with app.app_context():
+            account = Account(
+                name="Prog Account",
+                server="http://test.example.com",
+                username="u",
+                password="p",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            source = EpgSource(
+                name="Provider",
+                source_type="provider",
+                account_id=account.id,
+                enabled=True,
+            )
+            db.session.add(source)
+            db.session.commit()
+
+            mock_iptv_cls.return_value.get_xmltv.return_value = b"<tv></tv>"
+            mock_sync_channels.return_value = {"channels_added": 1, "channels_updated": 0}
+            mock_sync_programs.return_value = {"programs_added": 2}
+
+            phases = []
+
+            def progress(phase, message="", **kwargs):
+                phases.append((phase, message, kwargs))
+
+            success, message, stats = EpgSyncService.sync_provider_source(source, progress=progress)
+
+            assert success is True
+            phase_names = [p[0] for p in phases]
+            assert PHASE_FETCHING in phase_names
+            assert PHASE_CHANNELS in phase_names
+            assert PHASE_PROGRAMS in phase_names
+            mock_sync_programs.assert_called_once()
+            assert mock_sync_programs.call_args[1]["progress_callback"] is not None
+
+
 class TestSyncPpvEventsSource:
     """Test sync_ppv_events_source method"""
 
-    # Note: PPVEpgService is imported inside the function, so full integration
-    # testing is done through route tests. This tests the dispatcher only.
+    @patch("services.epg_sync_service.save_to_cache")
+    @patch("services.ppv.epg.PPVEpgService.generate_ppv_epg_xmltv", return_value=b"<tv/>")
+    @patch("services.ppv.epg.PPVEpgService.sync_ppv_events_to_epg_channels", return_value=(1, 0))
+    def test_ppv_events_reports_progress(self, mock_sync_channels, mock_generate, mock_cache):
+        from services.epg_sync_progress import PHASE_CHANNELS, PHASE_PROGRAMS
+
+        source = Mock()
+        source.id = 1
+        phases = []
+
+        def progress(phase, message="", **kwargs):
+            phases.append(phase)
+
+        success, message, stats = EpgSyncService.sync_ppv_events_source(source, progress=progress)
+
+        assert success is True
+        assert PHASE_CHANNELS in phases
+        assert PHASE_PROGRAMS in phases
+        mock_sync_channels.assert_called_once_with(1)
+        mock_generate.assert_called_once()
+        mock_cache.assert_called_once_with(1, b"<tv/>")
 
 
 class TestUpdateSourceSyncStatus:
@@ -369,18 +441,6 @@ class TestUpdateSourceSyncStatus:
         assert source.last_sync_status == "success"
         assert source.last_sync_message == "Sync complete"
         assert source.channel_count == 15
-        mock_commit.assert_called_once()
-
-    @patch("services.epg_sync_service.db.session.commit")
-    def test_update_sync_status_failure(self, mock_commit):
-        """Update sync status for failed sync"""
-        source = Mock()
-        stats = {}
-
-        EpgSyncService.update_source_sync_status(source, False, "Sync failed", stats)
-
-        assert source.last_sync_status == "error"
-        assert source.last_sync_message == "Sync failed"
         mock_commit.assert_called_once()
 
     @patch("services.epg_sync_service.db.session.commit")

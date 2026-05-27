@@ -30,7 +30,9 @@ import json
 import logging
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
+
+ProgressCallback = Optional[Callable[..., None]]
 
 from models import ChannelEpgMapping, EpgChannel, EpgProgram, EpgSource, db
 from services.epg.utils import get_decompressing_stream, parse_xmltv_time
@@ -42,6 +44,9 @@ DEFAULT_PREVIEW_HOURS = 12
 
 # Default batch size for database operations
 DEFAULT_BATCH_SIZE = 500
+
+# Flush in-memory channel buffers during XML parse to bound RAM on large guides
+CHANNEL_PROGRAM_BUFFER_FLUSH = 250
 
 
 def parse_xmltv_programs_streaming(
@@ -254,11 +259,58 @@ def get_epg_channel_id_map(source_id: int) -> Dict[str, int]:
     return {channel_id: db_id for channel_id, db_id in result}
 
 
+def _flush_channel_programs(
+    db_channel_id: int,
+    programs: List[Dict[str, Any]],
+    *,
+    is_matched: bool,
+    matched_db_ids: Set[int],
+    now: datetime,
+    preview_end: datetime,
+    stats: Dict[str, int],
+) -> None:
+    """Write accumulated programmes for one channel and clear the in-memory buffer."""
+    if not programs:
+        return
+
+    if is_matched:
+        deleted = EpgProgram.query.filter(
+            EpgProgram.epg_channel_id == db_channel_id,
+            EpgProgram.stop_time < now - timedelta(hours=1),
+        ).delete(synchronize_session=False)
+    else:
+        deleted = EpgProgram.query.filter(
+            EpgProgram.epg_channel_id == db_channel_id,
+            db.or_(
+                EpgProgram.stop_time < now - timedelta(hours=1),
+                EpgProgram.start_time >= preview_end,
+            ),
+        ).delete(synchronize_session=False)
+    stats["programs_deleted"] += deleted
+    db.session.flush()
+
+    existing = {p.start_time: p for p in EpgProgram.query.filter_by(epg_channel_id=db_channel_id).all()}
+    unique_programs = {prog_data["start_time"]: prog_data for prog_data in programs}
+
+    for prog_data in unique_programs.values():
+        start_time = prog_data["start_time"]
+        existing_prog = existing.get(start_time)
+        if existing_prog:
+            if _update_program(existing_prog, prog_data):
+                stats["programs_updated"] += 1
+            else:
+                stats["programs_unchanged"] += 1
+        else:
+            db.session.add(_create_program(db_channel_id, prog_data))
+            stats["programs_added"] += 1
+
+
 def sync_programs_for_source(
     source: EpgSource,
     xml_content: bytes,
     preview_hours: int = DEFAULT_PREVIEW_HOURS,
     load_all_for_matched: bool = True,
+    progress_callback: ProgressCallback = None,
 ) -> Dict[str, int]:
     """
     Sync program data from XMLTV content to the database.
@@ -313,87 +365,77 @@ def sync_programs_for_source(
         f"{stats['preview_channels']} preview channels ({preview_hours}h)"
     )
 
-    # Collect programs by EPG channel
     programs_by_channel: Dict[int, List[Dict]] = {}
+    channels_touched: Set[int] = set()
+    programmes_parsed = 0
+    commit_every = 0
+
+    def _report_progress(message: str = "") -> None:
+        if progress_callback:
+            progress_callback(
+                programmes_parsed=programmes_parsed,
+                programs_added=stats["programs_added"],
+                programs_updated=stats["programs_updated"],
+                channels_processed=len(channels_touched),
+                message=message or f"Parsed {programmes_parsed} programmes",
+            )
 
     for xmltv_channel_id, program_data in parse_xmltv_programs_streaming(xml_content):
         db_channel_id = channel_id_map.get(xmltv_channel_id)
         if not db_channel_id:
             continue
 
-        is_matched = xmltv_channel_id in matched_xmltv_ids
+        is_matched_xml = xmltv_channel_id in matched_xmltv_ids
 
-        # Apply time filter for unmatched channels
-        if not is_matched and not load_all_for_matched:
+        if not is_matched_xml and not load_all_for_matched:
             start_time = program_data.get("start_time")
             if start_time and start_time >= preview_end:
                 continue
             if start_time and start_time < now - timedelta(hours=1):
-                # Skip programs that ended more than 1 hour ago for preview
                 continue
 
         if db_channel_id not in programs_by_channel:
             programs_by_channel[db_channel_id] = []
 
         programs_by_channel[db_channel_id].append(program_data)
+        programmes_parsed += 1
+        channels_touched.add(db_channel_id)
 
-    stats["channels_processed"] = len(programs_by_channel)
+        if len(programs_by_channel[db_channel_id]) >= CHANNEL_PROGRAM_BUFFER_FLUSH:
+            is_matched_db = db_channel_id in matched_db_ids
+            _flush_channel_programs(
+                db_channel_id,
+                programs_by_channel.pop(db_channel_id),
+                is_matched=is_matched_db,
+                matched_db_ids=matched_db_ids,
+                now=now,
+                preview_end=preview_end,
+                stats=stats,
+            )
+            commit_every += 1
+            if commit_every % 20 == 0:
+                db.session.commit()
+                _report_progress()
 
-    # Sync programs to database in batches
-    batch_count = 0
+        if programmes_parsed % 50000 == 0:
+            _report_progress()
+
+    stats["channels_processed"] = len(channels_touched)
+
     for db_channel_id, programs in programs_by_channel.items():
-        is_matched = db_channel_id in matched_db_ids
-
-        # Delete old programs for this channel
-        if is_matched:
-            # For matched channels, delete programs older than 1 hour ago
-            deleted = EpgProgram.query.filter(
-                EpgProgram.epg_channel_id == db_channel_id,
-                EpgProgram.stop_time < now - timedelta(hours=1),
-            ).delete(synchronize_session=False)
-        else:
-            # For unmatched channels, delete all programs outside preview window
-            deleted = EpgProgram.query.filter(
-                EpgProgram.epg_channel_id == db_channel_id,
-                db.or_(
-                    EpgProgram.stop_time < now - timedelta(hours=1),
-                    EpgProgram.start_time >= preview_end,
-                ),
-            ).delete(synchronize_session=False)
-        stats["programs_deleted"] += deleted
-
-        # Flush to ensure deletes are processed before querying existing programs
-        # This prevents UNIQUE constraint violations on (epg_channel_id, start_time)
-        db.session.flush()
-
-        # Get existing programs for this channel (by start time)
-        existing = {p.start_time: p for p in EpgProgram.query.filter_by(epg_channel_id=db_channel_id).all()}
-
-        # De-duplicate programs by start_time (keep last occurrence)
-        # This prevents UNIQUE constraint violations from duplicate entries in source XML
-        unique_programs = {prog_data["start_time"]: prog_data for prog_data in programs}
-
-        for prog_data in unique_programs.values():
-            start_time = prog_data["start_time"]
-            existing_prog = existing.get(start_time)
-
-            if existing_prog:
-                # Update existing program only if data changed
-                if _update_program(existing_prog, prog_data):
-                    stats["programs_updated"] += 1
-                else:
-                    stats["programs_unchanged"] += 1
-            else:
-                # Create new program
-                new_prog = _create_program(db_channel_id, prog_data)
-                db.session.add(new_prog)
-                stats["programs_added"] += 1
-
-        batch_count += 1
-        if batch_count % DEFAULT_BATCH_SIZE == 0:
-            db.session.commit()
+        is_matched_db = db_channel_id in matched_db_ids
+        _flush_channel_programs(
+            db_channel_id,
+            programs,
+            is_matched=is_matched_db,
+            matched_db_ids=matched_db_ids,
+            now=now,
+            preview_end=preview_end,
+            stats=stats,
+        )
 
     db.session.commit()
+    _report_progress("Program sync complete")
 
     logger.info(
         f"Program sync complete for source {source.id}: "

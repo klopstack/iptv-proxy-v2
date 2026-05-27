@@ -1,9 +1,12 @@
 """Tests for EPG source sync endpoints."""
+import json
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from models import Account, Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
+from services.epg_sync_progress import PHASE_COMPLETE, PHASE_FETCHING
 
 
 class TestEpgSourceSync:
@@ -187,6 +190,58 @@ class TestEpgSourceSync:
         response = client.post(f"/api/epg/sources/{source_id}/sync")
         assert response.status_code == 400
         assert "Invalid credentials" in response.json["error"]
+
+    @patch("services.epg_sync_orchestrator.EpgSyncService.sync_source")
+    def test_per_source_sync_sets_progress(self, mock_sync, app, client):
+        """Per-source sync drives sync_phase via orchestrator progress callback."""
+        with app.app_context():
+            source = EpgSource(
+                name="Progress Source",
+                source_type="xmltv_url",
+                url="http://example.com/epg.xml",
+                enabled=True,
+            )
+            db.session.add(source)
+            db.session.commit()
+            source_id = source.id
+
+            def sync_with_progress(source, progress=None):
+                if progress:
+                    progress(PHASE_FETCHING, message="test")
+                return True, "ok", {"channels_added": 1}
+
+            mock_sync.side_effect = sync_with_progress
+
+            response = client.post(f"/api/epg/sources/{source_id}/sync")
+            assert response.status_code == 200
+            assert response.json["success"] is True
+
+            db.session.expire_all()
+            refreshed = db.session.get(EpgSource, source_id)
+            assert refreshed.sync_phase == PHASE_COMPLETE
+            assert refreshed.sync_in_progress is False
+            progress = json.loads(refreshed.sync_progress)
+            assert progress.get("message") == "ok"
+
+    def test_sync_returns_409_when_already_in_progress(self, app, client):
+        with app.app_context():
+            source = EpgSource(
+                name="Busy Source",
+                source_type="xmltv_url",
+                url="http://example.com/epg.xml",
+                enabled=True,
+                sync_in_progress=True,
+                sync_started_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            )
+            db.session.add(source)
+            db.session.commit()
+            source_id = source.id
+
+        with patch("services.epg_sync_orchestrator.EpgSyncService.sync_source") as mock_sync:
+            response = client.post(f"/api/epg/sources/{source_id}/sync")
+            assert response.status_code == 409
+            assert "in progress" in response.json["error"].lower()
+            mock_sync.assert_not_called()
 
     def test_sync_unknown_source_type(self, app, client):
         """Test syncing source with unknown type returns 400"""

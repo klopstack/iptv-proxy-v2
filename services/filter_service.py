@@ -7,9 +7,15 @@ import re
 from typing import Dict, List, Optional
 
 from models import Account, Channel, ChannelTag, Filter, Tag, db
-from services.epg.ppv import is_ppv_placeholder_name
 
 logger = logging.getLogger(__name__)
+
+
+def _is_ppv_placeholder_name(channel_name: str) -> bool:
+    """Lazy import to avoid circular import via services.epg package init."""
+    from services.epg.ppv import is_ppv_placeholder_name
+
+    return is_ppv_placeholder_name(channel_name)
 
 
 class FilterService:
@@ -138,7 +144,7 @@ class FilterService:
             True if channel passes all filters, False otherwise
         """
         # First, check if this is a PPV placeholder channel (always hidden)
-        if is_ppv_placeholder_name(channel.name):
+        if _is_ppv_placeholder_name(channel.name):
             return False
 
         # Group filters by type and action
@@ -253,7 +259,7 @@ class FilterService:
         # If no filters, all channels pass (except PPV placeholders)
         if not filters:
             # Still filter out PPV placeholders
-            return [ch for ch in channels if not is_ppv_placeholder_name(ch.name)]
+            return [ch for ch in channels if not _is_ppv_placeholder_name(ch.name)]
 
         # Check if we need to load tags
         has_tag_filters = any(f.filter_type == "tag" for f in filters)

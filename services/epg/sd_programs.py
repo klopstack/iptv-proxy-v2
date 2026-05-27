@@ -12,8 +12,9 @@ This module provides functions to sync SD program data to the database,
 enabling database-based EPG generation without re-fetching from SD.
 """
 import logging
+import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from models import EpgChannel, EpgProgram, EpgSource, db
 
@@ -213,12 +214,16 @@ def convert_sd_program_to_epg_data(
     return data
 
 
+ProgressCallback = Optional[Callable[..., None]]
+
+
 def sync_sd_programs_for_source(
     source: EpgSource,
     sd_client: Any,  # SchedulesDirectClient
     days_ahead: int = DEFAULT_DAYS_AHEAD,
     fetch_program_details: bool = True,
     use_md5_cache: bool = True,
+    progress_callback: ProgressCallback = None,
 ) -> Dict[str, int]:
     """
     Sync program data from Schedules Direct to the database.
@@ -257,6 +262,24 @@ def sync_sd_programs_for_source(
 
     station_ids = list(station_map.keys())
     logger.info(f"Syncing SD programs for {len(station_ids)} stations in source {source.id} ({source.name})")
+
+    programmes_parsed = 0
+    last_progress_at = 0.0
+
+    def _report_progress(message: str = "") -> None:
+        nonlocal last_progress_at
+        if not progress_callback:
+            return
+        now = time.monotonic()
+        if message or programmes_parsed == 0 or now - last_progress_at >= 1.0:
+            last_progress_at = now
+            progress_callback(
+                programmes_parsed=programmes_parsed,
+                programs_added=stats["programs_added"],
+                programs_updated=stats["programs_updated"],
+                channels_processed=stats["channels_processed"],
+                message=message or f"Processed {programmes_parsed} schedule entries",
+            )
 
     # Build date list
     today = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -317,10 +340,14 @@ def sync_sd_programs_for_source(
 
                 for entry in schedule.get("programs", []):
                     all_schedule_entries.append((epg_channel_id, entry))
+                    programmes_parsed += 1
                     if fetch_program_details:
                         prog_id = entry.get("programID")
                         if prog_id:
                             program_ids_to_fetch.add(prog_id)
+
+            if programmes_parsed % 1000 == 0:
+                _report_progress()
 
         except Exception as e:
             logger.error(f"Failed to fetch SD schedules for batch: {e}")
@@ -360,6 +387,7 @@ def sync_sd_programs_for_source(
         entries_by_channel[epg_channel_id].append(entry)
 
     stats["channels_processed"] = len(entries_by_channel)
+    _report_progress("Writing programmes to database")
 
     # Sync to database
     now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -399,8 +427,10 @@ def sync_sd_programs_for_source(
         # Commit in batches
         if (stats["programs_added"] + stats["programs_updated"]) % DEFAULT_BATCH_SIZE == 0:
             db.session.commit()
+            _report_progress()
 
     db.session.commit()
+    _report_progress("Schedules Direct program sync complete")
 
     logger.info(
         f"SD program sync complete for source {source.id}: "

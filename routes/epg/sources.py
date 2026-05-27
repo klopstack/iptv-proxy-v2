@@ -251,39 +251,53 @@ def get_source_mappings(source_id):
 
 @epg_sources_bp.route("/sources/<int:source_id>/sync", methods=["POST"])
 @handle_errors(return_json=True, default_message="Error syncing EPG source")
-def sync_epg_source(source_id):
-    """Sync EPG data from a source using EpgSyncService"""
-    from services.epg_sync_service import EpgSyncService
+def sync_epg_source_route(source_id):
+    """Sync EPG data from a source via orchestrator (progress + lock semantics)."""
+    from flask import current_app
 
-    source = EpgSource.query.get_or_404(source_id)
+    from services.epg_sync_orchestrator import EpgSyncOrchestrator
 
-    # Use the decomposed service to handle all source types
-    success, message, stats = EpgSyncService.sync_source(source)
+    EpgSource.query.get_or_404(source_id)
 
-    # Update source sync status
-    EpgSyncService.update_source_sync_status(source, success, message, stats)
+    force = request.args.get("force", "false").lower() in ("1", "true", "yes")
+    app = current_app._get_current_object()
+    result = EpgSyncOrchestrator(app).sync_source_by_id(source_id, force=force)
 
-    if success:
-        return (
-            jsonify(
-                {
-                    "success": True,
-                    "message": message,
-                    "stats": stats,
-                }
-            ),
-            200,
-        )
-    else:
+    if result.get("not_found"):
+        return jsonify({"success": False, "error": result.get("message", "Source not found")}), 404
+
+    if result.get("skipped"):
         return (
             jsonify(
                 {
                     "success": False,
-                    "error": message,
+                    "error": result.get("message", "Sync already in progress"),
                 }
             ),
-            400,
+            409,
         )
+
+    if result.get("success"):
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "message": result.get("message"),
+                    "stats": result.get("stats") or {},
+                }
+            ),
+            200,
+        )
+
+    return (
+        jsonify(
+            {
+                "success": False,
+                "error": result.get("message", "Sync failed"),
+            }
+        ),
+        400,
+    )
 
 
 @epg_sources_bp.route("/coverage", methods=["GET"])

@@ -130,6 +130,7 @@
                                 </div>
                             </div>
                             <div id="epg-sync-status" class="small text-muted mb-2"></div>
+                            <div id="epg-sources-progress" class="mb-3"></div>
                             <button type="button" id="sync-epg-btn" class="btn btn-sm btn-info">
                                 <i class="bi bi-arrow-clockwise"></i> Sync All EPG Sources Now
                             </button>
@@ -304,6 +305,19 @@
 {% endblock %}
 
 {% block extra_js %}
+<script type="module">
+import * as EpgProgress from "{{ url_for('static', filename='js/lib/epg_sync_progress.js') }}";
+import { createEpgSyncPoller } from "{{ url_for('static', filename='js/lib/epg_sync_progress_poll.js') }}";
+
+const epgSyncPoller = createEpgSyncPoller();
+window.EpgSyncProgress = {
+    ...EpgProgress,
+    poller: epgSyncPoller,
+    renderTable(container, sources, formatRelativeTime) {
+        EpgProgress.renderEpgSourcesProgressTable(container, sources, formatRelativeTime);
+    },
+};
+</script>
 <script>
 let currentStatus = null;
 
@@ -443,6 +457,9 @@ async function loadSchedulerStatus() {
             // Update status displays
             updateSyncStatus('account-sync-status', status.syncs.accounts);
             updateSyncStatus('epg-sync-status', status.syncs.epg);
+            if (status.epg_sources) {
+                renderEpgSourcesProgress(status.epg_sources);
+            }
             updateSyncStatus('fcc-sync-status', status.syncs.fcc);
         } else {
             // Fallback for legacy API response
@@ -569,8 +586,27 @@ document.getElementById('sync-accounts-btn').addEventListener('click', async fun
     }
 });
 
+function onSettingsEpgProgress(sources) {
+    const container = document.getElementById('epg-sources-progress');
+    if (window.EpgSyncProgress) {
+        window.EpgSyncProgress.renderTable(container, sources, formatRelativeTime);
+    }
+}
+
+function renderEpgSourcesProgress(sources) {
+    onSettingsEpgProgress(sources);
+}
+
+function startEpgProgressPolling() {
+    window.EpgSyncProgress?.poller?.start(onSettingsEpgProgress);
+}
+
+async function loadEpgSyncProgress() {
+    await window.EpgSyncProgress?.poller?.pollOnce();
+}
+
 document.getElementById('sync-epg-btn').addEventListener('click', async function() {
-    if (!confirm('Sync all enabled EPG sources now? This may take several minutes.')) {
+    if (!confirm('Sync all enabled EPG sources now? Sources run in parallel; large guides may take a while.')) {
         return;
     }
     
@@ -578,13 +614,21 @@ document.getElementById('sync-epg-btn').addEventListener('click', async function
     const originalText = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Syncing...';
+    startEpgProgressPolling();
     
     try {
         const response = await fetch('/api/sync/epg', { method: 'POST' });
         
         if (response.ok) {
             const result = await response.json();
-            alert(`✓ Synced ${result.sources_synced} of ${result.total_sources} EPG source(s) successfully!`);
+            let msg = `✓ Synced ${result.sources_synced} of ${result.total_sources} EPG source(s).`;
+            if (result.sources_skipped) {
+                msg += ` ${result.sources_skipped} skipped (already in progress).`;
+            }
+            msg += ' Check progress below for details.';
+            alert(msg);
+            await loadEpgSyncProgress();
+            await loadSchedulerStatus();
         } else {
             const error = await response.json();
             alert('Error: ' + (error.error || 'Failed to sync EPG sources'));
@@ -594,6 +638,7 @@ document.getElementById('sync-epg-btn').addEventListener('click', async function
     } finally {
         btn.disabled = false;
         btn.innerHTML = originalText;
+        loadEpgSyncProgress();
     }
 });
 
@@ -856,6 +901,7 @@ document.getElementById('clear-all-images-btn').addEventListener('click', async 
 // Load status on page load
 loadProxySettings();
 loadSchedulerStatus();
+startEpgProgressPolling();
 loadImageCacheStats();
 loadImageCacheEntries();
 

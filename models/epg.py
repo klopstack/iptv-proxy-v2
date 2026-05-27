@@ -42,6 +42,12 @@ class EpgSource(db.Model):  # type: ignore[name-defined]
     last_sync_message = db.Column(db.Text)
     channel_count = db.Column(db.Integer, default=0)  # Channels in this source
 
+    # Live sync progress (scheduler / manual parallel sync)
+    sync_in_progress = db.Column(db.Boolean, default=False)
+    sync_phase = db.Column(db.String(50))  # queued, fetching, channels, programs, complete, error, ...
+    sync_progress = db.Column(db.Text)  # JSON counters and status message
+    sync_started_at = db.Column(db.DateTime)
+
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at = db.Column(
         db.DateTime,

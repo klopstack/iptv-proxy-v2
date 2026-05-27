@@ -136,6 +136,8 @@ set_scheduler(sync_scheduler)
 _disable_scheduler = (
     os.getenv("DISABLE_SCHEDULER", "false").lower() == "true" or os.getenv("PYTEST_CURRENT_TEST") is not None
 )
+# When run_scheduler.py owns the scheduler, gunicorn workers must not start another copy.
+_disable_in_worker_scheduler = os.getenv("DISABLE_IN_WORKER_SCHEDULER", "false").lower() == "true"
 
 # Scheduler will be started lazily on first request when no other worker's heartbeat is active
 _startup_tasks_done = False
@@ -148,11 +150,16 @@ def _run_startup_tasks():
         return
 
     try:
+        from services.epg_sync_orchestrator import recover_stale_epg_sync_locks
         from services.sync_service import recover_stale_sync_locks
 
         recovered = recover_stale_sync_locks()
         if recovered:
-            logger.info("Recovered %s stale sync lock(s) on startup", recovered)
+            logger.info("Recovered %s stale account sync lock(s) on startup", recovered)
+
+        recovered_epg = recover_stale_epg_sync_locks()
+        if recovered_epg:
+            logger.info("Recovered %s stale EPG sync lock(s) on startup", recovered_epg)
     except Exception as e:
         logger.warning("Could not recover stale sync locks on startup: %s", e)
 
@@ -161,7 +168,7 @@ def _run_startup_tasks():
 
 def _ensure_scheduler_started():
     """Start the background scheduler in one gunicorn worker (file lock)."""
-    if _disable_scheduler:
+    if _disable_scheduler or _disable_in_worker_scheduler:
         return
 
     if sync_scheduler.running:

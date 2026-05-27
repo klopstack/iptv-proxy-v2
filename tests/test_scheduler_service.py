@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from models import SyncMetadata, db
+from models import EpgSource, SyncMetadata, db
 from services.scheduler import (
     DEFAULT_EPG_INTERVAL_HOURS,
     DEFAULT_FCC_INTERVAL_HOURS,
@@ -19,14 +19,16 @@ from services.scheduler import (
     SYNC_KEY_SCHEDULER_HEARTBEAT,
     SyncScheduler,
 )
+from services.scheduler_lock import SchedulerLock
 
 # app fixture is provided by conftest.py
 
 
 @pytest.fixture
-def scheduler(app):
+def scheduler(app, tmp_path):
     """Create a scheduler instance for testing."""
     sched = SyncScheduler(app, interval_hours=6)
+    sched._lock = SchedulerLock(tmp_path / "scheduler.lock")
     yield sched
     # Always cleanup after test
     if sched.running:
@@ -100,6 +102,8 @@ class TestSyncStatus:
             assert "accounts" in status["syncs"]
             assert "epg" in status["syncs"]
             assert "fcc" in status["syncs"]
+            assert "epg_sources" in status
+            assert isinstance(status["epg_sources"], list)
             # All should be overdue since no prior syncs
             assert status["syncs"]["accounts"]["overdue"] is True
             assert status["syncs"]["epg"]["overdue"] is True
@@ -245,12 +249,45 @@ class TestTriggerSync:
             # For now just verify the mocking works
             assert mock_sync is not None
 
-    @patch("services.scheduler.SyncScheduler._sync_epg_sources")
-    def test_trigger_sync_epg(self, mock_sync, scheduler, app):
-        """Test triggering EPG sync manually"""
-        mock_sync.return_value = None
+    @patch("services.epg_sync_orchestrator.EpgSyncOrchestrator.sync_sources")
+    def test_sync_epg_sources_if_due_calls_orchestrator(self, mock_sync_sources, scheduler, app):
+        """Due enabled sources trigger parallel orchestrator sync."""
         with app.app_context():
-            assert mock_sync is not None
+            source = EpgSource(
+                name="Due Scheduler Source",
+                source_type="xmltv_url",
+                url="http://example.com/epg.xml",
+                enabled=True,
+            )
+            db.session.add(source)
+            db.session.commit()
+
+            mock_sync_sources.return_value = {"sources_synced": 1, "total_sources": 1}
+
+            scheduler._sync_epg_sources_if_due()
+
+            mock_sync_sources.assert_called_once()
+            called_sources = mock_sync_sources.call_args[0][0]
+            assert len(called_sources) == 1
+            assert called_sources[0].id == source.id
+            assert mock_sync_sources.call_args[1]["parallel"] is True
+
+    @patch("services.epg_sync_orchestrator.EpgSyncOrchestrator.sync_sources")
+    def test_sync_epg_sources_if_due_skips_fresh_sources(self, mock_sync_sources, scheduler, app):
+        """Recently synced sources are not passed to the orchestrator."""
+        with app.app_context():
+            source = EpgSource(
+                name="Fresh Scheduler Source",
+                source_type="xmltv_url",
+                url="http://example.com/epg.xml",
+                enabled=True,
+                last_sync=datetime.now(timezone.utc).replace(tzinfo=None),
+            )
+            db.session.add(source)
+            db.session.commit()
+
+            scheduler._sync_epg_sources_if_due()
+            mock_sync_sources.assert_not_called()
 
 
 class TestEnsureSchedulerStarted:
@@ -260,6 +297,7 @@ class TestEnsureSchedulerStarted:
         import app as app_module
 
         monkeypatch.setattr(app_module, "_disable_scheduler", False)
+        monkeypatch.setattr(app_module, "_disable_in_worker_scheduler", False)
         starts = []
 
         monkeypatch.setattr(app_module.sync_scheduler, "running", False)

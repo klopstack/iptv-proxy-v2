@@ -304,6 +304,49 @@ class TestSyncSdProgramsIntegration:
             assert len(programs) >= 1
             assert any(p.title == "Test Program" for p in programs)
 
+    def test_sync_reports_progress_callback(self, app, db, sample_sd_source, sample_sd_channels):
+        """Progress callback receives monotonic programme counts."""
+        from services.epg.sd_programs import sync_sd_programs_for_source
+
+        with app.app_context():
+            mock_client = MagicMock()
+            mock_client.get_schedule_md5s.return_value = {
+                "12345": {"2026-01-06": {"md5": "abc123", "lastModified": "2026-01-06T12:00:00Z"}}
+            }
+            mock_client.get_schedules.return_value = [
+                {
+                    "stationID": "12345",
+                    "programs": [
+                        {
+                            "airDateTime": f"2026-01-06T{12 + i:02d}:00:00Z",
+                            "duration": 60,
+                            "programID": f"EP{i:04d}",
+                        }
+                        for i in range(3)
+                    ],
+                }
+            ]
+            mock_client.get_programs.return_value = [
+                {"programID": f"EP{i:04d}", "titles": [{"title120": f"Show {i}"}]}
+                for i in range(3)
+            ]
+
+            counts = []
+
+            def on_progress(**kwargs):
+                counts.append(kwargs.get("programmes_parsed", 0))
+
+            sync_sd_programs_for_source(
+                sample_sd_source,
+                mock_client,
+                days_ahead=1,
+                progress_callback=on_progress,
+            )
+
+            assert counts
+            assert counts[-1] >= counts[0]
+            assert max(counts) >= 3
+
     def test_sync_updates_existing(self, app, db, sample_sd_source, sample_sd_channels):
         """Test that sync updates existing programs."""
         from datetime import timedelta
