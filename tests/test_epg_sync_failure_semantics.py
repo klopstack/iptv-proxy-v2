@@ -83,6 +83,20 @@ class TestUpdateSourceSyncStatusOnFailure:
         mock_commit.assert_called_once()
 
     @patch("services.epg_sync_service.db.session.commit")
+    def test_partial_success_updates_last_sync_and_partial_status(self, mock_commit):
+        source = Mock()
+        before = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        EpgSyncService.update_source_sync_status(
+            source, True, "Synced 5 channels (programme sync failed: timeout)", {"partial": True, "channels_added": 3, "channels_updated": 2}
+        )
+
+        after = datetime.now(timezone.utc).replace(tzinfo=None)
+        assert source.last_sync_status == "partial"
+        assert before <= source.last_sync <= after
+        mock_commit.assert_called_once()
+
+    @patch("services.epg_sync_service.db.session.commit")
     def test_success_updates_last_sync(self, mock_commit):
         source = Mock()
         before = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -201,6 +215,57 @@ class TestOrchestratorPreservesLastSyncOnFailure:
             assert refreshed.sync_in_progress is False
             assert refreshed.last_sync_status == "error"
             assert refreshed.last_sync == old_sync
+
+
+class TestPartialProgrammeSyncFailure:
+    @patch("services.epg.programs.sync_programs_for_source")
+    @patch("services.epg.parsing.sync_epg_source")
+    @patch("services.epg.cache.save_to_cache")
+    def test_partial_failure_advances_last_sync_and_updates_global_metadata(
+        self, mock_cache, mock_channels, mock_programs, app, xmltv_source
+    ):
+        with app.app_context():
+            previous = "2020-01-01T00:00:00+00:00"
+            SyncMetadata.set(SYNC_KEY_LAST_EPG_SYNC, previous)
+            old_sync = (datetime.now(timezone.utc) - timedelta(hours=48)).replace(tzinfo=None)
+            source = db.session.get(EpgSource, xmltv_source.id)
+            source.last_sync = old_sync
+            source.last_sync_status = "success"
+            db.session.commit()
+
+            mock_channels.return_value = {"channels_added": 2, "channels_updated": 0, "programs": 10}
+            mock_programs.side_effect = RuntimeError("programme parse failed")
+
+            with patch("requests.get") as mock_get:
+                mock_resp = mock_get.return_value
+                mock_resp.content = b"<tv></tv>"
+                mock_resp.raise_for_status = lambda: None
+
+                success, message, stats = EpgSyncService.sync_xmltv_url_source(source)
+                EpgSyncService.update_source_sync_status(source, success, message, stats)
+
+            assert success is True
+            assert stats.get("partial") is True
+            refreshed = db.session.get(EpgSource, xmltv_source.id)
+            assert refreshed.last_sync_status == "partial"
+            assert refreshed.last_sync > old_sync
+            assert "programme sync failed" in refreshed.last_sync_message
+
+    @patch("services.epg_sync_orchestrator.EpgSyncService.sync_source")
+    def test_partial_sync_counts_for_global_metadata(self, mock_sync, app, xmltv_source):
+        with app.app_context():
+            previous = "2020-01-01T00:00:00+00:00"
+            SyncMetadata.set(SYNC_KEY_LAST_EPG_SYNC, previous)
+            mock_sync.return_value = (
+                True,
+                "Synced 1 channels (programme sync failed: timeout)",
+                {"partial": True, "channels_added": 1},
+            )
+
+            result = EpgSyncOrchestrator(app).sync_sources([xmltv_source], parallel=False)
+
+            assert SyncMetadata.get(SYNC_KEY_LAST_EPG_SYNC) != previous
+            assert result["results"][0].get("partial") is True
 
 
 class TestSourceNeedsSyncAfterFailure:

@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 import requests
 
 from models import Account
+from services.mediaflow_stream_service import MediaFlowStreamService
 from services.stream_proxy_service import StreamConnectivityTester, StreamProxyService
 
 # ============================================================================
@@ -34,6 +35,18 @@ class TestStreamProxyService:
         mock_stream_service.get_idle_stream_count.assert_called_once_with(1)
         mock_stream_service.release_idle_streams_for_account.assert_called_once_with(1)
         mock_get_cred.assert_called_once()
+
+    @patch("services.stream_proxy_service.ConnectionManager.get_available_credential")
+    def test_handle_credential_shortage_mediaflow_no_attribute_error(self, mock_get_cred, app):
+        """MediaFlow backend exposes idle-stream API as no-ops (no AttributeError)."""
+        service = MediaFlowStreamService()
+        mock_get_cred.return_value = None
+
+        result = StreamProxyService.handle_credential_shortage(1, service)
+
+        assert result is None
+        assert service.get_idle_stream_count(1) == 0
+        assert service.release_idle_streams_for_account(1) == 0
 
     @patch("services.stream_proxy_service.ConnectionManager.get_available_credential")
     def test_handle_credential_shortage_no_idle_streams(self, mock_get_cred, app):

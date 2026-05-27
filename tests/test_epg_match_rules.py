@@ -434,7 +434,7 @@ class TestEpgMatchRulesService:
 
     def test_should_exclude_channel_by_category(self, app):
         """Test excluding a channel by category pattern"""
-        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+        from services.epg.match_rules import EpgMatchRulesService, clear_fcc_pattern_cache
 
         with app.app_context():
             # Clear cache to ensure test isolation
@@ -486,7 +486,7 @@ class TestEpgMatchRulesService:
 
     def test_should_not_exclude_regular_channel(self, app):
         """Test that regular channels are not excluded"""
-        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+        from services.epg.match_rules import EpgMatchRulesService, clear_fcc_pattern_cache
 
         with app.app_context():
             # Clear cache to ensure test isolation
@@ -538,7 +538,7 @@ class TestEpgMatchRulesService:
 
     def test_get_rulesets_for_account_with_assignment(self, app):
         """Test getting rulesets for an account with explicit assignment"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             # Create account
@@ -576,7 +576,7 @@ class TestEpgMatchRulesService:
 
     def test_get_rulesets_for_account_fallback_to_default(self, app):
         """Test getting default rulesets when no assignment exists"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             # Create account
@@ -768,7 +768,7 @@ class TestChannelNumberExtraction:
 
     def test_extract_network_followed_by_number(self, app):
         """Test extracting channel number when network is followed by number"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             assert EpgMatchRulesService._extract_channel_number("US: NBC 13 HD [MONTANA]") == "13"
@@ -779,7 +779,7 @@ class TestChannelNumberExtraction:
 
     def test_extract_number_followed_by_network(self, app):
         """Test extracting channel number when number is followed by network/quality"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             assert EpgMatchRulesService._extract_channel_number("Channel 9 HD") == "9"
@@ -787,7 +787,7 @@ class TestChannelNumberExtraction:
 
     def test_extract_no_channel_number(self, app):
         """Test that None is returned when no channel number is found"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             assert EpgMatchRulesService._extract_channel_number("ESPN") is None
@@ -801,7 +801,7 @@ class TestFccLookupEnhanced:
 
     def test_state_name_mapping(self, app):
         """Test that US state names are correctly mapped to abbreviations"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             # Check the state mapping dictionary exists and has expected entries
@@ -813,7 +813,7 @@ class TestFccLookupEnhanced:
     def test_fcc_lookup_with_state_and_channel(self, app):
         """Test FCC lookup using state name and channel number"""
         from models import FccFacility, FccMatchNetwork, FccMatchStrategy
-        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+        from services.epg.match_rules import EpgMatchRulesService, clear_fcc_pattern_cache
 
         with app.app_context():
             # Clear the cache to ensure our test data is used
@@ -874,7 +874,7 @@ class TestFccLookupEnhanced:
 
     def test_fcc_lookup_without_network(self, app):
         """Test that FCC lookup returns None without network tag"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
 
@@ -894,7 +894,7 @@ class TestCallsignExtraction:
 
     def test_extract_callsign_us_locals_format(self, app):
         """Test extraction from us_locals format like KECI-DT.us_locals1"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             # Format used by US local stations EPG source
@@ -905,7 +905,7 @@ class TestCallsignExtraction:
 
     def test_extract_callsign_simple_country_format(self, app):
         """Test extraction from simple CALLSIGN.country format"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             assert EpgMatchRulesService._extract_callsign("WHAS.us") == "WHAS"
@@ -914,7 +914,7 @@ class TestCallsignExtraction:
 
     def test_extract_callsign_schedules_direct_format(self, app):
         """Test extraction from Schedules Direct format"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             assert EpgMatchRulesService._extract_callsign("I12345.json.schedulesdirect.org") == "12345"
@@ -922,7 +922,7 @@ class TestCallsignExtraction:
 
     def test_extract_callsign_simple(self, app):
         """Test extraction from simple callsign without suffix"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             assert EpgMatchRulesService._extract_callsign("KABC") == "KABC"
@@ -930,7 +930,7 @@ class TestCallsignExtraction:
 
     def test_extract_callsign_none(self, app):
         """Test extraction returns None for invalid inputs"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             assert EpgMatchRulesService._extract_callsign(None) is None
@@ -942,7 +942,7 @@ class TestCallsignNormalization:
 
     def test_normalize_callsign_tv_suffix(self, app):
         """Test normalization removes -TV suffix"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             assert EpgMatchRulesService._normalize_callsign("KECI-TV") == "KECI"
@@ -950,7 +950,7 @@ class TestCallsignNormalization:
 
     def test_normalize_callsign_dt_suffix(self, app):
         """Test normalization removes -DT suffix"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             assert EpgMatchRulesService._normalize_callsign("KECI-DT") == "KECI"
@@ -958,14 +958,14 @@ class TestCallsignNormalization:
 
     def test_normalize_callsign_hd_suffix(self, app):
         """Test normalization removes -HD suffix"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             assert EpgMatchRulesService._normalize_callsign("KECI-HD") == "KECI"
 
     def test_normalize_callsign_no_suffix(self, app):
         """Test normalization preserves callsigns without suffix"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             assert EpgMatchRulesService._normalize_callsign("KECI") == "KECI"
@@ -973,7 +973,7 @@ class TestCallsignNormalization:
 
     def test_normalize_callsign_empty(self, app):
         """Test normalization handles empty input"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             assert EpgMatchRulesService._normalize_callsign("") == ""
@@ -985,7 +985,7 @@ class TestFccToEpgCallsignMatching:
 
     def test_fcc_tv_matches_epg_dt(self, app):
         """Test that FCC's KECI-TV normalizes to match EPG's KECI-DT"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             fcc_callsign = "KECI-TV"
@@ -998,7 +998,7 @@ class TestFccToEpgCallsignMatching:
 
     def test_callsign_index_includes_base_callsign(self, app):
         """Test that callsign index includes both full and base callsigns"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             # Create an EPG source and channel
@@ -1039,7 +1039,7 @@ class TestParseLocationTag:
 
     def test_parse_city_with_state_suffix(self, app):
         """Test parsing tags like WICHITA_KS into city and state"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             city, state = EpgMatchRulesService._parse_location_tag("WICHITA_KS")
@@ -1052,7 +1052,7 @@ class TestParseLocationTag:
 
     def test_parse_state_name_with_underscore(self, app):
         """Test parsing state names like NEW_YORK"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             city, state = EpgMatchRulesService._parse_location_tag("NEW_YORK")
@@ -1065,7 +1065,7 @@ class TestParseLocationTag:
 
     def test_parse_single_word_state_name(self, app):
         """Test parsing single word state names like MONTANA"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             city, state = EpgMatchRulesService._parse_location_tag("MONTANA")
@@ -1078,7 +1078,7 @@ class TestParseLocationTag:
 
     def test_parse_state_abbreviation(self, app):
         """Test parsing 2-letter state abbreviations"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             city, state = EpgMatchRulesService._parse_location_tag("KS")
@@ -1091,7 +1091,7 @@ class TestParseLocationTag:
 
     def test_parse_city_only(self, app):
         """Test parsing city names without state"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             city, state = EpgMatchRulesService._parse_location_tag("BINGHAMTON")
@@ -1104,7 +1104,7 @@ class TestParseLocationTag:
 
     def test_parse_multi_word_city(self, app):
         """Test parsing multi-word city names"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             city, state = EpgMatchRulesService._parse_location_tag("VIRGIN_ISLANDS")
@@ -1117,7 +1117,7 @@ class TestParseLocationTag:
 
     def test_parse_hyphenated_location(self, app):
         """Test parsing hyphenated DMA names like CHICO-READING"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             # Hyphenated without state at end is treated as city
@@ -1127,7 +1127,7 @@ class TestParseLocationTag:
 
     def test_parse_empty_input(self, app):
         """Test parsing empty or None input"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             city, state = EpgMatchRulesService._parse_location_tag("")
@@ -1647,7 +1647,7 @@ class TestChannelNameMappingsService:
 
     def test_apply_exact_mapping(self, app):
         """Test applying exact channel name mapping"""
-        from services.epg_match_rules_service import CachedChannelNameMapping, EpgMatchRulesService
+        from services.epg.match_rules import CachedChannelNameMapping, EpgMatchRulesService
 
         with app.app_context():
             mapping = CachedChannelNameMapping(
@@ -1665,7 +1665,7 @@ class TestChannelNameMappingsService:
 
     def test_apply_exact_mapping_case_sensitive(self, app):
         """Test case sensitive exact mapping"""
-        from services.epg_match_rules_service import CachedChannelNameMapping, EpgMatchRulesService
+        from services.epg.match_rules import CachedChannelNameMapping, EpgMatchRulesService
 
         with app.app_context():
             mapping = CachedChannelNameMapping(
@@ -1688,7 +1688,7 @@ class TestChannelNameMappingsService:
 
     def test_apply_contains_mapping(self, app):
         """Test applying contains channel name mapping"""
-        from services.epg_match_rules_service import CachedChannelNameMapping, EpgMatchRulesService
+        from services.epg.match_rules import CachedChannelNameMapping, EpgMatchRulesService
 
         with app.app_context():
             mapping = CachedChannelNameMapping(
@@ -1705,7 +1705,7 @@ class TestChannelNameMappingsService:
 
     def test_apply_prefix_mapping(self, app):
         """Test applying prefix channel name mapping"""
-        from services.epg_match_rules_service import CachedChannelNameMapping, EpgMatchRulesService
+        from services.epg.match_rules import CachedChannelNameMapping, EpgMatchRulesService
 
         with app.app_context():
             mapping = CachedChannelNameMapping(
@@ -1722,7 +1722,7 @@ class TestChannelNameMappingsService:
 
     def test_apply_suffix_mapping(self, app):
         """Test applying suffix channel name mapping"""
-        from services.epg_match_rules_service import CachedChannelNameMapping, EpgMatchRulesService
+        from services.epg.match_rules import CachedChannelNameMapping, EpgMatchRulesService
 
         with app.app_context():
             mapping = CachedChannelNameMapping(
@@ -1739,7 +1739,7 @@ class TestChannelNameMappingsService:
 
     def test_apply_regex_mapping(self, app):
         """Test applying regex channel name mapping"""
-        from services.epg_match_rules_service import CachedChannelNameMapping, EpgMatchRulesService
+        from services.epg.match_rules import CachedChannelNameMapping, EpgMatchRulesService
 
         with app.app_context():
             mapping = CachedChannelNameMapping(
@@ -1756,7 +1756,7 @@ class TestChannelNameMappingsService:
 
     def test_apply_mapping_empty_name(self, app):
         """Test that empty name returns unchanged"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             result, mapping = EpgMatchRulesService.apply_channel_name_mappings("", [])
@@ -1765,7 +1765,7 @@ class TestChannelNameMappingsService:
 
     def test_apply_mapping_invalid_regex(self, app):
         """Test that invalid regex is skipped gracefully"""
-        from services.epg_match_rules_service import CachedChannelNameMapping, EpgMatchRulesService
+        from services.epg.match_rules import CachedChannelNameMapping, EpgMatchRulesService
 
         with app.app_context():
             mapping = CachedChannelNameMapping(
@@ -1788,7 +1788,7 @@ class TestNetworkDetection:
     def test_detect_network_direct_tag(self, app):
         """Test detecting network from direct tag match"""
         from models import FccMatchNetwork
-        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+        from services.epg.match_rules import EpgMatchRulesService, clear_fcc_pattern_cache
 
         with app.app_context():
             clear_fcc_pattern_cache()
@@ -1815,7 +1815,7 @@ class TestNetworkDetection:
         import json
 
         from models import FccMatchNetwork
-        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+        from services.epg.match_rules import EpgMatchRulesService, clear_fcc_pattern_cache
 
         with app.app_context():
             clear_fcc_pattern_cache()
@@ -1840,7 +1840,7 @@ class TestNetworkDetection:
 
     def test_detect_network_no_match(self, app):
         """Test that no network is detected when no match"""
-        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+        from services.epg.match_rules import EpgMatchRulesService, clear_fcc_pattern_cache
 
         with app.app_context():
             clear_fcc_pattern_cache()
@@ -1855,7 +1855,7 @@ class TestExclusionPatternTypes:
     def test_exclude_by_channel_name_regex(self, app):
         """Test excluding channel by name with regex pattern"""
         from models import Account, Category, Channel, EpgExclusionPattern
-        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+        from services.epg.match_rules import EpgMatchRulesService, clear_fcc_pattern_cache
 
         with app.app_context():
             clear_fcc_pattern_cache()
@@ -1905,7 +1905,7 @@ class TestExclusionPatternTypes:
     def test_exclude_by_tag(self, app):
         """Test excluding channel by tag"""
         from models import Account, Category, Channel, ChannelTag, EpgExclusionPattern, Tag
-        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+        from services.epg.match_rules import EpgMatchRulesService, clear_fcc_pattern_cache
 
         with app.app_context():
             clear_fcc_pattern_cache()
@@ -1968,7 +1968,7 @@ class TestNormalizeName:
 
     def test_normalize_lowercase(self, app):
         """Test that names are lowercased"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             result = EpgMatchRulesService._normalize_name("ESPN HD")
@@ -1976,7 +1976,7 @@ class TestNormalizeName:
 
     def test_normalize_removes_special_chars(self, app):
         """Test that special characters are removed"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             result = EpgMatchRulesService._normalize_name("ESPN-HD!")
@@ -1984,7 +1984,7 @@ class TestNormalizeName:
 
     def test_normalize_collapses_whitespace(self, app):
         """Test that multiple spaces are collapsed"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             result = EpgMatchRulesService._normalize_name("ESPN   HD   Sports")
@@ -1992,7 +1992,7 @@ class TestNormalizeName:
 
     def test_normalize_empty_string(self, app):
         """Test normalizing empty string"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             result = EpgMatchRulesService._normalize_name("")
@@ -2007,7 +2007,7 @@ class TestCachedDataclasses:
         import json
 
         from models import FccMatchNetwork
-        from services.epg_match_rules_service import CachedFccNetwork
+        from services.epg.match_rules import CachedFccNetwork
 
         with app.app_context():
             network = FccMatchNetwork(
@@ -2029,7 +2029,7 @@ class TestCachedDataclasses:
     def test_cached_channel_name_mapping_from_orm(self, app):
         """Test creating CachedChannelNameMapping from ORM object"""
         from models import EpgChannelNameMapping
-        from services.epg_match_rules_service import CachedChannelNameMapping
+        from services.epg.match_rules import CachedChannelNameMapping
 
         with app.app_context():
             mapping = EpgChannelNameMapping(
@@ -2056,7 +2056,7 @@ class TestCachedDataclasses:
         import json
 
         from models import FccMatchChannelPattern
-        from services.epg_match_rules_service import CachedChannelPattern
+        from services.epg.match_rules import CachedChannelPattern
 
         with app.app_context():
             pattern = FccMatchChannelPattern(
@@ -2078,7 +2078,7 @@ class TestCachedDataclasses:
     def test_cached_location_pattern_from_orm(self, app):
         """Test creating CachedLocationPattern from ORM object"""
         from models import FccMatchLocationPattern
-        from services.epg_match_rules_service import CachedLocationPattern
+        from services.epg.match_rules import CachedLocationPattern
 
         with app.app_context():
             pattern = FccMatchLocationPattern(
@@ -2104,7 +2104,7 @@ class TestCachedDataclasses:
     def test_cached_exclusion_pattern_from_orm(self, app):
         """Test creating CachedExclusionPattern from ORM object"""
         from models import EpgExclusionPattern
-        from services.epg_match_rules_service import CachedExclusionPattern
+        from services.epg.match_rules import CachedExclusionPattern
 
         with app.app_context():
             pattern = EpgExclusionPattern(
@@ -2133,7 +2133,7 @@ class TestCacheLoading:
     def test_get_quality_tags_from_db(self, app):
         """Test loading quality tags from database"""
         from models import QualityTag
-        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+        from services.epg.match_rules import EpgMatchRulesService, clear_fcc_pattern_cache
 
         with app.app_context():
             clear_fcc_pattern_cache()
@@ -2153,7 +2153,7 @@ class TestCacheLoading:
     def test_get_country_tags_from_db(self, app):
         """Test loading country tags from database"""
         from models import CountryTag
-        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+        from services.epg.match_rules import EpgMatchRulesService, clear_fcc_pattern_cache
 
         with app.app_context():
             clear_fcc_pattern_cache()
@@ -2173,7 +2173,7 @@ class TestCacheLoading:
     def test_get_callsign_suffixes_from_db(self, app):
         """Test loading callsign suffixes from database"""
         from models import CallsignSuffix
-        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+        from services.epg.match_rules import EpgMatchRulesService, clear_fcc_pattern_cache
 
         with app.app_context():
             clear_fcc_pattern_cache()
@@ -2195,7 +2195,7 @@ class TestCacheLoading:
         import json
 
         from models import EpgCountrySuffix
-        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+        from services.epg.match_rules import EpgMatchRulesService, clear_fcc_pattern_cache
 
         with app.app_context():
             clear_fcc_pattern_cache()
@@ -2223,7 +2223,7 @@ class TestGetSourceValue:
 
     def test_get_channel_name(self, app):
         """Test getting channel_name source"""
-        from services.epg_match_rules_service import EpgMatchRule, EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRule, EpgMatchRulesService
 
         with app.app_context():
             # Create a minimal mock channel
@@ -2239,7 +2239,7 @@ class TestGetSourceValue:
 
     def test_get_cleaned_name(self, app):
         """Test getting cleaned_name source"""
-        from services.epg_match_rules_service import EpgMatchRule, EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRule, EpgMatchRulesService
 
         with app.app_context():
 
@@ -2255,7 +2255,7 @@ class TestGetSourceValue:
 
     def test_get_epg_channel_id(self, app):
         """Test getting epg_channel_id source"""
-        from services.epg_match_rules_service import EpgMatchRule, EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRule, EpgMatchRulesService
 
         with app.app_context():
 
@@ -2271,7 +2271,7 @@ class TestGetSourceValue:
 
     def test_get_category_name(self, app):
         """Test getting category_name source"""
-        from services.epg_match_rules_service import EpgMatchRule, EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRule, EpgMatchRulesService
 
         with app.app_context():
 
@@ -2290,7 +2290,7 @@ class TestGetSourceValue:
 
     def test_get_source_with_name_mapping(self, app):
         """Test getting source value with name mapping applied"""
-        from services.epg_match_rules_service import CachedChannelNameMapping, EpgMatchRule, EpgMatchRulesService
+        from services.epg.match_rules import CachedChannelNameMapping, EpgMatchRule, EpgMatchRulesService
 
         with app.app_context():
 
@@ -2320,7 +2320,7 @@ class TestGetChannelTags:
     def test_get_channel_tags(self, app):
         """Test getting tags for a channel"""
         from models import Account, ChannelTag, Tag
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             # Create account
@@ -2352,7 +2352,7 @@ class TestGetChannelTags:
 
     def test_get_channel_tags_none(self, app):
         """Test getting tags for channel with no tags"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             tags = EpgMatchRulesService._get_channel_tags(999999, "nonexistent")
@@ -2365,7 +2365,7 @@ class TestFccStrategies:
     def test_get_fcc_strategies(self, app):
         """Test getting FCC matching strategies from DB"""
         from models import FccMatchStrategy
-        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+        from services.epg.match_rules import EpgMatchRulesService, clear_fcc_pattern_cache
 
         with app.app_context():
             clear_fcc_pattern_cache()
@@ -2393,7 +2393,7 @@ class TestFccStrategies:
     def test_get_fcc_location_patterns(self, app):
         """Test getting FCC location patterns from DB"""
         from models import FccMatchLocationPattern
-        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+        from services.epg.match_rules import EpgMatchRulesService, clear_fcc_pattern_cache
 
         with app.app_context():
             clear_fcc_pattern_cache()
@@ -2421,7 +2421,7 @@ class TestFccStrategies:
     def test_get_network_names(self, app):
         """Test getting network names set"""
         from models import FccMatchNetwork
-        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+        from services.epg.match_rules import EpgMatchRulesService, clear_fcc_pattern_cache
 
         with app.app_context():
             clear_fcc_pattern_cache()
@@ -2457,7 +2457,7 @@ class TestExclusionPatternCaching:
     def test_get_enabled_exclusion_patterns(self, app):
         """Test getting enabled exclusion patterns with caching"""
         from models import EpgExclusionPattern
-        from services.epg_match_rules_service import EpgMatchRulesService, clear_fcc_pattern_cache
+        from services.epg.match_rules import EpgMatchRulesService, clear_fcc_pattern_cache
 
         with app.app_context():
             clear_fcc_pattern_cache()
@@ -2495,7 +2495,7 @@ class TestApplyMatchRule:
     def test_apply_match_rule_skip_action(self, app):
         """Test match rule with skip action returns None"""
         from models import Category, EpgChannel, EpgMatchRule, EpgSource
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             # Create account and channel
@@ -2556,7 +2556,7 @@ class TestApplyMatchRule:
     def test_apply_match_rule_fallback_action(self, app):
         """Test match rule with fallback action"""
         from models import Category, EpgChannel, EpgMatchRule, EpgSource
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             account = Account(name="Test", server="test.com")
@@ -2617,7 +2617,7 @@ class TestApplyMatchRule:
     def test_apply_match_rule_callsign_tag(self, app):
         """Test match rule with callsign_tag match type"""
         from models import Category, EpgChannel, EpgMatchRule, EpgSource
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             account = Account(name="Test", server="test.com")
@@ -2677,7 +2677,7 @@ class TestApplyMatchRule:
     def test_apply_match_rule_callsign_from_name(self, app):
         """Test match rule with callsign_name match type"""
         from models import Category, EpgChannel, EpgMatchRule, EpgSource
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             account = Account(name="Test", server="test.com")
@@ -2737,7 +2737,7 @@ class TestApplyMatchRule:
     def test_apply_match_rule_fuzzy_name(self, app):
         """Test match rule with fuzzy_name match type"""
         from models import Category, EpgChannel, EpgMatchRule, EpgSource
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             account = Account(name="Test", server="test.com")
@@ -2797,7 +2797,7 @@ class TestApplyMatchRule:
     def test_apply_match_rule_regex(self, app):
         """Test match rule with regex match type"""
         from models import Category, EpgChannel, EpgMatchRule, EpgSource
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             account = Account(name="Test", server="test.com")
@@ -2858,7 +2858,7 @@ class TestApplyMatchRule:
     def test_apply_match_rule_tag_based(self, app):
         """Test match rule with tag_based match type"""
         from models import Category, EpgChannel, EpgMatchRule, EpgSource
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             account = Account(name="Test", server="test.com")
@@ -2918,7 +2918,7 @@ class TestApplyMatchRule:
     def test_apply_match_rule_category_pattern(self, app):
         """Test match rule with category_pattern match type"""
         from models import Category, EpgChannel, EpgMatchRule, EpgSource
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             account = Account(name="Test", server="test.com")
@@ -2979,7 +2979,7 @@ class TestApplyMatchRule:
     def test_apply_match_rule_network_fallback(self, app):
         """Test match rule with network_fallback match type"""
         from models import Category, EpgChannel, EpgMatchRule, EpgSource
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             account = Account(name="Test", server="test.com")
@@ -3041,7 +3041,7 @@ class TestNormalizeCallsign:
 
     def test_normalize_callsign_with_suffix(self, app):
         """Test normalizing callsigns with common suffixes"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             # Standard suffixes should be removed
@@ -3051,7 +3051,7 @@ class TestNormalizeCallsign:
 
     def test_normalize_callsign_without_suffix(self, app):
         """Test normalizing callsigns without suffixes"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             assert EpgMatchRulesService._normalize_callsign("KABC") == "KABC"
@@ -3059,7 +3059,7 @@ class TestNormalizeCallsign:
 
     def test_normalize_callsign_empty(self, app):
         """Test normalizing empty or None callsigns"""
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             assert EpgMatchRulesService._normalize_callsign("") == ""
@@ -3072,7 +3072,7 @@ class TestMatchRuleFilters:
     def test_match_channels_with_category_filter(self, app):
         """Test that match rules with category filter are applied correctly"""
         from models import Category, EpgChannel, EpgMatchRule, EpgMatchRuleSet, EpgSource
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
 
         with app.app_context():
             account = Account(name="Test", server="test.com")

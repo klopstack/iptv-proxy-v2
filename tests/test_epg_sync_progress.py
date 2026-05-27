@@ -127,6 +127,7 @@ class TestEpgSyncProgress:
     def test_set_phase_missing_source_is_noop(self, app):
         with app.app_context():
             EpgSyncProgress.set_phase(99999, PHASE_QUEUED)
+            assert db.session.get(EpgSource, 99999) is None
 
     def test_snapshot_shape(self, app, epg_source):
         with app.app_context():

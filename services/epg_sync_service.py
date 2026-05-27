@@ -45,6 +45,76 @@ class EpgSyncService:
     """Handles EPG synchronization from various sources"""
 
     @staticmethod
+    def _apply_program_sync_result(
+        stats: Dict,
+        program_stats: Dict,
+        *,
+        include_deleted: bool = True,
+    ) -> None:
+        stats["programs_added"] = program_stats.get("programs_added", 0)
+        stats["programs_updated"] = program_stats.get("programs_updated", 0)
+        if include_deleted:
+            stats["programs_deleted"] = program_stats.get("programs_deleted", 0)
+
+    @staticmethod
+    def _mark_partial_program_failure(stats: Dict, message: str, exc: Exception) -> str:
+        stats["partial"] = True
+        suffix = f" (programme sync failed: {exc})"
+        return message + suffix if suffix not in message else message
+
+    @staticmethod
+    def _sync_programs_with_progress(
+        source: EpgSource,
+        xml_content: bytes,
+        stats: Dict,
+        progress: ProgressCallback,
+        *,
+        programmes_total_estimate: Optional[int] = None,
+    ) -> str:
+        """
+        Sync programmes after channels; returns channel sync message (possibly amended).
+
+        On failure sets stats['partial'] and appends warning to message; does not raise.
+        """
+        from services.epg.programs import sync_programs_for_source
+
+        message = f"Synced {stats['channels_added'] + stats['channels_updated']} channels"
+        try:
+            if progress:
+                progress(
+                    PHASE_PROGRAMS,
+                    message="Syncing programmes",
+                    programmes_total_estimate=programmes_total_estimate or stats.get("programs"),
+                )
+
+            preview_hours = get_epg_sync_interval()
+
+            def program_progress(**counts: Any) -> None:
+                if progress:
+                    progress(PHASE_PROGRAMS, **counts)
+
+            program_stats = sync_programs_for_source(
+                source,
+                xml_content,
+                preview_hours=preview_hours,
+                load_all_for_matched=True,
+                progress_callback=program_progress,
+            )
+            logger.info(
+                "Synced EPG programs for source %s: added=%s, updated=%s, deleted=%s, channels=%s",
+                source.id,
+                program_stats.get("programs_added", 0),
+                program_stats.get("programs_updated", 0),
+                program_stats.get("programs_deleted", 0),
+                program_stats.get("channels_processed", 0),
+            )
+            EpgSyncService._apply_program_sync_result(stats, program_stats)
+        except Exception as e:
+            logger.error("Failed to sync EPG programs for source %s: %s", source.id, e, exc_info=True)
+            message = EpgSyncService._mark_partial_program_failure(stats, message, e)
+        return message
+
+    @staticmethod
     def sync_provider_source(source: EpgSource, progress: ProgressCallback = None) -> Tuple[bool, str, Dict]:
         """
         Sync EPG from an IPTV provider account.
@@ -83,49 +153,11 @@ class EpgSyncService:
             stats = sync_epg_source(source, xml_content)
             logger.info(f"Synced EPG channels for source {source.id}: {stats}")
 
-            # Cache the raw XMLTV for EPG generation
             save_to_cache(source.id, xml_content)
-
-            # Sync program data to database
-            try:
-                from services.epg.programs import sync_programs_for_source
-
-                if progress:
-                    progress(
-                        PHASE_PROGRAMS,
-                        message="Syncing programmes",
-                        programmes_total_estimate=stats.get("programs"),
-                    )
-
-                preview_hours = get_epg_sync_interval()
-
-                def program_progress(**counts: Any) -> None:
-                    if progress:
-                        progress(PHASE_PROGRAMS, **counts)
-
-                program_stats = sync_programs_for_source(
-                    source,
-                    xml_content,
-                    preview_hours=preview_hours,
-                    load_all_for_matched=True,
-                    progress_callback=program_progress,
-                )
-                logger.info(
-                    f"Synced EPG programs for source {source.id}: "
-                    f"added={program_stats.get('programs_added', 0)}, "
-                    f"updated={program_stats.get('programs_updated', 0)}, "
-                    f"deleted={program_stats.get('programs_deleted', 0)}, "
-                    f"channels={program_stats.get('channels_processed', 0)}"
-                )
-                stats["programs_added"] = program_stats.get("programs_added", 0)
-                stats["programs_updated"] = program_stats.get("programs_updated", 0)
-                stats["programs_deleted"] = program_stats.get("programs_deleted", 0)
-            except Exception as e:
-                logger.error(f"Failed to sync EPG programs for source {source.id}: {e}", exc_info=True)
-                # Don't fail the entire sync if program sync fails
-
-            channels_synced = stats["channels_added"] + stats["channels_updated"]
-            return (True, f"Synced {channels_synced} channels", stats)
+            message = EpgSyncService._sync_programs_with_progress(
+                source, xml_content, stats, progress, programmes_total_estimate=stats.get("programs")
+            )
+            return (True, message, stats)
 
         except Exception as e:
             logger.error(f"Error syncing provider EPG source {source.id}: {e}", exc_info=True)
@@ -168,49 +200,11 @@ class EpgSyncService:
             stats = sync_epg_source(source, response.content)
             logger.info(f"Synced EPG channels for source {source.id}: {stats}")
 
-            # Cache the raw XMLTV for EPG generation
             save_to_cache(source.id, response.content)
-
-            # Sync program data to database
-            try:
-                from services.epg.programs import sync_programs_for_source
-
-                if progress:
-                    progress(
-                        PHASE_PROGRAMS,
-                        message="Syncing programmes",
-                        programmes_total_estimate=stats.get("programs"),
-                    )
-
-                preview_hours = get_epg_sync_interval()
-
-                def program_progress(**counts: Any) -> None:
-                    if progress:
-                        progress(PHASE_PROGRAMS, **counts)
-
-                program_stats = sync_programs_for_source(
-                    source,
-                    response.content,
-                    preview_hours=preview_hours,
-                    load_all_for_matched=True,
-                    progress_callback=program_progress,
-                )
-                logger.info(
-                    f"Synced EPG programs for source {source.id}: "
-                    f"added={program_stats.get('programs_added', 0)}, "
-                    f"updated={program_stats.get('programs_updated', 0)}, "
-                    f"deleted={program_stats.get('programs_deleted', 0)}, "
-                    f"channels={program_stats.get('channels_processed', 0)}"
-                )
-                stats["programs_added"] = program_stats.get("programs_added", 0)
-                stats["programs_updated"] = program_stats.get("programs_updated", 0)
-                stats["programs_deleted"] = program_stats.get("programs_deleted", 0)
-            except Exception as e:
-                logger.error(f"Failed to sync EPG programs for source {source.id}: {e}", exc_info=True)
-                # Don't fail the entire sync if program sync fails
-
-            channels_synced = stats["channels_added"] + stats["channels_updated"]
-            return (True, f"Synced {channels_synced} channels", stats)
+            message = EpgSyncService._sync_programs_with_progress(
+                source, response.content, stats, progress, programmes_total_estimate=stats.get("programs")
+            )
+            return (True, message, stats)
 
         except Exception as e:
             logger.error(f"Error syncing XMLTV URL source {source.id}: {e}", exc_info=True)
@@ -255,6 +249,8 @@ class EpgSyncService:
             stats = sync_sd_channels_to_epg(source, channels)
             logger.info(f"Synced SD EPG channels for source {source.id}: {stats}")
 
+            channels_synced = stats["channels_added"] + stats["channels_updated"]
+            message = f"Synced {channels_synced} channels from Schedules Direct"
             try:
                 from services.epg.sd_programs import sync_sd_programs_for_source
 
@@ -274,19 +270,18 @@ class EpgSyncService:
                     progress_callback=program_progress,
                 )
                 logger.info(
-                    f"Synced SD programs for source {source.id}: "
-                    f"added={program_stats.get('programs_added', 0)}, "
-                    f"updated={program_stats.get('programs_updated', 0)}, "
-                    f"channels={program_stats.get('channels_processed', 0)}"
+                    "Synced SD programs for source %s: added=%s, updated=%s, channels=%s",
+                    source.id,
+                    program_stats.get("programs_added", 0),
+                    program_stats.get("programs_updated", 0),
+                    program_stats.get("channels_processed", 0),
                 )
-                stats["programs_added"] = program_stats.get("programs_added", 0)
-                stats["programs_updated"] = program_stats.get("programs_updated", 0)
+                EpgSyncService._apply_program_sync_result(stats, program_stats, include_deleted=False)
             except Exception as e:
-                logger.error(f"Failed to sync SD programs for source {source.id}: {e}", exc_info=True)
-                # Don't fail the entire sync if program sync fails
+                logger.error("Failed to sync SD programs for source %s: %s", source.id, e, exc_info=True)
+                message = EpgSyncService._mark_partial_program_failure(stats, message, e)
 
-            channels_synced = stats["channels_added"] + stats["channels_updated"]
-            return (True, f"Synced {channels_synced} channels from Schedules Direct", stats)
+            return (True, message, stats)
 
         except SchedulesDirectError as e:
             logger.error(f"Schedules Direct error for source {source.id}: {e}")
@@ -339,46 +334,10 @@ class EpgSyncService:
             logger.info(f"Synced EPG channels for source {source.id}: {stats}")
 
             save_to_cache(source.id, xml_content)
-
-            try:
-                from services.epg.programs import sync_programs_for_source
-
-                if progress:
-                    progress(
-                        PHASE_PROGRAMS,
-                        message="Syncing programmes",
-                        programmes_total_estimate=stats.get("programs"),
-                    )
-
-                preview_hours = get_epg_sync_interval()
-
-                def program_progress(**counts: Any) -> None:
-                    if progress:
-                        progress(PHASE_PROGRAMS, **counts)
-
-                program_stats = sync_programs_for_source(
-                    source,
-                    xml_content,
-                    preview_hours=preview_hours,
-                    load_all_for_matched=True,
-                    progress_callback=program_progress,
-                )
-                logger.info(
-                    f"Synced EPG programs for source {source.id}: "
-                    f"added={program_stats.get('programs_added', 0)}, "
-                    f"updated={program_stats.get('programs_updated', 0)}, "
-                    f"deleted={program_stats.get('programs_deleted', 0)}, "
-                    f"channels={program_stats.get('channels_processed', 0)}"
-                )
-                stats["programs_added"] = program_stats.get("programs_added", 0)
-                stats["programs_updated"] = program_stats.get("programs_updated", 0)
-                stats["programs_deleted"] = program_stats.get("programs_deleted", 0)
-            except Exception as e:
-                logger.error(f"Failed to sync EPG programs for source {source.id}: {e}", exc_info=True)
-                # Don't fail the entire sync if program sync fails
-
-            channels_synced = stats["channels_added"] + stats["channels_updated"]
-            return (True, f"Synced {channels_synced} channels", stats)
+            message = EpgSyncService._sync_programs_with_progress(
+                source, xml_content, stats, progress, programmes_total_estimate=stats.get("programs")
+            )
+            return (True, message, stats)
 
         except Exception as e:
             logger.error(f"Error syncing XMLTV grabber source {source.id}: {e}", exc_info=True)
@@ -445,7 +404,10 @@ class EpgSyncService:
             message: Status message
             stats: Sync statistics with 'channels_added' and 'channels_updated'
         """
-        source.last_sync_status = "success" if success else "error"
+        if success and stats.get("partial"):
+            source.last_sync_status = "partial"
+        else:
+            source.last_sync_status = "success" if success else "error"
         source.last_sync_message = message
         source.sync_in_progress = False
         if success:

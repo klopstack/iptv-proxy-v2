@@ -107,33 +107,24 @@ class TestAccountEpgSource:
         assert response.json["success"] is True
         assert response.json["source_id"] == 1
 
-    @patch("routes.epg.channels.IPTVService")
-    @patch("routes.epg.channels.sync_epg_source")
+    @patch("services.epg_sync_orchestrator.EpgSyncOrchestrator")
     @patch("routes.epg.channels.create_provider_epg_source")
-    def test_create_account_epg_source_with_sync(
-        self, mock_create, mock_sync, MockIPTVService, app, client, test_account
-    ):
-        """Test creating account EPG source with immediate sync"""
-        # Create a mock source with a mock account that has proper attributes
-        mock_account = MagicMock()
-        mock_account.server = "example.com"
-        mock_account.user_agent = "test"
-        mock_account.get_primary_credential.return_value = None
-        mock_account.username = "test"
-        mock_account.password = "test"
-
+    def test_create_account_epg_source_with_sync(self, mock_create, mock_orchestrator_cls, app, client, test_account):
+        """Test creating account EPG source with immediate sync via orchestrator"""
         mock_source = MagicMock()
         mock_source.id = 1
-        mock_source.account = mock_account
         mock_create.return_value = mock_source
 
-        mock_service = MagicMock()
-        mock_service.get_xmltv.return_value = b"<tv></tv>"
-        MockIPTVService.return_value = mock_service
-
-        mock_sync.return_value = {"channels_added": 10, "channels_updated": 5}
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.sync_source_by_id.return_value = {
+            "success": True,
+            "message": "Synced 15 channels",
+            "stats": {"channels_added": 10, "channels_updated": 5},
+        }
+        mock_orchestrator_cls.return_value = mock_orchestrator
 
         response = client.post(f"/api/accounts/{test_account}/epg-source?sync=true")
         assert response.status_code == 200
         assert response.json["success"] is True
         assert "synced" in response.json["message"].lower()
+        mock_orchestrator.sync_source_by_id.assert_called_once_with(1, force=False)

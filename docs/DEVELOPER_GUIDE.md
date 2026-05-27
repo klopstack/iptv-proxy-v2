@@ -220,7 +220,7 @@ Copy all three files when the app is running with WAL mode:
 
 ### Indexes
 
-Use `python run_migrations.py` only. The legacy `add_indexes.py` script delegates to the migration runner.
+Use `python run_migrations.py` only for schema migrations.
 
 ## Database Migrations
 

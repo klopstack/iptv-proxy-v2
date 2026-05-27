@@ -65,12 +65,6 @@ class TestSourceNeedsSync:
             db.session.commit()
             assert source_needs_sync(xmltv_source, 24) is True
 
-    def test_naive_last_sync_compared_in_utc(self, app, xmltv_source):
-        with app.app_context():
-            xmltv_source.last_sync = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=48)
-            db.session.commit()
-            assert source_needs_sync(xmltv_source, 24) is True
-
 
 class TestEpgSyncOrchestratorEmpty:
     def test_sync_sources_empty(self, app):

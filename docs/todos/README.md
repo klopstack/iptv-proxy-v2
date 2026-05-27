@@ -198,9 +198,9 @@ These items were derived from full codebase reviews covering:
 - ~~Orchestrator integration tests only mocked `sync_source`~~ (fixed in 49)
 
 **Other remaining debt:**
-- ~6,500 lines of overlapping EPG tests across 4 files
-- Zero MediaFlow/stream-factory tests
-- `is_visible` column semantics contradict FilterService docstrings
+- EPG test modules remain large (~2.7k lines across orchestrator/service/route tests); further consolidation optional
+- `is_visible` column semantics contradict FilterService docstrings (TODO 27 documents admin-only use)
 - Playlist config PUT lacks schema validation; slug lookup is O(n)
 - Provider EPG de-emphasized in UI with deprecation warnings (TODO 31 ✅)
-- Vitest coverage expanded to 5 test files / 53 tests across lib helpers (TODO 32 ✅)
+- Vitest coverage expanded across lib helpers (TODO 32 ✅)
+- MediaFlow/stream-factory tests added (TODO 26 ✅); EPG audit remediation (52) complete

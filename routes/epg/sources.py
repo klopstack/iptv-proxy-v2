@@ -76,7 +76,7 @@ def create_epg_source():
     if not data.get("source_type"):
         return jsonify({"error": "Source type is required"}), 400
 
-    valid_types = ["provider", "schedules_direct", "xmltv_url", "xmltv_file", "xmltv_grabber"]
+    valid_types = ["provider", "schedules_direct", "xmltv_url", "xmltv_grabber"]
     if data["source_type"] not in valid_types:
         return jsonify({"error": f"Invalid source type. Must be one of: {valid_types}"}), 400
 

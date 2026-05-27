@@ -423,6 +423,16 @@ class MediaFlowStreamService:
                     stream = self._streams.pop(stream_key)
                     self._close_stream(stream)
 
+    def get_idle_stream_count(self, account_id: int) -> int:
+        """MediaFlow has no multiplexer idle release; always report zero idle streams."""
+        return 0
+
+    def release_idle_streams_for_account(
+        self, account_id: int, credential_id: Optional[int] = None, max_to_release: int = 1
+    ) -> int:
+        """No-op — credential shortage handling uses other strategies for MediaFlow."""
+        return 0
+
 
 # Global instance
 _mediaflow_service: Optional[MediaFlowStreamService] = None

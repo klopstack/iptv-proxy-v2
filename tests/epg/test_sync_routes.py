@@ -51,22 +51,19 @@ class TestEpgSourceSync:
         assert response.status_code == 400
         assert "url" in response.json["error"].lower()
 
-    @patch("services.iptv_service.IPTVService.get_xmltv")
-    @patch("services.epg.parsing.sync_epg_source")
-    def test_sync_provider_source_success(self, mock_sync, mock_get_xmltv, app, client, test_epg_source, test_account):
-        """Test successful provider source sync"""
-        mock_get_xmltv.return_value = b"<tv></tv>"
-        mock_sync.return_value = {"channels_added": 10, "channels_updated": 5}
+    @patch("services.epg_sync_orchestrator.EpgSyncService.sync_source")
+    def test_sync_provider_source_success(self, mock_sync, app, client, test_epg_source, test_account):
+        """Test successful provider source sync via orchestrator"""
+        mock_sync.return_value = (True, "ok", {"channels_added": 10, "channels_updated": 5})
 
         response = client.post(f"/api/epg/sources/{test_epg_source}/sync")
         assert response.status_code == 200
         assert response.json["success"] is True
+        mock_sync.assert_called_once()
 
-    @patch("requests.get")
-    @patch("services.epg.parsing.sync_epg_source")
-    def test_sync_xmltv_url_success(self, mock_sync, mock_requests, app, client):
-        """Test successful XMLTV URL source sync"""
-        # Create XMLTV URL source
+    @patch("services.epg_sync_orchestrator.EpgSyncService.sync_source")
+    def test_sync_xmltv_url_success(self, mock_sync, app, client):
+        """Test successful XMLTV URL source sync via orchestrator"""
         with app.app_context():
             source = EpgSource(
                 name="XMLTV Source",
@@ -78,16 +75,12 @@ class TestEpgSourceSync:
             db.session.commit()
             source_id = source.id
 
-        # Mock the requests response
-        mock_response = MagicMock()
-        mock_response.content = b"<tv></tv>"
-        mock_requests.return_value = mock_response
-
-        mock_sync.return_value = {"channels_added": 5, "channels_updated": 2}
+        mock_sync.return_value = (True, "ok", {"channels_added": 5, "channels_updated": 2})
 
         response = client.post(f"/api/epg/sources/{source_id}/sync")
         assert response.status_code == 200
         assert response.json["success"] is True
+        mock_sync.assert_called_once()
 
     def test_sync_schedules_direct_missing_credentials(self, app, client):
         """Test syncing Schedules Direct source without credentials returns 400"""
@@ -222,6 +215,28 @@ class TestEpgSourceSync:
             assert refreshed.sync_in_progress is False
             progress = json.loads(refreshed.sync_progress)
             assert progress.get("message") == "ok"
+
+    @patch("services.epg_sync_orchestrator.EpgSyncService.sync_source")
+    def test_sync_with_force_overrides_in_progress_lock(self, mock_sync, app, client):
+        with app.app_context():
+            source = EpgSource(
+                name="Force Source",
+                source_type="xmltv_url",
+                url="http://example.com/epg.xml",
+                enabled=True,
+                sync_in_progress=True,
+                sync_started_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            )
+            db.session.add(source)
+            db.session.commit()
+            source_id = source.id
+
+            mock_sync.return_value = (True, "ok", {"channels_added": 1})
+
+            response = client.post(f"/api/epg/sources/{source_id}/sync?force=true")
+            assert response.status_code == 200
+            assert response.json["success"] is True
+            mock_sync.assert_called_once()
 
     def test_sync_returns_409_when_already_in_progress(self, app, client):
         with app.app_context():

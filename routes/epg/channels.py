@@ -672,26 +672,50 @@ def create_account_epg_source(account_id):
 
     source = create_provider_epg_source(account_id)
 
-    # Optionally sync immediately
+    # Optionally sync immediately via orchestrator (channels, programmes, cache, locks)
     if request.args.get("sync", "false").lower() == "true":
-        account = source.account
-        cred = account.get_primary_credential()
-        if cred:
-            service = IPTVService(account.server, cred.username, cred.password, account.user_agent or "okhttp/3.14.9")
-        else:
-            service = IPTVService(
-                account.server, account.username, account.password, account.user_agent or "okhttp/3.14.9"
+        from flask import current_app
+
+        from services.epg_sync_orchestrator import EpgSyncOrchestrator
+
+        force = request.args.get("force", "false").lower() in ("1", "true", "yes")
+        app = current_app._get_current_object()
+        result = EpgSyncOrchestrator(app).sync_source_by_id(source.id, force=force)
+
+        if result.get("skipped"):
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "source_id": source.id,
+                        "error": result.get("message", "Sync already in progress"),
+                    }
+                ),
+                409,
             )
 
-        xml_content = service.get_xmltv()
-        stats = sync_epg_source(source, xml_content)
+        if not result.get("success"):
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "source_id": source.id,
+                        "error": result.get("message", "Sync failed"),
+                    }
+                ),
+                400,
+            )
+
+        stats = result.get("stats") or {}
+        channels = stats.get("channels_added", 0) + stats.get("channels_updated", 0)
 
         return jsonify(
             {
                 "success": True,
                 "source_id": source.id,
-                "message": f"EPG source created and synced ({stats['channels_added'] + stats['channels_updated']} channels)",
+                "message": result.get("message") or f"EPG source created and synced ({channels} channels)",
                 "stats": stats,
+                "partial": bool(result.get("partial") or stats.get("partial")),
             }
         )
 

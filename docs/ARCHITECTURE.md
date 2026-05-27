@@ -197,6 +197,16 @@ Background scheduler (`services/scheduler.py`) syncs EPG data:
 3. Disable or delete the legacy provider source once mappings are verified
 4. Generated EPG (`/epg/<account_id>.xml`) uses database-first data from mappings — no provider passthrough at serve time
 
+### EPG sync entry points (three tiers)
+
+| Tier | Trigger | Implementation | Progress / locks |
+|------|---------|----------------|------------------|
+| **Source** | `POST /api/sync/epg`, `POST /api/epg/sources/<id>/sync`, scheduler due sync, PPV sync API, account `POST .../epg-source?sync=true` | [`EpgSyncOrchestrator`](services/epg_sync_orchestrator.py) → [`EpgSyncService`](services/epg_sync_service.py) | Per-source `sync_in_progress`, `sync_phase`, JSON progress |
+| **SD lineup** | `POST /api/epg/sd/lineups/<id>/sync` (inline on EPG sources page) | [`sync_sd_lineup_impl`](routes/epg/common.py) — lineup stations only | Updates `SdLineup.last_sync` only; does not use source-level orchestrator progress |
+| **Scheduler** | `run_scheduler.py` / `_sync_epg_sources_if_due` | `EpgSyncOrchestrator.sync_due_sources()` | Same as source tier for due enabled sources |
+
+Manual bulk sync from Settings uses the source tier. Schedules Direct **sources** should use the SD tab for lineup-level channel imports; source-level SD sync exists in the API but the UI directs users to lineup sync.
+
 ### EPG Generation Flow
 
 ```

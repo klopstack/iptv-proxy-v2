@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from models import Account, EpgSource, SyncMetadata
+from services.epg_sync_orchestrator import SYNC_KEY_LAST_EPG_SYNC
 from services.scheduler_lock import SchedulerLock
 from services.sync_service import ChannelSyncService
 from services.tag_service import TagService
@@ -23,7 +24,6 @@ DEFAULT_FCC_INTERVAL_HOURS = 168  # Weekly
 
 # Metadata keys for persistent sync state
 SYNC_KEY_LAST_ACCOUNT_SYNC = "last_account_sync"
-SYNC_KEY_LAST_EPG_SYNC = "last_epg_sync"
 SYNC_KEY_LAST_FCC_SYNC = "last_fcc_sync"
 
 # Metadata keys for interval settings (persisted)
@@ -484,24 +484,18 @@ class SyncScheduler:
     def _sync_epg_sources_if_due(self):
         """Sync enabled EPG sources that are past their interval (parallel, per-source progress)."""
         try:
-            from services.epg_sync_orchestrator import EpgSyncOrchestrator, source_needs_sync
+            from services.epg_sync_orchestrator import EpgSyncOrchestrator
 
-            due = [
-                s
-                for s in EpgSource.query.filter_by(enabled=True).all()
-                if source_needs_sync(s, self._epg_interval_hours)
-            ]
-            if not due:
+            self._touch_heartbeat()
+            result = EpgSyncOrchestrator(self.app).sync_due_sources(self._epg_interval_hours, parallel=True)
+            self._touch_heartbeat()
+            if result.get("total_sources", 0) == 0:
                 return
-
-            logger.info("EPG sync: %s source(s) due (interval %sh)", len(due), self._epg_interval_hours)
-            self._touch_heartbeat()
-            result = EpgSyncOrchestrator(self.app).sync_sources(due, parallel=True)
-            self._touch_heartbeat()
             logger.info(
-                "EPG sync pass complete: %s/%s succeeded",
+                "EPG sync pass complete: %s/%s succeeded (%s skipped)",
                 result.get("sources_synced", 0),
                 result.get("total_sources", 0),
+                result.get("sources_skipped", 0),
             )
         except Exception as e:
             logger.error("Error in EPG source sync: %s", e)

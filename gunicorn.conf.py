@@ -1,9 +1,9 @@
 """
 Gunicorn configuration for IPTV Proxy v2
 
-This config ensures:
-1. Only one worker runs the background scheduler (to avoid duplicate health checks)
-2. Workers are properly configured for streaming
+HTTP workers serve the Flask app. The background scheduler runs in a separate
+process (run_scheduler.py via entrypoint.sh) with DISABLE_IN_WORKER_SCHEDULER=true
+so gunicorn workers do not start a duplicate scheduler.
 """
 
 import os

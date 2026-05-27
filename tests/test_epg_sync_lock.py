@@ -78,6 +78,29 @@ class TestEpgSyncLockAcquire:
 
 class TestOrchestratorSkipsInProgress:
     @patch("services.epg_sync_orchestrator.EpgSyncService.sync_source")
+    def test_skip_does_not_clear_lock_when_db_in_progress(self, mock_sync, app, xmltv_source):
+        """Stale ORM sync_in_progress=False must not clear DB lock on skip."""
+        with app.app_context():
+            sid = xmltv_source.id
+            assert try_acquire_epg_sync_lock(sid) is True
+            # Detached row with stale sync_in_progress=False; DB still holds the lock.
+            stale = EpgSource(
+                id=sid,
+                name="Lock Source",
+                source_type="xmltv_url",
+                url="http://example.com/guide.xml",
+                enabled=True,
+                sync_in_progress=False,
+            )
+
+            result = EpgSyncOrchestrator(app).sync_sources([stale], parallel=False)
+
+            assert result["sources_skipped"] == 1
+            mock_sync.assert_not_called()
+            refreshed = db.session.get(EpgSource, sid)
+            assert refreshed.sync_in_progress is True
+
+    @patch("services.epg_sync_orchestrator.EpgSyncService.sync_source")
     def test_sync_sources_skips_in_progress(self, mock_sync, app, xmltv_source):
         with app.app_context():
             source = db.session.get(EpgSource, xmltv_source.id)

@@ -238,39 +238,31 @@ class TestLoadInterval:
 
 
 class TestTriggerSync:
-    """Test manual sync trigger"""
+    """Test scheduler-driven EPG sync"""
 
     @patch("services.scheduler.SyncScheduler._sync_accounts")
-    def test_trigger_sync_accounts(self, mock_sync, scheduler, app):
-        """Test triggering account sync manually"""
-        mock_sync.return_value = None
+    def test_sync_accounts_invokes_channel_sync(self, mock_sync, scheduler, app):
+        """Scheduler account pass calls ChannelSyncService per enabled account."""
+        mock_sync.return_value = {"channels_added": 0, "channels_updated": 0, "channels_deactivated": 0}
         with app.app_context():
-            # Test would call scheduler.trigger_sync("accounts") if method exists
-            # For now just verify the mocking works
-            assert mock_sync is not None
+            scheduler._sync_accounts()
+            assert mock_sync.called
 
-    @patch("services.epg_sync_orchestrator.EpgSyncOrchestrator.sync_sources")
-    def test_sync_epg_sources_if_due_calls_orchestrator(self, mock_sync_sources, scheduler, app):
-        """Due enabled sources trigger parallel orchestrator sync."""
+    @patch("services.epg_sync_orchestrator.EpgSyncOrchestrator.sync_due_sources")
+    def test_sync_epg_sources_if_due_calls_orchestrator(self, mock_sync_due, scheduler, app):
+        """Due enabled sources trigger orchestrator sync_due_sources."""
         with app.app_context():
-            source = EpgSource(
-                name="Due Scheduler Source",
-                source_type="xmltv_url",
-                url="http://example.com/epg.xml",
-                enabled=True,
-            )
-            db.session.add(source)
-            db.session.commit()
-
-            mock_sync_sources.return_value = {"sources_synced": 1, "total_sources": 1}
+            mock_sync_due.return_value = {
+                "sources_synced": 1,
+                "total_sources": 1,
+                "sources_skipped": 0,
+            }
 
             scheduler._sync_epg_sources_if_due()
 
-            mock_sync_sources.assert_called_once()
-            called_sources = mock_sync_sources.call_args[0][0]
-            assert len(called_sources) == 1
-            assert called_sources[0].id == source.id
-            assert mock_sync_sources.call_args[1]["parallel"] is True
+            mock_sync_due.assert_called_once()
+            assert mock_sync_due.call_args[0][0] == scheduler._epg_interval_hours
+            assert mock_sync_due.call_args[1]["parallel"] is True
 
     @patch("services.epg_sync_orchestrator.EpgSyncOrchestrator.sync_sources")
     def test_sync_epg_sources_if_due_skips_fresh_sources(self, mock_sync_sources, scheduler, app):

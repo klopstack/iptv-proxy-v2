@@ -57,7 +57,6 @@ if [ "${DISABLE_SCHEDULER:-false}" != "true" ]; then
     python run_scheduler.py &
 fi
 
-# Start gunicorn with gevent workers for efficient stream proxying
-# Use gunicorn.conf.py for configuration (ensures only one worker runs scheduler)
-# Gevent allows handling many concurrent I/O-bound connections per worker
+# Start gunicorn with gevent workers for efficient stream proxying.
+# Scheduler runs in run_scheduler.py above, not inside gunicorn workers.
 exec gunicorn --config gunicorn.conf.py app:app

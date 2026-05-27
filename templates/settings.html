@@ -610,15 +610,19 @@ document.getElementById('sync-epg-btn').addEventListener('click', async function
     if (!confirm('Sync all enabled EPG sources now? Sources run in parallel; large guides may take a while.')) {
         return;
     }
-    
+    const useForce = confirm(
+        'Force sync (override in-progress locks)?\n\nOK = force all sources\nCancel = skip sources already syncing'
+    );
+
     const btn = this;
     const originalText = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Syncing...';
     startEpgProgressPolling();
-    
+
+    const url = useForce ? '/api/sync/epg?force=true' : '/api/sync/epg';
     try {
-        const response = await fetch('/api/sync/epg', { method: 'POST' });
+        const response = await fetch(url, { method: 'POST' });
         
         if (response.ok) {
             const result = await response.json();

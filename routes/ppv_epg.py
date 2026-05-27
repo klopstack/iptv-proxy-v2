@@ -134,9 +134,11 @@ def sync_ppv_events_to_source(source_id):
     Returns:
         JSON with sync statistics
     """
-    from models import EpgSource
+    from flask import current_app
 
-    # Validate source exists and is ppv_events type
+    from models import EpgSource
+    from services.epg_sync_orchestrator import EpgSyncOrchestrator
+
     epg_source = db.session.get(EpgSource, source_id)
     if not epg_source:
         return jsonify({"error": "EPG source not found"}), 404
@@ -144,23 +146,28 @@ def sync_ppv_events_to_source(source_id):
     if epg_source.source_type != "ppv_events":
         return jsonify({"error": f"EPG source is type '{epg_source.source_type}', expected 'ppv_events'"}), 400
 
-    # Sync events to EPG channels
-    created, updated = PPVEpgService.sync_ppv_events_to_epg_channels(source_id)
+    force = request.args.get("force", "false").lower() in ("1", "true", "yes")
+    app = current_app._get_current_object()
+    result = EpgSyncOrchestrator(app).sync_source_by_id(source_id, force=force)
 
-    # Update source stats
-    epg_source.channel_count = created + updated
-    epg_source.last_sync_status = "success"
-    from datetime import datetime, timezone
+    if result.get("skipped"):
+        return jsonify({"error": result.get("message", "Sync already in progress")}), 409
 
-    epg_source.last_sync = datetime.now(timezone.utc).replace(tzinfo=None)
-    db.session.commit()
+    if not result.get("success"):
+        return jsonify({"error": result.get("message", "Sync failed")}), 400
+
+    stats = result.get("stats") or {}
+    created = stats.get("channels_added", 0)
+    updated = stats.get("channels_updated", 0)
+    total = created + updated
 
     return jsonify(
         {
             "created": created,
             "updated": updated,
-            "total": created + updated,
-            "message": f"Synced {created + updated} PPV events to EPG channels",
+            "total": total,
+            "message": result.get("message") or f"Synced {total} PPV events to EPG channels",
+            "partial": bool(result.get("partial") or stats.get("partial")),
         }
     )
 

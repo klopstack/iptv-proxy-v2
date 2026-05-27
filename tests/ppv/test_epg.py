@@ -7,6 +7,7 @@ with enriched TheSportsDB data.
 import json
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 import pytest
 
@@ -539,6 +540,25 @@ class TestPPVEpgRoutes:
             assert "epg_source_id" in data
             assert data["epg_source_id"] > 0
 
+    @patch("services.epg_sync_orchestrator.EpgSyncOrchestrator")
+    def test_sync_ppv_events_to_source_route_uses_orchestrator(self, mock_orchestrator_cls, app, client, sample_events):
+        """Test POST /api/ppv-epg/source/<source_id>/sync delegates to orchestrator"""
+        with app.app_context():
+            source_id = PPVEpgService.create_epg_source_for_ppv_events(name="PPV Test")
+
+        mock_orchestrator = mock_orchestrator_cls.return_value
+        mock_orchestrator.sync_source_by_id.return_value = {
+            "success": True,
+            "message": "Synced 2 PPV events",
+            "stats": {"channels_added": 2, "channels_updated": 0},
+        }
+
+        response = client.post(f"/api/ppv-epg/source/{source_id}/sync")
+        assert response.status_code == 200
+        assert response.json["created"] == 2
+        assert response.json["total"] == 2
+        mock_orchestrator.sync_source_by_id.assert_called_once_with(source_id, force=False)
+
     def test_sync_ppv_events_to_source_route(self, app, client, sample_events):
         """Test POST /api/ppv-epg/source/<source_id>/sync"""
         with app.app_context():
@@ -627,7 +647,7 @@ def test_ppv_channel_epg_matching(app, sample_events):
     """Test that PPV channels are correctly matched to EPG data"""
     with app.app_context():
         from models import Account, Category, Channel, ChannelEpgMapping, Event, EventChannelLink
-        from services.epg_match_rules_service import EpgMatchRulesService
+        from services.epg.match_rules import EpgMatchRulesService
         from services.ppv.epg import PPVEpgService
 
         # Get the event created by fixture

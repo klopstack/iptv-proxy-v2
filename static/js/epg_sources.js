@@ -107,6 +107,12 @@ function renderSourceStatusCell(source) {
     if (source.last_sync_status === 'success') {
         return '<span class="badge bg-success">Success</span>';
     }
+    if (source.last_sync_status === 'partial') {
+        const msg = source.last_sync_message
+            ? `<div class="small text-muted mt-1">${escapeHtml(source.last_sync_message)}</div>`
+            : '';
+        return `<span class="badge bg-warning text-dark">Partial</span>${msg}`;
+    }
     if (source.last_sync_status === 'error') {
         const msg = source.last_sync_message
             ? `<div class="small text-muted mt-1">${escapeHtml(source.last_sync_message)}</div>`
@@ -377,7 +383,7 @@ async function syncSource(id) {
         const result = await response.json();
 
         if (response.status === 409) {
-            alert('Sync already in progress for this source. Wait for it to finish or use force sync from Settings.');
+            alert('Sync already in progress for this source. Wait for it to finish, or use Force sync on the Settings page (Sync EPG).');
         } else if (response.ok) {
             await loadSources();
             alert(`✓ Synced! ${result.message}`);
@@ -441,8 +447,9 @@ async function loadSdLineupsInline(sourceId) {
             `;
             return;
         }
-        
-        let html = '<div class="list-group list-group-flush">';
+
+        let html = '<p class="small text-muted mb-2 px-3">Lineup sync updates channels for this lineup only; it does not show on the source progress bar above.</p>';
+        html += '<div class="list-group list-group-flush">';
         for (const lineup of lineups) {
             html += `
                 <div class="list-group-item px-3 py-2 d-flex justify-content-between align-items-center">

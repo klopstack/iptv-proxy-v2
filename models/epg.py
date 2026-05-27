@@ -12,7 +12,7 @@ class EpgSource(db.Model):  # type: ignore[name-defined]
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    # 'provider', 'schedules_direct', 'xmltv_url', 'xmltv_file', 'xmltv_grabber', 'ppv_events'
+    # 'provider', 'schedules_direct', 'xmltv_url', 'xmltv_grabber', 'ppv_events'
     source_type = db.Column(db.String(50), nullable=False)
 
     # For provider sources, link to account

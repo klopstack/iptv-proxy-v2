@@ -12,7 +12,7 @@ from flask import Flask
 from sqlalchemy import update
 
 from models import EpgSource, SyncMetadata, db
-from services.epg_sync_progress import PHASE_COMPLETE, PHASE_ERROR, PHASE_QUEUED, PHASE_SKIPPED, EpgSyncProgress
+from services.epg_sync_progress import PHASE_COMPLETE, PHASE_ERROR, PHASE_QUEUED, EpgSyncProgress
 from services.epg_sync_service import EpgSyncService
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,19 @@ def try_acquire_epg_sync_lock(source_id: int, *, force: bool = False) -> bool:
     """
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     if force:
+        locked = (
+            db.session.execute(
+                update(EpgSource).where(EpgSource.id == source_id, EpgSource.sync_in_progress.is_(True))
+            ).rowcount
+            or 0
+        ) > 0
+        if locked:
+            source = db.session.get(EpgSource, source_id)
+            logger.warning(
+                "EPG sync force=True overriding in-progress lock for source %s (id=%s)",
+                source.name if source else "?",
+                source_id,
+            )
         result = db.session.execute(
             update(EpgSource).where(EpgSource.id == source_id).values(sync_in_progress=True, sync_started_at=now)
         )
@@ -246,9 +259,8 @@ class EpgSyncOrchestrator:
                 continue
 
             message = "Sync already in progress"
-            # Preserve active sync progress when another worker holds the lock.
-            if not source.sync_in_progress:
-                EpgSyncProgress.set_phase(sid, PHASE_SKIPPED, message=message)
+            # Do not call set_phase here — it would clear sync_in_progress in DB while
+            # another worker holds the lock (including stale ORM rows).
 
             skipped.append(
                 {
@@ -289,13 +301,16 @@ class EpgSyncOrchestrator:
                     message=message,
                     **{k: stats.get(k) for k in ("programs_added", "programs_updated", "channels_added") if stats},
                 )
-                return {
+                result = {
                     "source_id": source_id,
                     "source_name": name,
                     "success": success,
                     "message": message,
                     "stats": stats,
                 }
+                if stats.get("partial"):
+                    result["partial"] = True
+                return result
             except Exception as exc:
                 db.session.rollback()
                 logger.error("Error syncing EPG source %s: %s", name, exc, exc_info=True)
