@@ -17,7 +17,9 @@ module.exports = {
     confirm: 'readonly',
     FormData: 'readonly',
     // Shared components defined in base.html
-    TagSelector: 'writable'
+    TagSelector: 'writable',
+    // Loaded from static/js/epg_sources.js in EPG templates
+    initEpgSourcesProgressPolling: 'readonly'
   },
   // JavaScript rules (for script tags)
   rules: {

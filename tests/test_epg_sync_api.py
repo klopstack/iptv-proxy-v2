@@ -241,9 +241,7 @@ class TestEpgSyncMigration:
 
         db_path = tmp_path / "test.db"
         conn = sqlite3.connect(db_path)
-        conn.execute(
-            "CREATE TABLE epg_sources (id INTEGER PRIMARY KEY, name TEXT, source_type TEXT)"
-        )
+        conn.execute("CREATE TABLE epg_sources (id INTEGER PRIMARY KEY, name TEXT, source_type TEXT)")
         conn.execute("ALTER TABLE epg_sources ADD COLUMN sync_in_progress BOOLEAN DEFAULT 0")
         conn.execute("ALTER TABLE epg_sources ADD COLUMN sync_phase VARCHAR(50)")
         conn.execute("ALTER TABLE epg_sources ADD COLUMN sync_progress TEXT")

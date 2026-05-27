@@ -27,7 +27,7 @@ class TestSyncScheduler:
             scheduler = SyncScheduler(app, interval_hours=1)
 
             # Mock the _run method to prevent actual thread execution
-            with patch.object(scheduler, "_run"):
+            with patch.object(scheduler, "_run"), patch.object(scheduler._lock, "try_acquire", return_value=True):
                 scheduler.start()
                 assert scheduler.running is True
                 assert scheduler.thread is not None
@@ -35,14 +35,17 @@ class TestSyncScheduler:
                 # Cleanup
                 scheduler.stop()
 
-    def test_scheduler_start_already_running(self, app, caplog):
-        """Test scheduler warns when already running"""
+    def test_scheduler_start_already_running(self, app):
+        """Test scheduler is a no-op when already running locally"""
         with app.app_context():
             scheduler = SyncScheduler(app, interval_hours=1)
-            scheduler.running = True  # Simulate already running
+            scheduler.running = True
+            scheduler.thread = MagicMock()
 
-            scheduler.start()
-            assert "already running" in caplog.text.lower()
+            with patch.object(scheduler._lock, "try_acquire") as mock_acquire:
+                scheduler.start()
+                mock_acquire.assert_not_called()
+                scheduler.thread.start.assert_not_called()
 
     def test_scheduler_stop(self, app):
         """Test scheduler stop"""

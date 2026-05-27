@@ -12,13 +12,7 @@ from flask import Flask
 from sqlalchemy import update
 
 from models import EpgSource, SyncMetadata, db
-from services.epg_sync_progress import (
-    PHASE_COMPLETE,
-    PHASE_ERROR,
-    PHASE_QUEUED,
-    PHASE_SKIPPED,
-    EpgSyncProgress,
-)
+from services.epg_sync_progress import PHASE_COMPLETE, PHASE_ERROR, PHASE_QUEUED, PHASE_SKIPPED, EpgSyncProgress
 from services.epg_sync_service import EpgSyncService
 
 logger = logging.getLogger(__name__)
@@ -37,9 +31,7 @@ def try_acquire_epg_sync_lock(source_id: int, *, force: bool = False) -> bool:
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     if force:
         result = db.session.execute(
-            update(EpgSource)
-            .where(EpgSource.id == source_id)
-            .values(sync_in_progress=True, sync_started_at=now)
+            update(EpgSource).where(EpgSource.id == source_id).values(sync_in_progress=True, sync_started_at=now)
         )
     else:
         result = db.session.execute(
@@ -202,9 +194,7 @@ class EpgSyncOrchestrator:
 
         if parallel and workers > 1:
             with ThreadPoolExecutor(max_workers=workers) as pool:
-                futures = {
-                    pool.submit(self._sync_source_in_thread, sid): sid for sid in source_ids
-                }
+                futures = {pool.submit(self._sync_source_in_thread, sid): sid for sid in source_ids}
                 for future in as_completed(futures):
                     sid = futures[future]
                     try:

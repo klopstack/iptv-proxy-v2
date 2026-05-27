@@ -327,8 +327,7 @@ class TestSyncSdProgramsIntegration:
                 }
             ]
             mock_client.get_programs.return_value = [
-                {"programID": f"EP{i:04d}", "titles": [{"title120": f"Show {i}"}]}
-                for i in range(3)
+                {"programID": f"EP{i:04d}", "titles": [{"title120": f"Show {i}"}]} for i in range(3)
             ]
 
             counts = []

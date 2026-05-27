@@ -305,6 +305,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- eslint-disable-next-script -->
 <script type="module">
 import * as EpgProgress from "{{ url_for('static', filename='js/lib/epg_sync_progress.js') }}";
 import { createEpgSyncPoller } from "{{ url_for('static', filename='js/lib/epg_sync_progress_poll.js') }}";

@@ -11,15 +11,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from models import EpgSource, db
-from services.epg_sync_orchestrator import (
-    EpgSyncOrchestrator,
-    source_needs_sync,
-)
-from services.epg_sync_progress import (
-    PHASE_COMPLETE,
-    PHASE_FETCHING,
-    PHASE_QUEUED,
-)
+from services.epg_sync_orchestrator import EpgSyncOrchestrator, source_needs_sync
+from services.epg_sync_progress import PHASE_COMPLETE, PHASE_FETCHING, PHASE_QUEUED
 from services.epg_sync_service import EpgSyncService
 
 
@@ -210,7 +203,9 @@ class TestEpgSyncOrchestratorSync:
     @patch("services.epg_sync_orchestrator.ThreadPoolExecutor")
     @patch("services.epg_sync_orchestrator.EpgSyncService.sync_source")
     @patch("services.epg_sync_orchestrator.EpgSyncService.update_source_sync_status")
-    def test_parallel_uses_max_workers_cap(self, mock_update, mock_sync, mock_executor_cls, app, xmltv_source, second_source):
+    def test_parallel_uses_max_workers_cap(
+        self, mock_update, mock_sync, mock_executor_cls, app, xmltv_source, second_source
+    ):
         with app.app_context():
             mock_sync.return_value = (True, "ok", {})
             executor = MagicMock()
@@ -274,9 +269,7 @@ class TestEpgSyncOrchestratorSync:
 class TestSyncSourceById:
     @patch("services.epg_sync_orchestrator.EpgSyncService.sync_source")
     @patch("services.epg_sync_orchestrator.EpgSyncService.update_source_sync_status")
-    def test_sync_source_by_id_delegates_to_sync_sources(
-        self, mock_update, mock_sync, app, xmltv_source
-    ):
+    def test_sync_source_by_id_delegates_to_sync_sources(self, mock_update, mock_sync, app, xmltv_source):
         with app.app_context():
             mock_sync.return_value = (True, "done", {"channels_added": 2})
 

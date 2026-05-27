@@ -10,8 +10,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from models import Account, EpgSource, SyncMetadata
-from services.sync_service import ChannelSyncService
 from services.scheduler_lock import SchedulerLock
+from services.sync_service import ChannelSyncService
 from services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
@@ -52,6 +52,7 @@ DEFAULT_EPG_PROGRAM_RETENTION_DAYS = 7
 SYNC_KEY_SCHEDULER_HEARTBEAT = "scheduler_heartbeat"
 # Must exceed longest single sync step (EPG fetches use up to 600s timeouts)
 SCHEDULER_HEARTBEAT_TIMEOUT_SECONDS = 900
+
 
 class SyncScheduler:
     """Scheduler for periodic channel sync with persistent timing and separate intervals"""

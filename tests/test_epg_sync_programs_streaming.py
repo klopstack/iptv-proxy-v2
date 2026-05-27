@@ -46,9 +46,7 @@ def bulk_channel(db, bulk_source):
 
 
 class TestStreamingProgramSync:
-    def test_buffer_flush_handles_many_programmes_on_one_channel(
-        self, app, db, bulk_source, bulk_channel
-    ):
+    def test_buffer_flush_handles_many_programmes_on_one_channel(self, app, db, bulk_source, bulk_channel):
         """Programmes are flushed in chunks without holding the entire guide in RAM."""
         with app.app_context():
             account = Account(

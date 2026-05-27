@@ -12,11 +12,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from models import EpgSource, SyncMetadata, db
-from services.epg_sync_orchestrator import (
-    SYNC_KEY_LAST_EPG_SYNC,
-    EpgSyncOrchestrator,
-    source_needs_sync,
-)
+from services.epg_sync_orchestrator import SYNC_KEY_LAST_EPG_SYNC, EpgSyncOrchestrator, source_needs_sync
 from services.epg_sync_progress import PHASE_ERROR
 from services.epg_sync_service import EpgSyncService
 
@@ -124,9 +120,7 @@ class TestUpdateSourceSyncStatusOnFailure:
 
 class TestOrchestratorGlobalMetadata:
     @patch("services.epg_sync_orchestrator.EpgSyncService.sync_source")
-    def test_all_failed_does_not_set_last_epg_sync_metadata(
-        self, mock_sync, app, xmltv_source, second_source
-    ):
+    def test_all_failed_does_not_set_last_epg_sync_metadata(self, mock_sync, app, xmltv_source, second_source):
         with app.app_context():
             previous = "2020-01-01T00:00:00+00:00"
             SyncMetadata.set(SYNC_KEY_LAST_EPG_SYNC, previous)
@@ -141,9 +135,7 @@ class TestOrchestratorGlobalMetadata:
             assert SyncMetadata.get(SYNC_KEY_LAST_EPG_SYNC) == previous
 
     @patch("services.epg_sync_orchestrator.EpgSyncService.sync_source")
-    def test_partial_success_updates_metadata_when_policy_allows(
-        self, mock_sync, app, xmltv_source, second_source
-    ):
+    def test_partial_success_updates_metadata_when_policy_allows(self, mock_sync, app, xmltv_source, second_source):
         with app.app_context():
             previous = "2020-01-01T00:00:00+00:00"
             SyncMetadata.set(SYNC_KEY_LAST_EPG_SYNC, previous)
@@ -160,9 +152,7 @@ class TestOrchestratorGlobalMetadata:
             assert SyncMetadata.get(SYNC_KEY_LAST_EPG_SYNC) != previous
 
     @patch("services.epg_sync_orchestrator.EpgSyncService.sync_source")
-    def test_all_success_updates_last_epg_sync_metadata(
-        self, mock_sync, app, xmltv_source, second_source
-    ):
+    def test_all_success_updates_last_epg_sync_metadata(self, mock_sync, app, xmltv_source, second_source):
         with app.app_context():
             mock_sync.return_value = (True, "ok", {})
 
@@ -179,7 +169,6 @@ class TestOrchestratorPreservesLastSyncOnFailure:
             source = db.session.get(EpgSource, xmltv_source.id)
             source.last_sync = old_sync
             source.last_sync_status = "success"
-            source.sync_in_progress = True
             db.session.commit()
 
             mock_sync.return_value = (False, "fetch failed", {})
@@ -194,9 +183,7 @@ class TestOrchestratorPreservesLastSyncOnFailure:
             assert refreshed.sync_in_progress is False
 
     @patch("services.epg_sync_orchestrator.EpgSyncService.sync_source")
-    def test_exception_clears_sync_in_progress_without_advancing_last_sync(
-        self, mock_sync, app, xmltv_source
-    ):
+    def test_exception_clears_sync_in_progress_without_advancing_last_sync(self, mock_sync, app, xmltv_source):
         with app.app_context():
             old_sync = (datetime.now(timezone.utc) - timedelta(hours=2)).replace(tzinfo=None)
             source = db.session.get(EpgSource, xmltv_source.id)
@@ -229,9 +216,7 @@ class TestSourceNeedsSyncAfterFailure:
 
             assert source_needs_sync(source, 12) is True
 
-    def test_failed_source_not_due_if_interval_not_elapsed_and_last_sync_unchanged(
-        self, app, xmltv_source
-    ):
+    def test_failed_source_not_due_if_interval_not_elapsed_and_last_sync_unchanged(self, app, xmltv_source):
         with app.app_context():
             source = db.session.get(EpgSource, xmltv_source.id)
             source.last_sync = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -244,14 +229,10 @@ class TestSourceNeedsSyncAfterFailure:
 
             assert source_needs_sync(source, 12) is False
 
-    def test_failed_source_due_when_interval_passed_and_last_sync_unchanged(
-        self, app, xmltv_source
-    ):
+    def test_failed_source_due_when_interval_passed_and_last_sync_unchanged(self, app, xmltv_source):
         with app.app_context():
             source = db.session.get(EpgSource, xmltv_source.id)
-            source.last_sync = (datetime.now(timezone.utc) - timedelta(hours=48)).replace(
-                tzinfo=None
-            )
+            source.last_sync = (datetime.now(timezone.utc) - timedelta(hours=48)).replace(tzinfo=None)
             source.last_sync_status = "success"
             db.session.commit()
 
@@ -265,9 +246,7 @@ class TestSourceNeedsSyncAfterFailure:
     def test_orchestrator_failure_leaves_source_due(self, mock_sync, app, xmltv_source):
         with app.app_context():
             source = db.session.get(EpgSource, xmltv_source.id)
-            source.last_sync = (datetime.now(timezone.utc) - timedelta(hours=48)).replace(
-                tzinfo=None
-            )
+            source.last_sync = (datetime.now(timezone.utc) - timedelta(hours=48)).replace(tzinfo=None)
             source.last_sync_status = "success"
             db.session.commit()
 

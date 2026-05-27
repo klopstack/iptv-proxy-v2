@@ -7,11 +7,8 @@ from unittest.mock import patch
 import pytest
 
 from models import EpgSource, db
-from services.epg_sync_orchestrator import (
-    EpgSyncOrchestrator,
-    recover_stale_epg_sync_locks,
-    try_acquire_epg_sync_lock,
-)
+from services.epg_sync_orchestrator import EpgSyncOrchestrator, recover_stale_epg_sync_locks, try_acquire_epg_sync_lock
+
 
 @pytest.fixture
 def xmltv_source(db):

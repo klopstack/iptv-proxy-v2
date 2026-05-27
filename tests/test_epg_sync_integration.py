@@ -78,9 +78,7 @@ def _mock_http_response(content: bytes) -> MagicMock:
 class TestOrchestratorXmltvIntegration:
     @patch("services.epg_sync_service.save_to_cache")
     @patch("requests.get")
-    def test_orchestrator_xmltv_url_sets_progress_phases(
-        self, mock_get, mock_cache, app, xmltv_source
-    ):
+    def test_orchestrator_xmltv_url_sets_progress_phases(self, mock_get, mock_cache, app, xmltv_source):
         mock_get.return_value = _mock_http_response(_small_xmltv_bytes())
         mock_cache.return_value = True
 
@@ -100,9 +98,7 @@ class TestOrchestratorXmltvIntegration:
 
     @patch("services.epg_sync_service.save_to_cache")
     @patch("requests.get")
-    def test_orchestrator_xmltv_fetch_error_sets_error_phase(
-        self, mock_get, mock_cache, app, xmltv_source
-    ):
+    def test_orchestrator_xmltv_fetch_error_sets_error_phase(self, mock_get, mock_cache, app, xmltv_source):
         mock_get.side_effect = requests.RequestException("network down")
 
         with app.app_context():
@@ -125,9 +121,7 @@ class TestOrchestratorXmltvIntegration:
 class TestOrchestratorProviderIntegration:
     @patch("services.epg_sync_service.save_to_cache")
     @patch("services.epg_sync_service.IPTVService")
-    def test_orchestrator_provider_source_completes(
-        self, mock_iptv_cls, mock_cache, app, provider_source
-    ):
+    def test_orchestrator_provider_source_completes(self, mock_iptv_cls, mock_cache, app, provider_source):
         mock_service = MagicMock()
         mock_service.get_xmltv.return_value = _small_xmltv_bytes("prov.ch")
         mock_iptv_cls.return_value = mock_service
@@ -148,9 +142,7 @@ class TestOrchestratorProviderIntegration:
 class TestOrchestratorListStatusAndDue:
     @patch("services.epg_sync_service.save_to_cache")
     @patch("requests.get")
-    def test_list_status_after_success_source_not_due(
-        self, mock_get, mock_cache, app, xmltv_source
-    ):
+    def test_list_status_after_success_source_not_due(self, mock_get, mock_cache, app, xmltv_source):
         mock_get.return_value = _mock_http_response(_small_xmltv_bytes())
         mock_cache.return_value = True
 
@@ -180,9 +172,7 @@ class TestOrchestratorListStatusAndDue:
 class TestSchedulerEpgSourcesIntegration:
     @patch("services.epg_sync_service.save_to_cache")
     @patch("requests.get")
-    def test_scheduler_get_status_epg_sources_shape(
-        self, mock_get, mock_cache, app, xmltv_source
-    ):
+    def test_scheduler_get_status_epg_sources_shape(self, mock_get, mock_cache, app, xmltv_source):
         mock_get.return_value = _mock_http_response(_small_xmltv_bytes())
         mock_cache.return_value = True
 
@@ -218,9 +208,7 @@ class TestSchedulerEpgSourcesIntegration:
             source.last_sync = datetime.now(timezone.utc).replace(tzinfo=None)
             db.session.commit()
 
-            with patch(
-                "services.epg_sync_orchestrator.EpgSyncService.sync_source"
-            ) as mock_sync:
+            with patch("services.epg_sync_orchestrator.EpgSyncService.sync_source") as mock_sync:
                 result2 = EpgSyncOrchestrator(app).sync_due_sources(12, parallel=False)
                 assert result2["message"] == "No EPG sources due for sync"
                 mock_sync.assert_not_called()

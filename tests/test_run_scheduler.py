@@ -3,6 +3,7 @@
 import signal
 from unittest.mock import MagicMock, patch
 
+
 class TestRunSchedulerMain:
     def test_main_exits_when_disabled(self, monkeypatch):
         monkeypatch.setenv("DISABLE_SCHEDULER", "true")
@@ -33,7 +34,9 @@ class TestRunSchedulerMain:
         mock_app.app_context.return_value = mock_ctx
 
         with patch("signal.signal", side_effect=capture_signal):
-            with patch("run_scheduler.time.sleep", side_effect=lambda _: handlers[signal.SIGTERM](signal.SIGTERM, None)):
+            with patch(
+                "run_scheduler.time.sleep", side_effect=lambda _: handlers[signal.SIGTERM](signal.SIGTERM, None)
+            ):
                 with patch("app.app", mock_app):
                     with patch("app.sync_scheduler", mock_scheduler):
                         run_scheduler.main()
