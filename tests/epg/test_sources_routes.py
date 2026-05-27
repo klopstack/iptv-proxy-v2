@@ -26,7 +26,7 @@ class TestEpgSources:
 
     def test_create_epg_source_missing_name(self, app, client):
         """Test creating EPG source without name"""
-        response = client.post("/api/epg/sources", json={"source_type": "provider"}, content_type="application/json")
+        response = client.post("/api/epg/sources", json={"source_type": "xmltv_url"}, content_type="application/json")
         assert response.status_code == 400
         assert "name" in response.json["error"].lower()
 
@@ -41,6 +41,16 @@ class TestEpgSources:
         response = client.post(
             "/api/epg/sources",
             json={"name": "Test", "source_type": "invalid_type"},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        assert "invalid" in response.json["error"].lower()
+
+    def test_create_epg_source_rejects_provider_type(self, app, client):
+        """Provider EPG source type is no longer supported"""
+        response = client.post(
+            "/api/epg/sources",
+            json={"name": "Provider Source", "source_type": "provider", "account_id": 1},
             content_type="application/json",
         )
         assert response.status_code == 400
@@ -252,8 +262,8 @@ class TestEpgSources:
             # Create a source
             source = EpgSource(
                 name="Test Source",
-                source_type="provider",
-                account_id=test_account,
+                source_type="xmltv_url",
+                url="http://example.com/epg.xml",
                 enabled=True,
             )
             db.session.add(source)
@@ -320,8 +330,8 @@ class TestEpgSources:
             # Create a source
             source = EpgSource(
                 name="Search Test Source",
-                source_type="provider",
-                account_id=test_account,
+                source_type="xmltv_url",
+                url="http://example.com/epg.xml",
                 enabled=True,
             )
             db.session.add(source)
@@ -364,7 +374,7 @@ class TestEpgSources:
     def test_get_source_mappings_pagination(self, app, client, test_account):
         """Test pagination of source mappings"""
         with app.app_context():
-            source = EpgSource(name="Pagination Test", source_type="provider", account_id=test_account, enabled=True)
+            source = EpgSource(name="Pagination Test", source_type="xmltv_url", url="http://example.com/epg.xml", enabled=True)
             db.session.add(source)
             db.session.flush()
 

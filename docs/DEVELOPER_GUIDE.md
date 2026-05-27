@@ -372,13 +372,9 @@ Use package imports for EPG and PPV services:
 from services.epg.generation import generate_epg_for_channels
 from services.epg.parsing import sync_epg_source, parse_xmltv
 from services.epg.coverage import get_epg_coverage_stats
-from services.epg.matching import EpgMatcher, match_channels_to_epg
 from services.epg.match_rules import EpgMatchRulesService
 from services.epg.ppv import is_ppv_channel, is_ppv_category, is_ppv_placeholder_name
 from services.epg.utils import normalize_xmltv_url, make_sd_xmltv_id
-
-# Legacy tests may still import the thin facade:
-# from services.epg import EpgService
 
 # PPV
 from services.ppv.visibility import PPVVisibilityService
@@ -404,12 +400,15 @@ Playlist, preview, EPG, and Xtream routes use **`ChannelQueryService`** with **l
 
 ### Playlist config URLs (slug preferred)
 
-Multi-account playlist and EPG config endpoints use **slug URLs** as the canonical form:
+Multi-account playlist and EPG config endpoints use slug URLs:
 
 - `/playlist/config/<slug>.m3u`
 - `/epg/config/<slug>.xml`
 
-Numeric ID routes (`/playlist/config/<int:id>.m3u`, `/epg/config/<int:id>.xml`) remain for backward compatibility and return a `Deprecation` response header when a slug exists. New integrations should use slug URLs only; numeric routes may redirect in a future release.
+Per-account playlist/EPG endpoints use numeric account IDs:
+
+- `/playlist/<account_id>.m3u`
+- `/epg/<account_id>.xml`
 - Treat `is_visible` as a filter cache for admin queries only; it may lag until recompute but must not gate playlists.
 - Health auto-disable hides channels via `ChannelHealthStatus.auto_disabled_at`; CQS excludes those from output.
 - PPV placeholder patterns live in `services/epg/constants.py` (re-exported from `services/ppv/constants.py`); import via `services.ppv.detection.is_ppv_placeholder_name`.
@@ -529,29 +528,6 @@ db.session.commit()
 
 # Scheduler will fetch and parse XMLTV
 ```
-
-**Provider EPG (legacy — prefer SD or XMLTV):**
-
-Provider sources sync EPG channel listings from the IPTV provider's XMLTV endpoint into the database. They remain supported for backward compatibility and quick bootstrap, but are deprecated for new setups:
-
-- Quality and coverage vary by provider; data is not normalized like Schedules Direct
-- Sync requires a live provider connection (admin sync only — generation is still database-first)
-- The EPG management UI shows a deprecation warning when creating provider sources
-
-Use provider EPG only when you need an initial channel list before configuring Schedules Direct or an XMLTV grabber. Plan to migrate: add SD/XMLTV, remap channels, then disable the provider source.
-
-```python
-# Legacy bootstrap only — not recommended for new deployments
-source = EpgSource(
-    account_id=account.id,
-    name="Provider EPG (legacy)",
-    source_type="provider",
-)
-db.session.add(source)
-db.session.commit()
-```
-
-See [ARCHITECTURE.md](./ARCHITECTURE.md#epg-data-sync) for the full migration path.
 
 ### EPG Program Sync
 

@@ -42,7 +42,7 @@ class TestAccountTestConnection:
         response = client.post("/api/accounts/999/test")
         assert response.status_code == 404
 
-    def test_test_connection_no_credentials_or_legacy(self, app, client, test_account):
+    def test_test_connection_no_credentials(self, app, client, test_account):
         """Test connection with no credentials configured"""
         with app.app_context():
             account = db.session.get(Account, test_account)
@@ -54,8 +54,8 @@ class TestAccountTestConnection:
         assert "credentials" in response.json.get("error", "").lower()
 
     @patch("routes.accounts.IPTVService")
-    def test_test_connection_legacy_mode_success(self, MockIPTVService, app, client, test_account):
-        """Legacy mode removed: create a credential and test that path."""
+    def test_test_connection_success(self, MockIPTVService, app, client, test_account):
+        """Test connection using account credentials."""
         with app.app_context():
             cred = Credential(account_id=test_account, username="u", password="p", max_connections=1, enabled=True)
             db.session.add(cred)
@@ -73,11 +73,10 @@ class TestAccountTestConnection:
         assert response.status_code == 200
         assert response.json["success"] is True
         assert response.json["channels"] == 10
-        assert response.json.get("legacy_mode") is not True
 
     @patch("routes.accounts.IPTVService")
-    def test_test_connection_legacy_mode_error(self, MockIPTVService, app, client, test_account):
-        """Test connection using legacy mode with error"""
+    def test_test_connection_error(self, MockIPTVService, app, client, test_account):
+        """Test connection returns error when authentication fails"""
         mock_service = MagicMock()
         mock_service.authenticate.side_effect = Exception("Connection refused")
         MockIPTVService.return_value = mock_service

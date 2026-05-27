@@ -66,7 +66,8 @@ def account_with_data(app):
 
         epg_source = EpgSource(
             name="Provider EPG",
-            source_type="provider",
+            source_type="xmltv_url",
+            url="http://example.com/epg.xml",
             account_id=account.id,
             enabled=True,
         )

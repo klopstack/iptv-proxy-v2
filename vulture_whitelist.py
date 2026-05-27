@@ -101,7 +101,6 @@ get_epg_mappings
 create_epg_mapping
 delete_epg_mapping
 get_epg_coverage
-create_account_epg_source
 test_sd_credentials
 search_sd_lineups
 get_sd_lineups

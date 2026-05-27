@@ -6,8 +6,6 @@
  * Field visibility map for the add/edit source modal.
  * @param {string} sourceType
  * @returns {{
- *   providerFields: boolean,
- *   providerDeprecationWarning: boolean,
  *   xmltvUrlFields: boolean,
  *   sdFields: boolean,
  *   grabberFields: boolean,
@@ -16,8 +14,6 @@
  */
 export function getSourceTypeFieldVisibility(sourceType) {
     return {
-        providerFields: sourceType === 'provider',
-        providerDeprecationWarning: sourceType === 'provider',
         xmltvUrlFields: sourceType === 'xmltv_url',
         sdFields: sourceType === 'schedules_direct',
         grabberFields: sourceType === 'xmltv_grabber',
@@ -26,19 +22,12 @@ export function getSourceTypeFieldVisibility(sourceType) {
 }
 
 /**
- * @param {string} sourceType
- * @returns {boolean}
- */
-export function shouldShowProviderDeprecationWarning(sourceType) {
-    return sourceType === 'provider';
-}
-
-/**
- * @param {{ deprecated?: boolean, source_type?: string }} source
+ * Existing DB rows may still use the removed provider source type.
+ * @param {{ source_type?: string }} source
  * @returns {boolean}
  */
 export function isLegacyProviderSource(source) {
-    return Boolean(source?.deprecated || source?.source_type === 'provider');
+    return source?.source_type === 'provider';
 }
 
 /**

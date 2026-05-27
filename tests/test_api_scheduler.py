@@ -30,8 +30,6 @@ class TestSchedulerAPI:
         mock_scheduler.interval_seconds = 21600
         mock_scheduler.get_status.return_value = {
             "running": True,
-            "interval_hours": 6,
-            "interval_seconds": 21600,
             "syncs": {
                 "accounts": {"interval_hours": 6, "last_sync": None, "next_sync": None, "overdue": True},
                 "epg": {"interval_hours": 12, "last_sync": None, "next_sync": None, "overdue": True},
@@ -44,7 +42,7 @@ class TestSchedulerAPI:
             assert response.status_code == 200
             data = response.json
             assert data["running"] is True
-            assert data["interval_hours"] == 6
+            assert data["syncs"]["accounts"]["interval_hours"] == 6
 
     def test_scheduler_stop_no_scheduler(self, app, client):
         """Test stop scheduler when not initialized"""
@@ -130,46 +128,44 @@ class TestSchedulerAPI:
             mock_scheduler.start.assert_called_once()
 
     def test_scheduler_restart_with_new_interval(self, app, client):
-        """Test scheduler restart with new interval"""
+        """Test scheduler restart with new account interval"""
         mock_scheduler = MagicMock()
-        mock_scheduler.interval_hours = 6
-        mock_scheduler.account_interval_hours = 12
+        mock_scheduler.account_interval_hours = 6
         mock_scheduler.epg_interval_hours = 12
         mock_scheduler.fcc_interval_hours = 168
 
         with patch("routes.api._scheduler", mock_scheduler):
             response = client.post(
                 "/api/scheduler/restart",
-                json={"interval_hours": 12},
+                json={"account_interval_hours": 12},
                 content_type="application/json",
             )
             assert response.status_code == 200
-            # The response includes account_interval_hours which was set via interval_hours
             assert response.json["account_interval_hours"] == 12
             mock_scheduler.stop.assert_called_once()
             mock_scheduler.start.assert_called_once()
 
     def test_scheduler_restart_invalid_interval(self, app, client):
-        """Test scheduler restart with invalid interval"""
+        """Test scheduler restart with invalid account interval"""
         mock_scheduler = MagicMock()
 
         with patch("routes.api._scheduler", mock_scheduler):
             response = client.post(
                 "/api/scheduler/restart",
-                json={"interval_hours": "invalid"},
+                json={"account_interval_hours": "invalid"},
                 content_type="application/json",
             )
             assert response.status_code == 400
 
     def test_scheduler_restart_interval_out_of_range(self, app, client):
-        """Test scheduler restart with interval out of range"""
+        """Test scheduler restart with account interval out of range"""
         mock_scheduler = MagicMock()
 
         with patch("routes.api._scheduler", mock_scheduler):
             # Test too low
             response = client.post(
                 "/api/scheduler/restart",
-                json={"interval_hours": 0},
+                json={"account_interval_hours": 0},
                 content_type="application/json",
             )
             assert response.status_code == 400
@@ -178,7 +174,7 @@ class TestSchedulerAPI:
             # Test too high
             response = client.post(
                 "/api/scheduler/restart",
-                json={"interval_hours": 200},
+                json={"account_interval_hours": 200},
                 content_type="application/json",
             )
             assert response.status_code == 400

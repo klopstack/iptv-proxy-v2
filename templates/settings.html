@@ -462,11 +462,6 @@ async function loadSchedulerStatus() {
                 renderEpgSourcesProgress(status.epg_sources);
             }
             updateSyncStatus('fcc-sync-status', status.syncs.fcc);
-        } else {
-            // Fallback for legacy API response
-            document.getElementById('account-interval').value = status.interval_hours;
-            document.getElementById('epg-interval').value = 12; // Default
-            document.getElementById('fcc-interval').value = 168; // Default weekly
         }
         
         document.getElementById('scheduler-form').style.display = 'block';

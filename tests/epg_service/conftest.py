@@ -11,8 +11,8 @@ def test_epg_source(app, test_account):
     with app.app_context():
         source = EpgSource(
             name="Test EPG Source",
-            source_type="provider",
-            account_id=test_account,
+            source_type="xmltv_url",
+            url="http://example.com/epg.xml",
             priority=100,
             enabled=True,
         )

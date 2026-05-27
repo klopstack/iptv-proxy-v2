@@ -67,7 +67,6 @@ class SyncScheduler:
                            This is used as fallback if no specific intervals are set
         """
         self.app = app
-        # Legacy compatibility - this will be the account sync interval
         self.interval_hours = interval_hours
         self.interval_seconds = interval_hours * 3600
         self.running = False
@@ -110,7 +109,6 @@ class SyncScheduler:
         """Set IPTV account sync interval in hours"""
         self._account_interval_hours = value
         self._save_interval(SYNC_KEY_ACCOUNT_INTERVAL, value)
-        # Keep legacy property in sync
         self.interval_hours = value
         self.interval_seconds = value * 3600
 
@@ -174,10 +172,6 @@ class SyncScheduler:
                 "running": self.running or self._is_scheduler_alive(),
                 "local_running": self.running,
                 "lock_held": self._lock.held,
-                # Legacy compatibility
-                "interval_hours": self.interval_hours,
-                "interval_seconds": self.interval_seconds,
-                # Detailed sync info
                 "syncs": {
                     "accounts": get_sync_info(SYNC_KEY_LAST_ACCOUNT_SYNC, self._account_interval_hours),
                     "epg": get_sync_info(SYNC_KEY_LAST_EPG_SYNC, self._epg_interval_hours),

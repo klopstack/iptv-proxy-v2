@@ -46,12 +46,12 @@ class Account(db.Model):  # type: ignore[name-defined]
         "Credential", backref="account", lazy=True, cascade="all, delete-orphan", order_by="Credential.id"
     )
 
+
     def __init__(self, **kwargs):
-        # Allow legacy constructor args from old tests/callers; store as a Credential.
         username = kwargs.pop("username", None)
         password = kwargs.pop("password", None)
         super().__init__(**kwargs)
-        if username and password and not getattr(self, "credentials", None):
+        if username and password:
             self.credentials.append(
                 Credential(username=username, password=password, max_connections=1, enabled=True)  # type: ignore[name-defined]
             )

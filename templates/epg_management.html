@@ -54,7 +54,7 @@
                     </div>
                     <div class="card-body">
                         <p class="text-muted small mb-3">
-                            Manage EPG (Electronic Program Guide) sources. Prefer Schedules Direct or XMLTV grabbers for reliable program data; provider EPG is legacy.
+                            Manage EPG (Electronic Program Guide) sources. Use Schedules Direct or XMLTV grabbers for reliable program data.
                         </p>
                         
                         <!-- Coverage Summary -->
@@ -91,7 +91,6 @@
                         <li><strong>Schedules Direct:</strong> Recommended for US/Canada — premium TV listings synced to the database</li>
                         <li><strong>XMLTV Grabber:</strong> Recommended for local or custom XMLTV grabber scripts</li>
                         <li><strong>XMLTV URL/File:</strong> Import EPG from an external XMLTV feed</li>
-                        <li><strong>Provider (legacy):</strong> Passthrough from your IPTV provider — lower quality; migrate to SD or XMLTV when possible</li>
                         <li><strong>PPV Events:</strong> Auto-managed source synced during PPV channel enrichment (read-only)</li>
                     </ul>
                 </div>
@@ -396,26 +395,8 @@
                             <option value="schedules_direct">Schedules Direct</option>
                             <option value="xmltv_grabber">XMLTV Grabber</option>
                             <option value="xmltv_url">XMLTV URL</option>
-                            <option value="provider">IPTV Provider (legacy)</option>
                             <option value="ppv_events">PPV Events</option>
                         </select>
-                    </div>
-
-                    <div id="providerDeprecationWarning" class="alert alert-warning" style="display: none;">
-                        <i class="bi bi-exclamation-triangle"></i>
-                        <strong>Legacy source type.</strong> Provider EPG is a passthrough from your IPTV provider and is deprecated.
-                        Prefer Schedules Direct or an XMLTV grabber for better coverage and database-first generation.
-                        See the <a href="https://github.com/klopstack/iptv-proxy-v2/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noopener">architecture docs</a> for the migration path.
-                    </div>
-                    
-                    <!-- Provider-specific fields -->
-                    <div id="providerFields" style="display: none;">
-                        <div class="mb-3">
-                            <label for="sourceAccountId" class="form-label">Account</label>
-                            <select class="form-select" id="sourceAccountId">
-                                <option value="">Select account...</option>
-                            </select>
-                        </div>
                     </div>
                     
                     <!-- XMLTV URL fields -->
@@ -1104,7 +1085,6 @@ import {
 import {
     getSourceTypeFieldVisibility,
     isLegacyProviderSource,
-    shouldShowProviderDeprecationWarning,
 } from "{{ url_for('static', filename='js/lib/epg_sources_helpers.js') }}";
 import {
     getRuleFormFieldVisibility,
@@ -1136,7 +1116,6 @@ Object.assign(window, {
     formatRelativeTime,
     getSourceTypeFieldVisibility,
     isLegacyProviderSource,
-    shouldShowProviderDeprecationWarning,
     getRuleFormFieldVisibility,
     normalizeNameMappingKey,
     parseCountryCodes,
@@ -1237,6 +1216,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     addListener('add-source-btn', 'click', () => {
         document.getElementById('sourceId').value = '';
         document.getElementById('sourceForm').reset();
+        document.getElementById('sourceType').disabled = false;
         document.getElementById('sourceModalLabel').textContent = 'Add EPG Source';
         onSourceTypeChange();
     });

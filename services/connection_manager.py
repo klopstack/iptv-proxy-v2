@@ -34,7 +34,6 @@ class ConnectionManager:
 
         Returns:
             Credential with available connection slots, or None if all are busy.
-            May return a Credential instance or a LegacyCredential pseudo-object.
         """
         # First, clean up stale connections
         ConnectionManager.cleanup_stale_connections(account_id)
@@ -77,7 +76,7 @@ class ConnectionManager:
         Acquire a connection slot for a stream.
 
         Args:
-            credential_id: The credential to use (None for legacy mode)
+            credential_id: The credential to use
             stream_id: The stream being requested
             client_ip: Optional client IP address
 
@@ -223,8 +222,12 @@ class ConnectionManager:
         credentials = Credential.query.filter_by(account_id=account_id).all()
 
         if not credentials:
-            # Legacy mode
-            return {"total_max_connections": 1, "total_active_connections": 0, "credentials": [], "legacy_mode": True}
+            return {
+                "total_max_connections": 0,
+                "total_active_connections": 0,
+                "available_connections": 0,
+                "credentials": [],
+            }
 
         # Calculate totals
         total_max = sum(c.max_connections or 1 for c in credentials)
@@ -250,7 +253,6 @@ class ConnectionManager:
             "total_active_connections": total_active,
             "available_connections": total_max - total_active,
             "credentials": credential_details,
-            "legacy_mode": False,
         }
 
     @staticmethod

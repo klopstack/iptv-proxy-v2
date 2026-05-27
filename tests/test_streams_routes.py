@@ -114,15 +114,16 @@ class TestStreamStatus:
         response = client.get(f"/stream/{test_account}/status")
         assert response.status_code == 200
         data = response.json
-        assert "total_max_connections" in data or "legacy_mode" in data
+        assert "total_max_connections" in data
+        assert "credentials" in data
 
     def test_stream_status_includes_account_info(self, app, client, test_account):
         """Test stream status returns account and credential details"""
         response = client.get(f"/stream/{test_account}/status")
         assert response.status_code == 200
         data = response.json
-        # Should contain either connection info or legacy mode indicator
         assert isinstance(data, dict)
+        assert "credentials" in data
 
 
 class TestActiveStreams:

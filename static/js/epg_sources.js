@@ -29,7 +29,7 @@ async function loadAccounts() {
         accounts = data;
         
         // Populate account selects
-        const selects = ['sourceAccountId', 'mappingAccountSelect', 'matchAccountSelect'];
+        const selects = ['mappingAccountSelect', 'matchAccountSelect'];
         selects.forEach(id => {
             const select = document.getElementById(id);
             if (select) {
@@ -240,11 +240,6 @@ function onSourceTypeChange() {
     const type = document.getElementById('sourceType').value;
     const visibility = getSourceTypeFieldVisibility(type);
 
-    const providerWarning = document.getElementById('providerDeprecationWarning');
-    if (providerWarning) {
-        providerWarning.style.display = visibility.providerDeprecationWarning ? 'block' : 'none';
-    }
-    document.getElementById('providerFields').style.display = visibility.providerFields ? 'block' : 'none';
     document.getElementById('xmltvUrlFields').style.display = visibility.xmltvUrlFields ? 'block' : 'none';
     document.getElementById('sdFields').style.display = visibility.sdFields ? 'block' : 'none';
     document.getElementById('grabberFields').style.display = visibility.grabberFields ? 'block' : 'none';
@@ -264,13 +259,7 @@ async function saveSource() {
         enabled: document.getElementById('sourceEnabled').checked
     };
     
-    if (data.source_type === 'provider') {
-        data.account_id = parseInt(document.getElementById('sourceAccountId').value);
-        if (!data.account_id) {
-            alert('Please select an account');
-            return;
-        }
-    } else if (data.source_type === 'xmltv_url') {
+    if (data.source_type === 'xmltv_url') {
         data.url = document.getElementById('sourceUrl').value;
         if (!data.url) {
             alert('Please enter a URL');
@@ -328,8 +317,12 @@ function editSource(id) {
     document.getElementById('sourceEnabled').checked = source.enabled;
     
     if (source.source_type === 'provider') {
-        document.getElementById('sourceAccountId').value = source.account_id || '';
-    } else if (source.source_type === 'xmltv_url') {
+        document.getElementById('sourceType').disabled = true;
+    } else {
+        document.getElementById('sourceType').disabled = false;
+    }
+
+    if (source.source_type === 'xmltv_url') {
         document.getElementById('sourceUrl').value = source.url || '';
     } else if (source.source_type === 'xmltv_grabber') {
         populateGrabberSelect().then(() => {

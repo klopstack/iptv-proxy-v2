@@ -466,7 +466,6 @@ def restart_scheduler():
     """Restart scheduler with new intervals
 
     Accepts JSON body with optional interval settings:
-    - interval_hours: Legacy single interval (sets account_interval_hours)
     - account_interval_hours: IPTV account sync interval (1-168)
     - epg_interval_hours: EPG source sync interval (1-336)
     - fcc_interval_hours: FCC data sync interval (24-672)
@@ -475,10 +474,6 @@ def restart_scheduler():
         return jsonify({"error": "Scheduler not initialized"}), 500
 
     data = request.get_json() or {}
-
-    # Handle legacy interval_hours (maps to account interval)
-    if "interval_hours" in data and "account_interval_hours" not in data:
-        data["account_interval_hours"] = data["interval_hours"]
 
     # Validate and apply account interval
     if "account_interval_hours" in data:
@@ -525,9 +520,6 @@ def restart_scheduler():
         {
             "success": True,
             "message": "Scheduler restarted with updated intervals",
-            # Legacy compatibility
-            "interval_hours": _scheduler.interval_hours,
-            # Detailed intervals
             "account_interval_hours": _scheduler.account_interval_hours,
             "epg_interval_hours": _scheduler.epg_interval_hours,
             "fcc_interval_hours": _scheduler.fcc_interval_hours,

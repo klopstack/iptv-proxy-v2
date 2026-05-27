@@ -450,9 +450,7 @@ def get_xmltv_epg():
         # Use account EPG endpoint
         return redirect(f"/epg/{account.id}.xml")
     elif playlist_config:
-        if playlist_config.slug:
-            return redirect(f"/epg/config/{playlist_config.slug}.xml")
-        return redirect(f"/epg/config/{playlist_config.id}.xml")
+        return redirect(f"/epg/config/{playlist_config.slug}.xml")
     else:
         return "No EPG available", 404
 
