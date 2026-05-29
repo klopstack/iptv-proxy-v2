@@ -339,7 +339,13 @@ pip install -r requirements-dev.txt
 
 Or use the Makefile:
 ```bash
-make install
+make install   # also installs git pre-commit hooks
+```
+
+Pre-commit runs the same linters as CI (`make lint-py` and `make lint-js`) on every commit. To install hooks on an existing venv without reinstalling everything:
+
+```bash
+make install-hooks
 ```
 
 ### Run Tests
@@ -356,6 +362,8 @@ make test-fast
 ```
 
 ### Linting and Code Quality
+
+Git pre-commit hooks run `make lint-py` and `make lint-js` automatically (matching CI). To run the same checks manually:
 
 ```bash
 # Run all linting checks

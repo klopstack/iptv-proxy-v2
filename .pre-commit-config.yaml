@@ -1,0 +1,20 @@
+# Mirrors CI lint jobs (see .github/workflows/build.yml: lint-py, lint-js).
+# Hooks delegate to Makefile so pre-commit and CI always run the same commands.
+default_language_version:
+  python: python3.11
+
+repos:
+  - repo: local
+    hooks:
+      - id: lint-py
+        name: Python linters (make lint-py)
+        entry: make lint-py
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: lint-js
+        name: JavaScript/HTML linters (make lint-js)
+        entry: make lint-js
+        language: system
+        pass_filenames: false
+        always_run: true

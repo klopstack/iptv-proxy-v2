@@ -1,4 +1,4 @@
-.PHONY: help install install-js test test-js test-fast test-clean lint lint-js format clean run debug docker-build docker-run venv vulture vulture-all
+.PHONY: help install install-js install-hooks test test-js test-fast test-clean lint lint-py lint-js format clean run debug docker-build docker-run venv vulture vulture-all
 
 VENV = venv
 PYTHON = $(VENV)/bin/python
@@ -9,6 +9,7 @@ ISORT = $(VENV)/bin/isort
 FLAKE8 = $(VENV)/bin/flake8
 MYPY = $(VENV)/bin/mypy
 VULTURE = $(VENV)/bin/vulture
+PRE_COMMIT = $(VENV)/bin/pre-commit
 MYPY_MODELS = models/
 VULTURE_MODELS = models/
 
@@ -22,7 +23,7 @@ venv: ## Create virtual environment
 	python3 -m venv $(VENV)
 	$(PIP) install --upgrade pip
 
-install: install-py install-js ## Install all dependencies
+install: install-py install-js install-hooks ## Install all dependencies and git pre-commit hooks
 
 install-py: venv ## Install Python dependencies in venv
 	$(PIP) install -r requirements.txt
@@ -30,6 +31,9 @@ install-py: venv ## Install Python dependencies in venv
 
 install-js: ## Install JavaScript dependencies
 	npm install
+
+install-hooks: install-py ## Install git pre-commit hooks (same linters as CI)
+	$(PRE_COMMIT) install
 
 test-clean: ## Remove stale test database files
 	rm -f test.db test.db-* instance/test.db instance/test.db-* instance/pytest.db instance/pytest.db-*

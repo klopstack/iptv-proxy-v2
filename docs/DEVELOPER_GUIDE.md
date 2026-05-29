@@ -155,10 +155,12 @@ def test_channel_filtering(client):
 
 ### Required Commands
 
-⚠️ **ALWAYS run these commands before committing**:
+Pre-commit hooks run the same linters as CI on every `git commit` (`make lint-py` and `make lint-js`). Install them once with `make install-hooks` (included in `make install`).
+
+⚠️ **ALWAYS run these commands before pushing** (hooks cover lint; tests are not in pre-commit):
 
 ```bash
-make lint    # Check code quality and formatting
+make lint    # Same checks as pre-commit / CI lint jobs
 make test    # Run full test suite with coverage
 ```
 

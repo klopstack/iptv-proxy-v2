@@ -54,12 +54,20 @@ echo "🧪 Running tests..."
 pytest tests/ -v --cov=. --cov-report=term-missing --cov-fail-under=70
 
 echo ""
+if command -v pre-commit >/dev/null 2>&1; then
+    echo ""
+    echo "🔗 Installing git pre-commit hooks..."
+    pre-commit install
+fi
+
+echo ""
 echo "✅ Setup complete!"
 echo ""
 echo "Available commands:"
 echo "  make test       - Run tests with coverage"
 echo "  make test-fast  - Run tests without coverage"
-echo "  make lint       - Check code quality"
+echo "  make lint       - Check code quality (also runs on git commit via pre-commit)"
+echo "  make install-hooks - Install git pre-commit hooks"
 echo "  make format     - Auto-format code"
 echo "  make run        - Run the application"
 echo "  make help       - Show all commands"
