@@ -5,13 +5,13 @@ import pytest
 
 from models import EpgChannel, EpgSource, db
 from services.epg.parsing import parse_xmltv, parse_xmltv_streaming, sync_epg_source
-from services.epg.utils import parse_xmltv_time
 from services.epg.utils import (
     decompress_content,
     extract_callsign_from_xmltv_id,
     get_decompressing_stream,
     make_sd_xmltv_id,
     normalize_xmltv_url,
+    parse_xmltv_time,
     shift_xmltv_time,
 )
 

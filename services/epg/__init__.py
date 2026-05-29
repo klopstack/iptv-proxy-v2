@@ -49,6 +49,7 @@ from services.epg.constants import (
     STRIP_WORDS,
     WEST_TAGS,
 )
+
 __all__ = [
     # Submodules
     "cache",

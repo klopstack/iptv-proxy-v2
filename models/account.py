@@ -46,7 +46,6 @@ class Account(db.Model):  # type: ignore[name-defined]
         "Credential", backref="account", lazy=True, cascade="all, delete-orphan", order_by="Credential.id"
     )
 
-
     def __init__(self, **kwargs):
         username = kwargs.pop("username", None)
         password = kwargs.pop("password", None)

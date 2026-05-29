@@ -103,7 +103,9 @@ def test_account(app):
         )
         _db.session.add(account)
         _db.session.flush()
-        cred = Credential(account_id=account.id, username="test_user", password="test_pass", max_connections=1, enabled=True)
+        cred = Credential(
+            account_id=account.id, username="test_user", password="test_pass", max_connections=1, enabled=True
+        )
         _db.session.add(cred)
         _db.session.commit()
         yield account.id

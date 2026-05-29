@@ -318,7 +318,9 @@ class TestCredentialManagement:
             account = Account(name="Creds", server="example.com", enabled=True)
             db.session.add(account)
             db.session.flush()
-            cred = Credential(account_id=account.id, username="cred_user", password="cred_pass", max_connections=2, enabled=True)
+            cred = Credential(
+                account_id=account.id, username="cred_user", password="cred_pass", max_connections=2, enabled=True
+            )
             db.session.add(cred)
             db.session.commit()
             account_id = account.id

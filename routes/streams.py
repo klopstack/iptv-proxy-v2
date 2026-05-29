@@ -202,6 +202,10 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
     credential_username = getattr(credential, "username", "unknown")
     logger.debug(f"Using credential: id={credential_id}, username={credential_username}")
 
+    if credential_id is None:
+        logger.error(f"Stream request failed: credential has no id for account {account_id}")
+        abort(503, description="No available connections. All streams are in use.")
+
     # Acquire connection slot
     session_token, error = ConnectionManager.acquire_connection(credential_id, stream_id, client_ip)
     if not session_token:

@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 # Create blueprint
 epg_sources_bp = Blueprint("epg_sources", __name__, url_prefix="/api/epg")
 
+
 def _serialize_epg_source(source, *, mapping_count=0):
     """Serialize an EpgSource for JSON responses."""
     return {

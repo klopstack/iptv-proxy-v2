@@ -213,7 +213,9 @@ class EpgSyncService:
                 lineups_completed += 1
 
             channels_synced = stats["channels_added"] + stats["channels_updated"]
-            message = f"Synced {channels_synced} channels from Schedules Direct ({lineups_completed}/{lineups_total} lineups)"
+            message = (
+                f"Synced {channels_synced} channels from Schedules Direct ({lineups_completed}/{lineups_total} lineups)"
+            )
             try:
                 from services.epg.sd_programs import sync_sd_programs_for_source
 

@@ -31,9 +31,13 @@ def try_acquire_epg_sync_lock(source_id: int, *, force: bool = False) -> bool:
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     if force:
         locked = (
-            db.session.execute(
-                update(EpgSource).where(EpgSource.id == source_id, EpgSource.sync_in_progress.is_(True))
-            ).rowcount
+            getattr(
+                db.session.execute(
+                    update(EpgSource).where(EpgSource.id == source_id, EpgSource.sync_in_progress.is_(True))
+                ),
+                "rowcount",
+                0,
+            )
             or 0
         ) > 0
         if locked:

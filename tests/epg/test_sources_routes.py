@@ -374,7 +374,9 @@ class TestEpgSources:
     def test_get_source_mappings_pagination(self, app, client, test_account):
         """Test pagination of source mappings"""
         with app.app_context():
-            source = EpgSource(name="Pagination Test", source_type="xmltv_url", url="http://example.com/epg.xml", enabled=True)
+            source = EpgSource(
+                name="Pagination Test", source_type="xmltv_url", url="http://example.com/epg.xml", enabled=True
+            )
             db.session.add(source)
             db.session.flush()
 

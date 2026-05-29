@@ -41,13 +41,13 @@ def find_account_xmltv_epg_source(account_id: int) -> Optional[EpgSource]:
     Only sources with account_id set and type xmltv_url are considered.
     """
     return (
-        EpgSource.query.filter_by(account_id=account_id, source_type="xmltv_url")
-        .order_by(EpgSource.id.asc())
-        .first()
+        EpgSource.query.filter_by(account_id=account_id, source_type="xmltv_url").order_by(EpgSource.id.asc()).first()
     )
 
 
-def upsert_account_xmltv_epg_source(account: Account, credential: Optional[Credential] = None) -> Tuple[EpgSource, bool]:
+def upsert_account_xmltv_epg_source(
+    account: Account, credential: Optional[Credential] = None
+) -> Tuple[EpgSource, bool]:
     """
     Create or update an xmltv_url EPG source for this account's primary credential.
 

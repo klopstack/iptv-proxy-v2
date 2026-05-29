@@ -92,4 +92,3 @@ def migrate(db_path):
         return False, f"Error: {e}"
     finally:
         conn.close()
-

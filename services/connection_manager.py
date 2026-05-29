@@ -71,7 +71,9 @@ class ConnectionManager:
         return selected
 
     @staticmethod
-    def acquire_connection(credential_id: int, stream_id: str, client_ip: Optional[str] = None) -> Tuple[Optional[str], str]:
+    def acquire_connection(
+        credential_id: int, stream_id: str, client_ip: Optional[str] = None
+    ) -> Tuple[Optional[str], str]:
         """
         Acquire a connection slot for a stream.
 

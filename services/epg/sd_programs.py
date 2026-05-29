@@ -16,7 +16,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from models import EpgChannel, EpgProgram, SdLineup, SdStation, db
+from models import EpgChannel, EpgProgram, EpgSource, SdLineup, SdStation, db
 
 logger = logging.getLogger(__name__)
 

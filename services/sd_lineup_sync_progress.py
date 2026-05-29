@@ -106,4 +106,3 @@ class SdLineupSyncProgress:
             return data if isinstance(data, dict) else {}
         except Exception:
             return {}
-

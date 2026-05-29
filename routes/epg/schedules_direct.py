@@ -2,9 +2,9 @@
 Schedules Direct API integration routes
 """
 import logging
+from typing import Any
 
 from flask import Blueprint, jsonify, request
-from typing import Any
 
 from error_handling import handle_errors
 from models import Account, EpgSource, SdLineup, SdStation, db

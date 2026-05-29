@@ -88,7 +88,10 @@ class TestUpdateSourceSyncStatusOnFailure:
         before = datetime.now(timezone.utc).replace(tzinfo=None)
 
         EpgSyncService.update_source_sync_status(
-            source, True, "Synced 5 channels (programme sync failed: timeout)", {"partial": True, "channels_added": 3, "channels_updated": 2}
+            source,
+            True,
+            "Synced 5 channels (programme sync failed: timeout)",
+            {"partial": True, "channels_added": 3, "channels_updated": 2},
         )
 
         after = datetime.now(timezone.utc).replace(tzinfo=None)
