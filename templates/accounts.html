@@ -58,6 +58,26 @@
                                placeholder="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36">
                         <div class="form-text">Custom user agent string for API requests (leave blank for default)</div>
                     </div>
+                    <div class="mb-3 form-check" id="createXmltvEpgGroup">
+                        <input type="checkbox" class="form-check-input" id="accountCreateXmltvEpg" checked>
+                        <label class="form-check-label" for="accountCreateXmltvEpg">
+                            Create XMLTV EPG source from provider feed
+                        </label>
+                        <div class="form-text">
+                            Adds a standard <code>xmltv_url</code> EPG source for this account's
+                            <code>xmltv.php</code> endpoint. Sync it from EPG management when ready.
+                        </div>
+                    </div>
+                    <div class="mb-3" id="xmltvEpgManageGroup" style="display: none;">
+                        <label class="form-label">Linked XMLTV EPG source</label>
+                        <div id="xmltvEpgStatus" class="small text-muted mb-2">—</div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="update-xmltv-epg-btn">
+                            <i class="bi bi-arrow-repeat"></i> Update EPG feed URL
+                        </button>
+                        <div class="form-text">
+                            Refreshes the EPG source URL after server or credential changes.
+                        </div>
+                    </div>
                     <div class="mb-3 form-check">
                         <input type="checkbox" class="form-check-input" id="accountEnabled" checked>
                         <label class="form-check-label" for="accountEnabled">Enabled</label>
@@ -280,6 +300,9 @@ async function renderAccounts() {
                         </small>
                     </div>
                     <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-secondary" data-action="update-xmltv-epg" data-account-id="${account.id}" title="Update linked XMLTV EPG source URL">
+                            <i class="bi bi-calendar3"></i>
+                        </button>
                         <button class="btn btn-sm btn-outline-info" data-action="sync" data-account-id="${account.id}" title="Sync Channels to Database">
                             <i class="bi bi-arrow-repeat"></i>
                         </button>
@@ -308,6 +331,45 @@ async function renderAccounts() {
     }
     html += '</div>';
     document.getElementById('accounts-list').innerHTML = html;
+}
+
+function setXmltvEpgModalState(account) {
+    const createGroup = document.getElementById('createXmltvEpgGroup');
+    const manageGroup = document.getElementById('xmltvEpgManageGroup');
+    const createCheckbox = document.getElementById('accountCreateXmltvEpg');
+    const statusEl = document.getElementById('xmltvEpgStatus');
+
+    if (!createGroup || !manageGroup) return;
+
+    const isEdit = Boolean(account?.id);
+    createGroup.style.display = isEdit ? 'none' : 'block';
+    manageGroup.style.display = isEdit ? 'block' : 'none';
+
+    if (!isEdit) {
+        createCheckbox.checked = true;
+        return;
+    }
+
+    const src = account.xmltv_epg_source;
+    if (src) {
+        const sync = src.last_sync ? `Last sync: ${src.last_sync}` : 'Never synced';
+        statusEl.innerHTML = `<strong>${src.name}</strong> — ${sync}`;
+        if (src.last_sync_status) {
+            statusEl.innerHTML += ` <span class="badge bg-secondary">${src.last_sync_status}</span>`;
+        }
+    } else {
+        statusEl.textContent = 'No linked XMLTV EPG source. Use the button below to create one from current credentials.';
+    }
+}
+
+async function updateAccountXmltvEpgSource(accountId, { sync = false } = {}) {
+    const url = `/api/accounts/${accountId}/xmltv-epg-source${sync ? '?sync=true' : ''}`;
+    const response = await fetch(url, { method: 'POST' });
+    const result = await response.json();
+    if (!response.ok) {
+        throw new Error(result.error || 'Failed to update EPG source');
+    }
+    return result;
 }
 
 // Helper function to format relative time
@@ -347,6 +409,27 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('accountEnabled').checked = true;
             document.getElementById('accountPassword').required = true;
             document.getElementById('passwordHint').style.display = 'none';
+            setXmltvEpgModalState(null);
+        });
+    }
+
+    const updateXmltvEpgBtn = document.getElementById('update-xmltv-epg-btn');
+    if (updateXmltvEpgBtn) {
+        updateXmltvEpgBtn.addEventListener('click', async () => {
+            const accountId = document.getElementById('accountId').value;
+            if (!accountId) return;
+            updateXmltvEpgBtn.disabled = true;
+            try {
+                const result = await updateAccountXmltvEpgSource(accountId);
+                alert(result.created ? '✓ EPG source created' : '✓ EPG source URL updated');
+                await loadAccounts();
+                const account = accounts.find((a) => a.id === parseInt(accountId, 10));
+                if (account) setXmltvEpgModalState(account);
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                updateXmltvEpgBtn.disabled = false;
+            }
         });
     }
 
@@ -377,6 +460,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Include user_agent if provided
             if (userAgent) {
                 data.user_agent = userAgent;
+            }
+
+            if (!id && document.getElementById('accountCreateXmltvEpg')?.checked) {
+                data.create_xmltv_epg_source = true;
             }
             
             try {
@@ -438,7 +525,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.getElementById('accountUserAgent').value = account.user_agent || '';
                     document.getElementById('accountEnabled').checked = account.enabled;
                     document.getElementById('accountPpvVisibility').value = account.ppv_visibility || 'hide_inactive';
+                    setXmltvEpgModalState(account);
                     modal.show();
+                    break;
+
+                case 'update-xmltv-epg':
+                    if (!confirm(`Update XMLTV EPG source URL for ${account?.name}?`)) return;
+                    try {
+                        button.disabled = true;
+                        const result = await updateAccountXmltvEpgSource(accountId);
+                        alert(result.created ? '✓ EPG source created' : '✓ EPG source URL updated');
+                        await loadAccounts();
+                    } catch (error) {
+                        alert('Error: ' + error.message);
+                    } finally {
+                        button.disabled = false;
+                    }
                     break;
 
                 case 'delete':

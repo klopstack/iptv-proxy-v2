@@ -1018,3 +1018,43 @@ class TestProcessTagsTimezone:
         """Processing tags should not raise timezone comparison errors."""
         response = client.post(f"/api/accounts/{test_account_with_channels}/process-tags")
         assert response.status_code in [200, 503]
+
+
+class TestAccountXmltvEpgSource:
+    """Account-linked XMLTV EPG source API."""
+
+    def test_create_account_with_xmltv_epg_source(self, app, client):
+        response = client.post(
+            "/api/accounts",
+            json={
+                "name": "EPG Account",
+                "server": "epg.example.com",
+                "username": "epguser",
+                "password": "epgpass",
+                "create_xmltv_epg_source": True,
+            },
+            content_type="application/json",
+        )
+        assert response.status_code == 201
+        data = response.json
+        assert data["xmltv_epg_source"] is not None
+        assert data["xmltv_epg_source"]["source_type"] == "xmltv_url"
+        assert "xmltv.php" in data["xmltv_epg_source"]["url"]
+
+    def test_upsert_xmltv_epg_source_route(self, app, client, test_account):
+        response = client.post(f"/api/accounts/{test_account}/xmltv-epg-source")
+        assert response.status_code == 200
+        body = response.json
+        assert body["success"] is True
+        assert body["xmltv_epg_source"]["url"].startswith("https://")
+
+        get_resp = client.get(f"/api/accounts/{test_account}/xmltv-epg-source")
+        assert get_resp.status_code == 200
+        assert get_resp.json["xmltv_epg_source"]["id"] == body["xmltv_epg_source"]["id"]
+
+    def test_list_accounts_includes_xmltv_epg_source(self, app, client, test_account):
+        client.post(f"/api/accounts/{test_account}/xmltv-epg-source")
+        response = client.get("/api/accounts")
+        assert response.status_code == 200
+        row = next(a for a in response.json if a["id"] == test_account)
+        assert row["xmltv_epg_source"] is not None

@@ -69,6 +69,8 @@ update_credential
 delete_credential
 test_credential
 get_account_connection_status
+get_account_xmltv_epg_source
+upsert_account_xmltv_epg_source_route
 
 # api.py
 get_all_categories

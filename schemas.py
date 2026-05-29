@@ -25,6 +25,7 @@ class AccountCreateSchema(Schema):
         load_default="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     )
     enabled = fields.Bool(load_default=True)
+    create_xmltv_epg_source = fields.Bool(load_default=False)
 
     @validates("server")
     def validate_server(self, value):
@@ -45,6 +46,8 @@ class AccountUpdateSchema(Schema):
     password = fields.Str(validate=lambda x: 1 <= len(x) <= 100)
     user_agent = fields.Str(validate=lambda x: 1 <= len(x) <= 255)
     enabled = fields.Bool()
+    create_xmltv_epg_source = fields.Bool()
+    update_xmltv_epg_source = fields.Bool()
 
     @validates("server")
     def validate_server(self, value):

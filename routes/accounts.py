@@ -7,8 +7,14 @@ from flask import Blueprint, jsonify, request
 from sqlalchemy import or_
 
 from error_handling import handle_errors
-from models import Account, Category, Channel, ChannelTag, Credential, Filter, Tag, db
+from models import Account, Category, Channel, ChannelTag, Credential, EpgSource, Filter, Tag, db
 from schemas import AccountCreateSchema, AccountUpdateSchema, validate_request_data
+from services.account_epg_source_service import (
+    find_account_xmltv_epg_source,
+    normalize_account_server,
+    serialize_account_xmltv_epg_source,
+    upsert_account_xmltv_epg_source,
+)
 from services.cache_service import CacheService
 from services.channel_query_service import ChannelQueryService
 from services.connection_manager import ConnectionManager
@@ -57,6 +63,14 @@ def get_accounts():
     )
     channel_count_map = {account_id: count for account_id, count in channel_counts}
 
+    xmltv_sources = {
+        row.account_id: row
+        for row in EpgSource.query.filter(
+            EpgSource.account_id.isnot(None),
+            EpgSource.source_type == "xmltv_url",
+        ).all()
+    }
+
     result = []
     for a in accounts:
         account_data = {
@@ -68,6 +82,7 @@ def get_accounts():
             "credentials": [credential_to_dict(c) for c in a.credentials],
             "total_max_connections": a.get_total_max_connections(),
             "channel_count": channel_count_map.get(a.id, 0),
+            "xmltv_epg_source": serialize_account_xmltv_epg_source(xmltv_sources.get(a.id)),
         }
         account_data["username"] = a.credentials[0].username if a.credentials else None
         result.append(account_data)
@@ -82,7 +97,7 @@ def create_account():
 
     account = Account(
         name=data["name"],
-        server=data["server"],
+        server=normalize_account_server(data["server"]),
         user_agent=data.get(
             "user_agent",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -104,6 +119,15 @@ def create_account():
     db.session.add(credential)
     db.session.commit()
 
+    xmltv_epg_source = None
+    if data.get("create_xmltv_epg_source"):
+        try:
+            source, _created = upsert_account_xmltv_epg_source(account, credential)
+            db.session.commit()
+            xmltv_epg_source = serialize_account_xmltv_epg_source(source)
+        except ValueError as e:
+            logger.warning("Could not create XMLTV EPG source for account %s: %s", account.id, e)
+
     return (
         jsonify(
             {
@@ -115,6 +139,7 @@ def create_account():
                 "enabled": account.enabled,
                 "credentials": [credential_to_dict(credential)],
                 "total_max_connections": account.get_total_max_connections(),
+                "xmltv_epg_source": xmltv_epg_source,
             }
         ),
         201,
@@ -129,7 +154,8 @@ def update_account(account_id):
     data = request.validated_data
 
     account.name = data.get("name", account.name)
-    account.server = data.get("server", account.server)
+    if "server" in data:
+        account.server = normalize_account_server(data["server"])
     # Account username/password live on credentials; update the primary credential if requested.
     if account.credentials and ("username" in data or "password" in data):
         cred = account.credentials[0]
@@ -141,8 +167,21 @@ def update_account(account_id):
         account.user_agent = data["user_agent"]
     account.enabled = data.get("enabled", account.enabled)
 
+    should_update_xmltv = data.get("update_xmltv_epg_source") or data.get("create_xmltv_epg_source")
+    cred_fields_changed = "username" in data or "password" in data or "server" in data or "name" in data
+    existing_xmltv = find_account_xmltv_epg_source(account_id)
+
     db.session.commit()
     cache_service.clear_account_cache(account_id)
+
+    xmltv_epg_source = serialize_account_xmltv_epg_source(existing_xmltv)
+    if should_update_xmltv or (existing_xmltv and cred_fields_changed):
+        try:
+            source, _created = upsert_account_xmltv_epg_source(account)
+            db.session.commit()
+            xmltv_epg_source = serialize_account_xmltv_epg_source(source)
+        except ValueError as e:
+            logger.warning("Could not update XMLTV EPG source for account %s: %s", account_id, e)
 
     return jsonify(
         {
@@ -152,6 +191,7 @@ def update_account(account_id):
             "username": account.credentials[0].username if account.credentials else None,
             "user_agent": account.user_agent,
             "enabled": account.enabled,
+            "xmltv_epg_source": xmltv_epg_source,
         }
     )
 
@@ -1135,6 +1175,15 @@ def update_credential(account_id, cred_id):
     db.session.commit()
     cache_service.clear_account_cache(account_id)
 
+    account = db.session.get(Account, account_id)
+    primary = account.get_primary_credential() if account else None
+    if account and primary and primary.id == credential.id and find_account_xmltv_epg_source(account_id):
+        try:
+            upsert_account_xmltv_epg_source(account, credential)
+            db.session.commit()
+        except ValueError as e:
+            logger.warning("Could not refresh XMLTV EPG URL for account %s: %s", account_id, e)
+
     return jsonify(credential_to_dict(credential))
 
 
@@ -1195,3 +1244,43 @@ def get_account_connection_status(account_id):
     """Get connection status for an account (active streams, available slots)"""
     Account.query.get_or_404(account_id)  # Validate account exists
     return jsonify(ConnectionManager.get_connection_status(account_id))
+
+
+@accounts_bp.route("/api/accounts/<int:account_id>/xmltv-epg-source", methods=["GET"])
+def get_account_xmltv_epg_source(account_id):
+    """Get the linked XMLTV EPG source for this account, if configured."""
+    Account.query.get_or_404(account_id)
+    source = find_account_xmltv_epg_source(account_id)
+    return jsonify({"xmltv_epg_source": serialize_account_xmltv_epg_source(source)})
+
+
+@accounts_bp.route("/api/accounts/<int:account_id>/xmltv-epg-source", methods=["POST"])
+@handle_errors(return_json=True, default_message="Error updating account XMLTV EPG source")
+def upsert_account_xmltv_epg_source_route(account_id):
+    """
+    Create or refresh the xmltv_url EPG source for this account.
+
+    Rebuilds the xmltv.php URL from the account server and primary credential.
+    Optional query param sync=true runs an EPG sync after upsert.
+    """
+    account = Account.query.get_or_404(account_id)
+    source, created = upsert_account_xmltv_epg_source(account)
+    db.session.commit()
+
+    sync_requested = request.args.get("sync", "false").lower() == "true"
+    sync_result = None
+    if sync_requested:
+        from services.epg_sync_service import EpgSyncService
+
+        success, message, stats = EpgSyncService.sync_xmltv_url_source(source)
+        EpgSyncService.update_source_sync_status(source, success, message, stats)
+        sync_result = {"success": success, "message": message, "stats": stats}
+
+    return jsonify(
+        {
+            "success": True,
+            "created": created,
+            "xmltv_epg_source": serialize_account_xmltv_epg_source(source),
+            "sync": sync_result,
+        }
+    )
