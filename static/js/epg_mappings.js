@@ -16,25 +16,26 @@ const mappingsState = {
 };
 
 function updateAutoMatchButton() {
-    const accountId = document.getElementById('mappingAccountSelect').value;
+    const accountId = document.getElementById('mappingAccountSelect')?.value;
     const btn = document.getElementById('auto-match-btn');
     const dropdown = document.getElementById('auto-match-dropdown');
     const rulesetInfo = document.getElementById('account-ruleset-info');
-    
-    // Only update if elements exist (may not be visible on non-mappings tabs)
-    if (!btn || !dropdown || !rulesetInfo) {
+
+    if (!btn) {
         return;
     }
-    
+
     if (accountId) {
         btn.disabled = false;
         if (dropdown) dropdown.disabled = false;
-        rulesetInfo.style.display = 'flex';
-        loadAccountRulesetInfo(accountId);
+        if (rulesetInfo) {
+            rulesetInfo.style.display = 'flex';
+            loadAccountRulesetInfo(accountId);
+        }
     } else {
         btn.disabled = true;
         if (dropdown) dropdown.disabled = true;
-        rulesetInfo.style.display = 'none';
+        if (rulesetInfo) rulesetInfo.style.display = 'none';
     }
 }
 
@@ -463,35 +464,41 @@ async function runAutoMatch() {
     const dropdown = document.getElementById('auto-match-dropdown');
     const originalHtml = btn.innerHTML;
     btn.disabled = true;
-    dropdown.disabled = true;
+    if (dropdown) dropdown.disabled = true;
     btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Matching...`;
-    
+
     const listContainer = document.getElementById('mappings-list');
     const originalListContent = listContainer.innerHTML;
-    
+
     const alertDiv = document.getElementById('autoMatchResultsAlert');
-    alertDiv.classList.add('d-none');
-    
+    if (alertDiv) alertDiv.classList.add('d-none');
+
     try {
         await runRuleBasedMatch(accountId, categoryId, includeFiltered, sourceId, listContainer, alertDiv);
         await loadMappings();
     } catch (error) {
         listContainer.innerHTML = originalListContent;
-        alertDiv.classList.remove('d-none', 'alert-info', 'alert-success');
-        alertDiv.classList.add('alert-danger');
-        const contentDiv = document.getElementById('autoMatchResultsContent');
-        
+
         let errorMsg = error.message;
         if (error.name === 'AbortError') {
             errorMsg = 'Operation timed out after 10 minutes. Try filtering by category to match fewer channels at once.';
         } else if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
             errorMsg = 'Network error or server timeout. For large channel lists, try filtering by category first.';
         }
-        
-        contentDiv.innerHTML = `<strong><i class="bi bi-x-circle"></i> Error:</strong> ${errorMsg}`;
+
+        if (alertDiv) {
+            alertDiv.classList.remove('d-none', 'alert-info', 'alert-success');
+            alertDiv.classList.add('alert-danger');
+            const contentDiv = document.getElementById('autoMatchResultsContent');
+            if (contentDiv) {
+                contentDiv.innerHTML = `<strong><i class="bi bi-x-circle"></i> Error:</strong> ${errorMsg}`;
+            }
+        } else {
+            showToast(errorMsg, 'error');
+        }
     } finally {
-        btn.disabled = false;
-        dropdown.disabled = false;
+        updateAutoMatchButton();
+        if (dropdown) dropdown.disabled = !accountId;
         btn.innerHTML = originalHtml;
     }
 }
@@ -521,13 +528,9 @@ async function runRuleBasedMatch(accountId, categoryId, includeFiltered, sourceI
     
     const stats = result.stats || {};
     const matchedCount = stats.matched || 0;
-    
-    alertDiv.classList.remove('d-none', 'alert-info', 'alert-danger');
-    alertDiv.classList.add('alert-success');
-    const contentDiv = document.getElementById('autoMatchResultsContent');
-    
+
     let statsHtml = `<i class="bi bi-check-circle"></i> <strong>Rule-Based Match: ${matchedCount} channels matched</strong>`;
-    
+
     const byType = stats.by_match_type || {};
     const typeDetails = [];
     if (byType.exact_id) typeDetails.push(`ID: ${byType.exact_id}`);
@@ -536,7 +539,7 @@ async function runRuleBasedMatch(accountId, categoryId, includeFiltered, sourceI
     if (byType.exact_name) typeDetails.push(`Name: ${byType.exact_name}`);
     if (byType.fuzzy_name) typeDetails.push(`Fuzzy: ${byType.fuzzy_name}`);
     if (byType.regex) typeDetails.push(`Regex: ${byType.regex}`);
-    
+
     if (typeDetails.length > 0) {
         statsHtml += ` <span class="ms-2 text-muted small">(${typeDetails.join(', ')}`;
         if (stats.skipped_existing) statsHtml += `, Skipped: ${stats.skipped_existing}`;
@@ -544,8 +547,15 @@ async function runRuleBasedMatch(accountId, categoryId, includeFiltered, sourceI
         if (stats.unmatched) statsHtml += `, Unmatched: ${stats.unmatched}`;
         statsHtml += `)</span>`;
     }
-    
-    contentDiv.innerHTML = statsHtml;
+
+    if (alertDiv) {
+        alertDiv.classList.remove('d-none', 'alert-info', 'alert-danger');
+        alertDiv.classList.add('alert-success');
+        const contentDiv = document.getElementById('autoMatchResultsContent');
+        if (contentDiv) contentDiv.innerHTML = statsHtml;
+    } else {
+        showToast(`${matchedCount} channels matched`, 'success');
+    }
 }
 
 async function hideChannel(accountId, channelName) {    
