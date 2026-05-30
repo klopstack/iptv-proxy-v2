@@ -89,6 +89,7 @@ def player_api():
 
     # Route to appropriate action handler
     action_handlers = {
+        "get_account_info": get_user_info,  # alias used by some clients
         "get_live_categories": get_live_categories,
         "get_live_streams": get_live_streams,
         "get_short_epg": get_short_epg,

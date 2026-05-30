@@ -212,6 +212,24 @@ class TestXtreamPlayerAPI:
             assert data["user_info"]["username"] == "xtream_user"
             assert data["user_info"]["auth"] == 1
 
+    def test_get_account_info_action(self, app, client, xtream_credential):
+        """Some clients use action=get_account_info instead of omitting action."""
+        with app.app_context():
+            response = client.get(
+                "/player_api.php",
+                query_string={
+                    "username": "xtream_user",
+                    "password": "xtream_pass",
+                    "action": "get_account_info",
+                },
+            )
+            assert response.status_code == 200
+            data = response.json
+            assert "user_info" in data
+            assert "server_info" in data
+            assert data["user_info"]["username"] == "xtream_user"
+            assert data["user_info"]["auth"] == 1
+
     def test_get_live_categories(self, app, client, xtream_credential, test_channels):
         """Test get_live_categories endpoint"""
         with app.app_context():
