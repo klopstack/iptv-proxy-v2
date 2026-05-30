@@ -1,13 +1,16 @@
 """Tests for services/epg/parsing.py and XMLTV utility helpers."""
 import gzip
+from unittest.mock import patch
 
 import pytest
 
 from models import EpgChannel, EpgSource, db
 from services.epg.parsing import parse_xmltv, parse_xmltv_streaming, sync_epg_source
 from services.epg.utils import (
+    XMLTV_FETCH_USER_AGENT,
     decompress_content,
     extract_callsign_from_xmltv_id,
+    fetch_xmltv_url_content,
     get_decompressing_stream,
     make_sd_xmltv_id,
     normalize_xmltv_url,
@@ -125,6 +128,50 @@ class TestNormalizeXmltvUrl:
         url = "http://192.168.1.100:8080/epg.xml"
         result = normalize_xmltv_url(url)
         assert result == url
+
+
+class TestFetchXmltvUrlContent:
+    """Tests for fetch_xmltv_url_content function"""
+
+    def test_raises_without_url(self):
+        source = EpgSource(name="Empty", source_type="xmltv_url", url=None)
+        with pytest.raises(ValueError, match="No URL configured"):
+            fetch_xmltv_url_content(source)
+
+    @patch("requests.get")
+    def test_uses_player_user_agent_for_external_urls(self, mock_get):
+        mock_response = mock_get.return_value
+        mock_response.content = b"<tv></tv>"
+        mock_response.raise_for_status = lambda: None
+
+        source = EpgSource(
+            name="External",
+            source_type="xmltv_url",
+            url="https://example.com/xmltv.php?username=u&password=p",
+        )
+        result = fetch_xmltv_url_content(source)
+
+        assert result == b"<tv></tv>"
+        mock_get.assert_called_once()
+        assert mock_get.call_args.kwargs["headers"]["User-Agent"] == XMLTV_FETCH_USER_AGENT
+
+    @patch("services.iptv_service.get_iptv_service_for_account")
+    def test_account_linked_source_uses_iptv_service(self, mock_get_service, app, test_account):
+        mock_service = mock_get_service.return_value
+        mock_service.get_xmltv.return_value = b"<tv></tv>"
+
+        with app.app_context():
+            source = EpgSource(
+                name="Provider",
+                source_type="xmltv_url",
+                account_id=test_account,
+                url="https://example.com/xmltv.php?username=u&password=p",
+            )
+            result = fetch_xmltv_url_content(source)
+
+        assert result == b"<tv></tv>"
+        mock_get_service.assert_called_once()
+        mock_service.get_xmltv.assert_called_once()
 
 
 class TestDecompressContent:

@@ -128,31 +128,27 @@ class EpgSyncService:
             return False, "No URL configured for this source", {}
 
         try:
-            import requests
+            from services.epg.utils import fetch_xmltv_url_content, normalize_xmltv_url
 
-            from services.epg.utils import normalize_xmltv_url
-
-            # Normalize URL (e.g., convert GitHub blob URLs to raw URLs)
-            url = normalize_xmltv_url(source.url)
-            if url != source.url:
-                logger.info(f"Normalized XMLTV URL: {source.url} -> {url}")
+            fetch_url = normalize_xmltv_url(source.url)
+            if fetch_url != source.url:
+                logger.info(f"Normalized XMLTV URL: {source.url} -> {fetch_url}")
 
             if progress:
-                progress(PHASE_FETCHING, message=f"Downloading {url}")
+                progress(PHASE_FETCHING, message=f"Downloading {fetch_url}")
 
-            response = requests.get(url, timeout=600)
-            response.raise_for_status()
-            logger.info(f"Fetched {len(response.content)} bytes of XMLTV from URL for source {source.id}")
+            content = fetch_xmltv_url_content(source)
+            logger.info(f"Fetched {len(content)} bytes of XMLTV from URL for source {source.id}")
 
             if progress:
                 progress(PHASE_CHANNELS, message="Parsing channels")
 
-            stats = sync_epg_source(source, response.content)
+            stats = sync_epg_source(source, content)
             logger.info(f"Synced EPG channels for source {source.id}: {stats}")
 
-            save_to_cache(source.id, response.content)
+            save_to_cache(source.id, content)
             message = EpgSyncService._sync_programs_with_progress(
-                source, response.content, stats, progress, programmes_total_estimate=stats.get("programs")
+                source, content, stats, progress, programmes_total_estimate=stats.get("programs")
             )
             return (True, message, stats)
 

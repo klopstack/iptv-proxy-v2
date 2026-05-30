@@ -95,7 +95,7 @@ class IPTVService:
         params = {"username": self.username, "password": self.password}
         headers = {"User-Agent": "9XtreamPlayer"}
 
-        response = requests.get(url, params=params, headers=headers, timeout=120)
+        response = requests.get(url, params=params, headers=headers, timeout=600)
         response.raise_for_status()
 
         return response.content

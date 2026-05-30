@@ -241,8 +241,6 @@ def _fetch_epg_from_external_source(source: EpgSource, account: Optional[Account
     Returns:
         Raw XMLTV XML as bytes, or None if fetch fails
     """
-    import requests
-
     logger.warning(
         f"EPG cache miss for source {source.id} ({source.name}) - "
         f"fetching from external source. Consider running EPG sync."
@@ -267,14 +265,15 @@ def _fetch_epg_from_external_source(source: EpgSource, account: Optional[Account
 
         elif source.source_type == "url" or source.source_type == "xmltv_url":
             # Fetch from external URL (both 'url' and 'xmltv_url' types use the same mechanism)
-            if not source.url:
+            if not source.url and not source.account_id:
                 logger.warning(f"EPG source {source.name} has type '{source.source_type}' but no URL configured")
                 return None
             logger.info(f"Fetching EPG from URL source {source.name}: {source.url}")
-            response = requests.get(source.url, timeout=120)
-            response.raise_for_status()
-            logger.info(f"Successfully fetched EPG from {source.name} ({len(response.content)} bytes)")
-            return response.content
+            from services.epg.utils import fetch_xmltv_url_content
+
+            content = fetch_xmltv_url_content(source)
+            logger.info(f"Successfully fetched EPG from {source.name} ({len(content)} bytes)")
+            return content
 
         else:
             logger.warning(f"Unknown EPG source type: {source.source_type}")

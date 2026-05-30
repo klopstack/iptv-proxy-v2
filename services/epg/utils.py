@@ -14,6 +14,40 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# Many Xtream/Cloudflare providers reject the default python-requests User-Agent (HTTP 520).
+XMLTV_FETCH_USER_AGENT = "9XtreamPlayer"
+XMLTV_FETCH_TIMEOUT = 600
+
+
+def fetch_xmltv_url_content(source) -> bytes:
+    """
+    Download raw XMLTV bytes for an xmltv_url EPG source.
+
+    Account-linked sources use IPTVService (Xtream xmltv.php with provider headers).
+    Other URLs use requests with a player User-Agent instead of python-requests.
+    """
+    if source.account_id:
+        from models import Account, db
+        from services.iptv_service import get_iptv_service_for_account
+
+        account = db.session.get(Account, source.account_id)
+        if account:
+            return get_iptv_service_for_account(account).get_xmltv()
+
+    if not source.url:
+        raise ValueError("No URL configured for this source")
+
+    import requests
+
+    url = normalize_xmltv_url(source.url)
+    response = requests.get(
+        url,
+        timeout=XMLTV_FETCH_TIMEOUT,
+        headers={"User-Agent": XMLTV_FETCH_USER_AGENT},
+    )
+    response.raise_for_status()
+    return response.content
+
 
 def extract_callsign_from_xmltv_id(xmltv_id: str) -> Optional[str]:
     """
