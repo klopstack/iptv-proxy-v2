@@ -178,6 +178,23 @@ class TestEpgSources:
             assert db.session.get(SdLineup, lineup_id) is None
             assert db.session.get(SdStation, station_id) is None
 
+    def test_delete_epg_source_with_mappings(self, app, client, test_epg_source, test_epg_mapping):
+        """Deleting a source removes channel mappings that reference its EPG channels."""
+        from models import ChannelEpgMapping, EpgChannel, EpgSource, db
+
+        with app.app_context():
+            assert db.session.get(ChannelEpgMapping, test_epg_mapping) is not None
+            assert EpgChannel.query.filter_by(source_id=test_epg_source).count() == 1
+
+        response = client.delete(f"/api/epg/sources/{test_epg_source}")
+        assert response.status_code == 200
+        assert response.json["success"] is True
+
+        with app.app_context():
+            assert db.session.get(EpgSource, test_epg_source) is None
+            assert db.session.get(ChannelEpgMapping, test_epg_mapping) is None
+            assert EpgChannel.query.filter_by(source_id=test_epg_source).count() == 0
+
     def test_get_epg_sources_includes_used_mapping_count(self, app, client, test_account):
         """Test that EPG sources include used_mapping_count"""
         with app.app_context():

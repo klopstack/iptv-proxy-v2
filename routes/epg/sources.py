@@ -6,7 +6,7 @@ import logging
 from flask import Blueprint, jsonify, request
 
 from error_handling import handle_errors
-from models import Account, ChannelEpgMapping, EpgChannel, EpgSource, SdLineup, SdStation, db
+from models import Account, ChannelEpgMapping, EpgChannel, EpgProgram, EpgSource, SdLineup, SdStation, db
 from services.epg.coverage import get_category_epg_coverage, get_epg_coverage_stats
 
 logger = logging.getLogger(__name__)
@@ -154,6 +154,16 @@ def update_epg_source(source_id):
 def delete_epg_source(source_id):
     """Delete an EPG source and all its channels"""
     source = EpgSource.query.get_or_404(source_id)
+
+    epg_channel_ids = [
+        row[0] for row in db.session.query(EpgChannel.id).filter(EpgChannel.source_id == source.id).all()
+    ]
+    if epg_channel_ids:
+        # ORM cascade would try to NULL epg_channel_id on mappings (NOT NULL column).
+        EpgProgram.query.filter(EpgProgram.epg_channel_id.in_(epg_channel_ids)).delete(synchronize_session=False)
+        ChannelEpgMapping.query.filter(ChannelEpgMapping.epg_channel_id.in_(epg_channel_ids)).delete(
+            synchronize_session=False
+        )
 
     # Schedules Direct sources have additional tables (sd_lineups/sd_stations).
     # Even though the FK is configured with ON DELETE CASCADE, being explicit here

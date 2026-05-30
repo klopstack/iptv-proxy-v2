@@ -286,7 +286,10 @@ class ChannelEpgMapping(db.Model):  # type: ignore[name-defined]
 
     # Relationships
     channel = db.relationship("Channel", backref="epg_mappings")
-    epg_channel = db.relationship("EpgChannel", backref="channel_mappings")
+    epg_channel = db.relationship(
+        "EpgChannel",
+        backref=db.backref("channel_mappings", passive_deletes=True),
+    )
 
     # Unique constraint - one mapping per channel per EPG channel
     __table_args__ = (
