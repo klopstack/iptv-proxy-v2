@@ -137,7 +137,6 @@ class TestEpgSyncOrchestratorSync:
     @patch("services.epg_sync_orchestrator.EpgSyncService.update_source_sync_status")
     def test_sync_source_invokes_progress_callback(self, mock_update, mock_sync, app, xmltv_source):
         with app.app_context():
-            captured = []
 
             def sync_with_progress(source, progress=None):
                 if progress:

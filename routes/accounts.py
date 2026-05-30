@@ -844,7 +844,7 @@ def preview_account_playlist(account_id):
     Returns:
     - JSON with total count, channel data, and using_database flag
     """
-    account = Account.query.get_or_404(account_id)
+    Account.query.get_or_404(account_id)
 
     # Parse tag filter
     tags_param = request.args.get("tags", "")

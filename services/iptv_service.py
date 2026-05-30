@@ -12,6 +12,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+API_REQUEST_TIMEOUT = 30
+# Provider XMLTV guides can be 15MB+; allow much longer than player_api calls.
+XMLTV_REQUEST_TIMEOUT = 600
+
 
 def get_iptv_service_for_account(account: "Account") -> "IPTVService":
     """Build IPTVService from account credentials."""
@@ -47,7 +51,7 @@ class IPTVService:
 
         logger.debug(f"Making request to {url} with action={action}")
 
-        response = requests.get(url, params=request_params, headers=headers, timeout=30)
+        response = requests.get(url, params=request_params, headers=headers, timeout=API_REQUEST_TIMEOUT)
         response.raise_for_status()
 
         return response.json()
@@ -95,7 +99,7 @@ class IPTVService:
         params = {"username": self.username, "password": self.password}
         headers = {"User-Agent": "9XtreamPlayer"}
 
-        response = requests.get(url, params=params, headers=headers, timeout=600)
+        response = requests.get(url, params=params, headers=headers, timeout=XMLTV_REQUEST_TIMEOUT)
         response.raise_for_status()
 
         return response.content

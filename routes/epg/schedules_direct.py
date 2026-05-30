@@ -354,7 +354,7 @@ def get_sd_lineup_statuses():
         return jsonify({"error": "source_id is required"}), 400
 
     lineups = SdLineup.query.filter_by(epg_source_id=source_id).order_by(SdLineup.name, SdLineup.id).all()
-    return jsonify({"success": True, "statuses": [SdLineupSyncProgress.snapshot(l) for l in lineups]})
+    return jsonify({"success": True, "statuses": [SdLineupSyncProgress.snapshot(lineup) for lineup in lineups]})
 
 
 @schedules_direct_bp.route("/lineups/<int:lineup_id>", methods=["DELETE"])

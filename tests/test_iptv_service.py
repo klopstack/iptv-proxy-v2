@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 
-from services.iptv_service import IPTVService
+from services.iptv_service import API_REQUEST_TIMEOUT, XMLTV_REQUEST_TIMEOUT, IPTVService
 
 
 class TestIPTVService:
@@ -204,7 +204,7 @@ class TestIPTVService:
         service.authenticate()
 
         call_args = mock_get.call_args
-        assert call_args[1]["timeout"] == 30
+        assert call_args[1]["timeout"] == API_REQUEST_TIMEOUT
 
     @patch("requests.get")
     def test_get_series_categories(self, mock_get):
@@ -291,7 +291,7 @@ class TestIPTVService:
 
     @patch("requests.get")
     def test_get_xmltv_timeout(self, mock_get):
-        """Test that XMLTV requests have extended timeout"""
+        """XMLTV requests use a longer timeout than regular API calls."""
         mock_response = Mock()
         mock_response.content = b"<tv></tv>"
         mock_get.return_value = mock_response
@@ -299,9 +299,9 @@ class TestIPTVService:
         service = IPTVService("example.com:8080", "testuser", "testpass")
         service.get_xmltv()
 
-        call_args = mock_get.call_args
-        # XMLTV has 120s timeout (longer than regular API calls)
-        assert call_args[1]["timeout"] == 120
+        timeout = mock_get.call_args[1]["timeout"]
+        assert timeout == XMLTV_REQUEST_TIMEOUT
+        assert timeout > API_REQUEST_TIMEOUT
 
     @patch("requests.get")
     def test_get_xmltv_user_agent(self, mock_get):

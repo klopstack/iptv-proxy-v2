@@ -32,10 +32,10 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
-ProgressCallback = Optional[Callable[..., None]]
-
 from models import ChannelEpgMapping, EpgChannel, EpgProgram, EpgSource, db
 from services.epg.utils import get_decompressing_stream, parse_xmltv_time
+
+ProgressCallback = Optional[Callable[..., None]]
 
 logger = logging.getLogger(__name__)
 
