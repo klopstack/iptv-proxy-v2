@@ -255,13 +255,24 @@ class TestChannelHealthRoutes:
         )
         assert response.status_code == 400
 
-    def test_get_scan_status(self, client, app):
+    def test_get_scan_status(self, client, app, health_test_account):
         """Test getting scan status."""
         response = client.get("/api/channel-health/scan-status")
         assert response.status_code == 200
 
         data = json.loads(response.data)
         assert data["success"] is True
+        assert "config" in data
+        for key in (
+            "scan_interval_minutes",
+            "max_channels_per_pass",
+            "black_screen_threshold",
+            "health_check_retention_days",
+        ):
+            assert key in data["config"]
+        account_row = next(a for a in data["accounts"] if a["account_id"] == health_test_account)
+        assert "scan_batch_size" in account_row
+        assert account_row["scan_batch_size"] >= 0
 
     def test_get_channel_history_empty(self, client, app, test_channel):
         """Test getting empty channel history."""
@@ -271,6 +282,7 @@ class TestChannelHealthRoutes:
         data = json.loads(response.data)
         assert data["success"] is True
         assert data["history"] == []
+        assert data["summary"]["stored_records"] == 0
 
     def test_reenable_channel(self, client, app, test_channel):
         """Test re-enabling a channel."""
@@ -410,6 +422,26 @@ class TestChannelHealthService:
             # With 3 max connections and 1 reserved, should have 2 available
             available = ChannelHealthService.get_available_scan_connections(health_test_account)
             assert available == 2
+
+    def test_compute_scan_batch_size_auto(self, app, health_test_account):
+        """Batch size should use connection slots for the scheduler tick window."""
+        from services.channel_health_service import ChannelHealthService
+
+        with app.app_context():
+            ChannelHealthConfig.set("analysis_duration_seconds", "10")
+            ChannelHealthConfig.set("max_channels_per_pass", "")
+            ChannelHealthConfig.set("reserved_connections", "1")
+
+            # 3 max - 1 reserved = 2 parallel; 55s tick / 10s check = 5 rounds -> 10
+            assert ChannelHealthService.compute_scan_batch_size(health_test_account) == 10
+
+    def test_compute_scan_batch_size_override(self, app, health_test_account):
+        """Explicit max_channels_per_pass overrides auto sizing."""
+        from services.channel_health_service import ChannelHealthService
+
+        with app.app_context():
+            ChannelHealthConfig.set("max_channels_per_pass", "7")
+            assert ChannelHealthService.compute_scan_batch_size(health_test_account) == 7
 
     def test_get_available_scan_connections_disabled_account(self, app, health_test_account):
         """Test getting connections for disabled account returns 0."""
@@ -588,8 +620,74 @@ class TestChannelHealthService:
                 db.session.add(check)
             db.session.commit()
 
-            history = ChannelHealthService.get_channel_history(test_channel)
-            assert len(history) == 3
+            payload = ChannelHealthService.get_channel_history(test_channel)
+            assert len(payload["history"]) == 3
+            assert payload["summary"]["stored_records"] == 3
+            assert payload["history"][0]["checked_at"].endswith("Z")
+
+    def test_channels_paginated_sorted_by_last_check_desc(self, app, health_test_account, test_channel):
+        """Channel list should show most recently checked channels first."""
+        from datetime import datetime, timedelta, timezone
+
+        from services.channel_health_service import ChannelHealthService
+
+        with app.app_context():
+            older_category = Category(
+                account_id=health_test_account,
+                category_id="2",
+                category_name="Older Category",
+            )
+            db.session.add(older_category)
+            db.session.flush()
+
+            older_channel = Channel(
+                account_id=health_test_account,
+                stream_id="99998",
+                name="AAA Older Scan",
+                cleaned_name="AAA Older Scan",
+                category_id=older_category.id,
+                is_active=True,
+                is_visible=True,
+            )
+            newer_channel = Channel(
+                account_id=health_test_account,
+                stream_id="99999",
+                name="ZZZ Newer Scan",
+                cleaned_name="ZZZ Newer Scan",
+                category_id=older_category.id,
+                is_active=True,
+                is_visible=True,
+            )
+            db.session.add_all([older_channel, newer_channel])
+            db.session.flush()
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            db.session.add(
+                ChannelHealthStatus(
+                    channel_id=older_channel.id,
+                    status=ChannelHealthStatus.STATUS_HEALTHY,
+                    last_check_at=now - timedelta(hours=5),
+                    last_result=ChannelHealthCheck.RESULT_SUCCESS,
+                    total_checks=1,
+                )
+            )
+            db.session.add(
+                ChannelHealthStatus(
+                    channel_id=newer_channel.id,
+                    status=ChannelHealthStatus.STATUS_HEALTHY,
+                    last_check_at=now - timedelta(minutes=2),
+                    last_result=ChannelHealthCheck.RESULT_SUCCESS,
+                    total_checks=1,
+                )
+            )
+            db.session.commit()
+
+            result = ChannelHealthService.get_channels_paginated(
+                account_id=health_test_account,
+                per_page=50,
+            )
+            ids = [c["id"] for c in result["channels"] if c["id"] in (older_channel.id, newer_channel.id)]
+            assert ids.index(newer_channel.id) < ids.index(older_channel.id)
 
     def test_update_config(self, app):
         """Test updating config."""

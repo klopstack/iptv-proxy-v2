@@ -34,9 +34,22 @@ from services.connection_manager import ConnectionManager
 
 logger = logging.getLogger(__name__)
 
+# Scheduler calls health scan every ~60s; leave headroom for DB work and other jobs.
+_SCHEDULER_SCAN_TICK_SECONDS = 55
+_MAX_CHANNELS_PER_PASS_CAP = 100
+
 
 class ChannelHealthService:
     """Service for monitoring channel health and detecting non-working streams."""
+
+    @staticmethod
+    def _iso_utc(dt: Optional[datetime]) -> Optional[str]:
+        """Serialize a naive-UTC datetime for JSON (always includes Z suffix)."""
+        if dt is None:
+            return None
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return f"{dt.isoformat()}Z"
 
     @staticmethod
     def get_available_scan_connections(account_id: int) -> int:
@@ -66,6 +79,28 @@ class ChannelHealthService:
 
         available = total_connections - active_count - reserved
         return max(0, available)
+
+    @staticmethod
+    def compute_scan_batch_size(account_id: int, tick_seconds: int = _SCHEDULER_SCAN_TICK_SECONDS) -> int:
+        """
+        How many channels to scan in one scheduler tick.
+
+        Uses parallel connection slots for the tick window (analysis_duration per check).
+        Override with max_channels_per_pass config (manual UI scan uses its own limit).
+        """
+        override = ChannelHealthConfig.get("max_channels_per_pass")
+        if override is not None and str(override).strip().isdigit():
+            configured = int(override)
+            if configured > 0:
+                return min(configured, _MAX_CHANNELS_PER_PASS_CAP)
+
+        available = ChannelHealthService.get_available_scan_connections(account_id)
+        if available <= 0:
+            return 0
+
+        analysis_duration = max(1, ChannelHealthConfig.get_int("analysis_duration_seconds", 10))
+        checks_per_slot = max(1, tick_seconds // analysis_duration)
+        return min(available * checks_per_slot, _MAX_CHANNELS_PER_PASS_CAP)
 
     @staticmethod
     def check_channel_health(channel: Channel, credential: Any, timeout_seconds: int = 10) -> Dict[str, Any]:
@@ -781,11 +816,13 @@ class ChannelHealthService:
         return results
 
     @staticmethod
-    def run_scheduled_scan_pass(max_channels_per_account: int = 5) -> Dict[str, Any]:
+    def run_scheduled_scan_pass() -> Dict[str, Any]:
         """
         Run one background health scan pass for all enabled accounts.
 
-        Used by the sync scheduler and when scanning is re-enabled in the UI.
+        Batch size is derived from available connections and analysis duration
+        (see compute_scan_batch_size). The scheduler invokes this every ~60s;
+        scan_interval_minutes only controls how soon the same channel is eligible again.
         """
         from models import Account
         from services.connection_manager import ConnectionManager
@@ -815,7 +852,23 @@ class ChannelHealthService:
                 )
                 continue
 
-            result = ChannelHealthService.scan_channels(account.id, max_channels=max_channels_per_account)
+            batch_size = ChannelHealthService.compute_scan_batch_size(account.id)
+            if batch_size <= 0:
+                logger.info(
+                    "Channel health scan for %s: skipped (batch size 0)",
+                    account.name,
+                )
+                accounts_summary.append(
+                    {
+                        "account_id": account.id,
+                        "account_name": account.name,
+                        "scanned": 0,
+                        "message": "No scan batch capacity",
+                    }
+                )
+                continue
+
+            result = ChannelHealthService.scan_channels(account.id, max_channels=batch_size)
             scanned = result.get("scanned", 0)
             accounts_summary.append(
                 {
@@ -933,12 +986,12 @@ class ChannelHealthService:
                         "failed_checks": status.failed_checks,
                         "consecutive_failures": status.consecutive_failures,
                         "distinct_failure_periods": status.distinct_failure_periods,
-                        "last_check_at": status.last_check_at.isoformat() if status.last_check_at else None,
-                        "last_success_at": status.last_success_at.isoformat() if status.last_success_at else None,
-                        "last_failure_at": status.last_failure_at.isoformat() if status.last_failure_at else None,
+                        "last_check_at": ChannelHealthService._iso_utc(status.last_check_at),
+                        "last_success_at": ChannelHealthService._iso_utc(status.last_success_at),
+                        "last_failure_at": ChannelHealthService._iso_utc(status.last_failure_at),
                         "last_result": status.last_result,
-                        "auto_disabled_at": status.auto_disabled_at.isoformat() if status.auto_disabled_at else None,
-                        "ignored_at": status.ignored_at.isoformat() if status.ignored_at else None,
+                        "auto_disabled_at": ChannelHealthService._iso_utc(status.auto_disabled_at),
+                        "ignored_at": ChannelHealthService._iso_utc(status.ignored_at),
                         "ignored_reason": status.ignored_reason,
                     }
                 )
@@ -1172,8 +1225,16 @@ class ChannelHealthService:
         # Get total count before pagination
         total = query.count()
 
-        # Apply ordering and pagination
-        query = query.order_by(Channel.name).offset((page - 1) * per_page).limit(per_page)
+        # Most recently checked channels first; never-checked at the bottom
+        query = (
+            query.order_by(
+                ChannelHealthStatus.last_check_at.is_(None),
+                ChannelHealthStatus.last_check_at.desc(),
+                Channel.name,
+            )
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
 
         # Build channel data
         channels_data = []
@@ -1224,12 +1285,12 @@ class ChannelHealthService:
                         "failed_checks": status.failed_checks,
                         "consecutive_failures": status.consecutive_failures,
                         "distinct_failure_periods": status.distinct_failure_periods,
-                        "last_check_at": status.last_check_at.isoformat() if status.last_check_at else None,
-                        "last_success_at": status.last_success_at.isoformat() if status.last_success_at else None,
-                        "last_failure_at": status.last_failure_at.isoformat() if status.last_failure_at else None,
+                        "last_check_at": ChannelHealthService._iso_utc(status.last_check_at),
+                        "last_success_at": ChannelHealthService._iso_utc(status.last_success_at),
+                        "last_failure_at": ChannelHealthService._iso_utc(status.last_failure_at),
                         "last_result": status.last_result,
-                        "auto_disabled_at": status.auto_disabled_at.isoformat() if status.auto_disabled_at else None,
-                        "ignored_at": status.ignored_at.isoformat() if status.ignored_at else None,
+                        "auto_disabled_at": ChannelHealthService._iso_utc(status.auto_disabled_at),
+                        "ignored_at": ChannelHealthService._iso_utc(status.ignored_at),
                         "ignored_reason": status.ignored_reason,
                     }
                 )
@@ -1365,7 +1426,7 @@ class ChannelHealthService:
         return {"success": True, "channel_id": channel_id, "message": "Channel marked as ignored"}
 
     @staticmethod
-    def get_channel_history(channel_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_channel_history(channel_id: int, limit: int = 50) -> Dict[str, Any]:
         """
         Get the health check history for a channel.
 
@@ -1374,7 +1435,7 @@ class ChannelHealthService:
             limit: Maximum number of records to return
 
         Returns:
-            List of health check records
+            Dict with ``history`` rows and ``summary`` metadata for the UI
         """
         checks = (
             ChannelHealthCheck.query.filter_by(channel_id=channel_id)
@@ -1383,7 +1444,18 @@ class ChannelHealthService:
             .all()
         )
 
-        return [
+        status = ChannelHealthStatus.query.filter_by(channel_id=channel_id).first()
+        retention_days = ChannelHealthConfig.get_int("health_check_retention_days", 30)
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+        last_24h_cutoff = now_utc - timedelta(hours=24)
+
+        stored_records = ChannelHealthCheck.query.filter_by(channel_id=channel_id).count()
+        checks_last_24h = ChannelHealthCheck.query.filter(
+            ChannelHealthCheck.channel_id == channel_id,
+            ChannelHealthCheck.checked_at >= last_24h_cutoff,
+        ).count()
+
+        history = [
             {
                 "id": check.id,
                 "result": check.result,
@@ -1391,11 +1463,22 @@ class ChannelHealthService:
                 "error_message": check.error_message,
                 "analysis_details": json.loads(check.analysis_details) if check.analysis_details else None,
                 "check_duration_ms": check.check_duration_ms,
-                "checked_at": check.checked_at.isoformat() if check.checked_at else None,
+                "checked_at": ChannelHealthService._iso_utc(check.checked_at),
                 "credential_id": check.credential_id,
             }
             for check in checks
         ]
+
+        return {
+            "history": history,
+            "summary": {
+                "lifetime_checks": status.total_checks if status and status.total_checks else 0,
+                "stored_records": stored_records,
+                "checks_last_24h": checks_last_24h,
+                "retention_days": retention_days,
+                "returned": len(history),
+            },
+        }
 
     @staticmethod
     def update_config(key: str, value: str) -> Dict[str, Any]:
@@ -1457,6 +1540,7 @@ class ChannelHealthService:
         if account_id:
             status["account_id"] = account_id
             status["available_connections"] = ChannelHealthService.get_available_scan_connections(account_id)
+            status["scan_batch_size"] = ChannelHealthService.compute_scan_batch_size(account_id)
             status["channels_to_scan"] = len(ChannelHealthService.get_channels_to_scan(account_id, limit=1000))
         else:
             # Get status for all enabled accounts
@@ -1467,6 +1551,7 @@ class ChannelHealthService:
                         "account_id": account.id,
                         "account_name": account.name,
                         "available_connections": ChannelHealthService.get_available_scan_connections(account.id),
+                        "scan_batch_size": ChannelHealthService.compute_scan_batch_size(account.id),
                         "channels_to_scan": len(ChannelHealthService.get_channels_to_scan(account.id, limit=1000)),
                     }
                 )

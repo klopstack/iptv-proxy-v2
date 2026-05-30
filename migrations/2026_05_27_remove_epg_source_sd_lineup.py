@@ -1,7 +1,18 @@
 """Remove legacy epg_sources.sd_lineup column (rebuild table)."""
 
+import importlib.util
 import logging
 import sqlite3
+from pathlib import Path
+
+
+def _fk_repair():
+    path = Path(__file__).resolve().parent / "_sqlite_fk_repair.py"
+    spec = importlib.util.spec_from_file_location("_sqlite_fk_repair", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +109,9 @@ def migrate(db_path):
         cursor.execute(f"INSERT INTO epg_sources ({cols_csv}) SELECT {cols_csv} FROM epg_sources_old")
 
         cursor.execute("DROP TABLE epg_sources_old")
+
+        repair = _fk_repair()
+        repair.fix_foreign_key_table_references(cursor, "epg_sources_old", "epg_sources")
 
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_epg_sources_account ON epg_sources(account_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_epg_sources_type ON epg_sources(source_type)")

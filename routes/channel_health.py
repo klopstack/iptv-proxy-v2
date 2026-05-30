@@ -272,13 +272,13 @@ def get_channel_history(channel_id: int):
     limit = request.args.get("limit", 50, type=int)
     limit = min(max(1, limit), 500)  # Clamp between 1 and 500
 
-    history = ChannelHealthService.get_channel_history(channel_id, limit)
+    payload = ChannelHealthService.get_channel_history(channel_id, limit)
 
     return jsonify(
         {
             "success": True,
             "channel_id": channel_id,
-            "history": history,
+            **payload,
         }
     )
 

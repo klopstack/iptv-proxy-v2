@@ -207,6 +207,11 @@ class ChannelHealthConfig(db.Model):  # type: ignore[name-defined]
         "scanning_enabled": ("false", "Whether background channel health scanning is enabled"),
         # Interval between scan cycles (minutes)
         "scan_interval_minutes": ("30", "Minutes between channel scan cycles"),
+        # Empty = auto-size from available connections and analysis_duration_seconds
+        "max_channels_per_pass": (
+            "",
+            "Max channels per scheduler tick (empty = auto from connection budget)",
+        ),
         # Black screen detection threshold (0.0-1.0, percentage of black frames)
         "black_screen_threshold": ("0.95", "Ratio of black frames to consider screen as black (0.0-1.0)"),
         # Whether to scan hidden channels (channels filtered out by user rules)

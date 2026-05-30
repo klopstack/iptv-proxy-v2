@@ -1,7 +1,18 @@
 """Remove legacy accounts.username/password columns (rebuild table)."""
 
+import importlib.util
 import logging
 import sqlite3
+from pathlib import Path
+
+
+def _fk_repair():
+    path = Path(__file__).resolve().parent / "_sqlite_fk_repair.py"
+    spec = importlib.util.spec_from_file_location("_sqlite_fk_repair", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +94,9 @@ def migrate(db_path):
         cursor.execute(f"INSERT INTO accounts ({cols_csv}) SELECT {cols_csv} FROM accounts_old")
 
         cursor.execute("DROP TABLE accounts_old")
+
+        repair = _fk_repair()
+        repair.fix_foreign_key_table_references(cursor, "accounts_old", "accounts")
 
         conn.commit()
         return True, "Rebuilt accounts without legacy username/password"

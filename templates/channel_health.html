@@ -128,6 +128,21 @@
                             <small class="text-muted">Always keep available for clients</small>
                         </div>
                     </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="scan-interval-minutes" class="form-label">Rescan Interval (minutes)</label>
+                            <input type="number" class="form-control form-control-sm" id="scan-interval-minutes"
+                                   min="5" max="1440" value="30">
+                            <small class="text-muted">How long before a checked channel is eligible again</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="max-channels-per-pass" class="form-label">Channels per Scheduler Tick</label>
+                            <input type="number" class="form-control form-control-sm" id="max-channels-per-pass"
+                                   min="0" max="100" value="0">
+                            <small class="text-muted">0 = auto from connections and analysis duration (~every 60s)</small>
+                        </div>
+                    </div>
                     
                     <div class="form-check mb-3">
                         <input class="form-check-input" type="checkbox" id="auto-disable" checked>
@@ -144,6 +159,24 @@
                         <small class="form-text text-muted d-block">
                             By default, only playlist-visible channels are scanned. Enable to also scan channels hidden by account filters.
                         </small>
+                    </div>
+
+                    <div class="border-top pt-3 mb-3">
+                        <h6 class="text-muted mb-3"><i class="bi bi-sliders"></i> Detection &amp; Retention</h6>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="black-screen-threshold" class="form-label">Black Screen Threshold</label>
+                                <input type="number" class="form-control form-control-sm" id="black-screen-threshold"
+                                       min="0.5" max="1" step="0.05" value="0.95">
+                                <small class="text-muted">Ratio of black frames to flag a black screen (0.5–1.0)</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="health-check-retention-days" class="form-label">Check History Retention (days)</label>
+                                <input type="number" class="form-control form-control-sm" id="health-check-retention-days"
+                                       min="1" max="365" value="30">
+                                <small class="text-muted">Delete individual check records older than this</small>
+                            </div>
+                        </div>
                     </div>
                     
                     <button type="submit" class="btn btn-primary btn-sm">
@@ -239,7 +272,7 @@
                         <th style="width: 12%">Category</th>
                         <th style="width: 10%">Status</th>
                         <th style="width: 12%">Last Result</th>
-                        <th style="width: 10%">Last Check</th>
+                        <th style="width: 10%" title="Newest checks first">Last Check</th>
                         <th style="width: 14%">EPG Info</th>
                         <th style="width: 16%">Actions</th>
                     </tr>
@@ -286,7 +319,8 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <h6 id="history-channel-name" class="mb-3"></h6>
+                <h6 id="history-channel-name" class="mb-2"></h6>
+                <p id="history-summary" class="small text-muted mb-3"></p>
                 <div class="table-responsive">
                     <table class="table table-sm table-striped">
                         <thead>
@@ -530,6 +564,15 @@ async function loadConfig() {
                 config.auto_disable_down_channels?.value !== 'false';
             document.getElementById('scan-hidden').checked = 
                 config.scan_hidden_channels?.value === 'true';
+            document.getElementById('scan-interval-minutes').value =
+                config.scan_interval_minutes?.value || '30';
+            const maxPerPass = config.max_channels_per_pass?.value;
+            document.getElementById('max-channels-per-pass').value =
+                (maxPerPass && maxPerPass.trim() !== '') ? maxPerPass : '0';
+            document.getElementById('black-screen-threshold').value =
+                config.black_screen_threshold?.value || '0.95';
+            document.getElementById('health-check-retention-days').value =
+                config.health_check_retention_days?.value || '30';
             
             document.getElementById('manual-scan-btn').disabled = 
                 !document.getElementById('scanning-enabled').checked;
@@ -542,11 +585,16 @@ async function loadConfig() {
 async function saveConfig(e) {
     e.preventDefault();
     
+    const maxChannelsPerPass = document.getElementById('max-channels-per-pass').value;
     const config = {
         failure_threshold: document.getElementById('failure-threshold').value,
         min_hours_apart: document.getElementById('min-hours-apart').value,
         analysis_duration_seconds: document.getElementById('analysis-duration').value,
         reserved_connections: document.getElementById('reserved-connections').value,
+        scan_interval_minutes: document.getElementById('scan-interval-minutes').value,
+        max_channels_per_pass: (maxChannelsPerPass === '' || maxChannelsPerPass === '0') ? '' : maxChannelsPerPass,
+        black_screen_threshold: document.getElementById('black-screen-threshold').value,
+        health_check_retention_days: document.getElementById('health-check-retention-days').value,
         auto_disable_down_channels: document.getElementById('auto-disable').checked ? 'true' : 'false',
         scan_hidden_channels: document.getElementById('scan-hidden').checked ? 'true' : 'false',
     };
@@ -601,22 +649,28 @@ async function loadScanStatus() {
         if (data.success) {
             let html = '';
             const scanningOn = data.scanning_enabled === true;
+            const cfg = data.config || {};
+            const rescanMins = cfg.scan_interval_minutes?.value || '30';
             html += `<div class="mb-2">
                 <span class="badge bg-${scanningOn ? 'success' : 'secondary'}">
                     Background scanning ${scanningOn ? 'ON' : 'OFF'}
                 </span>
+                <span class="badge bg-light text-dark ms-1">tick ~60s</span>
+                <span class="badge bg-light text-dark ms-1">rescan ${escapeHtml(rescanMins)}m</span>
             </div>`;
             
             if (data.accounts) {
                 html += '<div class="small">';
                 data.accounts.forEach(acc => {
                     const statusClass = acc.available_connections > 0 ? 'success' : 'warning';
+                    const batch = acc.scan_batch_size !== null ? acc.scan_batch_size : '?';
                     html += `
                         <div class="d-flex justify-content-between mb-2">
                             <span><strong>${escapeHtml(acc.account_name)}</strong></span>
                             <span>
                                 <span class="badge bg-${statusClass}">${acc.available_connections} conn avail</span>
-                                <span class="badge bg-secondary">${acc.channels_to_scan} to scan</span>
+                                <span class="badge bg-primary">${batch}/tick</span>
+                                <span class="badge bg-secondary">${acc.channels_to_scan} queued</span>
                             </span>
                         </div>
                     `;
@@ -877,8 +931,23 @@ function getResultBadge(result) {
     return badges[result] || `<span class="badge bg-secondary">${escapeHtml(result)}</span>`;
 }
 
+function parseUtcTimestamp(isoString) {
+    if (!isoString) return null;
+    const normalized = isoString.endsWith('Z') || isoString.includes('+')
+        ? isoString
+        : `${isoString}Z`;
+    return new Date(normalized);
+}
+
+function formatUtcTimestamp(isoString) {
+    const date = parseUtcTimestamp(isoString);
+    if (!date || Number.isNaN(date.getTime())) return isoString || '-';
+    return date.toLocaleString(undefined, { timeZoneName: 'short' });
+}
+
 function formatRelativeTime(isoString) {
-    const date = new Date(isoString);
+    const date = parseUtcTimestamp(isoString);
+    if (!date || Number.isNaN(date.getTime())) return 'Unknown';
     const now = new Date();
     const diffMs = now - date;
     const diffMins = Math.floor(diffMs / 60000);
@@ -942,6 +1011,7 @@ async function testChannel(channelId) {
 async function showHistory(channelId, channelName) {
     const modal = new bootstrap.Modal(document.getElementById('historyModal'));
     document.getElementById('history-channel-name').textContent = channelName;
+    document.getElementById('history-summary').textContent = 'Loading history...';
     const tbody = document.getElementById('history-table');
     
     tbody.innerHTML = `<tr><td colspan="4" class="text-center"><div class="spinner-border spinner-border-sm"></div></td></tr>`;
@@ -950,20 +1020,33 @@ async function showHistory(channelId, channelName) {
     try {
         const response = await fetch(`/api/channel-health/history/${channelId}?limit=50`);
         const data = await response.json();
+        const summary = data.summary || {};
+        
+        if (data.success) {
+            const parts = [
+                `${summary.checks_last_24h ?? 0} check(s) in the last 24 hours`,
+                `${summary.stored_records ?? 0} stored (last ${summary.retention_days ?? 30} days)`,
+            ];
+            if (summary.lifetime_checks > (summary.stored_records ?? 0)) {
+                parts.push(`${summary.lifetime_checks} lifetime on status (older rows purged)`);
+            }
+            document.getElementById('history-summary').textContent = parts.join(' · ');
+        }
         
         if (data.success && data.history.length > 0) {
             tbody.innerHTML = data.history.map(check => `
                 <tr>
-                    <td><small>${new Date(check.checked_at).toLocaleString()}</small></td>
+                    <td><small>${formatUtcTimestamp(check.checked_at)}</small></td>
                     <td>${getResultBadge(check.result)}</td>
                     <td><small>${escapeHtml(check.error_message || '-')}</small></td>
                     <td><small>${check.check_duration_ms}ms</small></td>
                 </tr>
             `).join('');
         } else {
-            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No history available</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No stored check records yet. Background scanning may not have reached this channel.</td></tr>';
         }
     } catch (error) {
+        document.getElementById('history-summary').textContent = '';
         tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error loading history</td></tr>';
     }
 }
