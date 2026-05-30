@@ -16,7 +16,6 @@ from models import EpgSource, db
 from services.epg.cache import save_to_cache
 from services.epg.parsing import sync_epg_source
 from services.epg_sync_progress import PHASE_CHANNELS, PHASE_FETCHING, PHASE_PROGRAMS
-from services.iptv_service import IPTVService
 from services.schedules_direct import SchedulesDirectClient, SchedulesDirectError
 from services.xmltv_grabber_service import XmltvGrabberService
 

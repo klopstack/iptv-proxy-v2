@@ -9,7 +9,6 @@ or block HTTP request handling.
 import logging
 import os
 import signal
-import sys
 import time
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))

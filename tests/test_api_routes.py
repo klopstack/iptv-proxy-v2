@@ -1,12 +1,11 @@
 """
 Tests for API routes - sync, tags, cache, and channel preview
 """
-from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
 
-from models import Account, Category, Channel, ChannelTag, Event, EventChannelLink, Tag, db
+from models import Account, Category, Channel, ChannelTag, Tag, db
 
 
 @pytest.fixture

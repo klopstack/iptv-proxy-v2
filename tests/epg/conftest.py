@@ -2,7 +2,7 @@
 
 import pytest
 
-from models import Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, SdLineup, db
+from models import Channel, ChannelEpgMapping, EpgChannel, EpgSource, SdLineup, db
 
 
 @pytest.fixture

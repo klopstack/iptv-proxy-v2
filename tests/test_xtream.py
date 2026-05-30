@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Tag, XtreamCredential, db
+from models import Account, Channel, ChannelTag, PlaylistConfig, Tag, XtreamCredential, db
 
 # ============================================================================
 # Fixtures

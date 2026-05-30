@@ -2,7 +2,6 @@
 Xtream Codes API output routes
 Emulates Xtream Codes API format for client compatibility
 """
-import json
 import logging
 from datetime import datetime, timedelta, timezone
 from functools import wraps

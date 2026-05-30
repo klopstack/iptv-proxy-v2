@@ -3,14 +3,12 @@ EPG channel management routes - channels, matching, mappings, and programs
 """
 import logging
 
-from flask import Blueprint, jsonify, make_response, request
+from flask import Blueprint, jsonify, request
 
 from error_handling import handle_errors
 from models import Account, Channel, ChannelEpgMapping, EpgChannel, EpgSource, Event, EventChannelLink, db
 from services.channel_query_service import ChannelQueryService
 from services.epg.match_rules import EpgMatchRulesService
-from services.epg.parsing import sync_epg_source
-from services.iptv_service import IPTVService
 
 logger = logging.getLogger(__name__)
 

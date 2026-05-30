@@ -4,7 +4,6 @@ PPV channel/category detection — used at sync and during enrichment filtering.
 
 import logging
 import re
-from typing import Optional
 
 from models import Channel
 from services.ppv.constants import GENERIC_CHANNEL_PATTERNS, PPV_CATEGORY_PATTERNS, PPV_PLACEHOLDER_PATTERNS

@@ -243,8 +243,6 @@ def _fetch_epg_from_external_source(source: EpgSource, account: Optional[Account
     """
     import requests
 
-    from services.iptv_service import IPTVService
-
     logger.warning(
         f"EPG cache miss for source {source.id} ({source.name}) - "
         f"fetching from external source. Consider running EPG sync."

@@ -1,7 +1,6 @@
 """Channels, categories, tags, and filtering rules."""
 
 from datetime import datetime, timezone
-from typing import Optional
 
 from models._base import db
 

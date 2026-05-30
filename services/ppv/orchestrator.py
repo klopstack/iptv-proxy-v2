@@ -3,7 +3,7 @@ PPV enrichment orchestrator — single entry point for scheduler and API routes.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from flask import Flask
 

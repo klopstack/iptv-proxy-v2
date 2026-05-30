@@ -78,7 +78,6 @@ class BaseMatchStrategy(ABC):
         Returns:
             List of MatchResult objects
         """
-        pass
 
 
 class TeamMatchStrategy(BaseMatchStrategy):

@@ -25,7 +25,6 @@ from models import (
     XtreamCredential,
     db,
 )
-from services.channel_query_service import ChannelQueryService
 
 
 def stream_ids_from_m3u(response_data: bytes) -> set[str]:

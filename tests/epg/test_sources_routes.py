@@ -1,9 +1,7 @@
 """Tests for EPG source CRUD and source-mapping endpoints."""
-from unittest.mock import MagicMock, patch
 
-import pytest
 
-from models import Account, Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
+from models import Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
 
 
 class TestEpgSources:

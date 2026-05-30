@@ -3,9 +3,7 @@ import json
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from models import Account, Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, SdLineup, db
+from models import EpgSource, SdLineup, db
 from services.epg_sync_progress import PHASE_COMPLETE, PHASE_FETCHING
 
 

@@ -1,9 +1,7 @@
 """Tests for EPG channel list endpoints and account EPG source creation."""
-from unittest.mock import MagicMock, patch
 
-import pytest
 
-from models import Account, Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
+from models import EpgChannel, EpgSource, db
 
 
 class TestEpgChannels:

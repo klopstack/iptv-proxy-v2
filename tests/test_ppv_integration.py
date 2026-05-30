@@ -1,11 +1,10 @@
 """End-to-end PPV enrichment pipeline integration test."""
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
 
 import pytest
 
-from models import Account, Category, Channel, Event, EventChannelLink, db
+from models import Account, Category, Channel, Event, db
 from services.ppv.detection import is_ppv_category
 from services.ppv.persistence import create_or_update_event, link_channel_to_event
 from services.ppv.visibility import PPVVisibilityService

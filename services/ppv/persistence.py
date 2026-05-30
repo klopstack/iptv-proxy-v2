@@ -4,7 +4,7 @@ Persist PPV match results to Event and EventChannelLink tables.
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from models import Channel, Event, EventChannelLink, db
 from services.ppv.constants import MAX_EVENT_AGE_DAYS, MAX_EVENT_FUTURE_DAYS

@@ -12,8 +12,7 @@ import pytest
 
 from models import EpgSource, db
 from services.epg_sync_orchestrator import EpgSyncOrchestrator, source_needs_sync
-from services.epg_sync_progress import PHASE_COMPLETE, PHASE_FETCHING, PHASE_QUEUED
-from services.epg_sync_service import EpgSyncService
+from services.epg_sync_progress import PHASE_COMPLETE, PHASE_FETCHING
 
 
 @pytest.fixture

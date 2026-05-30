@@ -8,7 +8,7 @@ from flask import Blueprint, Response, jsonify, request
 from marshmallow import ValidationError
 
 from error_handling import ServiceUnavailableError, handle_errors, handle_xml_errors
-from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Settings, db
+from models import Account, Channel, PlaylistConfig, db
 from schemas import (
     PlaylistConfigCreateSchema,
     PlaylistConfigUpdateSchema,

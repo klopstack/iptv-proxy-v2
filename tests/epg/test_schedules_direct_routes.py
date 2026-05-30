@@ -1,9 +1,7 @@
 """Tests for Schedules Direct HTTP endpoints."""
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from models import Account, Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
+from models import EpgSource, db
 
 
 class TestSchedulesDirectAPI:

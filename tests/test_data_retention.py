@@ -2,8 +2,6 @@
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
-
 from models import Account, Category, Channel, ChannelHealthCheck, ChannelTag, EpgProgram, Tag, db
 from services.channel_health_service import cleanup_old_health_checks
 from services.epg.programs import cleanup_expired_programs

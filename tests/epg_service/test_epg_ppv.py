@@ -1,5 +1,4 @@
 """Tests for services/epg/ppv.py PPV detection helpers."""
-import pytest
 
 from models import Account, Category, Channel, db
 from services.epg.ppv import get_ppv_event_title, is_ppv_category, is_ppv_channel, is_ppv_placeholder_name

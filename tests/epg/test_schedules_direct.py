@@ -2,8 +2,6 @@
 
 import json
 
-import pytest
-
 from models import EpgChannel, EpgSource, db
 from services.epg.sources import sync_sd_channels_to_epg
 

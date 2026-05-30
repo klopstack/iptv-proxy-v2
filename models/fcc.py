@@ -1,7 +1,6 @@
 """FCC facility data and match patterns."""
 
 from datetime import datetime, timezone
-from typing import Optional
 
 from models._base import db
 

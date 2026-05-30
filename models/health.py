@@ -1,7 +1,6 @@
 """Channel health monitoring models."""
 
 from datetime import datetime, timezone
-from typing import Optional
 
 from models._base import db
 

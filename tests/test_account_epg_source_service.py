@@ -2,7 +2,7 @@
 
 import pytest
 
-from models import Account, Credential, EpgSource, db
+from models import Account, db
 from services.account_epg_source_service import (
     ACCOUNT_XMLTV_NAME_SUFFIX,
     build_account_xmltv_url,

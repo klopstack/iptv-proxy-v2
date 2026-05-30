@@ -18,7 +18,6 @@ from services.account_epg_source_service import (
 from services.cache_service import CacheService
 from services.channel_query_service import ChannelQueryService
 from services.connection_manager import ConnectionManager
-from services.filter_service import FilterService
 from services.iptv_service import IPTVService, get_iptv_service_for_account
 from services.tag_service import TagService
 

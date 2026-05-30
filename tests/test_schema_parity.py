@@ -1,6 +1,5 @@
 """Schema parity: migrations + create_all produce expected tables and indexes."""
 
-import os
 import sqlite3
 import tempfile
 from pathlib import Path

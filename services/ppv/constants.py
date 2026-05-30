@@ -5,7 +5,25 @@ PPV domain constants — single source for category, placeholder, and generic ch
 import re
 
 # Re-export from EPG constants (shared with sync/category marking)
-from services.epg.constants import PPV_CATEGORY_PATTERNS, PPV_PLACEHOLDER_PATTERNS
+from services.epg.constants import PPV_CATEGORY_PATTERNS, PPV_PLACEHOLDER_PATTERNS  # noqa: F401
+
+__all__ = [
+    "GENERIC_CHANNEL_PATTERNS",
+    "PPV_CATEGORY_PATTERNS",
+    "PPV_PLACEHOLDER_PATTERNS",
+    "MIN_MATCH_CONFIDENCE",
+    "MEDIUM_CONFIDENCE_THRESHOLD",
+    "HIGH_CONFIDENCE_THRESHOLD",
+    "MAX_EVENT_AGE_DAYS",
+    "MAX_EVENT_FUTURE_DAYS",
+    "MAX_RETRY_ATTEMPTS",
+    "ENRICHMENT_BATCH_SIZE",
+    "SETTING_PPV_ENRICHMENT_ENABLED",
+    "METADATA_KEY_CALENDAR_PROCESSED",
+    "METADATA_KEY_CALENDAR_MATCHED",
+    "METADATA_KEY_DETAILS_FETCHED",
+    "METADATA_KEY_DETAIL_QUEUE_SIZE",
+]
 
 # Generic channel name patterns (inactive / numbered placeholders without events)
 GENERIC_CHANNEL_PATTERNS = [

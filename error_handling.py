@@ -285,25 +285,17 @@ def handle_xml_errors(default_message="Error generating EPG"):
 class ResourceNotFoundError(Exception):
     """Raise when a requested resource doesn't exist (404)"""
 
-    pass
-
 
 class ValidationError(ValueError):
     """Raise when input validation fails (400)"""
-
-    pass
 
 
 class AuthorizationError(PermissionError):
     """Raise when user lacks permission (403)"""
 
-    pass
-
 
 class ServiceUnavailableError(Exception):
     """Raise when service/dependency is unavailable (503)"""
-
-    pass
 
 
 # ============================================================================

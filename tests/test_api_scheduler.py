@@ -3,8 +3,6 @@ Tests for API routes - scheduler and additional coverage
 """
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from models import Account, Category, Channel, ChannelTag, Tag, db
 
 # ============================================================================

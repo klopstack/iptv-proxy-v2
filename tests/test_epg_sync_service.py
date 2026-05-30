@@ -4,11 +4,9 @@ Tests for EpgSyncService - EPG source synchronization dispatcher
 Tests the dispatcher logic that routes to correct sync methods.
 Individual sync methods are integration tests tested via route tests.
 """
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
-from models import EpgSource, db
-from services.epg_sync_progress import PHASE_CHANNELS, PHASE_FETCHING, PHASE_PROGRAMS
 from services.epg_sync_service import EpgSyncService
 
 
@@ -249,8 +247,6 @@ class TestSyncXmltvGrabberSource:
 
 class TestEpgSyncServiceProgress:
     """Verify sync_source forwards progress through channel and program phases."""
-
-    pass
 
 
 class TestSyncPpvEventsSource:

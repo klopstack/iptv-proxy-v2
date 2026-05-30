@@ -449,13 +449,9 @@ class RateLimitError(SchedulesDirectError):
 class ServiceOfflineError(SchedulesDirectError):
     """Raised when SD service is offline (code 3000)"""
 
-    pass
-
 
 class AccountError(SchedulesDirectError):
     """Raised for account-related errors (expired, locked, etc.)"""
-
-    pass
 
 
 class RetryableError(SchedulesDirectError):

@@ -1,9 +1,5 @@
 """Tests for EPG coverage and matching endpoints."""
-from unittest.mock import MagicMock, patch
-
-import pytest
-
-from models import Account, Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
+from unittest.mock import patch
 
 
 class TestEpgCoverage:

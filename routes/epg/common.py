@@ -4,7 +4,7 @@ Common helper functions for EPG routes
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 from models import EpgSource, SdLineup, SdStation, db
 from services.schedules_direct import SchedulesDirectClient, SchedulesDirectError

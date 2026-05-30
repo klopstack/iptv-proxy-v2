@@ -38,16 +38,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from flask import Flask
 
-from models import Channel, Event, EventChannelLink, SyncMetadata, db
+from models import Channel, Event, SyncMetadata, db
 from services.ppv.constants import (
-    ENRICHMENT_BATCH_SIZE,
     HIGH_CONFIDENCE_THRESHOLD,
-    MAX_EVENT_AGE_DAYS,
-    MAX_EVENT_FUTURE_DAYS,
     MEDIUM_CONFIDENCE_THRESHOLD,
     METADATA_KEY_CALENDAR_MATCHED,
     METADATA_KEY_CALENDAR_PROCESSED,
-    METADATA_KEY_DETAIL_QUEUE_SIZE,
     METADATA_KEY_DETAILS_FETCHED,
     MIN_MATCH_CONFIDENCE,
 )
