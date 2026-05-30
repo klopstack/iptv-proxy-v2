@@ -961,7 +961,7 @@
             </div>
             <div class="modal-body">
                 <input type="hidden" id="assign-ruleset-id">
-                <div id="assign-accounts-list">
+                <div id="accounts-assign-list">
                     <div class="text-center py-3">
                         <div class="spinner-border spinner-border-sm"></div>
                     </div>
@@ -1071,6 +1071,99 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary" id="save-name-mapping-btn">Save Mapping</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Search Lineups Modal -->
+<div class="modal fade" id="searchLineupModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Search SD Lineups</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="sdSourceSelect">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="searchCountry" class="form-label">Country</label>
+                        <select class="form-select" id="searchCountry">
+                            <option value="USA">USA</option>
+                            <option value="CAN">Canada</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="searchPostalCode" class="form-label">Postal/ZIP Code</label>
+                        <input type="text" class="form-control" id="searchPostalCode" placeholder="12345">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button type="button" class="btn btn-primary w-100" id="searchLineupsBtn">
+                            <i class="bi bi-search"></i> Search
+                        </button>
+                    </div>
+                </div>
+                <div id="lineupSearchResults">
+                    <div class="text-center text-muted py-3">
+                        Enter a postal code to search for available lineups
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SD Stations Modal -->
+<div class="modal fade" id="sdStationsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sdStationsModalTitle">Lineup Stations</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <input type="text" class="form-control" id="stationSearch" placeholder="Search stations...">
+                </div>
+                <div id="sd-stations-list" style="max-height: 400px; overflow-y: auto;">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Source Mappings Modal -->
+<div class="modal fade" id="sourceMappingsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sourceMappingsModalTitle">EPG Mappings</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <input type="text" class="form-control" id="sourceMappingsSearch" placeholder="Search channels...">
+                </div>
+                <div id="source-mappings-list" style="max-height: 500px; overflow-y: auto;">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="source-mappings-pagination" class="d-flex justify-content-between align-items-center mt-3">
+                    <span id="mappings-showing-text" class="text-muted"></span>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary" id="mappings-prev-btn" disabled>Previous</button>
+                        <button class="btn btn-outline-secondary" id="mappings-next-btn" disabled>Next</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1215,9 +1308,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
     
     addListener('sourceType', 'change', onSourceTypeChange);
-    addListener('save-source-btn', 'click', saveSource);
     addListener('testSdCredentialsBtn', 'click', testSdCredentials);
     addListener('testGrabberBtn', 'click', testGrabber);
+    addListener('searchLineupsBtn', 'click', searchLineups);
     addListener('refresh-coverage-btn', 'click', loadCoverage);
     addListener('add-source-btn', 'click', () => {
         document.getElementById('sourceId').value = '';
@@ -1256,29 +1349,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
     
-    // SD tab
-    addListener('sdSourceSelect', 'change', loadSdLineups);
-    addListener('searchLineupsBtn', 'click', searchLineups);
-    
-    // Manual mapping
+    // SD stations search (modal may not be on this page)
+    addListener('stationSearch', 'input', debounce(filterStations, 200));
+
+    // Manual mapping modal
     addListener('manualMappingEpgSearch', 'input', debounce(() => searchEpgChannels(true), 300));
     addListener('manualMappingEpgSource', 'change', () => searchEpgChannels(true));
     addListener('saveManualMappingBtn', 'click', saveManualMapping);
     setupEpgChannelScroll();
-    
-    // SD stations search
-    addListener('stationSearch', 'input', debounce(filterStations, 200));
-    
+
     // Tab change handlers
-    addListener('channels-tab', 'shown.bs.tab', loadEpgChannels);
-    addListener('mappings-tab', 'shown.bs.tab', loadMappings);
-    addListener('sd-tab', 'shown.bs.tab', () => {
-        loadSdStatus();
-        populateSdSourceSelect();
-    });
-    addListener('xmltv-tab', 'shown.bs.tab', () => {
-        loadXmltvGrabbers();
-        loadXmltvConfigs();
+    addListener('channels-tab', 'shown.bs.tab', () => {
+        updateAutoMatchButton();
+        loadMappings();
     });
     
     // Load match rules
@@ -1291,7 +1374,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Set up match rules tabs
     addListener('exclusions-subtab', 'shown.bs.tab', loadExclusions);
     addListener('name-mappings-subtab', 'shown.bs.tab', loadNameMappings);
-    addListener('reference-tab', 'shown.bs.tab', loadReference);
     
     // Set up button listeners
     addListener('create-ruleset-btn', 'click', showCreateRulesetModal);

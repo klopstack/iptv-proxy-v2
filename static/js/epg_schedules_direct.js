@@ -2,8 +2,15 @@
 // Schedules Direct
 // ============================================================================
 
+function openSearchLineupsModal(sourceId) {
+    const sourceInput = document.getElementById('sdSourceSelect');
+    if (sourceInput) sourceInput.value = sourceId;
+    if (searchLineupModal) searchLineupModal.show();
+}
+
 async function loadSdStatus() {
     const container = document.getElementById('sd-status-content');
+    if (!container) return;
     
     try {
         const response = await fetch('/api/epg/sd/status');
@@ -34,9 +41,10 @@ async function loadSdStatus() {
 }
 
 async function testSdCredentials() {
-    const username = document.getElementById('sdUsername').value;
-    const password = document.getElementById('sdPassword').value;
+    const username = document.getElementById('sdUsername')?.value;
+    const password = document.getElementById('sdPassword')?.value;
     const resultDiv = document.getElementById('sdCredentialsResult');
+    if (!resultDiv) return;
     
     if (!username || !password) {
         alert('Please enter credentials first');
@@ -71,13 +79,18 @@ async function testSdCredentials() {
 }
 
 async function loadSdLineups() {
-    const sourceId = document.getElementById('sdSourceSelect').value;
+    const sourceInput = document.getElementById('sdSourceSelect');
     const container = document.getElementById('sd-lineups-list');
     const searchBtn = document.getElementById('searchLineupsModalBtn');
+    if (!sourceInput || !container) return;
+
+    const sourceId = sourceInput.value;
     
     if (!sourceId) {
-        searchBtn.disabled = true;
-        searchBtn.title = 'Select a Schedules Direct source first';
+        if (searchBtn) {
+            searchBtn.disabled = true;
+            searchBtn.title = 'Select a Schedules Direct source first';
+        }
         container.innerHTML = '<div class="text-center text-muted py-3">Select a Schedules Direct source to view lineups</div>';
         return;
     }
@@ -90,7 +103,7 @@ async function loadSdLineups() {
         
         if (result.error || result.success === false) {
             container.innerHTML = `<div class="alert alert-danger">${result.error || 'Failed to load lineups'}</div>`;
-            searchBtn.disabled = true;
+            if (searchBtn) searchBtn.disabled = true;
             return;
         }
         
@@ -100,9 +113,11 @@ async function loadSdLineups() {
         const atLimit = accountLineups >= maxLineups;
         
         if (atLimit) {
-            searchBtn.disabled = true;
-            searchBtn.title = `Lineup limit reached (${accountLineups}/${maxLineups}). Remove a lineup to add more.`;
-        } else {
+            if (searchBtn) {
+                searchBtn.disabled = true;
+                searchBtn.title = `Lineup limit reached (${accountLineups}/${maxLineups}). Remove a lineup to add more.`;
+            }
+        } else if (searchBtn) {
             searchBtn.disabled = false;
             searchBtn.title = `Search for lineups to add (${accountLineups}/${maxLineups} used)`;
         }
@@ -167,7 +182,7 @@ async function loadSdLineups() {
 }
 
 async function searchLineups() {
-    const sourceId = document.getElementById('sdSourceSelect').value;
+    const sourceId = document.getElementById('sdSourceSelect')?.value;
     if (!sourceId) {
         alert('Please select a Schedules Direct source first');
         return;
@@ -223,7 +238,11 @@ async function searchLineups() {
 }
 
 async function addSdLineup(lineupId, name, location, type) {
-    const sourceId = document.getElementById('sdSourceSelect').value;
+    const sourceId = document.getElementById('sdSourceSelect')?.value;
+    if (!sourceId) {
+        alert('Please select a Schedules Direct source first');
+        return;
+    }
     
     try {
         const response = await fetch('/api/epg/sd/lineups?sync=true', {
@@ -241,8 +260,13 @@ async function addSdLineup(lineupId, name, location, type) {
         const result = await response.json();
         
         if (response.ok) {
-            searchLineupModal.hide();
-            loadSdLineups();
+            if (searchLineupModal) searchLineupModal.hide();
+            if (typeof loadSdLineupsInline === 'function') {
+                await loadSdLineupsInline(parseInt(sourceId, 10));
+            } else {
+                loadSdLineups();
+            }
+            if (typeof loadSources === 'function') await loadSources();
             alert(`✓ Lineup added! ${result.message}`);
         } else {
             if (result.limit_reached) {
@@ -301,9 +325,13 @@ async function removeSdLineup(lineupId) {
 let currentStations = [];
 
 async function viewStations(lineupId, lineupName) {
-    document.getElementById('sdStationsModalTitle').textContent = `Stations: ${lineupName}`;
-    document.getElementById('stationSearch').value = '';
+    const title = document.getElementById('sdStationsModalTitle');
+    const search = document.getElementById('stationSearch');
     const container = document.getElementById('sd-stations-list');
+    if (!title || !container) return;
+
+    title.textContent = `Stations: ${lineupName}`;
+    if (search) search.value = '';
     container.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
     if (sdStationsModal) sdStationsModal.show();
     
@@ -318,7 +346,9 @@ async function viewStations(lineupId, lineupName) {
 }
 
 function filterStations() {
-    const search = document.getElementById('stationSearch').value.toLowerCase();
+    const searchInput = document.getElementById('stationSearch');
+    if (!searchInput) return;
+    const search = searchInput.value.toLowerCase();
     const filtered = currentStations.filter(s => 
         (s.callsign || '').toLowerCase().includes(search) ||
         (s.name || '').toLowerCase().includes(search) ||

@@ -145,7 +145,7 @@ async function createDefaultExclusions() {
         
         if (result.success) {
             alert(result.message);
-            new bootstrap.Tab(document.getElementById('exclusions-tab')).show();
+            new bootstrap.Tab(document.getElementById('exclusions-subtab')).show();
             await loadExclusions();
         } else {
             alert('Error: ' + result.error);
@@ -158,7 +158,7 @@ async function createDefaultExclusions() {
 async function previewExclusionPattern() {
     const pattern = document.getElementById('exclusion-pattern').value;
     const patternType = document.getElementById('exclusion-pattern-type').value;
-    const isRegex = document.getElementById('exclusion-is-regex').checked;
+    const isRegex = !document.getElementById('exclusion-case-sensitive').checked;
     const accountId = document.getElementById('exclusion-account-filter').value;
     
     if (!pattern) {

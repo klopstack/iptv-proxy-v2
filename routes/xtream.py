@@ -94,6 +94,11 @@ def player_api():
         "get_live_streams": get_live_streams,
         "get_short_epg": get_short_epg,
         "get_simple_data_table": get_simple_data_table,
+        # Live-only proxy: VOD/series clients (e.g. IPTVnator) expect empty lists, not errors
+        "get_vod_categories": get_empty_list,
+        "get_vod_streams": get_empty_list,
+        "get_series_categories": get_empty_list,
+        "get_series": get_empty_list,
     }
 
     handler = action_handlers.get(action)
@@ -101,6 +106,12 @@ def player_api():
         return handler()
     else:
         return jsonify({"error": f"Unknown action: {action}"}), 400
+
+
+@require_xtream_auth
+def get_empty_list(xtream_cred, account, playlist_config):
+    """Return an empty list for unsupported VOD/series actions."""
+    return jsonify([])
 
 
 @require_xtream_auth

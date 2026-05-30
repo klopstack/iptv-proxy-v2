@@ -43,9 +43,13 @@ async function loadReference() {
         });
         html += '</dl></div></div></div></div>';
         
-        document.getElementById('reference-content').innerHTML = html;
+        const container = document.getElementById('reference-content');
+        if (!container) return;
+        container.innerHTML = html;
     } catch (error) {
-        document.getElementById('reference-content').innerHTML = `
+        const container = document.getElementById('reference-content');
+        if (!container) return;
+        container.innerHTML = `
             <div class="alert alert-danger">Error loading reference: ${error.message}</div>
         `;
     }
@@ -87,7 +91,9 @@ async function showAssignModal(rulesetId) {
     });
     html += '</div>';
     
-    document.getElementById('accounts-assign-list').innerHTML = html;
+    const container = document.getElementById('accounts-assign-list');
+    if (!container) return;
+    container.innerHTML = html;
     if (assignModal) assignModal.show();
 }
 

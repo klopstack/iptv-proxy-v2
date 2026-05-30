@@ -412,9 +412,7 @@ async function toggleSdLineups(sourceId) {
 }
 
 function showSdLineups(sourceId) {
-    document.getElementById('sd-tab').click();
-    document.getElementById('sdSourceSelect').value = sourceId;
-    loadSdLineups();
+    toggleSdLineups(sourceId);
 }
 
 async function loadSdLineupsInline(sourceId) {
@@ -435,7 +433,12 @@ async function loadSdLineupsInline(sourceId) {
         if (lineups.length === 0) {
             container.innerHTML = `
                 <div class="text-muted text-center py-2">
-                    <small>No lineups configured. <a href="#" onclick="showSdLineups(${sourceId}); return false;">Go to SD tab</a> to add lineups.</small>
+                    <small>No lineups configured.</small>
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-outline-primary" onclick="openSearchLineupsModal(${sourceId})">
+                            <i class="bi bi-search"></i> Search Lineups
+                        </button>
+                    </div>
                 </div>
             `;
             return;
@@ -450,7 +453,14 @@ async function loadSdLineupsInline(sourceId) {
             }
         } catch (_) {}
 
-        let html = '<p class="small text-muted mb-2 px-3">Lineup sync shows per-lineup progress below. Source-level sync progress is separate.</p>';
+        let html = `
+            <div class="d-flex justify-content-end mb-2 px-3">
+                <button class="btn btn-sm btn-outline-primary" onclick="openSearchLineupsModal(${sourceId})">
+                    <i class="bi bi-search"></i> Search Lineups
+                </button>
+            </div>
+        `;
+        html += '<p class="small text-muted mb-2 px-3">Lineup sync shows per-lineup progress below. Source-level sync progress is separate.</p>';
         html += '<div class="list-group list-group-flush">';
         for (const lineup of lineups) {
             const st = statuses[lineup.id];
@@ -471,6 +481,9 @@ async function loadSdLineupsInline(sourceId) {
                         ${lineup.last_sync ? '<small class="text-muted"> | Last sync: ' + formatLocalDateTime(lineup.last_sync) + '</small>' : ''}
                     </div>
                     <div class="btn-group btn-group-sm">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="viewStations(${lineup.id}, '${escapeHtml(lineup.name || lineup.lineup_id)}')" title="View stations">
+                            <i class="bi bi-list"></i>
+                        </button>
                         <button class="btn btn-sm btn-outline-primary" onclick="syncSdLineupInline(${lineup.id}, ${sourceId})" title="Sync lineup">
                             <i class="bi bi-arrow-repeat"></i>
                         </button>
@@ -512,6 +525,11 @@ async function syncSdLineupInline(lineupId, sourceId) {
 }
 
 async function showSourceMappings(sourceId, sourceName) {
+    if (!document.getElementById('sourceMappingsModal')) {
+        showToast('Source mappings viewer is not available on this page', 'error');
+        return;
+    }
+
     currentSourceMappings = {
         sourceId: sourceId,
         sourceName: sourceName,
@@ -627,7 +645,8 @@ function updateMappingsPagination(total, offset, limit) {
     const showingText = document.getElementById('mappings-showing-text');
     const prevBtn = document.getElementById('mappings-prev-btn');
     const nextBtn = document.getElementById('mappings-next-btn');
-    
+    if (!showingText || !prevBtn || !nextBtn) return;
+
     const start = offset + 1;
     const end = Math.min(offset + limit, total);
     showingText.textContent = total > 0 ? `Showing ${start}-${end} of ${total}` : 'No mappings';
