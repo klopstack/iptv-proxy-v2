@@ -27,6 +27,8 @@ from urllib.parse import urlencode
 
 import requests
 
+from services.hls_manifest_service import rewrite_hls_manifest
+
 if TYPE_CHECKING:
     from flask import Flask
 
@@ -287,11 +289,18 @@ class MediaFlowStreamService:
             f"(remaining: {len(stream.subscribers)}, bytes: {subscriber.bytes_sent})"
         )
 
-    def stream_chunks(self, stream: MediaFlowStream, subscriber: StreamSubscriber) -> Generator[bytes, None, None]:
+    def stream_chunks(
+        self,
+        stream: MediaFlowStream,
+        subscriber: StreamSubscriber,
+        proxy_base_url: Optional[str] = None,
+    ) -> Generator[bytes, None, None]:
         """
         Generator that yields chunks for a subscriber by proxying through MediaFlow.
 
         This makes an HTTP request to MediaFlow Proxy and streams the response.
+        For HLS manifests, URLs are rewritten so external clients can fetch segments
+        through this proxy's /mediaflow/ passthrough route.
         """
         url = stream.proxy_url or stream.upstream_url
 
@@ -321,7 +330,11 @@ class MediaFlowStreamService:
                     stream.content_type = response.headers["Content-Type"]
                     logger.debug(f"Updated content type to: {stream.content_type}")
 
+                rewrite_manifest = stream.format == "m3u8" and proxy_base_url and self._mediaflow_available
+
                 chunk_count = 0
+                manifest_parts: list[bytes] = []
+
                 for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
                     if not subscriber.active or not stream.is_active:
                         logger.debug(
@@ -331,9 +344,14 @@ class MediaFlowStreamService:
 
                     if chunk:
                         chunk_count += 1
-                        subscriber.bytes_sent += len(chunk)
                         stream.bytes_received += len(chunk)
                         stream.last_activity = datetime.now(timezone.utc).replace(tzinfo=None)
+
+                        if rewrite_manifest:
+                            manifest_parts.append(chunk)
+                            continue
+
+                        subscriber.bytes_sent += len(chunk)
 
                         if chunk_count == 1:
                             logger.info(f"First chunk received: {len(chunk)} bytes")
@@ -341,6 +359,20 @@ class MediaFlowStreamService:
                             logger.debug(f"Streamed {chunk_count} chunks, {subscriber.bytes_sent} bytes total")
 
                         yield chunk
+
+                if rewrite_manifest and manifest_parts and proxy_base_url:
+                    manifest_bytes = b"".join(manifest_parts)
+                    try:
+                        manifest_text = manifest_bytes.decode("utf-8")
+                        manifest_text = rewrite_hls_manifest(manifest_text, MEDIAFLOW_PROXY_URL, proxy_base_url)
+                        manifest_bytes = manifest_text.encode("utf-8")
+                        logger.info(f"Rewrote HLS manifest for external client ({len(manifest_bytes)} bytes)")
+                    except Exception as e:
+                        logger.warning(f"Failed to rewrite HLS manifest, sending original: {e}")
+
+                    subscriber.bytes_sent += len(manifest_bytes)
+                    stream.bytes_received = len(manifest_bytes)
+                    yield manifest_bytes
 
                 logger.info(f"Stream completed: {chunk_count} chunks, {subscriber.bytes_sent} bytes total")
 

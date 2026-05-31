@@ -225,7 +225,12 @@ class FFmpegStreamService:
             f"(remaining: {len(stream.subscribers)}, bytes: {subscriber.bytes_sent})"
         )
 
-    def stream_chunks(self, stream: FFmpegStream, subscriber: StreamSubscriber) -> Generator[bytes, None, None]:
+    def stream_chunks(
+        self,
+        stream: FFmpegStream,
+        subscriber: StreamSubscriber,
+        proxy_base_url: Optional[str] = None,
+    ) -> Generator[bytes, None, None]:
         """Generator that yields chunks for a subscriber."""
         # Mark subscriber as ready - now the reader thread can send data directly
         subscriber.ready = True

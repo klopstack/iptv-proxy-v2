@@ -254,6 +254,36 @@ class TestStreamPlayer:
         assert "stream" in content.lower() or "player" in content.lower()
 
 
+class TestMediaflowPassthrough:
+    """Tests for MediaFlow HLS passthrough route"""
+
+    def test_rejects_non_proxy_paths(self, app, client):
+        response = client.get("/mediaflow/other/path")
+        assert response.status_code == 404
+
+    def test_rewrites_nested_manifest(self, app, client, monkeypatch):
+        manifest = (
+            "#EXTM3U\n#EXTINF:10.0,\n" "http://localhost:8888/proxy/stream?d=https%3A%2F%2Fprovider.example%2Fseg.ts\n"
+        )
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/vnd.apple.mpegurl"}
+        mock_response.content = manifest.encode("utf-8")
+        mock_response.close = Mock()
+
+        monkeypatch.setattr(
+            "routes.streams.MEDIAFLOW_PROXY_URL",
+            "http://localhost:8888",
+        )
+
+        with patch("routes.streams.requests.request", return_value=mock_response):
+            response = client.get("/mediaflow/proxy/hls/manifest.m3u8?d=test")
+
+        assert response.status_code == 200
+        assert b"http://localhost/mediaflow/proxy/stream" in response.data
+        assert b"localhost:8888" not in response.data
+
+
 class TestProxyStream:
     """Tests for stream proxy endpoints"""
 

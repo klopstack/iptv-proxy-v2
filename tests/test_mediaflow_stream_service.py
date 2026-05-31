@@ -202,6 +202,30 @@ class TestMediaFlowSubscribe:
 
 
 class TestMediaFlowStreamChunks:
+    def test_stream_chunks_rewrites_m3u8_manifest(self, mediaflow_available):
+        service, mock_get = mediaflow_available
+        manifest = (
+            "#EXTM3U\n#EXTINF:10.0,\n" "http://localhost:8888/proxy/stream?d=https%3A%2F%2Fprovider.example%2Fseg.ts\n"
+        )
+        mock_get.return_value = _make_stream_response(
+            chunks=[manifest.encode("utf-8")],
+            headers={"Content-Type": "application/vnd.apple.mpegurl"},
+        )
+
+        stream, subscriber = service.subscribe(
+            account_id=1,
+            stream_id="hls",
+            format="m3u8",
+            upstream_url="http://upstream.example/live.m3u8",
+            credential_id=1,
+            session_token="session",
+        )
+
+        received = b"".join(service.stream_chunks(stream, subscriber, proxy_base_url="http://iptv-proxy:8000"))
+
+        assert b"http://iptv-proxy:8000/mediaflow/proxy/stream" in received
+        assert b"localhost:8888" not in received
+
     def test_stream_chunks_yields_data_on_success(self, mediaflow_available):
         service, mock_get = mediaflow_available
         chunks = [b"chunk-one", b"chunk-two"]

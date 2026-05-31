@@ -16,12 +16,16 @@ Stream backends (configured via STREAM_BACKEND env var):
 import logging
 from typing import Any, Dict, Generator, Tuple, Union
 
+import requests
 from flask import Blueprint, Response, abort, current_app, render_template, request, stream_with_context
 from werkzeug.exceptions import HTTPException
 
 from models import Account, db
 from services.connection_manager import ConnectionManager
+from services.hls_manifest_service import rewrite_hls_manifest
+from services.mediaflow_stream_service import MEDIAFLOW_PROXY_URL
 from services.stream_service_factory import get_stream_service
+from services.url_service import get_proxy_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +41,85 @@ CHUNK_SIZE = 65536
 # Read timeout: time between data chunks (120s for slow streams)
 UPSTREAM_CONNECT_TIMEOUT = 60
 UPSTREAM_READ_TIMEOUT = 120
+
+
+@streams_bp.route("/mediaflow/<path:subpath>", methods=["GET", "HEAD"])
+def mediaflow_passthrough(subpath: str):
+    """
+    Passthrough proxy for MediaFlow HLS segments and nested playlists.
+
+    External clients cannot reach MediaFlow Proxy directly (localhost / Docker
+    internal hostnames). Manifest URLs are rewritten to point here instead.
+    """
+    if not subpath.startswith("proxy/"):
+        abort(404, description="Invalid MediaFlow proxy path")
+
+    target_url = f"{MEDIAFLOW_PROXY_URL.rstrip('/')}/{subpath}"
+    if request.query_string:
+        target_url = f"{target_url}?{request.query_string.decode()}"
+
+    headers = {
+        "User-Agent": request.headers.get("User-Agent", "okhttp/3.14.9"),
+        "Accept": "*/*",
+    }
+
+    try:
+        upstream = requests.request(
+            method=request.method,
+            url=target_url,
+            headers=headers,
+            stream=request.method == "GET",
+            timeout=(UPSTREAM_CONNECT_TIMEOUT, UPSTREAM_READ_TIMEOUT),
+            allow_redirects=True,
+        )
+    except requests.exceptions.Timeout:
+        abort(504, description="MediaFlow proxy timeout")
+    except requests.exceptions.ConnectionError:
+        abort(502, description="MediaFlow proxy unavailable")
+
+    if upstream.status_code >= 400:
+        abort(upstream.status_code, description=f"MediaFlow proxy returned {upstream.status_code}")
+
+    content_type = upstream.headers.get("Content-Type", "")
+    is_hls_manifest = "mpegurl" in content_type or subpath.endswith(".m3u8")
+
+    passthrough_headers = {
+        key: value
+        for key, value in upstream.headers.items()
+        if key.lower() not in ("transfer-encoding", "connection", "keep-alive", "content-length")
+    }
+
+    if request.method == "HEAD":
+        upstream.close()
+        return Response(status=upstream.status_code, headers=passthrough_headers)
+
+    if is_hls_manifest:
+        try:
+            manifest_text = upstream.content.decode("utf-8")
+            manifest_text = rewrite_hls_manifest(manifest_text, MEDIAFLOW_PROXY_URL, get_proxy_base_url())
+            manifest_bytes = manifest_text.encode("utf-8")
+        except Exception as e:
+            logger.warning(f"Failed to rewrite nested HLS manifest: {e}")
+            manifest_bytes = upstream.content
+        finally:
+            upstream.close()
+
+        passthrough_headers["Content-Length"] = str(len(manifest_bytes))
+        return Response(manifest_bytes, status=upstream.status_code, headers=passthrough_headers)
+
+    def generate() -> Generator[bytes, None, None]:
+        try:
+            for chunk in upstream.iter_content(chunk_size=CHUNK_SIZE):
+                if chunk:
+                    yield chunk
+        finally:
+            upstream.close()
+
+    return Response(
+        stream_with_context(generate()),
+        status=upstream.status_code,
+        headers=passthrough_headers,
+    )
 
 
 @streams_bp.route("/player/<int:account_id>/<stream_id>")
@@ -117,6 +200,7 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
     from services.stream_proxy_service import StreamProxyService
 
     client_ip = request.remote_addr
+    proxy_base_url = get_proxy_base_url()
     logger.info(f"Stream request: account={account_id}, stream={stream_id}, format={format}, client={client_ip}")
 
     # Get account
@@ -163,7 +247,11 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
             )
             try:
                 chunk_count = 0
-                for chunk in stream_service.stream_chunks(existing_stream, subscriber):  # type: ignore[arg-type]
+                for chunk in stream_service.stream_chunks(
+                    existing_stream,  # type: ignore[arg-type]
+                    subscriber,  # type: ignore[arg-type]
+                    proxy_base_url=proxy_base_url,
+                ):
                     chunk_count += 1
                     if chunk_count == 1:
                         logger.info(f"Stream {stream_id}: First chunk yielded from shared service")
@@ -260,7 +348,11 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
             logger.info(f"Stream {stream_id}: Generator starting for subscriber {subscriber.subscriber_id[:8]}...")
             try:
                 chunk_count = 0
-                for chunk in stream_service.stream_chunks(shared_stream, subscriber):  # type: ignore[arg-type]
+                for chunk in stream_service.stream_chunks(
+                    shared_stream,  # type: ignore[arg-type]
+                    subscriber,  # type: ignore[arg-type]
+                    proxy_base_url=proxy_base_url,
+                ):
                     chunk_count += 1
                     if chunk_count == 1:
                         logger.info(f"Stream {stream_id}: First chunk yielded from service")
