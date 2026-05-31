@@ -1,6 +1,6 @@
 {
   "name": "iptv-proxy-v2",
-  "version": "2.3.12",
+  "version": "2.3.13",
   "description": "IPTV M3U Proxy with filtering and tag extraction",
   "private": true,
   "scripts": {
