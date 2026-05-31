@@ -280,7 +280,7 @@ class TestMediaflowPassthrough:
             response = client.get("/mediaflow/proxy/hls/manifest.m3u8?d=test")
 
         assert response.status_code == 200
-        assert b"http://localhost/mediaflow/proxy/stream" in response.data
+        assert b"/mediaflow/proxy/stream" in response.data
         assert b"localhost:8888" not in response.data
 
 

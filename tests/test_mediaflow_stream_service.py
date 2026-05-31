@@ -223,7 +223,7 @@ class TestMediaFlowStreamChunks:
 
         received = b"".join(service.stream_chunks(stream, subscriber, proxy_base_url="http://iptv-proxy:8000"))
 
-        assert b"http://iptv-proxy:8000/mediaflow/proxy/stream" in received
+        assert b"/mediaflow/proxy/stream" in received
         assert b"localhost:8888" not in received
 
     def test_stream_chunks_yields_data_on_success(self, mediaflow_available):

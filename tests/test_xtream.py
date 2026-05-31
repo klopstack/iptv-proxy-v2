@@ -811,4 +811,5 @@ class TestXtreamHelpers:
             with client:
                 client.get("/")  # Establish request context
                 base_url = get_proxy_base_url()
+                assert base_url.startswith("http://")
                 assert "proxy.example.com" in base_url

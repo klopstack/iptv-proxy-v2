@@ -9,5 +9,8 @@ def get_proxy_base_url() -> str:
     """Base URL for proxied stream/icon links (honors custom proxy hostname)."""
     custom = Settings.get("proxy_hostname")
     if custom:
-        return custom.rstrip("/")
+        custom = custom.rstrip("/")
+        if "://" not in custom:
+            return f"{request.scheme}://{custom}"
+        return custom
     return request.url_root.rstrip("/")
