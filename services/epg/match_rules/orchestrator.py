@@ -53,9 +53,7 @@ class OrchestratorMixin:
 
         # Get all active PPV channels across all accounts
         ppv_channels = (
-            Channel.query.filter_by(is_active=True, is_visible=True, is_ppv=True)
-            .order_by(Channel.account_id, Channel.stream_id)
-            .all()
+            Channel.query.filter_by(is_active=True, is_ppv=True).order_by(Channel.account_id, Channel.stream_id).all()
         )
 
         total_channels = len(ppv_channels)
@@ -280,75 +278,18 @@ class OrchestratorMixin:
 
         # Process channels
         channels_processed = 0
+        skipped_ppv_count = 0
         for channel in channels:
             stream_id = channel.stream_id
             channel_tags = all_tags_by_stream.get(stream_id, set())
             country_tags = country_tags_by_stream.get(stream_id, set())
 
-            # Special handling for PPV channels: automatically match to ppv_events source
-            # This bypasses exclusion patterns to enable automatic PPV EPG mapping
+            # PPV channels are enriched and mapped automatically — never via UI auto-match
             if channel.is_ppv:
-                # Check if already has mapping
-                if channel.id in existing_mappings:
-                    mapping = existing_mappings[channel.id]
-                    if mapping.is_override or mapping.confidence >= 0.85:
-                        skipped_existing_count += 1
-                        continue
-
-                # Try to match to ppv_events source via EventChannelLink
-                from models import EpgSource, Event, EventChannelLink
-
-                event_link = (
-                    db.session.query(EventChannelLink, Event)
-                    .join(Event, EventChannelLink.event_id == Event.id)
-                    .filter(EventChannelLink.channel_id == channel.id)
-                    .first()
-                )
-
-                if event_link:
-                    link, event = event_link
-                    # Find ppv_events source
-                    ppv_source = EpgSource.query.filter_by(source_type="ppv_events", enabled=True).first()
-                    if ppv_source:
-                        # Look for EPG channel with format: ppv-event-{external_id}
-                        epg_channel_id_str = f"ppv-event-{event.external_id}"
-                        ppv_epg_channel = EpgChannel.query.filter_by(
-                            source_id=ppv_source.id, channel_id=epg_channel_id_str
-                        ).first()
-
-                        if ppv_epg_channel:
-                            # Create or update mapping
-                            if channel.id in existing_mappings:
-                                mapping = existing_mappings[channel.id]
-                                if not mapping.is_override:
-                                    mapping.epg_channel_id = ppv_epg_channel.id
-                                    mapping.mapping_type = "ppv_auto"
-                                    mapping.confidence = 1.0
-                                    mapping.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
-                            else:
-                                mapping = ChannelEpgMapping(
-                                    channel_id=channel.id,
-                                    epg_channel_id=ppv_epg_channel.id,
-                                    mapping_type="ppv_auto",
-                                    confidence=1.0,
-                                )
-                                db.session.add(mapping)
-
-                            matched_count += 1
-                            matches_by_type["ppv_auto"] = matches_by_type.get("ppv_auto", 0) + 1
-
-                            channels_processed += 1
-                            if channels_processed >= batch_size:
-                                db.session.commit()
-                                channels_processed = 0
-
-                            continue  # Skip normal matching for this PPV channel
-
-                # PPV channel but no event link yet - skip for now
-                excluded_count += 1
+                skipped_ppv_count += 1
                 continue
 
-            # Check exclusion patterns (only for non-PPV channels)
+            # Check exclusion patterns
             should_exclude, pattern_name, _ = ExclusionMixin.should_exclude_channel(
                 channel, exclusion_patterns, channel_tags
             )
@@ -424,6 +365,7 @@ class OrchestratorMixin:
         result_stats: Dict[str, object] = {
             "total_channels": total_channels,
             "excluded": excluded_count,
+            "skipped_ppv": skipped_ppv_count,
             "matched": matched_count,
             "unmatched": unmatched_count,
             "skipped_existing": skipped_existing_count,

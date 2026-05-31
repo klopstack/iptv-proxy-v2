@@ -142,6 +142,15 @@ class Settings(db.Model):  # type: ignore[name-defined]
             "",
             "TheSportsDB API key for PPV event enrichment. Leave empty to use free tier (limited requests).",
         ),
+        # TheSportsDB website login for fuller calendar HTML scraping
+        "ppv_thesportsdb_site_username": (
+            "",
+            "TheSportsDB website username or email for authenticated calendar scraping.",
+        ),
+        "ppv_thesportsdb_site_password": (
+            "",
+            "TheSportsDB website password for authenticated calendar scraping.",
+        ),
     }
 
     @staticmethod

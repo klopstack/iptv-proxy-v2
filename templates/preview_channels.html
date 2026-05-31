@@ -118,5 +118,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script type="module" src="/static/js/preview_channels_page.js"></script>
+<script type="module" src="{{ url_for('static', filename='js/preview_channels_page.js') }}"></script>
 {% endblock %}

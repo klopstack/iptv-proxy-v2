@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Optional
 
 from thesportsdb import events, leagues, teams
 
+from services.thesportsdb_retry import call_thesportsdb_api
+
 logger = logging.getLogger(__name__)
 
 # Common league IDs mapping (can be expanded)
@@ -68,7 +70,7 @@ class TheSportsDBService:
             - strPostponed: "yes" or "no"
         """
         try:
-            result = events.nextLeagueEvents(league_id)
+            result = call_thesportsdb_api(events.nextLeagueEvents, league_id)
 
             if not result or not isinstance(result, dict):
                 logger.warning(f"Invalid response from nextLeagueEvents: {type(result)}")
@@ -102,7 +104,7 @@ class TheSportsDBService:
             List of event dicts (see get_next_league_events for format)
         """
         try:
-            result = events.leagueSeasonEvents(league_id, season)
+            result = call_thesportsdb_api(events.leagueSeasonEvents, league_id, season)
 
             if not result or not isinstance(result, dict):
                 logger.warning(f"Invalid response from leagueSeasonEvents: {type(result)}")
@@ -137,7 +139,7 @@ class TheSportsDBService:
             Or None if not found
         """
         try:
-            result = leagues.leagueInfo(league_id)
+            result = call_thesportsdb_api(leagues.leagueInfo, league_id)
 
             # API returns None for invalid league IDs
             if result is None:
@@ -182,7 +184,7 @@ class TheSportsDBService:
             - strSport: Sport type
         """
         try:
-            result = teams.leagueTeams(league_id)
+            result = call_thesportsdb_api(teams.leagueTeams, league_id)
 
             if not result or not isinstance(result, dict):
                 logger.warning(f"Invalid response from leagueTeams: {type(result)}")
@@ -282,7 +284,7 @@ class TheSportsDBService:
             Event dict with full details or None if not found
         """
         try:
-            result = events.eventInfo(event_id)
+            result = call_thesportsdb_api(events.eventInfo, event_id)
 
             if not result or not isinstance(result, dict):
                 logger.warning(f"Invalid response from eventInfo: {type(result)}")
@@ -353,6 +355,44 @@ class TheSportsDBService:
         """Clear the service cache."""
         self._cache.clear()
         logger.debug("TheSportsDB service cache cleared")
+
+
+_configured_api_key: Optional[str] = None
+
+
+def configure_thesportsdb_api_key() -> None:
+    """Apply ppv_thesportsdb_api_key from Settings to the thesportsdb SDK."""
+    global _configured_api_key
+
+    try:
+        from models import Settings
+
+        api_key = (Settings.get("ppv_thesportsdb_api_key", "") or "").strip()
+    except Exception:
+        api_key = ""
+
+    if _configured_api_key is not None and api_key == _configured_api_key:
+        return
+
+    import thesportsdb.settings as tsd_settings
+
+    if api_key:
+        tsd_settings.API_KEY = api_key
+    _configured_api_key = api_key
+    logger.debug("TheSportsDB API key configured from settings" if api_key else "Using default TheSportsDB API key")
+
+
+def reset_thesportsdb_api_key_config() -> None:
+    """Force re-read of API key from settings on next configure call."""
+    global _configured_api_key
+    _configured_api_key = None
+
+
+def parse_thesportsdb_api_response(result: Any) -> Optional[Dict[str, Any]]:
+    """Return the response dict when the SDK returned JSON, else None."""
+    if isinstance(result, dict):
+        return result
+    return None
 
 
 # Global instance

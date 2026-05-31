@@ -39,6 +39,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from flask import Flask
 
 from models import Channel, Event, SyncMetadata, db
+from services.ppv.cleanup import prune_orphan_ppv_events, sync_ppv_epg_after_enrichment
 from services.ppv.constants import (
     HIGH_CONFIDENCE_THRESHOLD,
     MEDIUM_CONFIDENCE_THRESHOLD,
@@ -48,7 +49,8 @@ from services.ppv.constants import (
     MIN_MATCH_CONFIDENCE,
 )
 from services.ppv.extraction import PPVEventExtractor
-from services.ppv.persistence import create_or_update_event, link_channel_to_event
+from services.ppv.matching.validation import competitors_match_event, is_weak_match_type
+from services.ppv.persistence import create_or_update_event, link_channel_to_event, sync_enrichment_status_from_links
 from services.reverse_event_matcher.orchestrator import ReverseEventMatcher
 from services.thesportsdb_calendar_scraper import CalendarEvent, get_calendar_scraper
 from services.thesportsdb_service import TheSportsDBService
@@ -329,29 +331,18 @@ class PPVCalendarEnrichmentService:
             # Update persistent stats
             self._update_stats(results)
 
-            # Auto-create PPV EPG source if events were created/updated
-            if results.get("events_created", 0) > 0 or results.get("events_updated", 0) > 0:
+            sync_enrichment_status_from_links(ch.id for ch in channels)
+
+            # Auto-sync PPV EPG when new matches were created
+            if results.get("matched", 0) > 0:
                 try:
-                    from services.ppv.epg import PPVEpgService
-
-                    source_id = PPVEpgService.create_epg_source_for_ppv_events()
-                    logger.info(f"Auto-created/verified PPV EPG source with ID: {source_id}")
-
-                    # Sync events to EPG channels
-                    created, updated = PPVEpgService.sync_ppv_events_to_epg_channels(source_id)
-                    logger.info(f"Synced PPV events to EPG: {created} created, {updated} updated")
-
-                    # Auto-match PPV channels to the EPG
-                    from services.epg.match_rules import EpgMatchRulesService
-
-                    match_stats = EpgMatchRulesService.match_ppv_channels_to_epg(source_id=source_id, batch_size=100)
-                    logger.info(
-                        f"Auto-matched PPV channels: {match_stats.get('matched_count', 0)} matched, "
-                        f"{match_stats.get('unmatched_count', 0)} unmatched"
-                    )
-                    results["ppv_epg_matched"] = match_stats.get("matched_count", 0)
+                    epg_stats = sync_ppv_epg_after_enrichment(results["matched"])
+                    results.update(epg_stats)
+                    results["ppv_epg_matched"] = epg_stats.get("epg_mappings", 0)
                 except Exception as e:
                     logger.error(f"Failed to auto-create/match PPV EPG source: {e}")
+            else:
+                prune_orphan_ppv_events()
 
             return results
 
@@ -473,8 +464,18 @@ class PPVCalendarEnrichmentService:
             use_channel_date=True,  # Enable date extraction and validation
         )
 
+        competitors = extraction.get("competitors")
+        if competitors and len(competitors) == 2:
+            validated_results = []
+            for result in match_results:
+                if is_weak_match_type(result.match_type):
+                    continue
+                if result.match_type != "both_teams" and not competitors_match_event(competitors, result.event):
+                    continue
+                validated_results.append(result)
+            match_results = validated_results
+
         # Convert MatchResult objects to (CalendarEvent, confidence) tuples
-        # to maintain compatibility with existing code
         matches = [(result.event, result.confidence) for result in match_results]
 
         if not matches:
@@ -482,7 +483,7 @@ class PPVCalendarEnrichmentService:
                 channel=channel,
                 matched=False,
                 extraction_result=extraction,
-                match_method="no_match_found",
+                match_method="competitor_mismatch",
             )
 
         # Get best match

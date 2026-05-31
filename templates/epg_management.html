@@ -1171,59 +1171,7 @@
 
 <!-- EPG Management Scripts -->
 <script src="{{ url_for('static', filename='js/mpegts.min.js') }}"></script>
-<!-- eslint-disable-next-script -->
-<script type="module">
-import {
-    formatLocalDate,
-    formatLocalDateTime,
-    formatLocalTime,
-    formatProgramTimeRange,
-    formatRelativeTime,
-    parseUTCDateTime,
-} from "{{ url_for('static', filename='js/lib/epg_datetime.js') }}";
-import {
-    getSourceTypeFieldVisibility,
-    isLegacyProviderSource,
-} from "{{ url_for('static', filename='js/lib/epg_sources_helpers.js') }}";
-import {
-    getRuleFormFieldVisibility,
-    normalizeNameMappingKey,
-    parseCountryCodes,
-    ruleNeedsPattern,
-    sortByPriority,
-    validateNameMappingPreviewInput,
-    validateRulePreviewInput,
-} from "{{ url_for('static', filename='js/lib/match_rules_helpers.js') }}";
-import * as EpgProgress from "{{ url_for('static', filename='js/lib/epg_sync_progress.js') }}";
-import { createEpgSyncPoller } from "{{ url_for('static', filename='js/lib/epg_sync_progress_poll.js') }}";
-
-const epgSyncPoller = createEpgSyncPoller();
-window.EpgSyncProgress = {
-    ...EpgProgress,
-    poller: epgSyncPoller,
-    renderTable(container, sources, formatRelativeTime) {
-        EpgProgress.renderEpgSourcesProgressTable(container, sources, formatRelativeTime);
-    },
-};
-
-Object.assign(window, {
-    parseUTCDateTime,
-    formatLocalTime,
-    formatLocalDate,
-    formatLocalDateTime,
-    formatProgramTimeRange,
-    formatRelativeTime,
-    getSourceTypeFieldVisibility,
-    isLegacyProviderSource,
-    getRuleFormFieldVisibility,
-    normalizeNameMappingKey,
-    parseCountryCodes,
-    ruleNeedsPattern,
-    sortByPriority,
-    validateNameMappingPreviewInput,
-    validateRulePreviewInput,
-});
-</script>
+<script type="module" src="{{ url_for('static', filename='js/pages/epg_management_bootstrap.js') }}"></script>
 <script src="{{ url_for('static', filename='js/epg_common.js') }}"></script>
 <script src="{{ url_for('static', filename='js/epg_sources.js') }}"></script>
 <script src="{{ url_for('static', filename='js/epg_channels.js') }}"></script>
@@ -1328,7 +1276,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadMappings();
     });
     addListener('mappingCategorySelect', 'change', loadMappings);
-    addListener('mappingEpgSourceSelect', 'change', loadMappings);
+    addListener('mappingEpgSourceSelect', 'change', () => {
+        updateAutoMatchButton();
+        loadMappings();
+    });
     addListener('mappingViewSelect', 'change', loadMappings);
     addListener('showFilteredChannels', 'change', loadMappings);
     addListener('auto-match-btn', 'click', () => runAutoMatch());

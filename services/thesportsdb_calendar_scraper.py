@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 # Calendar page URL template
 CALENDAR_URL_TEMPLATE = "https://www.thesportsdb.com/browse_calendar/?s={sport}&d={date}"
+SITE_LOGIN_URL = "https://www.thesportsdb.com/user_login.php"
 
 # Cache TTL in seconds (12 hours - calendar data doesn't change frequently)
 CACHE_TTL_SECONDS = 3600 * 12
@@ -35,11 +36,27 @@ CACHE_TTL_SECONDS = 3600 * 12
 # Persistent cache file path (relative to app data directory)
 PERSISTENT_CACHE_FILENAME = "calendar_cache.json"
 
+# Cache key version — bump when calendar fetch logic changes (invalidates stale entries)
+CACHE_KEY_VERSION = "api-v1"
+
 # Request timeout
 REQUEST_TIMEOUT = 30
 
 # Delay between requests to be nice to the server
 REQUEST_DELAY_SECONDS = 0.5
+
+# Sports to supplement via TheSportsDB API when HTML calendar is incomplete
+API_SUPPLEMENT_SPORTS = (
+    "Soccer",
+    "Baseball",
+    "American Football",
+    "Basketball",
+    "Ice Hockey",
+)
+
+# eventsDay is only useful near-term; skip far-future channel dates to avoid API noise
+MAX_API_SUPPLEMENT_DAYS_AHEAD = 90
+MAX_API_SUPPLEMENT_DAYS_BACK = 14
 
 
 class CalendarEvent:
@@ -185,6 +202,78 @@ class TheSportsDBCalendarScraper:
             }
         )
 
+        self._authenticated_user: Optional[str] = None
+        self._login_verified = False
+
+    def _load_site_credentials(self) -> Tuple[Optional[str], Optional[str]]:
+        """Load TheSportsDB website credentials from application settings."""
+        try:
+            from models import Settings
+
+            username = (Settings.get("ppv_thesportsdb_site_username", "") or "").strip()
+            password = Settings.get("ppv_thesportsdb_site_password", "") or ""
+            if username and password:
+                return username, password
+        except Exception as e:
+            logger.debug(f"Could not load TheSportsDB site credentials: {e}")
+        return None, None
+
+    def _get_auth_cache_suffix(self) -> str:
+        """Separate cache entries for anonymous vs authenticated calendar fetches."""
+        username, password = self._load_site_credentials()
+        if username and password:
+            return f":auth:{username}"
+        return ":anon"
+
+    def _ensure_site_login(self) -> None:
+        """Authenticate the HTTP session when site credentials are configured."""
+        username, password = self._load_site_credentials()
+        if not username or not password:
+            if self._authenticated_user is not None:
+                self._session.cookies.clear()
+            self._authenticated_user = None
+            self._login_verified = False
+            return
+
+        if self._login_verified and self._authenticated_user == username:
+            return
+
+        self._session.cookies.clear()
+        self._rate_limit()
+
+        try:
+            response = self._session.post(
+                SITE_LOGIN_URL,
+                data={
+                    "username": username,
+                    "password": password,
+                    "rememberme": "Yes",
+                },
+                timeout=REQUEST_TIMEOUT,
+                allow_redirects=True,
+            )
+            response.raise_for_status()
+        except Exception as e:
+            logger.warning(f"TheSportsDB site login request failed for {username}: {e}")
+            self._authenticated_user = None
+            self._login_verified = False
+            return
+
+        if self._is_login_page_with_error(response.text):
+            logger.warning(f"TheSportsDB site login failed for user {username}")
+            self._authenticated_user = None
+            self._login_verified = False
+            return
+
+        self._authenticated_user = username
+        self._login_verified = True
+        logger.info(f"TheSportsDB site login successful for {username}")
+
+    @staticmethod
+    def _is_login_page_with_error(html: str) -> bool:
+        """Return True when the login form is shown with a validation error."""
+        return "<h2>Login</h2>" in html and "has-error" in html
+
     def _rate_limit(self) -> None:
         """Enforce rate limiting between requests."""
         now = time.time()
@@ -207,6 +296,8 @@ class TheSportsDBCalendarScraper:
             now = time.time()
 
             for cache_key, entry in data.items():
+                if not cache_key.startswith(f"{CACHE_KEY_VERSION}:"):
+                    continue
                 timestamp = entry.get("timestamp", 0)
                 events_data = entry.get("events", [])
                 # Skip expired entries and poisoned empty caches (parser failures)
@@ -271,7 +362,7 @@ class TheSportsDBCalendarScraper:
 
     def _get_cache_key(self, date: str, sport: str = "") -> str:
         """Generate cache key for a date/sport combination."""
-        return f"{date}:{sport}"
+        return f"{CACHE_KEY_VERSION}:{date}:{sport}{self._get_auth_cache_suffix()}"
 
     def _is_cache_valid(self, cache_key: str) -> bool:
         """Check if cached data is still valid."""
@@ -303,17 +394,24 @@ class TheSportsDBCalendarScraper:
             logger.debug(f"Cache hit for {cache_key}: {len(events)} events")
             return events
 
-        # Fetch from web
+        # Fetch from web and supplement with API for major sports
         self._cache_misses += 1
         try:
-            events = self._fetch_calendar_page(date, sport)
+            html_events = self._fetch_calendar_page(date, sport)
+            api_events = self._fetch_api_events_for_date(date, sport)
+            events = self._merge_calendar_events(html_events, api_events)
             if events:
                 self._cache[cache_key] = (events, time.time())
                 self._save_persistent_cache()
             else:
                 self._cache.pop(cache_key, None)
-                logger.warning(f"No events parsed for {date} (sport={sport or 'all'}) — " "not caching empty result")
-            logger.info(f"Fetched {len(events)} events for {date} (sport={sport or 'all'})")
+                logger.warning(
+                    f"No events from HTML or API for {date} (sport={sport or 'all'}) — " "not caching empty result"
+                )
+            logger.info(
+                f"Fetched {len(events)} events for {date} (sport={sport or 'all'}, "
+                f"html={len(html_events)}, api={len(api_events)})"
+            )
             return events
         except Exception as e:
             logger.error(f"Failed to fetch calendar for {date}: {e}")
@@ -323,6 +421,11 @@ class TheSportsDBCalendarScraper:
                 logger.warning(f"Using stale cache for {date} due to fetch error")
                 return events
             return []
+
+    def _before_calendar_fetch(self) -> None:
+        """Rate-limit and authenticate before each calendar HTTP attempt."""
+        self._rate_limit()
+        self._ensure_site_login()
 
     def _fetch_calendar_page(self, date: str, sport: str = "") -> List[CalendarEvent]:
         """
@@ -335,15 +438,121 @@ class TheSportsDBCalendarScraper:
         Returns:
             List of CalendarEvent objects
         """
-        self._rate_limit()
-
         url = CALENDAR_URL_TEMPLATE.format(sport=sport, date=date)
         logger.debug(f"Fetching calendar: {url}")
 
-        response = self._session.get(url, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
+        from services.thesportsdb_retry import fetch_url_with_retry, is_retryable_html_page
+
+        response = fetch_url_with_retry(
+            self._session,
+            url,
+            timeout=REQUEST_TIMEOUT,
+            before_attempt=self._before_calendar_fetch,
+            validate_response=lambda resp: is_retryable_html_page(resp.text),
+        )
 
         return self._parse_calendar_html(response.text, date)
+
+    def _fetch_api_events_for_date(self, date: str, sport: str = "") -> List[CalendarEvent]:
+        """
+        Fetch events from TheSportsDB API to supplement incomplete HTML calendar pages.
+
+        The browse_calendar HTML page often omits major US sports (MLB, NFL, etc.)
+        while eventsDay API returns them reliably.
+        """
+        if not self._is_date_in_api_supplement_window(date):
+            return []
+
+        from thesportsdb import events as tsdb_events
+
+        from services.thesportsdb_retry import call_thesportsdb_api
+        from services.thesportsdb_service import parse_thesportsdb_api_response
+
+        sports_to_fetch: List[str]
+        if sport:
+            sports_to_fetch = [sport]
+        else:
+            sports_to_fetch = list(API_SUPPLEMENT_SPORTS)
+
+        api_events: List[CalendarEvent] = []
+        for sport_name in sports_to_fetch:
+            try:
+                result = call_thesportsdb_api(
+                    tsdb_events.eventsDay,
+                    date,
+                    s=sport_name,
+                    before_attempt=self._rate_limit,
+                )
+                payload = parse_thesportsdb_api_response(result)
+                if payload is None:
+                    logger.debug(
+                        f"API eventsDay returned non-JSON for {date} sport={sport_name} "
+                        f"after retries (type={type(result).__name__})"
+                    )
+                    continue
+
+                events_list = payload.get("events") or []
+                if not isinstance(events_list, list):
+                    logger.debug(f"API eventsDay unexpected events payload for {date} sport={sport_name}")
+                    continue
+
+                for raw in events_list:
+                    if not isinstance(raw, dict):
+                        continue
+                    event = self._api_event_to_calendar_event(raw, date)
+                    if event:
+                        api_events.append(event)
+            except Exception as e:
+                logger.warning(f"API eventsDay failed for {date} sport={sport_name}: {e}")
+
+        return api_events
+
+    def _is_date_in_api_supplement_window(self, date: str) -> bool:
+        """Return False for dates too far from today to query via eventsDay."""
+        try:
+            target = datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            return False
+
+        today = datetime.now(timezone.utc).date()
+        delta = (target - today).days
+        return -MAX_API_SUPPLEMENT_DAYS_BACK <= delta <= MAX_API_SUPPLEMENT_DAYS_AHEAD
+
+    def _api_event_to_calendar_event(self, raw: Dict[str, Any], date: str) -> Optional[CalendarEvent]:
+        """Convert a TheSportsDB API event dict to CalendarEvent."""
+        event_id = str(raw.get("idEvent") or "")
+        if not event_id:
+            return None
+
+        event_name = raw.get("strEvent") or ""
+        home_team = raw.get("strHomeTeam")
+        away_team = raw.get("strAwayTeam")
+        if not home_team or not away_team:
+            home_team, away_team = self._parse_teams_from_event_name(event_name)
+
+        time_raw = raw.get("strTime") or ""
+        time_utc = time_raw[:5] if len(time_raw) >= 5 else time_raw
+
+        return CalendarEvent(
+            event_id=event_id,
+            event_name=event_name,
+            league_name=raw.get("strLeague") or "",
+            time_utc=time_utc,
+            date=date,
+            home_team=home_team,
+            away_team=away_team,
+        )
+
+    def _merge_calendar_events(
+        self,
+        html_events: List[CalendarEvent],
+        api_events: List[CalendarEvent],
+    ) -> List[CalendarEvent]:
+        """Merge HTML and API events, deduplicating by event_id."""
+        merged: Dict[str, CalendarEvent] = {event.event_id: event for event in html_events}
+        for event in api_events:
+            merged.setdefault(event.event_id, event)
+        return list(merged.values())
 
     def _parse_calendar_html(self, html: str, date: str) -> List[CalendarEvent]:
         """
@@ -494,8 +703,10 @@ class TheSportsDBCalendarScraper:
         # Common separators: "vs", "vs.", "at", "@", "-"
         patterns = [
             r"(.+?)\s+vs\.?\s+(.+)",
+            r"(.+?)\s+v\.?\s+(.+)",
             r"(.+?)\s+at\s+(.+)",
             r"(.+?)\s+@\s+(.+)",
+            r"(.+?)\s+x\s+(.+)",
         ]
 
         for pattern in patterns:
@@ -745,6 +956,12 @@ class TheSportsDBCalendarScraper:
 
 # Global singleton instance
 _calendar_scraper: Optional[TheSportsDBCalendarScraper] = None
+
+
+def reset_calendar_scraper() -> None:
+    """Reset the global calendar scraper (e.g. after credential changes)."""
+    global _calendar_scraper
+    _calendar_scraper = None
 
 
 def get_calendar_scraper() -> TheSportsDBCalendarScraper:

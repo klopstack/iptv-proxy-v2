@@ -4,8 +4,8 @@
   "description": "IPTV M3U Proxy with filtering and tag extraction",
   "private": true,
   "scripts": {
-    "lint": "eslint templates/**/*.html",
-    "lint:fix": "eslint templates/**/*.html --fix",
+    "lint": "eslint templates/**/*.html static/js/lib static/js/pages",
+    "lint:fix": "eslint templates/**/*.html static/js/lib static/js/pages --fix",
     "test": "vitest run",
     "test:watch": "vitest"
   },

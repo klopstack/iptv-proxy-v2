@@ -17,15 +17,19 @@ const mappingsState = {
 
 function updateAutoMatchButton() {
     const accountId = document.getElementById('mappingAccountSelect')?.value;
+    const sourceSelect = document.getElementById('mappingEpgSourceSelect');
+    const sourceId = sourceSelect?.value;
+    const sourceType = sourceSelect?.selectedOptions?.[0]?.dataset?.sourceType;
     const btn = document.getElementById('auto-match-btn');
     const dropdown = document.getElementById('auto-match-dropdown');
     const rulesetInfo = document.getElementById('account-ruleset-info');
+    const isPpvSource = sourceType === 'ppv_events';
 
     if (!btn) {
         return;
     }
 
-    if (accountId) {
+    if (accountId && !isPpvSource) {
         btn.disabled = false;
         if (dropdown) dropdown.disabled = false;
         if (rulesetInfo) {
@@ -35,7 +39,15 @@ function updateAutoMatchButton() {
     } else {
         btn.disabled = true;
         if (dropdown) dropdown.disabled = true;
-        if (rulesetInfo) rulesetInfo.style.display = 'none';
+        if (rulesetInfo) {
+            if (isPpvSource && sourceId) {
+                rulesetInfo.style.display = 'flex';
+                rulesetInfo.innerHTML =
+                    '<i class="bi bi-info-circle text-info"></i> PPV Events are mapped automatically during enrichment.';
+            } else {
+                rulesetInfo.style.display = 'none';
+            }
+        }
     }
 }
 
@@ -453,10 +465,17 @@ async function runAutoMatch() {
     const accountId = document.getElementById('mappingAccountSelect').value;
     const categoryId = document.getElementById('mappingCategorySelect').value;
     const includeFiltered = document.getElementById('showFilteredChannels').checked;
-    const sourceId = document.getElementById('mappingEpgSourceSelect').value;
-    
+    const sourceSelect = document.getElementById('mappingEpgSourceSelect');
+    const sourceId = sourceSelect.value;
+    const sourceType = sourceSelect?.selectedOptions?.[0]?.dataset?.sourceType;
+
     if (!accountId) {
         alert('Please select an account');
+        return;
+    }
+
+    if (sourceType === 'ppv_events') {
+        alert('PPV Events are mapped automatically during enrichment. Use the PPV page to process the enrichment queue.');
         return;
     }
     

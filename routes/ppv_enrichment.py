@@ -131,6 +131,7 @@ def queue_channels_for_enrichment():
     """
     try:
         from models import Channel, db
+        from services.ppv.persistence import clear_event_links_for_channels
 
         data = request.get_json() or {}
         channel_ids = data.get("channel_ids", [])
@@ -152,6 +153,9 @@ def queue_channels_for_enrichment():
                 404,
             )
 
+        ppv_channel_ids = [ch.id for ch in channels if ch.is_ppv]
+        links_cleared = clear_event_links_for_channels(ppv_channel_ids)
+
         # Reset enrichment status to queued
         queued = 0
         for channel in channels:
@@ -165,7 +169,7 @@ def queue_channels_for_enrichment():
 
         logger.info(f"Queued {queued} channels for enrichment" f"{f' from account {account_id}' if account_id else ''}")
 
-        return jsonify({"queued": queued, "total_requested": len(channel_ids)}), 200
+        return jsonify({"queued": queued, "total_requested": len(channel_ids), "links_cleared": links_cleared}), 200
 
     except Exception as e:
         logger.error(f"Error queuing channels: {e}", exc_info=True)
@@ -187,6 +191,7 @@ def queue_all_ppv_channels():
     """
     try:
         from models import Channel, db
+        from services.ppv.persistence import clear_event_links_for_channels
 
         data = request.get_json(silent=True) or {}
         account_id = data.get("account_id")
@@ -204,6 +209,9 @@ def queue_all_ppv_channels():
                 404,
             )
 
+        ppv_channel_ids = [ch.id for ch in channels]
+        links_cleared = clear_event_links_for_channels(ppv_channel_ids)
+
         # Reset enrichment status to queued
         queued = 0
         skipped_already_matched = 0
@@ -211,7 +219,6 @@ def queue_all_ppv_channels():
         for channel in channels:
             if channel.ppv_enrichment_status == "matched":
                 skipped_already_matched += 1
-                # Still reset to allow re-enrichment
             channel.ppv_enrichment_status = "queued"
             channel.ppv_enrichment_attempts = 0
             channel.ppv_enrichment_error = None
@@ -223,7 +230,16 @@ def queue_all_ppv_channels():
             f"Queued {queued} PPV channels for enrichment" f"{f' from account {account_id}' if account_id else ''}"
         )
 
-        return jsonify({"queued": queued, "skipped_already_matched": skipped_already_matched}), 200
+        return (
+            jsonify(
+                {
+                    "queued": queued,
+                    "skipped_already_matched": skipped_already_matched,
+                    "links_cleared": links_cleared,
+                }
+            ),
+            200,
+        )
 
     except Exception as e:
         logger.error(f"Error queuing PPV channels: {e}", exc_info=True)

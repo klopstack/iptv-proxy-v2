@@ -4,12 +4,12 @@ Tests for TheSportsDB Calendar Scraper Service
 Tests the calendar scraping functionality without making actual HTTP requests.
 """
 
-from datetime import timezone
-from unittest.mock import patch
+from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from services.thesportsdb_calendar_scraper import CalendarEvent, TheSportsDBCalendarScraper
+from services.thesportsdb_calendar_scraper import CACHE_KEY_VERSION, CalendarEvent, TheSportsDBCalendarScraper
 
 
 class TestCalendarEvent:
@@ -159,15 +159,108 @@ class TestTheSportsDBCalendarScraper:
     def test_cache_key_generation(self, scraper):
         """Test cache key format."""
         key = scraper._get_cache_key("2024-06-15", "")
-        assert key == "2024-06-15:"
+        assert key.startswith("api-v1:2024-06-15:")
+        assert key.endswith(":anon")
 
         key_with_sport = scraper._get_cache_key("2024-06-15", "Boxing")
-        assert key_with_sport == "2024-06-15:Boxing"
+        assert key_with_sport == "api-v1:2024-06-15:Boxing:anon"
+
+    def test_is_login_page_with_error(self):
+        assert TheSportsDBCalendarScraper._is_login_page_with_error("<h2>Login</h2><div class='form-group has-error'>")
+        assert not TheSportsDBCalendarScraper._is_login_page_with_error(
+            "<h2>Welcome</h2><a href='/browse.php'>Browse</a>"
+        )
+
+    @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._load_site_credentials")
+    def test_cache_key_includes_auth_suffix(self, mock_creds, scraper):
+        mock_creds.return_value = ("alice", "secret")
+        assert scraper._get_cache_key("2026-05-31").endswith(":auth:alice")
+
+    @patch("services.thesportsdb_calendar_scraper.requests.Session.post")
+    @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._load_site_credentials")
+    def test_ensure_site_login_success(self, mock_creds, mock_post, scraper):
+        mock_creds.return_value = ("alice", "secret")
+        mock_post.return_value.text = "<html><a href='/browse.php'>Browse</a></html>"
+        mock_post.return_value.raise_for_status = lambda: None
+
+        scraper._ensure_site_login()
+
+        assert scraper._authenticated_user == "alice"
+        assert scraper._login_verified is True
+        mock_post.assert_called_once()
+
+    @patch("services.thesportsdb_calendar_scraper.requests.Session.post")
+    @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._load_site_credentials")
+    def test_ensure_site_login_failure(self, mock_creds, mock_post, scraper):
+        mock_creds.return_value = ("alice", "wrong")
+        mock_post.return_value.text = "<h2>Login</h2><div class='form-group has-error'>"
+        mock_post.return_value.raise_for_status = lambda: None
+
+        scraper._ensure_site_login()
+
+        assert scraper._authenticated_user is None
+        assert scraper._login_verified is False
+
+    @patch("services.thesportsdb_retry.fetch_url_with_retry")
+    @patch(
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._parse_calendar_html",
+        return_value=[],
+    )
+    def test_fetch_calendar_page_uses_retry_fetch(self, mock_parse, mock_fetch_url, scraper):
+        mock_response = MagicMock()
+        mock_response.text = "<html><table><a href='/event/1'>Game</a></table></html>"
+        mock_fetch_url.return_value = mock_response
+
+        scraper._fetch_calendar_page("2026-05-31")
+
+        mock_fetch_url.assert_called_once()
+        assert mock_fetch_url.call_args.kwargs["before_attempt"] == scraper._before_calendar_fetch
+
+    def test_is_date_in_api_supplement_window(self, scraper):
+        today = datetime.now(timezone.utc).date()
+        near = (today + timedelta(days=7)).strftime("%Y-%m-%d")
+        far = (today + timedelta(days=120)).strftime("%Y-%m-%d")
+
+        assert scraper._is_date_in_api_supplement_window(near) is True
+        assert scraper._is_date_in_api_supplement_window(far) is False
+
+    @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._rate_limit")
+    @patch("services.thesportsdb_retry.call_thesportsdb_api")
+    def test_fetch_api_events_skips_non_json_response(self, mock_call_api, mock_rate_limit, scraper):
+        mock_call_api.return_value = "<!doctype html><html></html>"
+
+        events = scraper._fetch_api_events_for_date(datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+
+        assert events == []
+
+    @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._rate_limit")
+    @patch("services.thesportsdb_retry.call_thesportsdb_api")
+    def test_fetch_api_events_parses_valid_response(self, mock_call_api, mock_rate_limit, scraper):
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        mock_call_api.return_value = {
+            "events": [
+                {
+                    "idEvent": "123",
+                    "strEvent": "Team A vs Team B",
+                    "strLeague": "MLB",
+                    "strTime": "19:05:00",
+                    "strHomeTeam": "Team A",
+                    "strAwayTeam": "Team B",
+                }
+            ]
+        }
+
+        events = scraper._fetch_api_events_for_date(today, sport="Baseball")
+
+        assert len(events) == 1
+        assert events[0].event_id == "123"
 
     def test_cache_validation(self, scraper):
         """Test cache validity checking."""
+        cache_key = scraper._get_cache_key("2024-06-15", "")
+
         # Empty cache should be invalid
-        assert not scraper._is_cache_valid("2024-06-15:")
+        assert not scraper._is_cache_valid(cache_key)
 
         # Add something to cache
         import time
@@ -181,12 +274,13 @@ class TestTheSportsDBCalendarScraper:
             time_utc="12:00",
             date="2024-06-15",
         )
-        scraper._cache["2024-06-15:"] = ([sample_event], time.time())
-        assert scraper._is_cache_valid("2024-06-15:")
+        scraper._cache[cache_key] = ([sample_event], time.time())
+        assert scraper._is_cache_valid(cache_key)
 
         # Empty event lists should not be considered valid
-        scraper._cache["2024-06-16:"] = ([], time.time())
-        assert not scraper._is_cache_valid("2024-06-16:")
+        empty_key = scraper._get_cache_key("2024-06-16", "")
+        scraper._cache[empty_key] = ([], time.time())
+        assert not scraper._is_cache_valid(empty_key)
 
     def test_parse_teams_from_event_name_vs(self, scraper):
         """Test team extraction with 'vs' separator."""
@@ -553,7 +647,7 @@ class TestFindMatchingEvents:
         # Pre-populate cache
         import time
 
-        scraper._cache["2024-03-01:"] = (events, time.time())
+        scraper._cache[scraper._get_cache_key("2024-03-01")] = (events, time.time())
 
         return scraper
 
@@ -614,8 +708,12 @@ class TestIntegration:
         """Create a scraper instance with isolated cache."""
         return TheSportsDBCalendarScraper(cache_dir=str(tmp_path))
 
+    @patch(
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_api_events_for_date",
+        return_value=[],
+    )
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_calendar_page")
-    def test_get_events_for_date_uses_cache(self, mock_fetch, scraper):
+    def test_get_events_for_date_uses_cache(self, mock_fetch, mock_api_fetch, scraper):
         """Test that subsequent calls use cache."""
         mock_events = [
             CalendarEvent(
@@ -638,8 +736,12 @@ class TestIntegration:
         assert mock_fetch.call_count == 1  # No additional fetch
         assert len(events2) == 1
 
+    @patch(
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_api_events_for_date",
+        return_value=[],
+    )
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_calendar_page")
-    def test_force_refresh_bypasses_cache(self, mock_fetch, scraper):
+    def test_force_refresh_bypasses_cache(self, mock_fetch, mock_api_fetch, scraper):
         """Test that force_refresh bypasses cache."""
         mock_events = [
             CalendarEvent(
@@ -659,6 +761,35 @@ class TestIntegration:
         # Force refresh should fetch again
         scraper.get_events_for_date("2024-03-01", force_refresh=True)
         assert mock_fetch.call_count == 2
+
+    @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_api_events_for_date")
+    @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_calendar_page")
+    def test_get_events_merges_html_and_api(self, mock_fetch, mock_api_fetch, scraper):
+        """API supplement events are merged with HTML calendar events."""
+        mock_fetch.return_value = [
+            CalendarEvent(
+                event_id="html-1",
+                event_name="HTML Event",
+                league_name="Test League",
+                time_utc="15:00",
+                date="2026-05-31",
+            )
+        ]
+        mock_api_fetch.return_value = [
+            CalendarEvent(
+                event_id="api-1",
+                event_name="Colorado Rockies vs San Francisco Giants",
+                league_name="MLB",
+                time_utc="19:05",
+                date="2026-05-31",
+                home_team="Colorado Rockies",
+                away_team="San Francisco Giants",
+            )
+        ]
+
+        events = scraper.get_events_for_date("2026-05-31", force_refresh=True)
+        assert len(events) == 2
+        assert {e.event_id for e in events} == {"html-1", "api-1"}
 
 
 class TestPersistentCache:
@@ -681,8 +812,12 @@ class TestPersistentCache:
         expected_path = os.path.join(temp_cache_dir, "calendar_cache.json")
         assert scraper_with_temp_cache._cache_file == expected_path
 
+    @patch(
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_api_events_for_date",
+        return_value=[],
+    )
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_calendar_page")
-    def test_save_persistent_cache(self, mock_fetch, scraper_with_temp_cache, temp_cache_dir):
+    def test_save_persistent_cache(self, mock_fetch, mock_api_fetch, scraper_with_temp_cache, temp_cache_dir):
         """Test that cache is saved to disk."""
         import json
         import os
@@ -711,9 +846,10 @@ class TestPersistentCache:
         with open(cache_file, "r") as f:
             data = json.load(f)
 
-        assert "2024-03-01:" in data
-        assert len(data["2024-03-01:"]["events"]) == 1
-        assert data["2024-03-01:"]["events"][0]["event_id"] == "1"
+        cache_key = scraper_with_temp_cache._get_cache_key("2024-03-01")
+        assert cache_key in data
+        assert len(data[cache_key]["events"]) == 1
+        assert data[cache_key]["events"][0]["event_id"] == "1"
 
     def test_load_persistent_cache(self, temp_cache_dir):
         """Test that cache is loaded from disk on startup."""
@@ -723,8 +859,9 @@ class TestPersistentCache:
 
         # Create a cache file manually
         cache_file = os.path.join(temp_cache_dir, "calendar_cache.json")
+        cache_key = f"{CACHE_KEY_VERSION}:2024-03-01::anon"
         cache_data = {
-            "2024-03-01:": {
+            cache_key: {
                 "timestamp": time.time(),
                 "events": [
                     {
@@ -753,8 +890,8 @@ class TestPersistentCache:
 
         # Check that cache was loaded
         assert scraper._cache_disk_loads == 1
-        assert "2024-03-01:" in scraper._cache
-        events, _ = scraper._cache["2024-03-01:"]
+        assert cache_key in scraper._cache
+        events, _ = scraper._cache[cache_key]
         assert len(events) == 1
         assert events[0].event_id == "saved1"
 
@@ -766,8 +903,9 @@ class TestPersistentCache:
 
         # Create a cache file with old timestamp
         cache_file = os.path.join(temp_cache_dir, "calendar_cache.json")
+        cache_key = f"{CACHE_KEY_VERSION}:2024-03-01::anon"
         cache_data = {
-            "2024-03-01:": {
+            cache_key: {
                 "timestamp": time.time() - 100000,  # Very old
                 "events": [
                     {
@@ -795,7 +933,7 @@ class TestPersistentCache:
         scraper = TheSportsDBCalendarScraper(cache_ttl=60, cache_dir=temp_cache_dir)
 
         # Expired entry should not be loaded
-        assert "2024-03-01:" not in scraper._cache
+        assert cache_key not in scraper._cache
 
     def test_clear_cache_with_persistent(self, scraper_with_temp_cache, temp_cache_dir):
         """Test clearing cache also deletes persistent file."""

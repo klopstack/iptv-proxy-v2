@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from sqlalchemy import delete, select, update
 
-from models import Account, Category, Channel, ChannelLink, ChannelTag, EventChannelLink, Tag, db
+from models import Account, Category, Channel, ChannelLink, ChannelTag, Tag, db
 from services.iptv_service import get_iptv_service_for_account
 from services.tag_service import TagService
 
@@ -160,6 +160,7 @@ class ChannelSyncService:
             "channels_added": 0,
             "channels_updated": 0,
             "channels_deactivated": 0,
+            "ppv_requeue_ids": [],
             "errors": [],
         }
 
@@ -207,6 +208,28 @@ class ChannelSyncService:
                 except Exception as e:
                     logger.error(f"Error computing filter visibility after sync: {e}")
                     stats["errors"].append(f"Filter visibility error: {str(e)}")
+
+                requeue_ids = stats.get("ppv_requeue_ids") or []
+                if requeue_ids:
+                    try:
+                        from flask import current_app, has_app_context
+
+                        from services.ppv.enrichment import get_calendar_enrichment_service
+
+                        if has_app_context():
+                            channels = Channel.query.filter(Channel.id.in_(requeue_ids)).all()
+                            if channels:
+                                logger.info(
+                                    "Re-enriching %s PPV channel(s) after name/event change",
+                                    len(channels),
+                                )
+                                enrich_stats = get_calendar_enrichment_service(
+                                    current_app._get_current_object()  # type: ignore[attr-defined]
+                                ).enrich_channels(channels)
+                                stats["ppv_enrichment"] = enrich_stats
+                    except Exception as e:
+                        logger.error("PPV re-enrichment after sync failed: %s", e)
+                        stats["errors"].append(f"PPV re-enrichment error: {str(e)}")
 
             logger.info(
                 f"Sync completed for account {account.name}: "
@@ -374,22 +397,21 @@ class ChannelSyncService:
                 changed = False
 
                 if chan.name != name:
-                    # Name changed - for PPV channels, this means a new event
-                    # Reset enrichment status and enqueue for re-enrichment
-                    if chan.is_ppv and chan.ppv_enrichment_status:
+                    if chan.is_ppv:
                         logger.info(
                             f"PPV channel name changed from '{chan.name}' to '{name}' - "
                             f"resetting enrichment and enqueueing for re-enrichment"
                         )
-                        chan.ppv_enrichment_status = "queued"  # Enqueue for enrichment
+                        from services.ppv.cleanup import reset_channel_ppv_state
+
+                        reset_channel_ppv_state(chan.id)
+                        chan.ppv_enrichment_status = "queued"
                         chan.ppv_enrichment_queue_id = f"sync_{now.timestamp()}"
                         chan.ppv_enrichment_attempts = 0
                         chan.ppv_enrichment_error = None
                         chan.ppv_enrichment_last_attempt = None
                         chan.thesportsdb_id = None
-
-                        # Remove any existing event links for this channel
-                        EventChannelLink.query.filter_by(channel_id=chan.id).delete()
+                        stats.setdefault("ppv_requeue_ids", []).append(chan.id)
 
                     chan.name = name
                     changed = True
@@ -402,7 +424,11 @@ class ChannelSyncService:
                 if chan.is_ppv != is_ppv:
                     chan.is_ppv = is_ppv
                     if is_ppv:
+                        from services.ppv.cleanup import reset_channel_ppv_state
+
+                        reset_channel_ppv_state(chan.id)
                         chan.ppv_enrichment_status = "queued"
+                        stats.setdefault("ppv_requeue_ids", []).append(chan.id)
                     changed = True
 
                 # Update other fields

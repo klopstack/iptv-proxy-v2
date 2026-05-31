@@ -68,6 +68,30 @@ module.exports = {
         '@html-eslint/no-target-blank': 'off',
         '@html-eslint/require-meta-charset': 'off'
       }
+    },
+    {
+      // ES module sources (lib + page bootstraps); not linted via eslint-plugin-html
+      files: ['static/js/lib/**/*.js', 'static/js/pages/**/*.js'],
+      parserOptions: {
+        ecmaVersion: 2020,
+        sourceType: 'module'
+      },
+      env: {
+        browser: true,
+        es2020: true
+      },
+      rules: {
+        'no-console': 'off',
+        'no-unused-vars': 'off',
+        'no-undef': 'error',
+        'no-var': 'error',
+        'prefer-const': 'warn',
+        'eqeqeq': 'warn',
+        'no-eval': 'error',
+        'no-implied-eval': 'error',
+        'no-redeclare': ['error', { 'builtinGlobals': false }],
+        'no-shadow': 'off'
+      }
     }
   ],
   settings: {

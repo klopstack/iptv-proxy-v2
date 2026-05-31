@@ -1,7 +1,8 @@
 """Tests for channel-to-EPG mapping endpoints."""
 
+from datetime import datetime, timezone
 
-from models import Account, Category, Channel, ChannelEpgMapping, db
+from models import Account, Category, Channel, ChannelEpgMapping, EpgSource, Event, EventChannelLink, db
 
 
 class TestEpgMappings:
@@ -331,3 +332,72 @@ class TestEpgMappings:
         )
         assert response.status_code == 200
         assert response.json["deleted_count"] == 0
+
+    def test_ppv_mapped_view_includes_playlist_hidden_channels(self, app, client):
+        """PPV event mappings admin view shows all linked channels, not just visible ones."""
+        with app.app_context():
+            account = Account(
+                name="PPV Map Test",
+                username="ppvmap",
+                password="pass",
+                server="example.com",
+                enabled=True,
+                ppv_visibility="hide_all",
+            )
+            db.session.add(account)
+            db.session.flush()
+
+            source = EpgSource(
+                name="PPV Events",
+                source_type="ppv_events",
+                enabled=True,
+            )
+            db.session.add(source)
+            db.session.flush()
+
+            event = Event(
+                external_id="999001",
+                source=Event.SOURCE_THESPORTSDB,
+                home_team_id="",
+                home_team_name="Team A",
+                away_team_id="",
+                away_team_name="Team B",
+                scheduled_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                is_ppv=True,
+            )
+            db.session.add(event)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="ppv_hidden",
+                name="Team A vs Team B",
+                is_active=True,
+                is_visible=False,
+                is_ppv=True,
+            )
+            db.session.add(channel)
+            db.session.flush()
+
+            db.session.add(
+                EventChannelLink(
+                    channel_id=channel.id,
+                    event_id=event.id,
+                    match_method="test",
+                    match_confidence=0.9,
+                )
+            )
+            db.session.commit()
+
+            account_id = account.id
+            source_id = source.id
+
+        response = client.get(
+            f"/api/epg/mappings?view_mode=mapped&account_id={account_id}"
+            f"&epg_source_id={source_id}&show_filtered=false"
+        )
+        assert response.status_code == 200
+        data = response.json
+        assert data["total"] == 1
+        assert data["mappings"][0]["channel_name"] == "Team A vs Team B"
+        assert data["mappings"][0]["mapping_type"] == "ppv_event"

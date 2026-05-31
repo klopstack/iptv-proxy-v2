@@ -38,12 +38,18 @@ class PPVEventExtractor:
     # Branch 1 (groups 1,2): "vs" with optional commas (tennis: "Federer, Roger vs Nadal, Rafael")
     # Branch 2 (groups 3,4): "at/@/versus" (most sports)
     # Branch 3 (groups 5,6): "-" separator for teams like "NORTHAMPTON SAINTS - HARLEQUINS"
+    # Branch 4 (groups 7,8): "x" separator common in MLB feeds (e.g., "Giants x Rockies")
     # NOTE: Tournament structure (Round 4 - Game 1) is removed via _clean_channel_name() BEFORE matching
     # NOTE: The group capturing team names can include trailing time which gets cleaned by _clean_team_name
     # Uses \w (unicode-aware) instead of [A-Za-z0-9] to support accented characters (Grêmio, São Paulo, etc.)
     # Branch 3 (dash): Uses non-greedy first team and greedy second team to match rightmost pair
     #   when multiple dashes exist (e.g., "PPV 1 - TEAM A - TEAM B" matches "TEAM A - TEAM B")
-    COMPETITOR_PATTERN = r"([#\w\s&\'\-,]+?)\s+(?:vs\.?)\s+([#\w\s&\'\-,\.:]+?)(?=\s*[|@()\[\]]|-\s+[A-Z]|-\s+\d|\s+\d|\s*$)|([#\w\s&\'-]+?)\s+(?:at\.?|versus|@)\s+([#\w\s&\'-\-\.]+?)(?=\s*[|@()\[\]]|-\s+[A-Z]|-\s+\d|\s+\d|\s*$)|([A-Z][A-Za-z\s&\'\-]+?)\s+-\s+([A-Z][A-Za-z\s&\'\-]+)(?=\s*[|@()\[\]]|\s*$)"
+    COMPETITOR_PATTERN = (
+        r"([#\w\s&\'\-,]+?)\s+(?:vs\.?)\s+([#\w\s&\'\-,\.:]+?)(?=\s*[|@()\[\]]|-\s+[A-Z]|-\s+\d|\s+\d|\s*$)"
+        r"|([#\w\s&\'-]+?)\s+(?:at\.?|versus|@)\s+([#\w\s&\'-\-\.]+?)(?=\s*[|@()\[\]]|-\s+[A-Z]|-\s+\d|\s+\d|\s*$)"
+        r"|([A-Z][A-Za-z\s&\'\-]+?)\s+-\s+([A-Z][A-Za-z\s&\'\-]+)(?=\s*[|@()\[\]]|\s*$)"
+        r"|([#\w\s&\'\-,]+?)\s+x\s+([#\w\s&\'\-,\.:]+?)(?=\s*[|@()\[\]]|-\s+[A-Z]|-\s+\d|\s+\d|\s*$|start:)"
+    )
 
     # Pattern to strip trailing time from team names (e.g., "Sudan 16:00pm" -> "Sudan")
     TRAILING_TIME_PATTERN = r"\s+\d{1,2}:\d{2}\s*(?:am|pm)?$"
@@ -191,6 +197,7 @@ class PPVEventExtractor:
         - "Vegas Golden Knights @ Colorado Avalanche" -> ("Vegas Golden Knights", "Colorado Avalanche")
         - "Federer, Roger vs Nadal, Rafael" -> ("Federer, Roger", "Nadal, Rafael")
         - "NORTHAMPTON SAINTS - HARLEQUINS" -> ("NORTHAMPTON SAINTS", "HARLEQUINS")
+        - "MLB 11 | Giants x Rockies start:2026-05-31" -> ("Giants", "Rockies")
         """
         # Skip placeholders
         if self.is_placeholder(channel_name):
@@ -207,20 +214,19 @@ class PPVEventExtractor:
         if not match:
             return None
 
-        # Handle alternate patterns: (vs with comma) vs (other separators without comma) vs (dash separator)
-        # vs pattern has groups 1,2; other separators have groups 3,4; dash separator has groups 5,6
+        # Handle alternate patterns: vs (1,2), at/@ (3,4), dash (5,6), x (7,8)
         if match.group(1) is not None:
-            # 'vs' pattern matched (groups 1, 2)
             comp1 = match.group(1).strip()
             comp2 = match.group(2).strip()
         elif match.group(3) is not None:
-            # Other separator pattern matched (groups 3, 4)
             comp1 = match.group(3).strip()
             comp2 = match.group(4).strip()
-        else:
-            # Dash separator pattern matched (groups 5, 6)
+        elif match.group(5) is not None:
             comp1 = match.group(5).strip()
             comp2 = match.group(6).strip()
+        else:
+            comp1 = match.group(7).strip()
+            comp2 = match.group(8).strip()
 
         # Clean up competitor names
         comp1 = self._clean_team_name(comp1)

@@ -147,11 +147,18 @@ class TestPpvEnrichmentConfigRoutes:
         assert data["enabled"] is True
         assert data["has_api_key"] is False
         assert data["api_key_preview"] is None
+        assert data["has_site_credentials"] is False
+        assert data["site_username_preview"] is None
 
     def test_update_ppv_enrichment_config(self, client):
         response = client.put(
             "/api/ppv-enrichment/config",
-            json={"enabled": False, "api_key": "secret12345"},
+            json={
+                "enabled": False,
+                "api_key": "secret12345",
+                "site_username": "myuser",
+                "site_password": "mypassword",
+            },
         )
         assert response.status_code == 200
         assert "message" in response.get_json()
@@ -161,6 +168,24 @@ class TestPpvEnrichmentConfigRoutes:
         assert data["enabled"] is False
         assert data["has_api_key"] is True
         assert data["api_key_preview"].startswith("secr")
+        assert data["has_site_credentials"] is True
+        assert data["site_username_preview"].startswith("my")
+
+    def test_clear_ppv_enrichment_site_login(self, client):
+        Settings.set("ppv_thesportsdb_site_username", "saveduser")
+        Settings.set("ppv_thesportsdb_site_password", "savedpass")
+        db.session.commit()
+
+        response = client.put(
+            "/api/ppv-enrichment/config",
+            json={"site_username": "", "site_password": ""},
+        )
+        assert response.status_code == 200
+
+        data = client.get("/api/ppv-enrichment/config").get_json()
+        assert data["has_site_credentials"] is False
+        assert Settings.get("ppv_thesportsdb_site_username", "") == ""
+        assert Settings.get("ppv_thesportsdb_site_password", "") == ""
 
     def test_clear_ppv_enrichment_api_key(self, client):
         Settings.set("ppv_thesportsdb_api_key", "oldkey")

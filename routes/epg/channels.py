@@ -12,6 +12,16 @@ from services.epg.match_rules import EpgMatchRulesService
 
 logger = logging.getLogger(__name__)
 
+
+def _apply_playlist_visibility_filter(
+    account_id: int | None,
+    show_filtered: bool,
+    is_ppv_source: bool,
+) -> bool:
+    """PPV event admin views include all linked channels, not just playlist-visible ones."""
+    return bool(account_id and not show_filtered and not is_ppv_source)
+
+
 # Create blueprints
 epg_channels_bp = Blueprint("epg_channels", __name__, url_prefix="/api/epg")
 account_epg_channels_bp = Blueprint("account_epg_channels", __name__)
@@ -117,6 +127,18 @@ def match_channels_to_epg_with_rules(account_id):
     category_id = request.args.get("category_id", type=int)
     include_filtered = request.args.get("include_filtered", "false").lower() == "true"
 
+    if source_id:
+        source = db.session.get(EpgSource, source_id)
+        if source and source.source_type == "ppv_events":
+            return (
+                jsonify(
+                    {
+                        "error": "PPV Events are mapped automatically during enrichment, not via auto-match.",
+                    }
+                ),
+                400,
+            )
+
     stats = EpgMatchRulesService.match_channels_with_rules(
         account_id,
         source_id=source_id,
@@ -174,6 +196,11 @@ def get_epg_mappings():
     limit = request.args.get("limit", 100, type=int)
     offset = request.args.get("offset", 0, type=int)
 
+    is_ppv_source = False
+    if epg_source_id:
+        epg_source = db.session.get(EpgSource, epg_source_id)
+        is_ppv_source = bool(epg_source and epg_source.source_type == "ppv_events")
+
     if view_mode == "unmapped":
         # Get channels without mappings
         mapped_ids = db.session.query(ChannelEpgMapping.channel_id).distinct()
@@ -186,9 +213,18 @@ def get_epg_mappings():
         if category_id:
             query = query.filter_by(category_id=category_id)
 
+        if is_ppv_source:
+            linked_ids = (
+                db.session.query(EventChannelLink.channel_id)
+                .join(Event, EventChannelLink.event_id == Event.id)
+                .filter(Event.is_ppv == True)  # noqa: E712
+                .distinct()
+            )
+            query = query.filter(~Channel.id.in_(linked_ids))
+
         all_channels = query.order_by(Channel.name).all()
 
-        if not show_filtered and account_id:
+        if _apply_playlist_visibility_filter(account_id, show_filtered, is_ppv_source):
             channels = ChannelQueryService.channels_for_account_candidates(account_id, all_channels)
         else:
             channels = all_channels
@@ -220,12 +256,6 @@ def get_epg_mappings():
             }
         )
     elif view_mode == "mapped":
-        # Check if filtering by a PPV events source
-        is_ppv_source = False
-        if epg_source_id:
-            epg_source = db.session.get(EpgSource, epg_source_id)
-            is_ppv_source = epg_source and epg_source.source_type == "ppv_events"
-
         all_mappings = []
 
         if is_ppv_source:
@@ -289,7 +319,7 @@ def get_epg_mappings():
 
             all_mappings = query.all()
 
-        if not show_filtered and account_id:
+        if _apply_playlist_visibility_filter(account_id, show_filtered, is_ppv_source):
             channels = [m.channel for m in all_mappings if m.channel]
             visible_channels = ChannelQueryService.channels_for_account_candidates(account_id, channels)
             visible_ids = {ch.id for ch in visible_channels}
@@ -334,7 +364,11 @@ def get_epg_mappings():
                         "cleaned_name": m.channel.cleaned_name if m.channel else None,
                         "epg_channel_id": m.epg_channel_id,
                         "epg_display_name": m.epg_channel.display_name if m.epg_channel else None,
-                        "source_name": m.epg_channel.source.name if m.epg_channel and m.epg_channel.source else None,
+                        "source_name": (
+                            m.epg_channel.source.name
+                            if getattr(m.epg_channel, "source", None)
+                            else ("PPV Events" if m.mapping_type == "ppv_event" else None)
+                        ),
                         "mapping_type": m.mapping_type,
                         "confidence": m.confidence,
                         "time_offset_hours": m.time_offset_hours or 0,
@@ -348,12 +382,6 @@ def get_epg_mappings():
         )
     else:
         # view_mode == "all" - return all channels with mapping info if available
-        # Check if filtering by a PPV events source
-        is_ppv_source = False
-        if epg_source_id:
-            epg_source = db.session.get(EpgSource, epg_source_id)
-            is_ppv_source = epg_source and epg_source.source_type == "ppv_events"
-
         query = Channel.query.filter(Channel.is_active == True)  # noqa: E712
 
         if account_id:
@@ -374,7 +402,7 @@ def get_epg_mappings():
 
         all_channels = query.order_by(Channel.name).all()
 
-        if not show_filtered and account_id:
+        if _apply_playlist_visibility_filter(account_id, show_filtered, is_ppv_source):
             channels = ChannelQueryService.channels_for_account_candidates(account_id, all_channels)
         else:
             channels = all_channels

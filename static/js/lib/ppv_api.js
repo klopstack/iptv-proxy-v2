@@ -9,7 +9,13 @@ export const PPV_ENRICHMENT_CONFIG_URL = '/api/ppv-enrichment/config';
 export const PPV_ENRICHMENT_SETTINGS_URL = '/api/ppv-enrichment/settings';
 
 /**
- * @returns {Promise<{ enabled: boolean, has_api_key: boolean, api_key_preview: string|null }>}
+ * @returns {Promise<{
+ *   enabled: boolean,
+ *   has_api_key: boolean,
+ *   api_key_preview: string|null,
+ *   has_site_credentials: boolean,
+ *   site_username_preview: string|null
+ * }>}
  */
 export async function fetchPpvEnrichmentConfig() {
     const response = await fetch(PPV_ENRICHMENT_CONFIG_URL);
@@ -20,17 +26,29 @@ export async function fetchPpvEnrichmentConfig() {
 }
 
 /**
- * @param {{ enabled?: boolean, apiKey?: string|null }} options
+ * @param {{
+ *   enabled?: boolean,
+ *   apiKey?: string|null,
+ *   siteUsername?: string|null,
+ *   sitePassword?: string|null
+ * }} options
  * Pass apiKey only when setting or clearing the key (empty string clears).
+ * Pass siteUsername/sitePassword when setting or clearing site login.
  * @returns {Promise<{ message: string }>}
  */
-export async function savePpvEnrichmentConfig({ enabled, apiKey } = {}) {
+export async function savePpvEnrichmentConfig({ enabled, apiKey, siteUsername, sitePassword } = {}) {
     const body = {};
     if (enabled !== undefined) {
         body.enabled = enabled;
     }
     if (apiKey !== undefined) {
         body.api_key = apiKey;
+    }
+    if (siteUsername !== undefined) {
+        body.site_username = siteUsername;
+    }
+    if (sitePassword !== undefined) {
+        body.site_password = sitePassword;
     }
 
     const response = await fetch(PPV_ENRICHMENT_CONFIG_URL, {

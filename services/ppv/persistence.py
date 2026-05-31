@@ -4,7 +4,7 @@ Persist PPV match results to Event and EventChannelLink tables.
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Optional, Tuple
+from typing import Any, Iterable, Optional, Tuple
 
 from models import Channel, Event, EventChannelLink, db
 from services.ppv.constants import MAX_EVENT_AGE_DAYS, MAX_EVENT_FUTURE_DAYS
@@ -105,7 +105,44 @@ def link_channel_to_event(
         feed_type="primary",
     )
     db.session.add(link)
+    if channel.is_ppv:
+        channel.ppv_enrichment_status = "matched"
+        channel.ppv_enrichment_error = None
     return link
+
+
+def sync_enrichment_status_from_links(channel_ids: Optional[Iterable[int]] = None) -> int:
+    """Set ppv_enrichment_status=matched on PPV channels that have event links."""
+    query = db.session.query(EventChannelLink.channel_id).distinct()
+    if channel_ids is not None:
+        ids = list(channel_ids)
+        if not ids:
+            return 0
+        query = query.filter(EventChannelLink.channel_id.in_(ids))
+
+    linked_ids = [row[0] for row in query.all()]
+    if not linked_ids:
+        return 0
+
+    return Channel.query.filter(
+        Channel.id.in_(linked_ids),
+        Channel.is_ppv.is_(True),
+        Channel.ppv_enrichment_status != "matched",
+    ).update(
+        {
+            Channel.ppv_enrichment_status: "matched",
+            Channel.ppv_enrichment_error: None,
+        },
+        synchronize_session=False,
+    )
+
+
+def clear_event_links_for_channels(channel_ids: Iterable[int]) -> int:
+    """Remove event links when channels are re-queued for enrichment."""
+    ids = list(channel_ids)
+    if not ids:
+        return 0
+    return EventChannelLink.query.filter(EventChannelLink.channel_id.in_(ids)).delete(synchronize_session=False)
 
 
 def persist_match(

@@ -104,6 +104,15 @@ class TestPPVEventExtractor:
         )
         assert result == ("BARAKALDO CF", "UNIONISTAS DE SALAMANCA CF")
 
+    def test_extract_competitors_x_separator_mlb(self):
+        """MLB PPV channels use 'x' between team nicknames."""
+        result = self.extractor.extract_competitors("MLB 11 | Giants x Rockies start:2026-05-31 19:05:00")
+        assert result == ("Giants", "Rockies")
+
+    def test_extract_competitors_x_separator_simple(self):
+        result = self.extractor.extract_competitors("Blue Jays x Twins")
+        assert result == ("Blue Jays", "Twins")
+
     # ========================================================================
     # Multi-word Team Names
     # ========================================================================

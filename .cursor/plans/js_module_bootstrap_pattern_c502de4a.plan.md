@@ -4,19 +4,19 @@ overview: Replace inline `<script type="module">` blocks (and their `eslint-disa
 todos:
   - id: shared-bridge
     content: Add install_epg_sync_progress.js and optional unit test
-    status: pending
+    status: completed
   - id: page-bootstraps
     content: Create static/js/pages/*_bootstrap.js for accounts, ppv, settings, epg_management
-    status: pending
+    status: completed
   - id: templates
     content: Swap inline module blocks for module src; fix defer/DOMContentLoaded init order
-    status: pending
+    status: completed
   - id: eslint
     content: Extend .eslintrc.js + package.json lint to cover static/js/lib and static/js/pages
-    status: pending
+    status: completed
   - id: docs-verify
     content: Add docs/FRONTEND_JS.md; run make lint, npm test, manual smoke on four pages
-    status: pending
+    status: completed
 isProject: false
 ---
 

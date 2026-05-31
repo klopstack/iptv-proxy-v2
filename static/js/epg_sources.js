@@ -73,8 +73,9 @@ function populateSourceSelects() {
             const firstOption = select.options[0].outerHTML;
             select.innerHTML = firstOption;
             sources.forEach(s => {
-                select.innerHTML += `<option value="${s.id}">${s.name} (${s.source_type})</option>`;
+                select.innerHTML += `<option value="${s.id}" data-source-type="${s.source_type}">${s.name} (${s.source_type})</option>`;
             });
+            select.dispatchEvent(new Event('change'));
         }
     });
 }

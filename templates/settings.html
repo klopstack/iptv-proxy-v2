@@ -85,12 +85,32 @@
                             Loading…
                         </div>
                     </div>
+                    <div class="mb-3">
+                        <label for="ppv-thesportsdb-site-username" class="form-label">
+                            <strong>TheSportsDB site username</strong>
+                        </label>
+                        <input type="text" class="form-control" id="ppv-thesportsdb-site-username"
+                               placeholder="Website login (optional)" autocomplete="username">
+                        <div class="form-text" id="ppv-site-login-hint">
+                            Optional. Logged-in calendar pages include more events than the public view.
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ppv-thesportsdb-site-password" class="form-label">
+                            <strong>TheSportsDB site password</strong>
+                        </label>
+                        <input type="password" class="form-control" id="ppv-thesportsdb-site-password"
+                               placeholder="Leave blank to keep existing password" autocomplete="current-password">
+                    </div>
                     <div class="d-flex flex-wrap gap-2">
                         <button type="submit" class="btn btn-success">
                             <i class="bi bi-save"></i> Save PPV Enrichment Settings
                         </button>
                         <button type="button" class="btn btn-outline-secondary" id="ppv-clear-api-key-btn">
                             Clear API key
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="ppv-clear-site-login-btn">
+                            Clear site login
                         </button>
                     </div>
                 </form>
@@ -428,6 +448,8 @@ document.getElementById('proxy-settings-form').addEventListener('submit', async 
 
 async function loadPpvEnrichmentConfig() {
     const hintEl = document.getElementById('ppv-api-key-hint');
+    const siteHintEl = document.getElementById('ppv-site-login-hint');
+    const siteUsernameInput = document.getElementById('ppv-thesportsdb-site-username');
     try {
         const data = await window.PpvApi.fetchPpvEnrichmentConfig();
         document.getElementById('ppv-enrichment-enabled').checked = data.enabled !== false;
@@ -436,6 +458,18 @@ async function loadPpvEnrichmentConfig() {
                 `Current key: ${data.api_key_preview}. Leave the field blank to keep it; enter a new value to replace, or use Clear API key.`;
         } else {
             hintEl.textContent = 'No API key configured. Enter a key and save to enable enrichment.';
+        }
+
+        if (data.has_site_credentials && data.site_username_preview) {
+            siteHintEl.textContent =
+                `Site login configured (${data.site_username_preview}). Enter a new username/password to replace, or use Clear site login.`;
+            if (!siteUsernameInput.value) {
+                siteUsernameInput.placeholder = data.site_username_preview;
+            }
+        } else {
+            siteHintEl.textContent =
+                'Optional. Logged-in calendar pages include more events than the public view.';
+            siteUsernameInput.placeholder = 'Website login (optional)';
         }
     } catch (error) {
         console.error('Error loading PPV enrichment config:', error);
@@ -452,6 +486,10 @@ document.getElementById('ppv-enrichment-config-form').addEventListener('submit',
     const enabled = document.getElementById('ppv-enrichment-enabled').checked;
     const apiKeyInput = document.getElementById('ppv-thesportsdb-api-key');
     const apiKeyRaw = apiKeyInput.value;
+    const siteUsernameInput = document.getElementById('ppv-thesportsdb-site-username');
+    const sitePasswordInput = document.getElementById('ppv-thesportsdb-site-password');
+    const siteUsernameRaw = siteUsernameInput.value.trim();
+    const sitePasswordRaw = sitePasswordInput.value;
 
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Saving...';
@@ -462,9 +500,16 @@ document.getElementById('ppv-enrichment-config-form').addEventListener('submit',
         if (apiKeyRaw.length > 0) {
             payload.apiKey = apiKeyRaw.trim();
         }
+        if (siteUsernameRaw.length > 0) {
+            payload.siteUsername = siteUsernameRaw;
+        }
+        if (sitePasswordRaw.length > 0) {
+            payload.sitePassword = sitePasswordRaw;
+        }
 
         await window.PpvApi.savePpvEnrichmentConfig(payload);
         apiKeyInput.value = '';
+        sitePasswordInput.value = '';
 
         statusEl.className = 'alert alert-success mt-3';
         statusEl.innerHTML = '<i class="bi bi-check-circle"></i> PPV enrichment settings saved.';
@@ -481,6 +526,26 @@ document.getElementById('ppv-enrichment-config-form').addEventListener('submit',
     } finally {
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalText;
+    }
+});
+
+document.getElementById('ppv-clear-site-login-btn').addEventListener('click', async () => {
+    if (!confirm('Remove the stored TheSportsDB site login?')) {
+        return;
+    }
+    const statusEl = document.getElementById('ppv-enrichment-config-status');
+    try {
+        await window.PpvApi.savePpvEnrichmentConfig({ siteUsername: '', sitePassword: '' });
+        document.getElementById('ppv-thesportsdb-site-username').value = '';
+        document.getElementById('ppv-thesportsdb-site-password').value = '';
+        statusEl.className = 'alert alert-success mt-3';
+        statusEl.innerHTML = '<i class="bi bi-check-circle"></i> Site login cleared.';
+        statusEl.style.display = 'block';
+        await loadPpvEnrichmentConfig();
+    } catch (error) {
+        statusEl.className = 'alert alert-danger mt-3';
+        statusEl.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Error: ${error.message}`;
+        statusEl.style.display = 'block';
     }
 });
 
