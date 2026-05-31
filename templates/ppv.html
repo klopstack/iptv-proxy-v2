@@ -241,14 +241,8 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- eslint-disable-next-script -->
-<script type="module">
-import * as AccountApi from "{{ url_for('static', filename='js/lib/account_api.js') }}";
-import * as PpvApi from "{{ url_for('static', filename='js/lib/ppv_api.js') }}";
-window.AccountApi = AccountApi;
-window.PpvApi = PpvApi;
-</script>
-<script>
+<script type="module" src="{{ url_for('static', filename='js/pages/ppv_bootstrap.js') }}"></script>
+<script defer>
 // ============================================================================
 // PPV Enrichment Settings
 // ============================================================================
