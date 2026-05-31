@@ -172,8 +172,21 @@ class TestTheSportsDBCalendarScraper:
         # Add something to cache
         import time
 
-        scraper._cache["2024-06-15:"] = ([], time.time())
+        from services.thesportsdb_calendar_scraper import CalendarEvent
+
+        sample_event = CalendarEvent(
+            event_id="1",
+            event_name="A vs B",
+            league_name="League",
+            time_utc="12:00",
+            date="2024-06-15",
+        )
+        scraper._cache["2024-06-15:"] = ([sample_event], time.time())
         assert scraper._is_cache_valid("2024-06-15:")
+
+        # Empty event lists should not be considered valid
+        scraper._cache["2024-06-16:"] = ([], time.time())
+        assert not scraper._is_cache_valid("2024-06-16:")
 
     def test_parse_teams_from_event_name_vs(self, scraper):
         """Test team extraction with 'vs' separator."""
@@ -442,6 +455,60 @@ class TestCalendarHTMLParsing:
 
         event = scraper._parse_event_row(row, "2024-06-15")
         assert event is None
+
+    def test_parse_event_row_new_four_column_layout(self, scraper):
+        """Test parsing the current 4-column TheSportsDB calendar layout."""
+        from bs4 import BeautifulSoup
+
+        row_html = """
+        <tr>
+            <td>00:00</td>
+            <td>Soccer</td>
+            <td>American USL Championship</td>
+            <td><a href="/event/2478663-buriram-united-vs-prachuap">
+                <img alt="event thumbnail" src="/images/no_thumb.png"/>
+                <span>Buriram United vs Prachuap</span>
+            </a></td>
+        </tr>
+        """
+        soup = BeautifulSoup(row_html, "html.parser")
+        row = soup.find("tr")
+
+        event = scraper._parse_event_row(row, "2026-05-31")
+
+        assert event is not None
+        assert event.event_id == "2478663"
+        assert event.event_name == "Buriram United vs Prachuap"
+        assert event.league_name == "American USL Championship"
+        assert event.time_utc == "00:00"
+        assert event.home_team == "Buriram United"
+        assert event.away_team == "Prachuap"
+
+    def test_parse_calendar_html_new_layout(self, scraper):
+        """Test parsing calendar HTML with the 4-column layout."""
+        html = """
+        <table>
+            <tr>
+                <td></td>
+                <td>Soccer</td>
+                <td>FA Cup</td>
+                <td><a href="/event/1111111-team-a-vs-team-b">Team A vs Team B</a></td>
+            </tr>
+            <tr>
+                <td>14:30</td>
+                <td>Basketball</td>
+                <td>NBA</td>
+                <td><a href="/event/2222222-lakers-vs-celtics">Lakers vs Celtics</a></td>
+            </tr>
+        </table>
+        """
+        events = scraper._parse_calendar_html(html, "2026-05-31")
+
+        assert len(events) == 2
+        assert events[0].event_id == "1111111"
+        assert events[0].time_utc == "00:00"
+        assert events[1].event_id == "2222222"
+        assert events[1].time_utc == "14:30"
 
 
 class TestFindMatchingEvents:

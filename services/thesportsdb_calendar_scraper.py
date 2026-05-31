@@ -208,26 +208,27 @@ class TheSportsDBCalendarScraper:
 
             for cache_key, entry in data.items():
                 timestamp = entry.get("timestamp", 0)
-                # Only load entries that are still valid
-                if (now - timestamp) < self._cache_ttl:
-                    events_data = entry.get("events", [])
-                    events = [
-                        CalendarEvent(
-                            event_id=ev["event_id"],
-                            event_name=ev["event_name"],
-                            league_name=ev["league_name"],
-                            time_utc=ev["time_utc"],
-                            date=ev["date"],
-                            home_team=ev.get("home_team"),
-                            away_team=ev.get("away_team"),
-                            event_url=ev.get("event_url"),
-                            league_icon_url=ev.get("league_icon_url"),
-                            country_flag_url=ev.get("country_flag_url"),
-                        )
-                        for ev in events_data
-                    ]
-                    self._cache[cache_key] = (events, timestamp)
-                    loaded_count += 1
+                events_data = entry.get("events", [])
+                # Skip expired entries and poisoned empty caches (parser failures)
+                if (now - timestamp) >= self._cache_ttl or not events_data:
+                    continue
+                events = [
+                    CalendarEvent(
+                        event_id=ev["event_id"],
+                        event_name=ev["event_name"],
+                        league_name=ev["league_name"],
+                        time_utc=ev["time_utc"],
+                        date=ev["date"],
+                        home_team=ev.get("home_team"),
+                        away_team=ev.get("away_team"),
+                        event_url=ev.get("event_url"),
+                        league_icon_url=ev.get("league_icon_url"),
+                        country_flag_url=ev.get("country_flag_url"),
+                    )
+                    for ev in events_data
+                ]
+                self._cache[cache_key] = (events, timestamp)
+                loaded_count += 1
 
             if loaded_count > 0:
                 self._cache_disk_loads = loaded_count
@@ -249,8 +250,8 @@ class TheSportsDBCalendarScraper:
             now = time.time()
 
             for cache_key, (events, timestamp) in self._cache.items():
-                # Only save entries that are still valid
-                if (now - timestamp) < self._cache_ttl:
+                # Only save non-empty, non-expired entries (never persist parser-failure caches)
+                if events and (now - timestamp) < self._cache_ttl:
                     data[cache_key] = {
                         "timestamp": timestamp,
                         "events": [ev.to_dict() for ev in events],
@@ -276,7 +277,9 @@ class TheSportsDBCalendarScraper:
         """Check if cached data is still valid."""
         if cache_key not in self._cache:
             return False
-        _, timestamp = self._cache[cache_key]
+        events, timestamp = self._cache[cache_key]
+        if not events:
+            return False
         return (time.time() - timestamp) < self._cache_ttl
 
     def get_events_for_date(self, date: str, sport: str = "", force_refresh: bool = False) -> List[CalendarEvent]:
@@ -304,9 +307,12 @@ class TheSportsDBCalendarScraper:
         self._cache_misses += 1
         try:
             events = self._fetch_calendar_page(date, sport)
-            self._cache[cache_key] = (events, time.time())
-            # Save to persistent cache after fetching new data
-            self._save_persistent_cache()
+            if events:
+                self._cache[cache_key] = (events, time.time())
+                self._save_persistent_cache()
+            else:
+                self._cache.pop(cache_key, None)
+                logger.warning(f"No events parsed for {date} (sport={sport or 'all'}) — " "not caching empty result")
             logger.info(f"Fetched {len(events)} events for {date} (sport={sport or 'all'})")
             return events
         except Exception as e:
@@ -343,13 +349,23 @@ class TheSportsDBCalendarScraper:
         """
         Parse calendar HTML to extract events.
 
-        The HTML structure has table rows like:
+        The HTML structure has table rows in one of two layouts:
+
+        Legacy (5+ columns):
         <tr>
             <td>00:00 UTC </td>
             <td width='20'> </td>
             <td><img src='league_icon'/> League Name</td>
             <td width='20'> </td>
             <td><img src='flag'/> <a href='/event/123456-event-slug'/>Event Name</a></td>
+        </tr>
+
+        Current (4 columns, since 2025/2026):
+        <tr>
+            <td>00:00</td>
+            <td>Soccer</td>
+            <td>FA Cup</td>
+            <td><a href='/event/123456-event-slug'><span>Team A vs Team B</span></a></td>
         </tr>
 
         Args:
@@ -376,72 +392,45 @@ class TheSportsDBCalendarScraper:
 
         return events
 
-    def _parse_event_row(self, row, date: str) -> Optional[CalendarEvent]:
-        """
-        Parse a single table row to extract event information.
+    def _parse_time_from_cell(self, time_text: str) -> Optional[str]:
+        """Parse HH:MM from a calendar time cell (with or without UTC suffix)."""
+        cleaned = re.sub(r"\s*UTC\s*", "", time_text.strip(), flags=re.IGNORECASE).strip()
+        if not cleaned:
+            return "00:00"
+        if re.match(r"^\d{1,2}:\d{2}", cleaned):
+            return cleaned
+        return None
 
-        Args:
-            row: BeautifulSoup Tag for the <tr> element
-            date: Date string for the event
-
-        Returns:
-            CalendarEvent or None if row doesn't contain a valid event
-        """
-        cells = row.find_all("td")
-        if len(cells) < 5:
-            return None
-
-        # Cell 0: Time (e.g., "00:00 UTC")
-        time_cell = cells[0]
-        time_text = time_cell.get_text(strip=True)
-        if "UTC" not in time_text:
-            return None
-
-        # Clean time text (remove arrow image indicator for "On Now" events)
-        time_utc = time_text.replace("UTC", "").strip()
-        # Handle times with leading zeros and spaces
-        time_utc = re.sub(r"^\s*", "", time_utc)
-
-        # If time is empty after cleaning, log a warning with more context
-        if not time_utc:
-            logger.debug(f"Empty time after parsing for row. Raw time_text: '{time_text}', " f"Cell HTML: {time_cell}")
-            # Skip this event if we can't determine the time
-            return None
-
-        # Cell 2: League info (icon + name)
-        league_cell = cells[2]
+    def _extract_event_from_cells(
+        self,
+        league_cell,
+        event_cell,
+        time_utc: str,
+        date: str,
+    ) -> Optional[CalendarEvent]:
+        """Build a CalendarEvent from league and event table cells."""
         league_img = league_cell.find("img")
         league_icon_url = league_img.get("src") if league_img else None
         league_name = league_cell.get_text(strip=True)
 
-        # Cell 4: Event info (flag + link to event)
-        event_cell = cells[4]
         flag_img = event_cell.find("img")
         country_flag_url = flag_img.get("src") if flag_img else None
 
-        # Find the event link - it contains the event ID
-        event_link = event_cell.find("a")
+        event_link = event_cell.find("a", href=re.compile(r"/event/\d+"))
         if not event_link:
             return None
 
         event_href = event_link.get("href", "")
-
-        # The event name might be inside the link OR as text after the link
-        # Try link text first, then fall back to full cell text
         event_name = event_link.get_text(strip=True)
         if not event_name:
-            # Event name is outside the link - get full cell text and strip img text
             event_name = event_cell.get_text(strip=True)
 
-        # Extract event ID from href like "/event/2376181-fresno-state-vs-nevada"
         event_id_match = re.search(r"/event/(\d+)", event_href)
         if not event_id_match:
             return None
 
         event_id = event_id_match.group(1)
         event_url = urljoin("https://www.thesportsdb.com", event_href)
-
-        # Try to extract team names from event name
         home_team, away_team = self._parse_teams_from_event_name(event_name)
 
         return CalendarEvent(
@@ -456,6 +445,41 @@ class TheSportsDBCalendarScraper:
             league_icon_url=league_icon_url,
             country_flag_url=country_flag_url,
         )
+
+    def _parse_event_row(self, row, date: str) -> Optional[CalendarEvent]:
+        """
+        Parse a single table row to extract event information.
+
+        Supports legacy 5-column and current 4-column TheSportsDB layouts.
+
+        Args:
+            row: BeautifulSoup Tag for the <tr> element
+            date: Date string for the event
+
+        Returns:
+            CalendarEvent or None if row doesn't contain a valid event
+        """
+        cells = row.find_all("td")
+        if len(cells) < 4:
+            return None
+
+        # Legacy layout: time | spacer | league | spacer | event
+        if len(cells) >= 5 and "UTC" in cells[0].get_text():
+            time_utc = self._parse_time_from_cell(cells[0].get_text(strip=True))
+            if not time_utc:
+                return None
+            return self._extract_event_from_cells(cells[2], cells[4], time_utc, date)
+
+        # Current layout: time | sport | league | event
+        time_utc = self._parse_time_from_cell(cells[0].get_text(strip=True))
+        if not time_utc:
+            return None
+
+        event_cell = cells[3]
+        if not event_cell.find("a", href=re.compile(r"/event/\d+")):
+            return None
+
+        return self._extract_event_from_cells(cells[2], event_cell, time_utc, date)
 
     def _parse_teams_from_event_name(self, event_name: str) -> Tuple[Optional[str], Optional[str]]:
         """

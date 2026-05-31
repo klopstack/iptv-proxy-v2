@@ -45,8 +45,16 @@ def create_or_update_event(calendar_event: CalendarEvent) -> Optional[Event]:
         ).first()
 
         if event:
-            if not event.scheduled_at and calendar_event.scheduled_at:
+            if calendar_event.scheduled_at:
                 event.scheduled_at = calendar_event.scheduled_at
+            if calendar_event.home_team:
+                event.home_team_name = calendar_event.home_team
+            if calendar_event.away_team:
+                event.away_team_name = calendar_event.away_team
+            if calendar_event.event_name:
+                event.title = calendar_event.event_name
+            if calendar_event.league_name:
+                event.league_name = calendar_event.league_name
             return event
 
         event = Event(
