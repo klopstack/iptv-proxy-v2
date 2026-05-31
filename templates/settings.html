@@ -354,22 +354,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- eslint-disable-next-script -->
-<script type="module">
-import * as EpgProgress from "{{ url_for('static', filename='js/lib/epg_sync_progress.js') }}";
-import { createEpgSyncPoller } from "{{ url_for('static', filename='js/lib/epg_sync_progress_poll.js') }}";
-import * as PpvApi from "{{ url_for('static', filename='js/lib/ppv_api.js') }}";
-
-const epgSyncPoller = createEpgSyncPoller();
-window.EpgSyncProgress = {
-    ...EpgProgress,
-    poller: epgSyncPoller,
-    renderTable(container, sources, formatRelativeTime) {
-        EpgProgress.renderEpgSourcesProgressTable(container, sources, formatRelativeTime);
-    },
-};
-window.PpvApi = PpvApi;
-</script>
+<script type="module" src="{{ url_for('static', filename='js/pages/settings_bootstrap.js') }}"></script>
 <script>
 let currentStatus = null;
 
@@ -1030,13 +1015,14 @@ document.getElementById('clear-all-images-btn').addEventListener('click', async 
     }
 });
 
-// Load status on page load
-loadProxySettings();
-loadPpvEnrichmentConfig();
-loadSchedulerStatus();
-startEpgProgressPolling();
-loadImageCacheStats();
-loadImageCacheEntries();
+document.addEventListener('DOMContentLoaded', () => {
+    loadProxySettings();
+    loadPpvEnrichmentConfig();
+    loadSchedulerStatus();
+    startEpgProgressPolling();
+    loadImageCacheStats();
+    loadImageCacheEntries();
+});
 
 // Tag Processing
 document.getElementById('process-all-tags-btn').addEventListener('click', async function() {

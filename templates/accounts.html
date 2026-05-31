@@ -203,11 +203,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- eslint-disable-next-script -->
-<script type="module">
-import * as AccountApi from "{{ url_for('static', filename='js/lib/account_api.js') }}";
-window.AccountApi = AccountApi;
-</script>
+<script type="module" src="{{ url_for('static', filename='js/pages/accounts_bootstrap.js') }}"></script>
 <script>
 let accounts = [];
 let currentCredentialsAccountId = null;
@@ -393,6 +389,8 @@ function getRelativeTime(date) {
 
 // Setup event listeners when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
+    loadAccounts();
+
     // Password toggle
     const togglePassword = document.getElementById('togglePassword');
     const passwordField = document.getElementById('accountPassword');
@@ -970,7 +968,5 @@ function addCategoryFilter(accountId, categoryName) {
     });
     window.location.href = `/filters?${params.toString()}`;
 }
-
-loadAccounts();
 </script>
 {% endblock %}

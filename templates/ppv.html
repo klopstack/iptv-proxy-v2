@@ -242,7 +242,7 @@
 
 {% block extra_js %}
 <script type="module" src="{{ url_for('static', filename='js/pages/ppv_bootstrap.js') }}"></script>
-<script defer>
+<script>
 // ============================================================================
 // PPV Enrichment Settings
 // ============================================================================
@@ -540,23 +540,23 @@ document.getElementById('queue-all-ppv-btn').addEventListener('click', async fun
 });
 
 // ============================================================================
-// Page Load
+// Page Load (after module bootstrap assigns window.PpvApi / window.AccountApi)
 // ============================================================================
 
-loadEnrichmentSettings();
-loadAccountsVisibility();
-loadQueueStatus();
-loadQueueStats();
-
-// Refresh status every 30 seconds
-setInterval(() => {
+document.addEventListener('DOMContentLoaded', () => {
+    loadEnrichmentSettings();
+    loadAccountsVisibility();
     loadQueueStatus();
     loadQueueStats();
-}, 30000);
 
-// Refresh enrichment settings every 60 seconds
-setInterval(() => {
-    loadEnrichmentSettings();
-}, 60000);
+    setInterval(() => {
+        loadQueueStatus();
+        loadQueueStats();
+    }, 30000);
+
+    setInterval(() => {
+        loadEnrichmentSettings();
+    }, 60000);
+});
 </script>
 {% endblock %}
