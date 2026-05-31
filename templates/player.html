@@ -162,11 +162,63 @@
 let player = null;
 let statsInterval = null;
 let showStats = false;
+let playerSuppressErrors = false;
 const metadataEl = document.getElementById("playerMetadata");
 const accountId = metadataEl.dataset.accountId;
 const streamId = metadataEl.dataset.streamId;
 // mpegts.js requires absolute URLs for worker threads
 const streamUrl = `${window.location.protocol}//${window.location.host}/stream/${accountId}/${streamId}.ts`;
+
+function onPlayerLoadedMetadata() {
+    const videoElement = document.getElementById("videoPlayer");
+    console.log("Video metadata loaded");
+    document.getElementById("loadingMessage").style.display = "none";
+    videoElement.style.display = "block";
+
+    videoElement.play().catch(err => {
+        console.warn("Play on loadedmetadata prevented:", err);
+    });
+}
+
+function onPlayerVideoError(e) {
+    if (playerSuppressErrors) return;
+    console.error("Video element error:", e);
+    showError("Video playback error. The stream may be offline or incompatible.");
+}
+
+function attachPlayerVideoHandlers(videoElement) {
+    detachPlayerVideoHandlers(videoElement);
+    videoElement.addEventListener('loadedmetadata', onPlayerLoadedMetadata);
+    videoElement.addEventListener('error', onPlayerVideoError);
+}
+
+function detachPlayerVideoHandlers(videoElement) {
+    if (!videoElement) return;
+    videoElement.removeEventListener('loadedmetadata', onPlayerLoadedMetadata);
+    videoElement.removeEventListener('error', onPlayerVideoError);
+}
+
+function destroyPlayer() {
+    playerSuppressErrors = true;
+
+    if (player) {
+        player.pause();
+        player.unload();
+        player.detachMediaElement();
+        player.destroy();
+        player = null;
+    }
+
+    const videoElement = document.getElementById("videoPlayer");
+    detachPlayerVideoHandlers(videoElement);
+    if (videoElement) {
+        videoElement.pause();
+        videoElement.removeAttribute('src');
+        videoElement.load();
+    }
+
+    playerSuppressErrors = false;
+}
 
 function initPlayer() {
     console.log("Initializing mpegts.js player for:", streamUrl);
@@ -178,9 +230,7 @@ function initPlayer() {
     
     const videoElement = document.getElementById("videoPlayer");
     
-    if (player) {
-        player.destroy();
-    }
+    destroyPlayer();
     
     player = mpegts.createPlayer({
         type: 'mpegts',
@@ -220,6 +270,7 @@ function initPlayer() {
     player.attachMediaElement(videoElement);
     
     player.on(mpegts.Events.ERROR, (errType, errDetail) => {
+        if (playerSuppressErrors) return;
         console.error("Player error:", errType, errDetail);
         
         let errorMsg = "An error occurred while playing the stream. ";
@@ -244,21 +295,7 @@ function initPlayer() {
         updateTechDetails(mediaInfo);
     });
     
-    videoElement.addEventListener('loadedmetadata', () => {
-        console.log("Video metadata loaded");
-        document.getElementById("loadingMessage").style.display = "none";
-        videoElement.style.display = "block";
-        
-        // Ensure playback starts (browsers require muted autoplay)
-        videoElement.play().catch(err => {
-            console.warn("Play on loadedmetadata prevented:", err);
-        });
-    });
-    
-    videoElement.addEventListener('error', (e) => {
-        console.error("Video element error:", e);
-        showError("Video playback error. The stream may be offline or incompatible.");
-    });
+    attachPlayerVideoHandlers(videoElement);
     
     try {
         player.load();
@@ -292,7 +329,10 @@ function retryStream() {
     
     if (statsInterval) {
         clearInterval(statsInterval);
+        statsInterval = null;
     }
+
+    destroyPlayer();
     
     setTimeout(initPlayer, 500);
 }
@@ -370,9 +410,7 @@ function formatDuration(seconds) {
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {
-    if (player) {
-        player.destroy();
-    }
+    destroyPlayer();
     if (statsInterval) {
         clearInterval(statsInterval);
     }

@@ -9,6 +9,54 @@ let currentSearchMode = 'channel'; // 'channel' or 'program'
 let currentOnlyFilter = false;
 let channelPreviewActive = false;
 let channelPreviewPlayer = null;
+let channelPreviewSuppressErrors = false;
+
+function onChannelPreviewLoadedMetadata() {
+    const video = document.getElementById('channelPreviewVideo');
+    if (!video) return;
+    video.play().catch(err => {
+        console.warn('Play prevented:', err);
+    });
+}
+
+function onChannelPreviewVideoError(e) {
+    if (channelPreviewSuppressErrors) return;
+    console.error('Video element error:', e);
+    const errorDiv = document.getElementById('channelPreviewError');
+    const errorMsg = document.getElementById('channelPreviewErrorMessage');
+    if (errorMsg) errorMsg.textContent = 'Video playback error. The stream may be offline.';
+    if (errorDiv) errorDiv.style.display = 'block';
+}
+
+function attachChannelPreviewVideoHandlers(video) {
+    detachChannelPreviewVideoHandlers(video);
+    video.addEventListener('loadedmetadata', onChannelPreviewLoadedMetadata);
+    video.addEventListener('error', onChannelPreviewVideoError);
+}
+
+function detachChannelPreviewVideoHandlers(video) {
+    if (!video) return;
+    video.removeEventListener('loadedmetadata', onChannelPreviewLoadedMetadata);
+    video.removeEventListener('error', onChannelPreviewVideoError);
+}
+
+function hideChannelPreviewError() {
+    const errorDiv = document.getElementById('channelPreviewError');
+    if (errorDiv) errorDiv.style.display = 'none';
+}
+
+function resetChannelPreviewUI() {
+    hideChannelPreviewError();
+    const placeholder = document.getElementById('channelPreviewPlaceholder');
+    const video = document.getElementById('channelPreviewVideo');
+    const btn = document.getElementById('toggleChannelPreviewBtn');
+    if (placeholder) placeholder.style.display = 'flex';
+    if (video) video.style.display = 'none';
+    if (btn) {
+        btn.innerHTML = '<i class="bi bi-play-fill"></i> Start Preview';
+        btn.disabled = false;
+    }
+}
 
 const EPG_CHANNELS_PER_PAGE = 20;
 
@@ -60,9 +108,7 @@ function showManualMappingModal(channelId, channelName, accountId, streamId, exi
     
     // Reset preview
     stopChannelPreview();
-    document.getElementById('channelPreviewPlaceholder').style.display = 'flex';
-    document.getElementById('channelPreviewVideo').style.display = 'none';
-    document.getElementById('toggleChannelPreviewBtn').innerHTML = '<i class="bi bi-play-fill"></i> Start Preview';
+    resetChannelPreviewUI();
     
     // Handle edit mode vs create mode
     const modalTitle = document.getElementById('manualMappingModalTitle');
@@ -520,7 +566,13 @@ function formatProgramTime(startTime, stopTime) {
     }
 }
 
+let epgChannelScrollInitialized = false;
+
 function setupEpgChannelScroll() {
+    if (epgChannelScrollInitialized) {
+        return;
+    }
+
     const container = document.getElementById('epgChannelListContainer');
     if (container) {
         container.addEventListener('scroll', () => {
@@ -529,6 +581,7 @@ function setupEpgChannelScroll() {
                 searchEpgChannels(false);
             }
         });
+        epgChannelScrollInitialized = true;
     }
 }
 
@@ -592,13 +645,14 @@ async function toggleChannelPreview() {
             
             // Error handling
             channelPreviewPlayer.on(mpegts.Events.ERROR, (errType, errDetail) => {
+                if (channelPreviewSuppressErrors) return;
                 console.error('mpegts.js error:', errType, errDetail);
                 const errorDiv = document.getElementById('channelPreviewError');
                 const errorMsg = document.getElementById('channelPreviewErrorMessage');
-                errorMsg.textContent = `Playback error: ${errDetail}`;
-                errorDiv.style.display = 'block';
+                if (errorMsg) errorMsg.textContent = `Playback error: ${errDetail}`;
+                if (errorDiv) errorDiv.style.display = 'block';
                 setTimeout(() => {
-                    errorDiv.style.display = 'none';
+                    hideChannelPreviewError();
                 }, 5000);
             });
             
@@ -612,21 +666,8 @@ async function toggleChannelPreview() {
                 console.log('Media info:', mediaInfo);
             });
             
-            // Handle video element events
-            video.addEventListener('loadedmetadata', () => {
-                console.log('Video metadata loaded');
-                video.play().catch(err => {
-                    console.warn('Play prevented:', err);
-                });
-            });
-            
-            video.addEventListener('error', (e) => {
-                console.error('Video element error:', e);
-                const errorDiv = document.getElementById('channelPreviewError');
-                const errorMsg = document.getElementById('channelPreviewErrorMessage');
-                errorMsg.textContent = 'Video playback error. The stream may be offline.';
-                errorDiv.style.display = 'block';
-            });
+            attachChannelPreviewVideoHandlers(video);
+            hideChannelPreviewError();
             
             // Load and start playback
             channelPreviewPlayer.load();
@@ -651,7 +692,9 @@ async function toggleChannelPreview() {
 
 function stopChannelPreview() {
     const video = document.getElementById('channelPreviewVideo');
-    
+
+    channelPreviewSuppressErrors = true;
+
     if (channelPreviewPlayer) {
         channelPreviewPlayer.pause();
         channelPreviewPlayer.unload();
@@ -659,14 +702,18 @@ function stopChannelPreview() {
         channelPreviewPlayer.destroy();
         channelPreviewPlayer = null;
     }
-    
+
+    detachChannelPreviewVideoHandlers(video);
+
     if (video) {
         video.pause();
-        video.src = '';
+        video.removeAttribute('src');
         video.load();
     }
-    
+
+    hideChannelPreviewError();
     channelPreviewActive = false;
+    channelPreviewSuppressErrors = false;
 }
 
 async function saveManualMapping() {
@@ -791,6 +838,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const previewBtn = document.getElementById('toggleChannelPreviewBtn');
     if (previewBtn) {
         previewBtn.addEventListener('click', toggleChannelPreview);
+    }
+
+    const previewPlaceholder = document.getElementById('channelPreviewPlaceholder');
+    if (previewPlaceholder) {
+        previewPlaceholder.addEventListener('click', () => {
+            if (!channelPreviewActive) {
+                toggleChannelPreview();
+            }
+        });
     }
     
     // Clean up preview when modal closes

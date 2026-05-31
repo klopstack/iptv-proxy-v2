@@ -12,6 +12,7 @@ let previewState = {
     selectedChannelId: null,
     loading: false
 };
+let previewTabInitialized = false;
 
 /**
  * Load EPG sources into the source dropdown
@@ -352,6 +353,11 @@ function formatDuration(start, stop) {
  */
 async function initializePreviewTab() {
     await loadPreviewSources();
+
+    if (previewTabInitialized) {
+        return;
+    }
+    previewTabInitialized = true;
     
     // Source selection change handler
     const sourceSelect = document.getElementById('preview-source-select');
