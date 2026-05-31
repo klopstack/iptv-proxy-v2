@@ -110,6 +110,38 @@ class TestAccountTestConnection:
         assert len(response.json["credentials"]) >= 1
 
 
+class TestAccountPpvVisibility:
+    """Tests for per-account PPV visibility settings."""
+
+    def test_update_ppv_visibility(self, app, client, test_account):
+        response = client.put(
+            f"/api/accounts/{test_account}/ppv-visibility",
+            json={"ppv_visibility": "show_all"},
+        )
+        assert response.status_code == 200
+        assert response.json["ppv_visibility"] == "show_all"
+
+        with app.app_context():
+            account = db.session.get(Account, test_account)
+            assert account.ppv_visibility == "show_all"
+
+    def test_update_ppv_visibility_invalid_mode(self, app, client, test_account):
+        response = client.put(
+            f"/api/accounts/{test_account}/ppv-visibility",
+            json={"ppv_visibility": "invalid_mode"},
+        )
+        assert response.status_code == 400
+        assert "error" in response.json
+
+    def test_general_account_put_ignores_ppv_visibility_field(self, app, client, test_account):
+        """PPV visibility must use the dedicated endpoint, not the account update schema."""
+        response = client.put(
+            f"/api/accounts/{test_account}",
+            json={"ppv_visibility": "show_all"},
+        )
+        assert response.status_code == 400
+
+
 # ============================================================================
 # Preview Filter Matches Tests
 # ============================================================================

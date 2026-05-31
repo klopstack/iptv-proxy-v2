@@ -258,7 +258,7 @@ class TestMediaflowPassthrough:
     """Tests for MediaFlow HLS passthrough route"""
 
     def test_rejects_non_proxy_paths(self, app, client):
-        response = client.get("/mediaflow/other/path")
+        response = client.get("/stream/mediaflow/other/path")
         assert response.status_code == 404
 
     def test_rewrites_nested_manifest(self, app, client, monkeypatch):
@@ -277,11 +277,29 @@ class TestMediaflowPassthrough:
         )
 
         with patch("routes.streams.requests.request", return_value=mock_response):
-            response = client.get("/mediaflow/proxy/hls/manifest.m3u8?d=test")
+            response = client.get("/stream/mediaflow/proxy/hls/manifest.m3u8?d=test")
 
         assert response.status_code == 200
-        assert b"/mediaflow/proxy/stream" in response.data
+        assert b"/stream/mediaflow/proxy/stream" in response.data
         assert b"localhost:8888" not in response.data
+
+    def test_passthrough_accepts_encrypted_token_paths(self, app, client, monkeypatch):
+        manifest = "#EXTM3U\n#EXTINF:10.0,\nhttp://localhost:8888/proxy/stream?d=seg.ts\n"
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/vnd.apple.mpegurl"}
+        mock_response.content = manifest.encode("utf-8")
+        mock_response.close = Mock()
+
+        monkeypatch.setattr("routes.streams.MEDIAFLOW_PROXY_URL", "http://localhost:8888")
+
+        with patch("routes.streams.requests.request", return_value=mock_response) as mock_request:
+            response = client.get("/stream/mediaflow/_token_encrypted/proxy/hls/manifest.m3u8?d=test")
+
+        assert response.status_code == 200
+        mock_request.assert_called_once()
+        called_url = mock_request.call_args.kwargs.get("url") or mock_request.call_args[1].get("url")
+        assert called_url == "http://localhost:8888/_token_encrypted/proxy/hls/manifest.m3u8?d=test"
 
 
 class TestProxyStream:
@@ -304,8 +322,34 @@ class TestProxyStream:
         response_m3u8 = client.get(f"/stream/{test_account}/test_stream.m3u8")
 
         # Both should reach the handler (responses may vary based on service availability)
-        assert response_ts.status_code in [200, 502, 503]
-        assert response_m3u8.status_code in [200, 502, 503]
+        assert response_ts.status_code in [200, 302, 502, 503]
+        assert response_m3u8.status_code in [200, 302, 502, 503]
+
+    def test_proxy_stream_m3u8_serves_buffered_mediaflow_manifest(self, app, client, test_account, monkeypatch):
+        """MediaFlow backend should return a buffered m3u8 manifest (not redirect)."""
+        monkeypatch.setattr("routes.streams.get_stream_backend_name", lambda: "mediaflow")
+
+        manifest = (
+            "#EXTM3U\n#EXTINF:10.0,\n"
+            "http://localhost:8888/proxy/hls/segment.ts?d=https%3A%2F%2Fprovider.example%2Fseg.ts\n"
+        )
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.content = manifest.encode("utf-8")
+
+        with patch("routes.streams.ConnectionManager.get_available_credential") as mock_cred:
+            mock_cred.return_value = type(
+                "Cred",
+                (),
+                {"id": 1, "username": "user", "password": "pass"},
+            )()
+            with patch("routes.streams.requests.get", return_value=mock_response):
+                response = client.get(f"/stream/{test_account}/430295.m3u8")
+
+        assert response.status_code == 200
+        assert response.headers.get("Content-Length") is not None
+        assert response.content_type == "application/vnd.apple.mpegurl"
+        assert b"/stream/mediaflow/" in response.data or b"iptv" in response.data
 
 
 # ============================================================================

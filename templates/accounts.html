@@ -203,6 +203,11 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- eslint-disable-next-script -->
+<script type="module">
+import * as AccountApi from "{{ url_for('static', filename='js/lib/account_api.js') }}";
+window.AccountApi = AccountApi;
+</script>
 <script>
 let accounts = [];
 let currentCredentialsAccountId = null;
@@ -363,7 +368,7 @@ function setXmltvEpgModalState(account) {
 }
 
 async function updateAccountXmltvEpgSource(accountId, { sync = false } = {}) {
-    const url = `/api/accounts/${accountId}/xmltv-epg-source${sync ? '?sync=true' : ''}`;
+    const url = window.AccountApi.accountXmltvEpgSourceUrl(accountId, { sync });
     const response = await fetch(url, { method: 'POST' });
     const result = await response.json();
     if (!response.ok) {
@@ -481,11 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     // Also update PPV visibility
                     const ppvVisibility = document.getElementById('accountPpvVisibility').value;
-                    await fetch(`/api/accounts/${accountId}/ppv-visibility`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ppv_visibility: ppvVisibility })
-                    });
+                    await window.AccountApi.updateAccountPpvVisibility(accountId, ppvVisibility);
                     
                     modal.hide();
                     await loadAccounts();
@@ -788,9 +789,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             try {
-                const url = credId 
-                    ? `/api/accounts/${accountId}/credentials/${credId}` 
-                    : `/api/accounts/${accountId}/credentials`;
+                const url = window.AccountApi.accountCredentialsUrl(accountId, credId || null);
                 const method = credId ? 'PUT' : 'POST';
                 
                 const response = await fetch(url, {
@@ -830,7 +829,7 @@ async function showCredentialsModal(accountId, accountName) {
 
 async function loadCredentials(accountId) {
     try {
-        const response = await fetch(`/api/accounts/${accountId}/credentials`);
+        const response = await fetch(window.AccountApi.accountCredentialsUrl(accountId));
         const credentials = await response.json();
         
         let html = '';
@@ -949,7 +948,7 @@ async function deleteCredential(accountId, credId) {
     if (!confirm('Are you sure you want to delete this credential?')) return;
     
     try {
-        const response = await fetch(`/api/accounts/${accountId}/credentials/${credId}`, { method: 'DELETE' });
+        const response = await fetch(window.AccountApi.accountCredentialsUrl(accountId, credId), { method: 'DELETE' });
         
         if (response.ok) {
             await loadCredentials(accountId);

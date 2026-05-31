@@ -105,7 +105,7 @@ def get_ppv_enrichment_config():
 def update_ppv_enrichment_config():
     """Update PPV enrichment configuration."""
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True)
         if not data:
             return jsonify({"error": "Request body required"}), 400
 
@@ -113,10 +113,9 @@ def update_ppv_enrichment_config():
             Settings.set("ppv_enrichment_enabled", "true" if data["enabled"] else "false")
 
         if "api_key" in data:
-            # Only update if the new key is not None
-            api_key = data.get("api_key", "").strip()
-            if api_key or data["api_key"] is None:  # Allow clearing the key
-                Settings.set("ppv_thesportsdb_api_key", api_key)
+            raw = data.get("api_key")
+            api_key = "" if raw is None else str(raw).strip()
+            Settings.set("ppv_thesportsdb_api_key", api_key)
 
         return jsonify({"message": "PPV enrichment configuration updated successfully"})
     except Exception as e:

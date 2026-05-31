@@ -169,7 +169,7 @@ class QualityService:
                 )
 
                 # Log duplicate collapse decision
-                logger.info(
+                logger.debug(
                     f"Collapsing {len(group)} duplicates for '{key}': "
                     f"keeping stream_id={best.get('stream_id')} "
                     f"(quality_score={QualityService.get_quality_score_with_health(best.get(tags_field, []), best.get('health_status'))})"

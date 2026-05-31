@@ -300,7 +300,7 @@ class MediaFlowStreamService:
 
         This makes an HTTP request to MediaFlow Proxy and streams the response.
         For HLS manifests, URLs are rewritten so external clients can fetch segments
-        through this proxy's /mediaflow/ passthrough route.
+        through this proxy's /stream/mediaflow/ passthrough route.
         """
         url = stream.proxy_url or stream.upstream_url
 

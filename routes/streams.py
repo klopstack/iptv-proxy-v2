@@ -15,6 +15,7 @@ Stream backends (configured via STREAM_BACKEND env var):
 
 import logging
 from typing import Any, Dict, Generator, Tuple, Union
+from urllib.parse import urlencode
 
 import requests
 from flask import Blueprint, Response, abort, current_app, render_template, request, stream_with_context
@@ -23,8 +24,8 @@ from werkzeug.exceptions import HTTPException
 from models import Account, db
 from services.connection_manager import ConnectionManager
 from services.hls_manifest_service import rewrite_hls_manifest
-from services.mediaflow_stream_service import MEDIAFLOW_PROXY_URL
-from services.stream_service_factory import get_stream_service
+from services.mediaflow_stream_service import MEDIAFLOW_API_PASSWORD, MEDIAFLOW_PROXY_URL
+from services.stream_service_factory import get_stream_backend_name, get_stream_service
 from services.url_service import get_proxy_base_url
 
 logger = logging.getLogger(__name__)
@@ -43,15 +44,91 @@ UPSTREAM_CONNECT_TIMEOUT = 60
 UPSTREAM_READ_TIMEOUT = 120
 
 
+def _serve_m3u8_mediaflow_manifest(
+    account: Account,
+    account_id: int,
+    stream_id: str,
+    client_ip: str | None,
+) -> Response:
+    """
+    Fetch and return a buffered HLS manifest for MediaFlow-backed m3u8 streams.
+
+    IPTVNator/hls.js does not follow redirects for manifest URLs, so we must
+    return 200 with a complete playlist body (Content-Length set). Each poll
+    of /stream/.../....m3u8 returns a fresh live manifest snapshot.
+    """
+    credential = ConnectionManager.get_available_credential(account_id)
+    if not credential:
+        logger.warning(f"m3u8 manifest failed: no available credentials for account {account_id}")
+        abort(503, description="No available connections. All streams are in use.")
+
+    upstream_url = f"https://{account.server}/live/{credential.username}/{credential.password}/{stream_id}.m3u8"
+    user_agent = account.user_agent or "okhttp/3.14.9"
+    params = {
+        "d": upstream_url,
+        "h_user-agent": user_agent,
+        "force_playlist_proxy": "true",
+    }
+    if MEDIAFLOW_API_PASSWORD:
+        params["api_password"] = MEDIAFLOW_API_PASSWORD
+
+    target_url = f"{MEDIAFLOW_PROXY_URL.rstrip('/')}/proxy/hls/manifest.m3u8?{urlencode(params)}"
+    logger.info(
+        f"Serving m3u8 manifest for stream {stream_id} account {account_id} " f"via MediaFlow (client={client_ip})"
+    )
+
+    try:
+        upstream = requests.get(
+            target_url,
+            headers={"User-Agent": user_agent, "Accept": "*/*"},
+            timeout=(UPSTREAM_CONNECT_TIMEOUT, UPSTREAM_READ_TIMEOUT),
+        )
+    except requests.exceptions.Timeout:
+        abort(504, description="MediaFlow proxy timeout")
+    except requests.exceptions.ConnectionError:
+        abort(502, description="MediaFlow proxy unavailable")
+
+    if upstream.status_code >= 400:
+        abort(upstream.status_code, description=f"MediaFlow proxy returned {upstream.status_code}")
+
+    try:
+        manifest_text = rewrite_hls_manifest(
+            upstream.content.decode("utf-8"),
+            MEDIAFLOW_PROXY_URL,
+            get_proxy_base_url(),
+        )
+        manifest_bytes = manifest_text.encode("utf-8")
+    except Exception as e:
+        logger.warning(f"Failed to rewrite HLS manifest: {e}")
+        manifest_bytes = upstream.content
+
+    return Response(
+        manifest_bytes,
+        content_type="application/vnd.apple.mpegurl",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "Content-Length": str(len(manifest_bytes)),
+        },
+    )
+
+
+@streams_bp.route("/stream/mediaflow/<path:subpath>", methods=["GET", "HEAD"])
 @streams_bp.route("/mediaflow/<path:subpath>", methods=["GET", "HEAD"])
 def mediaflow_passthrough(subpath: str):
+    return _mediaflow_passthrough(subpath)
+
+
+def _mediaflow_passthrough(subpath: str):
     """
     Passthrough proxy for MediaFlow HLS segments and nested playlists.
 
     External clients cannot reach MediaFlow Proxy directly (localhost / Docker
     internal hostnames). Manifest URLs are rewritten to point here instead.
     """
-    if not subpath.startswith("proxy/"):
+    # Accept proxy/... and encrypted /_token_.../proxy/... paths from MediaFlow
+    if not subpath.startswith("proxy/") and "/proxy/" not in subpath:
         abort(404, description="Invalid MediaFlow proxy path")
 
     target_url = f"{MEDIAFLOW_PROXY_URL.rstrip('/')}/{subpath}"
@@ -214,6 +291,9 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
         abort(403, description="Account is disabled")
 
     logger.debug(f"Account {account_id}: server={account.server}, user_agent={account.user_agent}")
+
+    if format == "m3u8" and get_stream_backend_name() == "mediaflow":
+        return _serve_m3u8_mediaflow_manifest(account, account_id, stream_id, client_ip)
 
     # Get stream service (ffmpeg or multiplexer based on STREAM_BACKEND env var)
     stream_service = get_stream_service(app=current_app._get_current_object())  # type: ignore[attr-defined]

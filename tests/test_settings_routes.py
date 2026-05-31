@@ -135,3 +135,46 @@ class TestSettingsRoutes:
 
         # Verify deletion
         assert Settings.query.filter_by(key="cycle_key").first() is None
+
+
+class TestPpvEnrichmentConfigRoutes:
+    """Tests for /api/ppv-enrichment/config (editable PPV settings)."""
+
+    def test_get_ppv_enrichment_config_defaults(self, client):
+        response = client.get("/api/ppv-enrichment/config")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["enabled"] is True
+        assert data["has_api_key"] is False
+        assert data["api_key_preview"] is None
+
+    def test_update_ppv_enrichment_config(self, client):
+        response = client.put(
+            "/api/ppv-enrichment/config",
+            json={"enabled": False, "api_key": "secret12345"},
+        )
+        assert response.status_code == 200
+        assert "message" in response.get_json()
+
+        get_response = client.get("/api/ppv-enrichment/config")
+        data = get_response.get_json()
+        assert data["enabled"] is False
+        assert data["has_api_key"] is True
+        assert data["api_key_preview"].startswith("secr")
+
+    def test_clear_ppv_enrichment_api_key(self, client):
+        Settings.set("ppv_thesportsdb_api_key", "oldkey")
+        db.session.commit()
+
+        response = client.put(
+            "/api/ppv-enrichment/config",
+            json={"api_key": ""},
+        )
+        assert response.status_code == 200
+
+        data = client.get("/api/ppv-enrichment/config").get_json()
+        assert data["has_api_key"] is False
+
+    def test_update_ppv_enrichment_config_requires_body(self, client):
+        response = client.put("/api/ppv-enrichment/config")
+        assert response.status_code == 400

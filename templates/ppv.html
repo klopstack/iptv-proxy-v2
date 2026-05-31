@@ -241,6 +241,13 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- eslint-disable-next-script -->
+<script type="module">
+import * as AccountApi from "{{ url_for('static', filename='js/lib/account_api.js') }}";
+import * as PpvApi from "{{ url_for('static', filename='js/lib/ppv_api.js') }}";
+window.AccountApi = AccountApi;
+window.PpvApi = PpvApi;
+</script>
 <script>
 // ============================================================================
 // PPV Enrichment Settings
@@ -248,8 +255,7 @@
 
 async function loadEnrichmentSettings() {
     try {
-        const response = await fetch('/api/ppv-enrichment/settings');
-        const data = await response.json();
+        const data = await window.PpvApi.fetchPpvEnrichmentSettings();
 
         const html = `
             <div class="row">
@@ -288,16 +294,11 @@ async function loadAccountsVisibility() {
     try {
         const response = await fetch('/api/accounts');
         const accounts = await response.json();
+        const visibilityOptions = await window.AccountApi.fetchPpvVisibilityOptions();
 
         let html = '<div class="list-group">';
 
         for (const account of accounts) {
-            const visibilityOptions = [
-                { value: 'hide_all', label: 'Hide All PPV' },
-                { value: 'hide_inactive', label: 'Hide Inactive PPV (default)' },
-                { value: 'show_all', label: 'Show All PPV' }
-            ];
-
             html += `
                 <div class="list-group-item">
                     <div class="row align-items-center">
@@ -311,7 +312,8 @@ async function loadAccountsVisibility() {
 
             for (const option of visibilityOptions) {
                 const selected = account.ppv_visibility === option.value ? 'selected' : '';
-                html += `<option value="${option.value}" ${selected}>${option.label}</option>`;
+                const suffix = option.value === 'hide_inactive' ? ' (default)' : '';
+                html += `<option value="${option.value}" ${selected}>${option.label}${suffix}</option>`;
             }
 
             html += `
@@ -348,13 +350,7 @@ async function handleVisibilityChange(e) {
     try {
         statusEl.innerHTML = '<i class="bi bi-hourglass-split"></i> Saving...';
 
-        const response = await fetch(`/api/accounts/${accountId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ppv_visibility: newVisibility })
-        });
-
-        if (!response.ok) throw new Error('Failed to update visibility');
+        await window.AccountApi.updateAccountPpvVisibility(accountId, newVisibility);
 
         statusEl.innerHTML = '<i class="bi bi-check-circle text-success"></i> Saved';
         setTimeout(() => {

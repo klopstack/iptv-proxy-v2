@@ -522,7 +522,7 @@ async function loadRulesForRuleset(rulesetId) {
                         <td>${rule.source}</td>
                         <td>${status} ${removeIcon}</td>
                         <td>
-                            <button class="btn btn-sm btn-outline-secondary" data-action="edit-rule" data-rule-id="${rule.id}">
+                            <button class="btn btn-sm btn-outline-secondary" data-action="edit-rule" data-rule-id="${rule.id}" data-ruleset-id="${rulesetId}">
                                 <i class="bi bi-pencil"></i>
                             </button>
                             <button class="btn btn-sm btn-outline-danger" data-action="delete-rule" data-rule-id="${rule.id}" data-ruleset-id="${rulesetId}">
@@ -865,8 +865,8 @@ function showCreateRuleModal(rulesetId) {
     new bootstrap.Modal(document.getElementById('ruleModal')).show();
 }
 
-async function editRule(ruleId) {
-    const response = await fetch(`/api/tag-rules?ruleset_id=`);
+async function editRule(ruleId, rulesetId) {
+    const response = await fetch(`/api/tag-rules?ruleset_id=${rulesetId}`);
     const rules = await response.json();
     const rule = rules.find(r => r.id === ruleId);
     
@@ -1744,7 +1744,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     showCreateRuleModal(rulesetId);
                     break;
                 case 'edit-rule':
-                    await editRule(ruleId);
+                    await editRule(ruleId, parseInt(button.dataset.rulesetId, 10));
                     break;
                 case 'delete-rule':
                     const rulesetIdForDel = parseInt(button.dataset.rulesetId);

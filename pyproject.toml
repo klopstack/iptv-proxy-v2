@@ -88,4 +88,5 @@ exclude = [
     "env",
     ".venv",
     "tests",
+    "vulture_whitelist.py",
 ]

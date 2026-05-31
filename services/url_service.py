@@ -11,6 +11,8 @@ def get_proxy_base_url() -> str:
     if custom:
         custom = custom.rstrip("/")
         if "://" not in custom:
-            return f"{request.scheme}://{custom}"
+            forwarded = request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip()
+            scheme = forwarded if forwarded in ("http", "https") else "https"
+            return f"{scheme}://{custom}"
         return custom
     return request.url_root.rstrip("/")
