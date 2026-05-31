@@ -75,6 +75,14 @@ class TestIsPpvPlaceholderName:
         assert is_ppv_placeholder_name("NIFL 5 |") is True
         assert is_ppv_placeholder_name("Florugby 00") is True
 
+    def test_placeholder_generic_brand_slots(self):
+        """Test generic numbered PPV brand slots without event titles"""
+        assert is_ppv_placeholder_name("DIRTVISION 03") is True
+        assert is_ppv_placeholder_name("GOLF 10") is True
+        assert is_ppv_placeholder_name("GOLF 10 HD") is True
+        assert is_ppv_placeholder_name("US: DIRTVISION 03") is True
+        assert is_ppv_placeholder_name("GOLF 1") is True
+
     def test_actual_event_name_not_placeholder(self):
         """Test that actual event names are not detected as placeholder"""
         assert is_ppv_placeholder_name("UFC 300: Jones vs Miocic") is False

@@ -453,6 +453,30 @@ class TestPPVVisibilityService:
             service = PPVVisibilityService(account)
             assert service.should_show_channel(channel) is True
 
+    def test_generic_slot_hidden_even_when_queued(self, app):
+        """Generic numbered PPV slots stay hidden while enrichment is pending."""
+        with app.app_context():
+            account = Account(name="Test", server="http://test.com", ppv_visibility="hide_inactive")
+            db.session.add(account)
+            db.session.commit()
+
+            for name in ("GOLF 10", "DIRTVISION 03", "GOLF 10 HD"):
+                channel = Channel(
+                    account_id=account.id,
+                    stream_id=f"slot-{name}",
+                    name=name,
+                    is_ppv=True,
+                    is_active=True,
+                    ppv_enrichment_status="queued",
+                )
+                db.session.add(channel)
+
+            db.session.commit()
+
+            service = PPVVisibilityService(account)
+            channels = Channel.query.filter_by(account_id=account.id).all()
+            assert all(service.should_show_channel(ch) is False for ch in channels)
+
     def test_no_event_with_processing_status_shown(self, app):
         """Test that channels being processed are shown (optimistic)"""
         with app.app_context():

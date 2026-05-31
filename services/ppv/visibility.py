@@ -8,6 +8,8 @@ import logging
 from datetime import datetime, timezone
 
 from models import Event, EventChannelLink, db
+from services.epg.ppv import is_ppv_placeholder_name
+from services.ppv.detection import is_generic_channel_name
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +69,11 @@ class PPVVisibilityService:
             # Unknown mode - default to hiding inactive
             return self._is_ppv_active(channel)
 
+    @staticmethod
+    def _is_inactive_ppv_slot_name(channel_name: str) -> bool:
+        """True for generic numbered PPV slots without a real event title."""
+        return is_ppv_placeholder_name(channel_name) or is_generic_channel_name(channel_name)
+
     def _is_ppv_active(self, channel):
         """
         Check if a PPV channel has an active event.
@@ -101,6 +108,10 @@ class PPVVisibilityService:
 
             # If no event linked, check enrichment status
             if not event:
+                if self._is_inactive_ppv_slot_name(channel.name):
+                    logger.debug(f"Hiding inactive PPV slot: {channel.name[:60]}")
+                    return False
+
                 # If enrichment explicitly marked as "no_match", hide channel (no active event)
                 if channel.ppv_enrichment_status == "no_match":
                     logger.debug(f"Hiding channel with no_match status: {channel.name[:60]}")

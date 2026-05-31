@@ -55,8 +55,8 @@ PPV_PLACEHOLDER_PATTERNS = [
     r"^:?\s*(?:[A-Z]+\s+)?(?:Viaplay|MAX|ESPN)\s+[A-Z]{2}\s+\d+\s*$",
     # Coming Soon/TBA placeholders
     r"^(?:COMING\s+SOON|TBA|TBD|OFFLINE).*$",
-    # Florugby/generic sport numbered: "Florugby 00", "Florugby 01"
-    r"^[A-Za-z]+\s+\d{2}\s*$",
+    # Generic brand + slot number: "DIRTVISION 03", "GOLF 10 HD", "US: GOLF 10"
+    r"^(?:[A-Z]{2}\s*[:\|]\s*)?[A-Za-z]+\s+\d{1,2}\s*(?:ᴿᴬᵂ|ᴴᴰ|⁴ᴷ|4K|HD|SD|FHD|UHD)?$",
     # Empty fixture slots: "GaaGo Fixtures 10:", "LOI 06 |"
     r"Fixtures?\s+\d+\s*[:\|]?\s*$",
     # NIFL/GAA empty: "NIFL 5 |", "ULSTER GAA 06 |"
