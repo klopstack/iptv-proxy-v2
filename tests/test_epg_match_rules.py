@@ -2734,6 +2734,121 @@ class TestApplyMatchRule:
             assert result[0].display_name == "WABC"
             assert result[1] == 0.9
 
+    def test_apply_match_rule_callsign_tag_ignores_west_feed_tag(self, app):
+        """WEST feed-direction tags must not match EPG callsign WEST"""
+        from models import Category, EpgChannel, EpgMatchRule, EpgSource
+        from services.epg.match_rules import EpgMatchRulesService
+
+        with app.app_context():
+            account = Account(name="Test", server="test.com")
+            db.session.add(account)
+            db.session.flush()
+
+            category = Category(
+                account_id=account.id,
+                category_id="1",
+                category_name="Entertainment",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="100",
+                name="NBC BRAVO WEST (D)",
+                cleaned_name="NBC BRAVO WEST",
+                category_id=category.id,
+            )
+            db.session.add(channel)
+
+            source = EpgSource(name="Test", source_type="xmltv_url", url="http://test.com")
+            db.session.add(source)
+            db.session.flush()
+
+            epg_channel = EpgChannel(
+                source_id=source.id,
+                channel_id="WEST.us",
+                display_name="WEST",
+            )
+            db.session.add(epg_channel)
+            db.session.commit()
+
+            rule = EpgMatchRule(
+                ruleset_id=1,
+                name="Callsign Tag Rule",
+                match_type="callsign_tag",
+            )
+
+            result = EpgMatchRulesService._apply_match_rule(
+                channel=channel,
+                rule=rule,
+                epg_channels=[epg_channel],
+                epg_by_id={},
+                epg_by_name={},
+                epg_by_callsign={"WEST": epg_channel},
+                channel_tags={"WEST", "NBC"},
+                country_tags=set(),
+            )
+            assert result is None
+
+    def test_apply_match_rule_callsign_name_ignores_west_in_name(self, app):
+        """WEST in channel names is a feed variant, not a broadcast callsign"""
+        from models import Category, EpgChannel, EpgMatchRule, EpgSource
+        from services.epg.match_rules import EpgMatchRulesService
+
+        with app.app_context():
+            account = Account(name="Test", server="test.com")
+            db.session.add(account)
+            db.session.flush()
+
+            category = Category(
+                account_id=account.id,
+                category_id="1",
+                category_name="Entertainment",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="100",
+                name="NBC E! WEST",
+                cleaned_name="NBC E! WEST",
+                category_id=category.id,
+            )
+            db.session.add(channel)
+
+            source = EpgSource(name="Test", source_type="xmltv_url", url="http://test.com")
+            db.session.add(source)
+            db.session.flush()
+
+            epg_channel = EpgChannel(
+                source_id=source.id,
+                channel_id="WEST.us",
+                display_name="WEST",
+            )
+            db.session.add(epg_channel)
+            db.session.commit()
+
+            rule = EpgMatchRule(
+                ruleset_id=1,
+                name="Callsign Name Rule",
+                match_type="callsign_name",
+                source="cleaned_name",
+            )
+
+            result = EpgMatchRulesService._apply_match_rule(
+                channel=channel,
+                rule=rule,
+                epg_channels=[epg_channel],
+                epg_by_id={},
+                epg_by_name={},
+                epg_by_callsign={"WEST": epg_channel},
+                channel_tags=set(),
+                country_tags=set(),
+            )
+            assert result is None
+
     def test_apply_match_rule_fuzzy_name(self, app):
         """Test match rule with fuzzy_name match type"""
         from models import Category, EpgChannel, EpgMatchRule, EpgSource

@@ -67,6 +67,12 @@ PPV_PLACEHOLDER_PATTERNS = [
 EAST_TAGS = {"EAST", "E", "ET", "EST", "EASTERN"}
 WEST_TAGS = {"WEST", "W", "PT", "PST", "PACIFIC", "WESTERN"}
 
+# Feed direction markers that resemble W/K broadcast callsigns but are not station IDs.
+# Channels like "NBC BRAVO WEST" must not match EPG callsign WEST.
+FEED_DIRECTION_PSEUDO_CALLSIGNS = frozenset(
+    tag for tag in (EAST_TAGS | WEST_TAGS) if len(tag) >= 3 and tag[0] in ("K", "W")
+)
+
 # Common suffixes/prefixes to strip when trying name variations
 # These are quality/region markers that don't affect channel identity
 STRIP_WORDS = {

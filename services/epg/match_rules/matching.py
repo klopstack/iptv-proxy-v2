@@ -244,7 +244,11 @@ class MatchingMixin:
         # Callsign tag matching
         elif match_type == EpgMatchRule.MATCH_TYPE_CALLSIGN_TAG:
             # Look for callsign-like tags (starting with K or W)
-            callsign_tags = {t for t in channel_tags if len(t) >= 3 and t[0] in ("K", "W")}
+            callsign_tags = {
+                t
+                for t in channel_tags
+                if len(t) >= 3 and t[0] in ("K", "W") and NormalizationMixin._is_valid_callsign(t)
+            }
             for callsign in callsign_tags:
                 epg = epg_by_callsign.get(callsign)
                 if epg:
@@ -254,10 +258,11 @@ class MatchingMixin:
         elif match_type == EpgMatchRule.MATCH_TYPE_CALLSIGN_NAME:
             source_name = MatchingMixin._get_source_value(channel, rule.source, name_mappings)
             if source_name:
-                # Extract callsign pattern from name
-                callsign_match = re.search(r"\b([KW][A-Z]{2,3}(?:-[A-Z]{2,3})?)\b", source_name.upper())
-                if callsign_match:
+                # Extract callsign pattern from name; skip feed-direction words like WEST
+                for callsign_match in re.finditer(r"\b([KW][A-Z]{2,3}(?:-[A-Z]{2,3})?)\b", source_name.upper()):
                     callsign = callsign_match.group(1).replace("-", "")
+                    if not NormalizationMixin._is_valid_callsign(callsign):
+                        continue
                     epg = epg_by_callsign.get(callsign)
                     if epg:
                         return epg, 0.9

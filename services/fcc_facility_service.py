@@ -810,6 +810,8 @@ class FccFacilityService:
         """
         import re
 
+        from services.epg.constants import FEED_DIRECTION_PSEUDO_CALLSIGNS
+
         name_upper = channel_name.upper()
 
         # Pattern for callsigns: K or W followed by 2-4 letters, optionally with suffix
@@ -825,7 +827,7 @@ class FccFacilityService:
             callsign = paren_match.group(1)
             # Strip any suffix for consistency (including subchannel numbers)
             callsign = re.sub(r"-(?:TV|DT|CD|HD|LP|LD|FM)\d?$", "", callsign)
-            if len(callsign) >= 3:
+            if len(callsign) >= 3 and callsign not in FEED_DIRECTION_PSEUDO_CALLSIGNS:
                 return callsign
 
         # If no parenthesized callsign, look for callsign patterns elsewhere
@@ -836,7 +838,7 @@ class FccFacilityService:
                 # Strip any suffix (including subchannel numbers)
                 callsign = re.sub(r"-(?:TV|DT|CD|HD|LP|LD|FM)\d?$", "", match)
                 # Require at least 4 characters for non-parenthesized matches
-                if len(callsign) >= 4:
+                if len(callsign) >= 4 and callsign not in FEED_DIRECTION_PSEUDO_CALLSIGNS:
                     return callsign
 
         return None

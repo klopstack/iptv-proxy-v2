@@ -458,6 +458,11 @@ class TestCallsignExtraction:
         # 'WE' is too short to be a valid callsign
         assert FccFacilityService.extract_callsign_from_name("WE Network") is None
 
+    def test_extract_ignores_west_feed_direction(self):
+        """WEST in channel names indicates feed variant, not a callsign"""
+        assert FccFacilityService.extract_callsign_from_name("NBC BRAVO WEST (D)") is None
+        assert FccFacilityService.extract_callsign_from_name("NBC E! WEST") is None
+
 
 class TestDmaAndNetworkLists:
     """Tests for DMA and network list methods"""

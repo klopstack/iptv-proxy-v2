@@ -3,6 +3,7 @@ import re
 from typing import Optional, Set
 
 from models import ChannelTag, Tag, db
+from services.epg.constants import FEED_DIRECTION_PSEUDO_CALLSIGNS
 
 
 class NormalizationMixin:
@@ -168,3 +169,10 @@ class NormalizationMixin:
             return ""
         # Remove common broadcast suffixes
         return re.sub(r"-(TV|DT|HD|FM|AM|LP|CA|CD|LD|D\d?)$", "", callsign.upper())
+
+    @staticmethod
+    def _is_valid_callsign(callsign: str) -> bool:
+        """Return False for feed-direction words that look like W/K callsigns (e.g. WEST)."""
+        if not callsign:
+            return False
+        return callsign.upper() not in FEED_DIRECTION_PSEUDO_CALLSIGNS
