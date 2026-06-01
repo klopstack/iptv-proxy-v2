@@ -7,6 +7,7 @@ import {
     getTagBadgeColorClass,
     normalizeTag,
 } from './preview_channels.js';
+import { formatLocalDateTime } from './lib/epg_datetime.js';
 import { escapeHtml, parseUrlParams } from './utils.js';
 
 let accounts = [];
@@ -366,8 +367,8 @@ async function showChannelDetails(accountId, streamId) {
             if (!dateStr) {
                 return '<span class="text-muted">-</span>';
             }
-            const date = new Date(dateStr);
-            return date.toLocaleString();
+            const formatted = formatLocalDateTime(dateStr, { timeZoneName: 'short' });
+            return formatted || escapeHtml(String(dateStr));
         };
 
         const formatBool = (val) => val

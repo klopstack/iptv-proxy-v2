@@ -48,8 +48,11 @@ async function syncAccount(accountId, button) {
 }
 
 function formatRelativeTime(date) {
+    const parsed = parseUtcTimestamp(date);
+    if (!parsed || Number.isNaN(parsed.getTime())) return 'Unknown';
+
     const now = new Date();
-    const diffMs = now - date;
+    const diffMs = now - parsed;
     const diffSecs = Math.floor(diffMs / 1000);
     const diffMins = Math.floor(diffSecs / 60);
     const diffHours = Math.floor(diffMins / 60);
@@ -59,7 +62,15 @@ function formatRelativeTime(date) {
     if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
     if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
     if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    return date.toLocaleDateString();
+    return parsed.toLocaleDateString();
+}
+
+function parseUtcTimestamp(isoString) {
+    if (!isoString) return null;
+    const normalized = String(isoString).endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(String(isoString))
+        ? String(isoString)
+        : `${isoString}Z`;
+    return new Date(normalized);
 }
 
 async function loadOverviewStats() {
@@ -146,10 +157,10 @@ async function loadOverviewStats() {
         // Add scheduler status if available
         if (stats.scheduler && stats.scheduler.running) {
             const lastAccountSync = stats.scheduler.last_syncs?.accounts 
-                ? formatRelativeTime(new Date(stats.scheduler.last_syncs.accounts))
+                ? formatRelativeTime(stats.scheduler.last_syncs.accounts)
                 : 'Never';
             const lastEpgSync = stats.scheduler.last_syncs?.epg 
-                ? formatRelativeTime(new Date(stats.scheduler.last_syncs.epg))
+                ? formatRelativeTime(stats.scheduler.last_syncs.epg)
                 : 'Never';
             
             html += `
@@ -238,8 +249,7 @@ async function loadDashboard() {
                 
                 let syncInfo = '';
                 if (isSynced && stats.last_sync) {
-                    const syncDate = new Date(stats.last_sync);
-                    const relativeTime = formatRelativeTime(syncDate);
+                    const relativeTime = formatRelativeTime(stats.last_sync);
                     syncInfo = `<small class="text-muted">Last sync: ${relativeTime}</small><br>`;
                 }
                 
