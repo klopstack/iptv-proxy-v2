@@ -6,9 +6,12 @@ Stores arbitrary key-value settings for each context data provider plugin
 so the UI can render them without knowing the provider implementation.
 """
 
+import logging
 from datetime import datetime, timezone
 
 from models._base import db
+
+logger = logging.getLogger(__name__)
 
 
 class ProviderSettings(db.Model):  # type: ignore[name-defined]
@@ -39,7 +42,7 @@ class ProviderSettings(db.Model):  # type: ignore[name-defined]
             if record is not None:
                 return record.value
         except Exception:
-            pass
+            logger.debug("ProviderSettings.get failed for %s/%s", provider_name, key, exc_info=True)
         return default
 
     @staticmethod
@@ -74,6 +77,7 @@ class ProviderSettings(db.Model):  # type: ignore[name-defined]
             ).scalars().all()
             return {r.key: r.value for r in rows}
         except Exception:
+            logger.debug("ProviderSettings.get_all_for failed for %s", provider_name, exc_info=True)
             return {}
 
     def __repr__(self) -> str:

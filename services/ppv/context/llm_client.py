@@ -125,6 +125,7 @@ def _llm_setting(key: str, default: str = "") -> str:
         from models.provider_settings import ProviderSettings
         return ProviderSettings.get(_LLM_NAMESPACE, key, default=default)
     except Exception:
+        logger.debug("Failed to read LLM setting %r from ProviderSettings", key, exc_info=True)
         return default
 
 

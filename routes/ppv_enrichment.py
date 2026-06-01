@@ -428,8 +428,8 @@ def get_provider_settings():
         return jsonify({"providers": result}), 200
 
     except Exception as e:
-        logger.error(f"Error fetching provider settings: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        logger.error("Error fetching provider settings: %s", e, exc_info=True)
+        return jsonify({"error": "Internal server error fetching provider settings"}), 500
 
 
 @ppv_enrichment_bp.route("/provider-settings/<provider_name>/<key>", methods=["PUT"])
@@ -480,8 +480,8 @@ def set_provider_setting(provider_name, key):
         return jsonify({"provider": provider_name, "key": key, "message": "Setting saved"}), 200
 
     except Exception as e:
-        logger.error(f"Error saving provider setting {provider_name}/{key}: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        logger.error("Error saving provider setting %s/%s: %s", provider_name, key, e, exc_info=True)
+        return jsonify({"error": "Internal server error saving provider setting"}), 500
 
 
 def _mask_value(field_type: str, value: str) -> str:
