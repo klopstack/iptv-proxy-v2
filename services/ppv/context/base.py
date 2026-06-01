@@ -35,7 +35,7 @@ Example ``settings_fields()`` implementation::
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Set
