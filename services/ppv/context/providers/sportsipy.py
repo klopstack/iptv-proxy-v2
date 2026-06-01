@@ -21,11 +21,16 @@ from services.ppv.context.cache import get_cache, make_form_key, make_h2h_key
 logger = logging.getLogger(__name__)
 
 _SUPPORTED_SPORTS: Set[str] = {
-    "American Football", "NFL",
-    "Basketball", "NBA",
-    "Ice Hockey", "NHL",
-    "Baseball", "MLB",
-    "NCAAF", "NCAAB",
+    "American Football",
+    "NFL",
+    "Basketball",
+    "NBA",
+    "Ice Hockey",
+    "NHL",
+    "Baseball",
+    "MLB",
+    "NCAAF",
+    "NCAAB",
     "MiLB",
 }
 
@@ -39,7 +44,7 @@ _SPORT_KEY: Dict[str, str] = {
     "nhl": "nhl",
     "baseball": "mlb",
     "mlb": "mlb",
-    "ncaaf": "nfl",   # best available in sportsipy
+    "ncaaf": "nfl",  # best available in sportsipy
     "ncaab": "nba",
     "milb": "mlb",
 }
@@ -60,6 +65,7 @@ class SportsipyContextProvider(ContextDataProvider):
 
     def _get_service(self):
         from services.sportsipy_service import get_sportsipy_service
+
         svc = get_sportsipy_service()
         if not svc.is_available():
             return None
@@ -174,11 +180,7 @@ class SportsipyContextProvider(ContextDataProvider):
                 date_str = ""
                 if ev.date:
                     try:
-                        date_str = (
-                            ev.date.strftime("%Y-%m-%d")
-                            if isinstance(ev.date, datetime)
-                            else str(ev.date)[:10]
-                        )
+                        date_str = ev.date.strftime("%Y-%m-%d") if isinstance(ev.date, datetime) else str(ev.date)[:10]
                     except Exception:
                         pass
                 line = f"{date_str}: {ev.result}" if date_str else ev.result
@@ -205,6 +207,7 @@ class SportsipyContextProvider(ContextDataProvider):
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
+
 
 def _find_abbreviation(svc, team_name: str, sport: str) -> Optional[str]:
     """Try to resolve a display name to a team abbreviation via svc patterns."""

@@ -99,9 +99,7 @@ class LLMEnrichmentSettings(ContextDataProvider):
                 "key": "model",
                 "label": "Model",
                 "type": "text",
-                "description": (
-                    "Model name, e.g. gpt-4o-mini or claude-3-haiku-20240307."
-                ),
+                "description": ("Model name, e.g. gpt-4o-mini or claude-3-haiku-20240307."),
                 "required": False,
                 "default": _DEFAULT_MODEL,
             },
@@ -123,6 +121,7 @@ def _llm_setting(key: str, default: str = "") -> str:
     """Read an LLM enrichment setting from the provider_settings table."""
     try:
         from models.provider_settings import ProviderSettings
+
         return ProviderSettings.get(_LLM_NAMESPACE, key, default=default)
     except Exception:
         logger.debug("Failed to read LLM setting %r from ProviderSettings", key, exc_info=True)
@@ -203,6 +202,7 @@ def generate_event_description_or_fallback(context: EventContext) -> str:
 # ---------------------------------------------------------------------------
 # Provider-specific HTTP calls
 # ---------------------------------------------------------------------------
+
 
 def _call_openai(api_key: str, model: str, system: str, prompt: str, base_url: str) -> Optional[str]:
     """Call an OpenAI-compatible chat completions endpoint."""

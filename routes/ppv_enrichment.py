@@ -366,7 +366,6 @@ def stop_detail_thread():
         return jsonify({"error": str(e)}), 500
 
 
-
 @ppv_enrichment_bp.route("/coverage", methods=["GET"])
 @cross_origin()
 def get_coverage_report():
@@ -377,6 +376,7 @@ def get_coverage_report():
     """
     try:
         from services.ppv.context.registry import get_registry
+
         report = get_registry().coverage_report()
         return jsonify(report), 200
     except Exception as e:

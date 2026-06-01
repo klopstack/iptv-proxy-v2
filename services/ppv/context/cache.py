@@ -23,11 +23,11 @@ logger = logging.getLogger(__name__)
 
 # TTL in seconds per data type
 CACHE_TTL: Dict[DataType, int] = {
-    DataType.STANDINGS: 6 * 3600,       # 6 hours
-    DataType.HEAD_TO_HEAD: 24 * 3600,   # 24 hours — historical data rarely changes
-    DataType.TEAM_FORM: 2 * 3600,       # 2 hours
-    DataType.EVENT_NOTES: 30 * 60,      # 30 minutes — game-day context updates
-    DataType.FIGHTER_RECORD: 24 * 3600, # 24 hours
+    DataType.STANDINGS: 6 * 3600,  # 6 hours
+    DataType.HEAD_TO_HEAD: 24 * 3600,  # 24 hours — historical data rarely changes
+    DataType.TEAM_FORM: 2 * 3600,  # 2 hours
+    DataType.EVENT_NOTES: 30 * 60,  # 30 minutes — game-day context updates
+    DataType.FIGHTER_RECORD: 24 * 3600,  # 24 hours
 }
 
 DEFAULT_TTL = 3600  # fallback for unknown data types

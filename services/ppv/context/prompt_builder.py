@@ -126,6 +126,7 @@ def get_system_prompt() -> str:
 # Post-generation hallucination validator
 # ---------------------------------------------------------------------------
 
+
 def _extract_numbers(text: str) -> set[str]:
     """Extract all digit sequences from text."""
     return set(re.findall(r"\d+", text))
@@ -153,6 +154,7 @@ def validate_description(description: str, prompt: str) -> bool:
 # ---------------------------------------------------------------------------
 # Mechanical fallback description
 # ---------------------------------------------------------------------------
+
 
 def build_mechanical_description(context: EventContext) -> str:
     """

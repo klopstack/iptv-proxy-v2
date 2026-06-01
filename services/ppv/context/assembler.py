@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from services.ppv.context.base import DataType, EventContext, TeamContext
 from services.ppv.context.registry import get_registry
@@ -55,10 +55,10 @@ def build_event_context(event: "Event") -> EventContext:
     standings_fetched = False
     for provider in standings_providers:
         try:
-            result = provider.get_standings(sport, league)
-            if result:
+            standings_result = provider.get_standings(sport, league)
+            if standings_result:
                 # All providers return {"_all_teams": {team_name_lower: {"record":..., "standing":...}}}
-                all_teams = result.get("_all_teams", {})
+                all_teams = standings_result.get("_all_teams", {})
                 for team_ctx, team_name in ((home_ctx, home_name), (away_ctx, away_name)):
                     name_lower = team_name.lower()
                     entry = all_teams.get(name_lower)
@@ -86,16 +86,16 @@ def build_event_context(event: "Event") -> EventContext:
     h2h_fetched = False
     for provider in h2h_providers:
         try:
-            result = provider.get_head_to_head(
+            h2h_result = provider.get_head_to_head(
                 home_team=home_name,
                 away_team=away_name,
                 sport=sport,
                 home_team_id=home_id,
                 away_team_id=away_id,
             )
-            if result is not None:
-                h2h_lines = result
-                if result:
+            if h2h_result is not None:
+                h2h_lines = h2h_result
+                if h2h_result:
                     data_sources.append(f"{provider.name}:head_to_head")
                 h2h_fetched = True
                 break
@@ -109,10 +109,10 @@ def build_event_context(event: "Event") -> EventContext:
     form_providers_home = registry.get_providers_for(sport, league, DataType.TEAM_FORM)
     for provider in form_providers_home:
         try:
-            result = provider.get_team_form(team_name=home_name, sport=sport, team_id=home_id)
-            if result is not None:
-                home_ctx.recent_form = result
-                if result:
+            home_form_result = provider.get_team_form(team_name=home_name, sport=sport, team_id=home_id)
+            if home_form_result is not None:
+                home_ctx.recent_form = home_form_result
+                if home_form_result:
                     data_sources.append(f"{provider.name}:team_form:home")
                 break
         except Exception as exc:
@@ -121,10 +121,10 @@ def build_event_context(event: "Event") -> EventContext:
     form_providers_away = registry.get_providers_for(sport, league, DataType.TEAM_FORM)
     for provider in form_providers_away:
         try:
-            result = provider.get_team_form(team_name=away_name, sport=sport, team_id=away_id)
-            if result is not None:
-                away_ctx.recent_form = result
-                if result:
+            away_form_result = provider.get_team_form(team_name=away_name, sport=sport, team_id=away_id)
+            if away_form_result is not None:
+                away_ctx.recent_form = away_form_result
+                if away_form_result:
                     data_sources.append(f"{provider.name}:team_form:away")
                 break
         except Exception as exc:
@@ -156,15 +156,15 @@ def build_event_context(event: "Event") -> EventContext:
     notes_fetched = False
     for provider in notes_providers:
         try:
-            result = provider.get_event_notes(
+            notes_result = provider.get_event_notes(
                 home_team=home_name,
                 away_team=away_name,
                 sport=sport,
                 event_date=event_date,
                 event_id=external_id,
             )
-            if result:
-                event_notes = result
+            if notes_result:
+                event_notes = notes_result
                 data_sources.append(f"{provider.name}:event_notes")
                 notes_fetched = True
                 break
@@ -211,10 +211,12 @@ def persist_context_metadata(event: "Event", context: EventContext) -> None:
     Stored under the "context" key so it coexists with any existing metadata.
     """
     try:
-        existing: dict = {}
+        existing: dict[str, Any] = {}
         if event.event_metadata:
             try:
-                existing = json.loads(event.event_metadata)
+                decoded = json.loads(event.event_metadata)
+                if isinstance(decoded, dict):
+                    existing = decoded
             except (json.JSONDecodeError, TypeError):
                 existing = {}
 

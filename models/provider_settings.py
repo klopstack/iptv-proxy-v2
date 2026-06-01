@@ -72,9 +72,9 @@ class ProviderSettings(db.Model):  # type: ignore[name-defined]
     def get_all_for(provider_name: str) -> dict:
         """Return all stored settings for *provider_name* as ``{key: value}``."""
         try:
-            rows = db.session.execute(
-                db.select(ProviderSettings).filter_by(provider_name=provider_name)
-            ).scalars().all()
+            rows = (
+                db.session.execute(db.select(ProviderSettings).filter_by(provider_name=provider_name)).scalars().all()
+            )
             return {r.key: r.value for r in rows}
         except Exception:
             logger.debug("ProviderSettings.get_all_for failed for %s", provider_name, exc_info=True)

@@ -17,24 +17,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from services.ppv.context.base import (
-    ContextDataProvider,
-    DataType,
-    EventContext,
-    TeamContext,
-)
+from services.ppv.context.base import ContextDataProvider, DataType, EventContext, TeamContext
 from services.ppv.context.cache import ContextCache
-from services.ppv.context.prompt_builder import (
-    build_mechanical_description,
-    build_prompt,
-    validate_description,
-)
+from services.ppv.context.prompt_builder import build_mechanical_description, build_prompt, validate_description
 from services.ppv.context.registry import ProviderRegistry
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_team(name="Team A", record="10-5", standing="1st in Division"):
     return TeamContext(name=name, record=record, standing=standing, recent_form=["W 3-1", "L 0-2"])
@@ -59,6 +50,7 @@ def _make_context(**kwargs):
 # DataType enum
 # ---------------------------------------------------------------------------
 
+
 class TestDataType:
     def test_values(self):
         assert DataType.STANDINGS.value == "standings"
@@ -72,6 +64,7 @@ class TestDataType:
 # ContextDataProvider.covers() helpers
 # ---------------------------------------------------------------------------
 
+
 class _DummyProvider(ContextDataProvider):
     name = "dummy"
     supported_sports = {"Soccer", "NFL"}
@@ -79,24 +72,39 @@ class _DummyProvider(ContextDataProvider):
     provided_data_types = {DataType.STANDINGS, DataType.HEAD_TO_HEAD}
     priority = 50
 
-    def get_standings(self, *a, **kw): return None
-    def get_head_to_head(self, *a, **kw): return None
-    def get_team_form(self, *a, **kw): return None
-    def get_event_notes(self, *a, **kw): return None
+    def get_standings(self, *a, **kw):
+        return None
+
+    def get_head_to_head(self, *a, **kw):
+        return None
+
+    def get_team_form(self, *a, **kw):
+        return None
+
+    def get_event_notes(self, *a, **kw):
+        return None
 
 
 class _BroadProvider(ContextDataProvider):
     """Covers all sports, all leagues (empty sets)."""
+
     name = "broad"
     supported_sports = set()
     supported_leagues = set()
     provided_data_types = {DataType.STANDINGS}
     priority = 90
 
-    def get_standings(self, *a, **kw): return None
-    def get_head_to_head(self, *a, **kw): return None
-    def get_team_form(self, *a, **kw): return None
-    def get_event_notes(self, *a, **kw): return None
+    def get_standings(self, *a, **kw):
+        return None
+
+    def get_head_to_head(self, *a, **kw):
+        return None
+
+    def get_team_form(self, *a, **kw):
+        return None
+
+    def get_event_notes(self, *a, **kw):
+        return None
 
 
 class TestContextDataProviderCovers:
@@ -138,6 +146,7 @@ class TestContextDataProviderCovers:
 # ---------------------------------------------------------------------------
 # ProviderRegistry
 # ---------------------------------------------------------------------------
+
 
 class TestProviderRegistry:
     def _make_registry(self):
@@ -189,6 +198,7 @@ class TestProviderRegistry:
 # ContextCache
 # ---------------------------------------------------------------------------
 
+
 class TestContextCache:
     def test_set_and_get(self):
         cache = ContextCache()
@@ -203,6 +213,7 @@ class TestContextCache:
         cache = ContextCache()
         # Override TTL to 0 seconds for STANDINGS data type
         from services.ppv.context.cache import CACHE_TTL
+
         original = CACHE_TTL.get(DataType.STANDINGS)
         CACHE_TTL[DataType.STANDINGS] = 0
         try:
@@ -238,6 +249,7 @@ class TestContextCache:
 # ---------------------------------------------------------------------------
 # build_prompt()
 # ---------------------------------------------------------------------------
+
 
 class TestBuildPrompt:
     def test_contains_team_names(self):
@@ -281,6 +293,7 @@ class TestBuildPrompt:
 # validate_description()
 # ---------------------------------------------------------------------------
 
+
 class TestValidateDescription:
     def test_valid_description_passes(self):
         ctx = _make_context()
@@ -308,6 +321,7 @@ class TestValidateDescription:
 # build_mechanical_description()
 # ---------------------------------------------------------------------------
 
+
 class TestBuildMechanicalDescription:
     def test_contains_both_teams(self):
         ctx = _make_context()
@@ -328,6 +342,7 @@ class TestBuildMechanicalDescription:
 # ---------------------------------------------------------------------------
 # build_event_context() with mock providers
 # ---------------------------------------------------------------------------
+
 
 class TestBuildEventContext:
     def test_uses_registered_provider(self, app):
@@ -388,8 +403,10 @@ class TestBuildEventContext:
 # ContextDataProvider settings API
 # ---------------------------------------------------------------------------
 
+
 class _SettingsProvider(ContextDataProvider):
     """Provider that declares a settings field."""
+
     name = "settings_test"
     supported_sports = {"Soccer"}
     supported_leagues = set()
@@ -407,10 +424,17 @@ class _SettingsProvider(ContextDataProvider):
             },
         ]
 
-    def get_standings(self, *a, **kw): return None
-    def get_head_to_head(self, *a, **kw): return None
-    def get_team_form(self, *a, **kw): return None
-    def get_event_notes(self, *a, **kw): return None
+    def get_standings(self, *a, **kw):
+        return None
+
+    def get_head_to_head(self, *a, **kw):
+        return None
+
+    def get_team_form(self, *a, **kw):
+        return None
+
+    def get_event_notes(self, *a, **kw):
+        return None
 
 
 class TestProviderSettingsAPI:

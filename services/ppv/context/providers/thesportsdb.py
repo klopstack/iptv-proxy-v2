@@ -15,11 +15,7 @@ import logging
 from typing import Any, Dict, List, Optional, Set
 
 from services.ppv.context.base import ContextDataProvider, DataType
-from services.ppv.context.cache import (
-    get_cache,
-    make_h2h_key,
-    make_standings_key,
-)
+from services.ppv.context.cache import get_cache, make_h2h_key, make_standings_key
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +55,10 @@ class TheSportsDBContextProvider(ContextDataProvider):
 
     def get_standings(self, sport: str, league: str, season: Optional[str] = None) -> Optional[dict]:
         try:
-            from services.thesportsdb_service import LEAGUE_ID_MAP
-            from services.thesportsdb_retry import call_thesportsdb_api
             from thesportsdb import tables as tsdb_tables
+
+            from services.thesportsdb_retry import call_thesportsdb_api
+            from services.thesportsdb_service import LEAGUE_ID_MAP
         except ImportError as exc:
             logger.debug("TheSportsDB import error: %s", exc)
             return None
@@ -124,8 +121,9 @@ class TheSportsDBContextProvider(ContextDataProvider):
             return None
 
         try:
-            from services.thesportsdb_retry import call_thesportsdb_api
             from thesportsdb import events as tsdb_events
+
+            from services.thesportsdb_retry import call_thesportsdb_api
         except ImportError as exc:
             logger.debug("TheSportsDB import error: %s", exc)
             return None

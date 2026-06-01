@@ -19,12 +19,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import requests
 
 from services.ppv.context.base import ContextDataProvider, DataType
-from services.ppv.context.cache import (
-    get_cache,
-    make_h2h_key,
-    make_notes_key,
-    make_standings_key,
-)
+from services.ppv.context.cache import get_cache, make_h2h_key, make_notes_key, make_standings_key
 
 logger = logging.getLogger(__name__)
 
@@ -70,12 +65,20 @@ _ESPN_SOCCER_LEAGUES: Dict[str, str] = {
 }
 
 _SUPPORTED_SPORTS: Set[str] = {
-    "American Football", "NFL",
-    "Basketball", "NBA", "WNBA",
-    "Ice Hockey", "NHL",
-    "Baseball", "MLB",
-    "Soccer", "MLS",
-    "Boxing", "MMA", "UFC",
+    "American Football",
+    "NFL",
+    "Basketball",
+    "NBA",
+    "WNBA",
+    "Ice Hockey",
+    "NHL",
+    "Baseball",
+    "MLB",
+    "Soccer",
+    "MLS",
+    "Boxing",
+    "MMA",
+    "UFC",
 }
 
 
@@ -214,6 +217,7 @@ class ESPNProvider(ContextDataProvider):
     ) -> Optional[List[str]]:
         cache = get_cache()
         from services.ppv.context.cache import make_form_key
+
         cache_key = make_form_key(self.name, sport, team_name)
         cached = cache.get(cache_key)
         if cached is not None:
@@ -279,6 +283,7 @@ class ESPNProvider(ContextDataProvider):
 # ---------------------------------------------------------------------------
 # ESPN response parsing helpers
 # ---------------------------------------------------------------------------
+
 
 def _parse_espn_standings(data: dict) -> Dict[str, dict]:
     """Parse ESPN standings response into {team_name_lower: {record, standing}}."""
@@ -434,10 +439,7 @@ def _extract_game_notes(data: dict, home_team: str, away_team: str) -> Optional[
             if not comps:
                 continue
             competitors = comps[0].get("competitors", [])
-            names = [
-                (c.get("team") or {}).get("displayName", "").lower()
-                for c in competitors
-            ]
+            names = [(c.get("team") or {}).get("displayName", "").lower() for c in competitors]
             if not any(home_lower in n or n in home_lower for n in names):
                 continue
             if not any(away_lower in n or n in away_lower for n in names):

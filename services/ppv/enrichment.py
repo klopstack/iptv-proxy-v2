@@ -652,9 +652,11 @@ class PPVCalendarEnrichmentService:
             # ------------------------------------------------------------------
             try:
                 from models.provider_settings import ProviderSettings
+
                 if ProviderSettings.get("llm_enrichment", "enabled", "false").lower() == "true":
                     from services.ppv.context import build_event_context, generate_event_description_or_fallback
                     from services.ppv.context.assembler import persist_context_metadata
+
                     context = build_event_context(event)
                     persist_context_metadata(event, context)
                     description = generate_event_description_or_fallback(context)

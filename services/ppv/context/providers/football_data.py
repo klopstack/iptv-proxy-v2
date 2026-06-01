@@ -16,11 +16,7 @@ from typing import Dict, List, Optional, Set
 import requests
 
 from services.ppv.context.base import ContextDataProvider, DataType
-from services.ppv.context.cache import (
-    get_cache,
-    make_h2h_key,
-    make_standings_key,
-)
+from services.ppv.context.cache import get_cache, make_h2h_key, make_standings_key
 
 logger = logging.getLogger(__name__)
 
@@ -53,17 +49,27 @@ _LEAGUE_CODES: Dict[str, str] = {
 }
 
 _SUPPORTED_LEAGUES: Set[str] = {
-    "Premier League", "English Premier League",
-    "La Liga", "Spanish La Liga",
-    "Serie A", "Italian Serie A",
-    "Bundesliga", "German Bundesliga",
-    "Ligue 1", "French Ligue 1",
-    "Champions League", "UEFA Champions League",
+    "Premier League",
+    "English Premier League",
+    "La Liga",
+    "Spanish La Liga",
+    "Serie A",
+    "Italian Serie A",
+    "Bundesliga",
+    "German Bundesliga",
+    "Ligue 1",
+    "French Ligue 1",
+    "Champions League",
+    "UEFA Champions League",
     "Europa League",
-    "World Cup", "FIFA World Cup",
-    "European Championship", "UEFA European Championship",
-    "Eredivisie", "Dutch Eredivisie",
-    "Primeira Liga", "Portuguese Primeira Liga",
+    "World Cup",
+    "FIFA World Cup",
+    "European Championship",
+    "UEFA European Championship",
+    "Eredivisie",
+    "Dutch Eredivisie",
+    "Primeira Liga",
+    "Portuguese Primeira Liga",
 }
 
 
@@ -87,8 +93,7 @@ class FootballDataProvider(ContextDataProvider):
                 "label": "API Key",
                 "type": "password",
                 "description": (
-                    "API key from football-data.org. "
-                    "A free tier key is available at https://www.football-data.org/."
+                    "API key from football-data.org. " "A free tier key is available at https://www.football-data.org/."
                 ),
                 "required": True,
             },

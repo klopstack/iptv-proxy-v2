@@ -211,6 +211,7 @@ class ContextDataProvider(ABC):
         """
         try:
             from models.provider_settings import ProviderSettings
+
             return ProviderSettings.get(self.name, key, default=default)
         except Exception:
             return default
@@ -218,6 +219,7 @@ class ContextDataProvider(ABC):
     def set_setting(self, key: str, value: str) -> None:
         """Persist a provider setting to the database."""
         from models.provider_settings import ProviderSettings
+
         ProviderSettings.set(self.name, key, value)
 
     # ------------------------------------------------------------------
@@ -243,11 +245,7 @@ class ContextDataProvider(ABC):
 
     def covers(self, sport: str, league: str, data_type: DataType) -> bool:
         """Return True if this provider covers the sport/league/data-type combination."""
-        return (
-            self.covers_sport(sport)
-            and self.covers_league(league)
-            and data_type in self.provided_data_types
-        )
+        return self.covers_sport(sport) and self.covers_league(league) and data_type in self.provided_data_types
 
     def __repr__(self) -> str:
         return f"<ContextDataProvider name={self.name!r} priority={self.priority}>"
