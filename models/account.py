@@ -28,6 +28,12 @@ class Account(db.Model):  # type: ignore[name-defined]
     # PPV visibility settings: 'hide_all' | 'hide_inactive' (default) | 'show_all'
     ppv_visibility = db.Column(db.String(20), default="hide_inactive", nullable=False)
 
+    # Channel rename format templates (None = use original cleaned_name)
+    # PPV template tokens: {league}, {sport}, {home_team}, {away_team}, {start_time}, {date}
+    ppv_rename_format = db.Column(db.Text, nullable=True)
+    # FCC template tokens: {network}, {callsign}, {broadcast_channel}, {market}
+    fcc_rename_format = db.Column(db.Text, nullable=True)
+
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at = db.Column(
         db.DateTime,

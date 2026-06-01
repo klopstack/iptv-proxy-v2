@@ -78,6 +78,8 @@ def get_accounts():
             "server": a.server,
             "enabled": a.enabled,
             "ppv_visibility": a.ppv_visibility,
+            "ppv_rename_format": a.ppv_rename_format,
+            "fcc_rename_format": a.fcc_rename_format,
             "credentials": [credential_to_dict(c) for c in a.credentials],
             "total_max_connections": a.get_total_max_connections(),
             "channel_count": channel_count_map.get(a.id, 0),
@@ -231,6 +233,52 @@ def get_ppv_visibility_options():
 
     options = PPVVisibilityService.get_visibility_options()
     return jsonify(options)
+
+
+@accounts_bp.route("/api/accounts/<int:account_id>/ppv-rename-format", methods=["PUT"])
+def update_ppv_rename_format(account_id):
+    """Update the PPV channel rename format template for an account.
+
+    Request body:
+    {
+        "ppv_rename_format": "{league} {sport}: {home_team} vs {away_team} - {start_time} {date}"
+    }
+
+    Set to null or empty string to disable.
+    Supported tokens: {league}, {sport}, {home_team}, {away_team}, {start_time}, {date}
+    """
+    account = Account.query.get_or_404(account_id)
+    data = request.get_json()
+
+    fmt = data.get("ppv_rename_format")
+    account.ppv_rename_format = fmt if fmt else None
+    db.session.commit()
+    cache_service.clear_account_cache(account_id)
+
+    return jsonify({"id": account.id, "ppv_rename_format": account.ppv_rename_format})
+
+
+@accounts_bp.route("/api/accounts/<int:account_id>/fcc-rename-format", methods=["PUT"])
+def update_fcc_rename_format(account_id):
+    """Update the FCC-matched channel rename format template for an account.
+
+    Request body:
+    {
+        "fcc_rename_format": "{network} {callsign} {broadcast_channel} - {market}"
+    }
+
+    Set to null or empty string to disable.
+    Supported tokens: {network}, {callsign}, {broadcast_channel}, {market}
+    """
+    account = Account.query.get_or_404(account_id)
+    data = request.get_json()
+
+    fmt = data.get("fcc_rename_format")
+    account.fcc_rename_format = fmt if fmt else None
+    db.session.commit()
+    cache_service.clear_account_cache(account_id)
+
+    return jsonify({"id": account.id, "fcc_rename_format": account.fcc_rename_format})
 
 
 @accounts_bp.route("/api/accounts/<int:account_id>", methods=["DELETE"])

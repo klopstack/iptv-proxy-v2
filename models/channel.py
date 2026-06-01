@@ -177,6 +177,9 @@ class Channel(db.Model):  # type: ignore[name-defined]
 
     # Third-party provider IDs
     thesportsdb_id = db.Column(db.String(50), nullable=True, index=True)  # TheSportsDB event ID for PPV
+    fcc_facility_id = db.Column(
+        db.Integer, db.ForeignKey("fcc_facilities.id"), nullable=True, index=True
+    )  # Matched FCC facility (set during FCC enrichment)
 
     # PPV enrichment tracking
     ppv_enrichment_status = db.Column(
@@ -194,6 +197,7 @@ class Channel(db.Model):  # type: ignore[name-defined]
 
     # Relationships
     category = db.relationship("Category", backref="channels")
+    fcc_facility = db.relationship("FccFacility", foreign_keys=[fcc_facility_id], lazy="select")
 
     # Unique constraint
     __table_args__ = (

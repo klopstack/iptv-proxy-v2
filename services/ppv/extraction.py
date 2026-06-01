@@ -75,6 +75,25 @@ class PPVEventExtractor:
     # Time-only pattern: "HH:MM", "HH:MMam", "9:00am"
     TIME_ONLY_PATTERN = r"\b(\d{1,2}):(\d{2})(?:\s*(am|pm))?\b"
 
+    # Stop-time token: "stop:YYYY-MM-DD HH:MM[:SS]" — provider-supplied broadcast end time
+    STOP_TIME_PATTERN = r"stop:(\d{4}-\d{1,2}-\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?)"
+
+    # Pipe-delimited weekday+date: "| Sat 31 May 19:05" or "| Tue 23 Dec 01:50"
+    # Captures: (day_int, month_abbr, hour, minute)
+    PIPE_DATE_PATTERN = (
+        r"\|\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+"
+        r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}):(\d{2})"
+    )
+
+    # Provider/country prefix patterns stripped before competitor extraction
+    # Applied iteratively: country code first, then provider+slot
+    _COUNTRY_PREFIX_RE = re.compile(r"^[A-Z]{2,3}:\s*", re.IGNORECASE)
+    _PROVIDER_SLOT_RE = re.compile(
+        r"^(?:DAZN|ESPN\s*(?:PLUS?|\+?)|MAX|TNT|FOX|SKY|BT\s*SPORT|beIN|ELEVEN)\s*(?:PPV\s*)?\d+\s*[-\u2013]\s*",
+        re.IGNORECASE,
+    )
+    _BARE_PPV_SLOT_RE = re.compile(r"^PPV\s*\d+\s*[-\u2013]\s*", re.IGNORECASE)
+
     def __init__(self, current_date: Optional[datetime] = None):
         """Initialize the extractor.
 
@@ -186,6 +205,31 @@ class PPVEventExtractor:
         cleaned = re.sub(r"\s+", " ", cleaned).strip()  # Normalize whitespace
         return cleaned
 
+    @staticmethod
+    def _strip_provider_prefix(name: str) -> str:
+        """
+        Remove provider/country prefix tokens that appear before competitor names.
+
+        Applied iteratively so that "US: DAZN PPV 3 - ..." strips the country code
+        first then the provider+slot prefix.
+
+        Examples:
+        - "US: DAZN PPV 3 - KANSAS CITY ROYALS @ TEXAS RANGERS"
+          -> "KANSAS CITY ROYALS @ TEXAS RANGERS"
+        - "UK: ESPN+ 1 - Liverpool @ Manchester City"
+          -> "Liverpool @ Manchester City"
+        - "PPV 2 - Fury vs Joshua"
+          -> "Fury vs Joshua"
+        """
+        prev = None
+        result = name
+        while result != prev:
+            prev = result
+            result = PPVEventExtractor._COUNTRY_PREFIX_RE.sub("", result).strip()
+            result = PPVEventExtractor._PROVIDER_SLOT_RE.sub("", result).strip()
+            result = PPVEventExtractor._BARE_PPV_SLOT_RE.sub("", result).strip()
+        return result
+
     def extract_competitors(self, channel_name: str) -> Optional[Tuple[str, str]]:
         """
         Extract competitor/team names from channel name.
@@ -205,6 +249,9 @@ class PPVEventExtractor:
 
         # First extract sport type to clean up the name
         _, cleaned_name = self.extract_sport(channel_name)
+
+        # Strip provider/country prefixes (e.g. "US: DAZN PPV 3 - ") before matching
+        cleaned_name = self._strip_provider_prefix(cleaned_name)
 
         # Remove tournament structure patterns (Round 4 - Game 1, etc.) to avoid false matches
         cleaned_name = self._clean_tournament_structure(cleaned_name)
@@ -292,6 +339,22 @@ class PPVEventExtractor:
                 # Invalid date (e.g., month > 12)
                 pass
 
+        # Try pipe-delimited weekday + "DD Month HH:MM" format:
+        # "| Sat 31 May 19:05", "| Tue 23 Dec 01:50"
+        pipe_match = re.search(self.PIPE_DATE_PATTERN, channel_name, re.IGNORECASE)
+        if pipe_match:
+            day_str, month_abbr, hour_str, minute_str = pipe_match.groups()
+            month = self._month_to_num(month_abbr)
+            try:
+                dt = datetime(self.current_year, month, int(day_str), int(hour_str), int(minute_str))
+                today = self.current_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                if dt.replace(hour=0, minute=0, second=0, microsecond=0) < today:
+                    dt = dt.replace(year=self.current_year + 1)
+                if not self.is_date_far_future(dt):
+                    return dt
+            except ValueError:
+                pass
+
         # Try month + day + time format
         match = re.search(self.DATE_PATTERN, channel_name, re.IGNORECASE)
         if match:
@@ -348,6 +411,30 @@ class PPVEventExtractor:
             ampm = match.group(3).lower() if match.group(3) else None
             return (hour, minute, ampm)
         return None
+
+    @staticmethod
+    def extract_stop_time(channel_name: str) -> Optional[datetime]:
+        """
+        Extract provider-supplied stop time from channel name.
+
+        Parses 'stop:YYYY-MM-DD HH:MM[:SS]' tokens present on live broadcast feeds.
+
+        Examples:
+        - "MLB 10 | Royals x Rangers start:2026-05-31 19:35:00 stop:2026-06-01 02:48:20"
+          -> datetime(2026, 6, 1, 2, 48, 20)
+
+        Returns: naive datetime (UTC), or None if token absent or unparseable.
+        """
+        match = re.search(PPVEventExtractor.STOP_TIME_PATTERN, channel_name, re.IGNORECASE)
+        if not match:
+            return None
+        try:
+            ts = match.group(1).strip()
+            if ts.count(":") == 2:
+                return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+            return datetime.strptime(ts, "%Y-%m-%d %H:%M")
+        except ValueError:
+            return None
 
     def infer_date_from_time(self, hour: int, minute: int, ampm: Optional[str] = None) -> datetime:
         """

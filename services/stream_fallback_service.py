@@ -15,7 +15,6 @@ LINK_TYPE_BACKUP = "backup"
 CACHE_TTL_SECONDS = 60
 
 _source_cache: dict[tuple[int, str], tuple[float, list["StreamSource"]]] = {}
-_backup_ids_cache: tuple[float, Set[int]] = (0.0, set())
 
 
 @dataclass(frozen=True)
@@ -33,9 +32,7 @@ def is_fallback_enabled() -> bool:
 
 def invalidate_cache() -> None:
     """Clear in-memory fallback caches (call after link CRUD)."""
-    global _backup_ids_cache
     _source_cache.clear()
-    _backup_ids_cache = (0.0, set())
 
 
 def build_upstream_url(account: Account, credential: Any, stream_id: str, fmt: str) -> str:
@@ -96,15 +93,8 @@ def get_backup_channel_ids() -> Set[int]:
     if not is_fallback_enabled():
         return set()
 
-    global _backup_ids_cache
-    now = time.time()
-    if now - _backup_ids_cache[0] < CACHE_TTL_SECONDS:
-        return _backup_ids_cache[1]
-
     rows = db.session.query(ChannelLink.source_channel_id).filter(ChannelLink.link_type == LINK_TYPE_BACKUP).all()
-    ids = {row[0] for row in rows}
-    _backup_ids_cache = (now, ids)
-    return ids
+    return {row[0] for row in rows}
 
 
 def probe_and_select_upstream(

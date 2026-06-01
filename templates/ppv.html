@@ -56,6 +56,37 @@
                 </div>
 
                 <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="bi bi-pencil-square"></i> PPV Channel Naming</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">
+                            Rename PPV channels in playlists using event data. Leave blank to use the original channel name.
+                        </p>
+
+                        <div id="ppv-rename-list" class="mb-3">
+                            <div class="text-center">
+                                <div class="spinner-border spinner-border-sm" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info small">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Available tokens:</strong>
+                            <code>{league}</code>, <code>{sport}</code>, <code>{home_team}</code>,
+                            <code>{away_team}</code>, <code>{start_time}</code>, <code>{date}</code>
+                            <br>
+                            <strong>Example:</strong>
+                            <code>{league} {sport}: {home_team} vs {away_team} - {start_time} {date}</code>
+                            <br>
+                            produces: <em>NFL Football: Chiefs vs Eagles - 8:20 PM Jan 5</em>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
                     <div class="card-header bg-dark text-white d-flex flex-wrap align-items-center justify-content-between gap-2">
                         <h5 class="mb-0"><i class="bi bi-calendar-event"></i> Detection Preview</h5>
                         <ul class="nav nav-pills nav-pills-sm" id="preview-view-tabs" role="tablist">
@@ -880,9 +911,79 @@ document.getElementById('queue-all-ppv-btn').addEventListener('click', async fun
     }
 });
 
+async function loadPpvRenameFormats() {
+    const container = document.getElementById('ppv-rename-list');
+    try {
+        const response = await fetch('/api/accounts');
+        const accounts = await response.json();
+
+        if (!accounts.length) {
+            container.innerHTML = '<p class="text-muted small">No accounts configured.</p>';
+            return;
+        }
+
+        let html = '<div class="list-group">';
+        for (const account of accounts) {
+            const fmt = account.ppv_rename_format || '';
+            html += `
+                <div class="list-group-item">
+                    <div class="row align-items-center g-2">
+                        <div class="col-md-3">
+                            <h6 class="mb-0">${escapeHtml(account.name)}</h6>
+                        </div>
+                        <div class="col-md-7">
+                            <input type="text" class="form-control form-control-sm ppv-rename-input"
+                                   data-account-id="${account.id}"
+                                   value="${escapeHtml(fmt)}"
+                                   placeholder="e.g. {league} {sport}: {home_team} vs {away_team} - {start_time} {date}">
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-sm btn-outline-primary w-100 ppv-rename-save-btn"
+                                    data-account-id="${account.id}">
+                                <i class="bi bi-save"></i> Save
+                            </button>
+                            <small class="text-muted ppv-rename-status-${account.id}"></small>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        html += '</div>';
+        container.innerHTML = html;
+
+        document.querySelectorAll('.ppv-rename-save-btn').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const accountId = btn.dataset.accountId;
+                const input = document.querySelector(`.ppv-rename-input[data-account-id="${accountId}"]`);
+                const statusEl = document.querySelector(`.ppv-rename-status-${accountId}`);
+                const fmt = input ? input.value.trim() : '';
+                btn.disabled = true;
+                try {
+                    const resp = await fetch(`/api/accounts/${accountId}/ppv-rename-format`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ppv_rename_format: fmt || null }),
+                    });
+                    if (!resp.ok) throw new Error(await resp.text());
+                    statusEl.innerHTML = '<i class="bi bi-check-circle text-success"></i>';
+                    setTimeout(() => { statusEl.innerHTML = ''; }, 2000);
+                } catch (err) {
+                    statusEl.innerHTML = '<i class="bi bi-exclamation-triangle text-danger"></i>';
+                    console.error('Error saving PPV rename format:', err);
+                } finally {
+                    btn.disabled = false;
+                }
+            });
+        });
+    } catch (error) {
+        container.innerHTML = `<div class="alert alert-danger small">Error loading accounts: ${escapeHtml(error.message)}</div>`;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     loadEnrichmentSettings();
     loadAccountsVisibility().then(() => {
+        loadPpvRenameFormats();
         initPreviewPanel();
         loadPreviewData();
     });

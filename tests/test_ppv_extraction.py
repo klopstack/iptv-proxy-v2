@@ -508,3 +508,119 @@ class TestPPVEventExtractor:
         result = self.extractor.extract_all("Arsenal vs Brighton at Stamford Bridge")
         # Should extract first vs match
         assert result["competitors"] is not None
+
+
+class TestDAZNStyleExtraction:
+    """Tests for provider-prefixed DAZN/ESPN channel name extraction.
+
+    These channels include a country code, provider name, slot number, and
+    full team names separated by '@', with a pipe-delimited date suffix.
+    """
+
+    def setup_method(self):
+        # Use a fixed reference date so date assertions are deterministic
+        self.extractor = PPVEventExtractor(current_date=datetime(2026, 5, 31, 0, 0, 0))
+
+    # --- Competitor extraction ---
+
+    def test_dazn_mlb_at_separator(self):
+        """Full provider-prefixed DAZN MLB channel: extracts team names after @ separator."""
+        result = self.extractor.extract_competitors(
+            "US: DAZN PPV 3 - KANSAS CITY ROYALS @ TEXAS RANGERS | Sat 31 May 19:05"
+        )
+        assert result == ("KANSAS CITY ROYALS", "TEXAS RANGERS")
+
+    def test_dazn_college_at_separator(self):
+        """DAZN college game: multi-word teams after @."""
+        result = self.extractor.extract_competitors(
+            "UK: DAZN PPV 3 - EAST CAROLINA @ NORTH CAROLINA | Tue 23 Dec 01:50"
+        )
+        assert result == ("EAST CAROLINA", "NORTH CAROLINA")
+
+    def test_dazn_nhl_at_separator(self):
+        """DAZN NHL: short city-based team names after @."""
+        result = self.extractor.extract_competitors("NL: DAZN PPV 7 - SENATORS @ RANGERS | Thu 15 Jan 00:20")
+        assert result == ("SENATORS", "RANGERS")
+
+    def test_espn_plus_channel(self):
+        """ESPN PLUS prefixed channel strips provider name before matching."""
+        result = self.extractor.extract_competitors("UK: ESPN+ 1 - Liverpool @ Manchester City")
+        assert result == ("Liverpool", "Manchester City")
+
+    def test_bare_ppv_slot_prefix(self):
+        """Bare 'PPV N -' prefix is stripped before matching."""
+        result = self.extractor.extract_competitors("PPV 2 - Fury vs Joshua")
+        assert result == ("Fury", "Joshua")
+
+    def test_placeholder_no_event_streaming(self):
+        """NO EVENT STREAMING variants return None, not junk teams."""
+        result = self.extractor.extract_competitors("US: ESPN PLUS 01 PPV - NO EVENT STREAMING")
+        assert result is None
+
+    def test_no_prefix_passthrough(self):
+        """Channels without provider prefix continue to work as before."""
+        result = self.extractor.extract_competitors("Giants x Rockies")
+        assert result == ("Giants", "Rockies")
+
+    # --- strip_provider_prefix helper ---
+
+    def test_strip_country_and_dazn_prefix(self):
+        from services.ppv.extraction import PPVEventExtractor as E
+
+        assert E._strip_provider_prefix("US: DAZN PPV 3 - ") == ""
+        assert E._strip_provider_prefix("UK: ESPN+ 1 - TEAM A") == "TEAM A"
+
+    def test_strip_bare_ppv_slot(self):
+        from services.ppv.extraction import PPVEventExtractor as E
+
+        assert E._strip_provider_prefix("PPV 5 - FURY VS JOSHUA") == "FURY VS JOSHUA"
+
+    def test_strip_idempotent_on_clean_name(self):
+        from services.ppv.extraction import PPVEventExtractor as E
+
+        name = "KANSAS CITY ROYALS @ TEXAS RANGERS"
+        assert E._strip_provider_prefix(name) == name
+
+    # --- Date extraction (pipe-delimited weekday+date) ---
+
+    def test_pipe_date_sat_may(self):
+        """'| Sat 31 May 19:05' parses to May 31 19:05 current year."""
+        result = self.extractor.extract_date("US: DAZN PPV 3 - KANSAS CITY ROYALS @ TEXAS RANGERS | Sat 31 May 19:05")
+        assert result == datetime(2026, 5, 31, 19, 5)
+
+    def test_pipe_date_tue_dec(self):
+        """'| Tue 23 Dec 01:50' parses to Dec 23."""
+        result = self.extractor.extract_date("UK: DAZN PPV 3 - EAST CAROLINA @ NORTH CAROLINA | Tue 23 Dec 01:50")
+        assert result is not None
+        assert result.month == 12
+        assert result.day == 23
+        assert result.hour == 1
+        assert result.minute == 50
+
+    def test_pipe_date_thu_jan(self):
+        """'| Thu 15 Jan 00:20' parses to Jan 15."""
+        result = self.extractor.extract_date("NL: DAZN PPV 7 - SENATORS @ RANGERS | Thu 15 Jan 00:20")
+        assert result is not None
+        assert result.month == 1
+        assert result.day == 15
+        assert result.hour == 0
+        assert result.minute == 20
+
+    # --- extract_stop_time ---
+
+    def test_extract_stop_time_with_seconds(self):
+        """stop: token with seconds is parsed correctly."""
+        result = PPVEventExtractor.extract_stop_time(
+            "MLB 10 | Royals x Rangers start:2026-05-31 19:35:00 stop:2026-06-01 02:48:20"
+        )
+        assert result == datetime(2026, 6, 1, 2, 48, 20)
+
+    def test_extract_stop_time_without_seconds(self):
+        """stop: token without seconds is parsed correctly."""
+        result = PPVEventExtractor.extract_stop_time("MLB 10 | Royals x Rangers stop:2026-06-01 03:00")
+        assert result == datetime(2026, 6, 1, 3, 0)
+
+    def test_extract_stop_time_absent(self):
+        """Returns None when no stop: token present."""
+        result = PPVEventExtractor.extract_stop_time("MLB 10 | Giants x Rockies")
+        assert result is None

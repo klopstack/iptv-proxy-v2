@@ -3,12 +3,21 @@ PPV enrichment orchestrator — single entry point for scheduler and API routes.
 """
 
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from flask import Flask
+from sqlalchemy import or_
 
 from models import Account, Channel, Settings, db
-from services.ppv.constants import ENRICHMENT_BATCH_SIZE, SETTING_PPV_ENRICHMENT_ENABLED
+from services.epg.ppv import is_ppv_placeholder_name
+from services.ppv.constants import (
+    ENRICHMENT_BATCH_SIZE,
+    PPV_ENRICHMENT_HOT_BATCH_SIZE,
+    PPV_ENRICHMENT_HOT_WINDOW_HOURS,
+    SETTING_PPV_ENRICHMENT_ENABLED,
+)
+from services.ppv.detection import is_generic_channel_name
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +35,22 @@ class PPVEnrichmentOrchestrator:
         if value is None:
             return True
         return str(value).lower() not in ("false", "0", "no", "off")
+
+    @staticmethod
+    def get_queue_stats() -> Dict[str, Any]:
+        """Return current queue depth used for adaptive scheduling and status API."""
+        hot_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=PPV_ENRICHMENT_HOT_WINDOW_HOURS)
+        pending_filter = or_(
+            Channel.ppv_enrichment_status.is_(None),
+            Channel.ppv_enrichment_status.in_(["queued", "retry_pending"]),
+        )
+        base = Channel.query.filter(
+            Channel.is_ppv.is_(True),
+            pending_filter,
+        )
+        total = base.count()
+        hot = base.filter(Channel.last_seen >= hot_cutoff).count()
+        return {"queued_count": total, "hot_queued_count": hot}
 
     def _get_enrichment_service(self):
         from services.ppv.enrichment import get_calendar_enrichment_service
@@ -53,24 +78,76 @@ class PPVEnrichmentOrchestrator:
             "errors": 0,
         }
 
+        hot_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=PPV_ENRICHMENT_HOT_WINDOW_HOURS)
+        pending_status_filter = or_(
+            Channel.ppv_enrichment_status.is_(None),
+            Channel.ppv_enrichment_status.in_(["queued", "retry_pending"]),
+        )
+
         for account in accounts:
             if not account or not account.enabled:
                 continue
 
-            channels = (
+            base_filter = [
+                Channel.account_id == account.id,
+                Channel.is_ppv.is_(True),
+                pending_status_filter,
+            ]
+
+            # --- Hot pass: recently-seen channels first ---
+            hot_channels = (
                 Channel.query.filter(
-                    Channel.account_id == account.id,
-                    Channel.is_ppv.is_(True),
-                    Channel.ppv_enrichment_status.in_([None, "queued", "retry_pending"]),
+                    *base_filter,
+                    Channel.last_seen >= hot_cutoff,
                 )
-                .limit(batch_size)
+                .order_by(
+                    Channel.last_seen.desc(),
+                    Channel.updated_at.desc(),
+                    Channel.id.asc(),
+                )
+                .limit(PPV_ENRICHMENT_HOT_BATCH_SIZE)
                 .all()
             )
+
+            # --- Cold pass: fill remaining budget, skip placeholder names ---
+            remaining = batch_size - len(hot_channels)
+            cold_channels: list = []
+            if remaining > 0:
+                hot_ids = {ch.id for ch in hot_channels}
+                cold_candidates = (
+                    Channel.query.filter(
+                        *base_filter,
+                        Channel.last_seen < hot_cutoff,
+                    )
+                    .order_by(
+                        Channel.last_seen.desc(),
+                        Channel.updated_at.desc(),
+                        Channel.id.asc(),
+                    )
+                    .limit(remaining * 2)  # over-fetch to allow skipping placeholders
+                    .all()
+                )
+                for ch in cold_candidates:
+                    if ch.id in hot_ids:
+                        continue
+                    if is_ppv_placeholder_name(ch.name) or is_generic_channel_name(ch.name):
+                        continue
+                    cold_channels.append(ch)
+                    if len(cold_channels) >= remaining:
+                        break
+
+            channels = hot_channels + cold_channels
 
             if not channels:
                 continue
 
-            logger.info("Enriching %s PPV channels for account %s", len(channels), account.name)
+            logger.info(
+                "Enriching %s PPV channels for account %s (%s hot, %s cold)",
+                len(channels),
+                account.name,
+                len(hot_channels),
+                len(cold_channels),
+            )
             result = service.enrich_channels(channels)
             total_stats["accounts_processed"] += 1
             total_stats["channels_processed"] += result.get("processed", 0)

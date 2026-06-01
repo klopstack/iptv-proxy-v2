@@ -3,6 +3,7 @@ PPV domain constants — single source for category, placeholder, and generic ch
 """
 
 import re
+from typing import Optional
 
 # Re-export from EPG constants (shared with sync/category marking)
 from services.epg.constants import PPV_CATEGORY_PATTERNS, PPV_PLACEHOLDER_PATTERNS  # noqa: F401
@@ -18,6 +19,12 @@ __all__ = [
     "MAX_EVENT_FUTURE_DAYS",
     "MAX_RETRY_ATTEMPTS",
     "ENRICHMENT_BATCH_SIZE",
+    "PPV_ENRICHMENT_HOT_BATCH_SIZE",
+    "PPV_ENRICHMENT_BACKLOG_THRESHOLD",
+    "PPV_ENRICHMENT_HOT_WINDOW_HOURS",
+    "SPORT_GRACE_HOURS",
+    "DEFAULT_SPORT_GRACE_HOURS",
+    "get_sport_grace_hours",
     "SETTING_PPV_ENRICHMENT_ENABLED",
     "METADATA_KEY_CALENDAR_PROCESSED",
     "METADATA_KEY_CALENDAR_MATCHED",
@@ -51,6 +58,43 @@ MAX_EVENT_AGE_DAYS = 30
 MAX_EVENT_FUTURE_DAYS = 365
 MAX_RETRY_ATTEMPTS = 3
 ENRICHMENT_BATCH_SIZE = 100
+
+# Queue throughput tuning
+PPV_ENRICHMENT_HOT_BATCH_SIZE = 50
+PPV_ENRICHMENT_BACKLOG_THRESHOLD = 1000
+PPV_ENRICHMENT_HOT_WINDOW_HOURS = 24
+
+# Sport-aware grace windows for live-game visibility (hours after scheduled_at)
+SPORT_GRACE_HOURS = {
+    "baseball": 4,
+    "mlb": 4,
+    "milb": 4,
+    "hockey": 4,
+    "ice hockey": 4,
+    "nhl": 4,
+    "basketball": 3,
+    "nba": 3,
+    "football": 4,
+    "nfl": 4,
+    "soccer": 2,
+    "football (soccer)": 2,
+    "boxing": 12,
+    "mma": 12,
+    "ufc": 12,
+    "wrestling": 4,
+    "tennis": 3,
+    "golf": 6,
+    "rugby": 3,
+}
+DEFAULT_SPORT_GRACE_HOURS = 6
+
+
+def get_sport_grace_hours(sport_name: Optional[str]) -> int:
+    """Return hours after scheduled_at to keep a linked event visible in the playlist."""
+    if not sport_name:
+        return DEFAULT_SPORT_GRACE_HOURS
+    return SPORT_GRACE_HOURS.get(sport_name.lower().strip(), DEFAULT_SPORT_GRACE_HOURS)
+
 
 # Scheduler / settings keys
 SETTING_PPV_ENRICHMENT_ENABLED = "ppv_enrichment_enabled"

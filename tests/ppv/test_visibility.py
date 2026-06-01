@@ -643,3 +643,209 @@ class TestPPVVisibilityService:
         assert options["hide_all"]["value"] == "hide_all"
         assert "label" in options["hide_all"]
         assert "description" in options["hide_all"]
+
+
+class TestLiveGameVisibility:
+    """Tests for in-progress / live-game visibility behaviour.
+
+    Covers the three new show-paths added to _is_ppv_active():
+    1. event.status == STATUS_LIVE
+    2. provider stop: token present and now < stop_time
+    3. sport-aware grace window after scheduled_at
+    """
+
+    def _make_account_and_service(self, app_ctx):
+        from models import Account, db
+
+        account = Account(name="LiveTest", server="http://test.com", ppv_visibility="hide_inactive")
+        db.session.add(account)
+        db.session.commit()
+        service = PPVVisibilityService(account)
+        return account, service
+
+    def _make_channel(self, account_id, stream_id, name):
+        from models import Channel, db
+
+        channel = Channel(
+            account_id=account_id,
+            stream_id=stream_id,
+            name=name,
+            is_ppv=True,
+            is_active=True,
+        )
+        db.session.add(channel)
+        db.session.commit()
+        return channel
+
+    def _link_event(self, event, channel):
+        from models import EventChannelLink, db
+
+        link = EventChannelLink(event_id=event.id, channel_id=channel.id)
+        db.session.add(link)
+        db.session.commit()
+
+    def test_status_live_always_shown(self, app):
+        """Event with STATUS_LIVE is shown even if scheduled_at is in the past."""
+        with app.app_context():
+            account, service = self._make_account_and_service(app)
+            past = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
+            event = Event(
+                external_id="live-test-1",
+                scheduled_at=past,
+                home_team_id="royals",
+                home_team_name="Royals",
+                away_team_id="rangers",
+                away_team_name="Rangers",
+                sport="baseball",
+                status=Event.STATUS_LIVE,
+            )
+            db.session.add(event)
+            db.session.commit()
+            channel = self._make_channel(account.id, "live-ch-1", "MLB 10 | Royals x Rangers start:2026-05-31 19:35:00")
+            self._link_event(event, channel)
+            assert service.should_show_channel(channel) is True
+
+    def test_stop_token_before_now_shown(self, app):
+        """Channel with stop: token in the future is shown even if scheduled_at passed."""
+        with app.app_context():
+            account, service = self._make_account_and_service(app)
+            # Game started 90 minutes ago
+            past = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=90)
+            # stop: is 3 hours from now
+            future_stop = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=3)
+            stop_str = future_stop.strftime("%Y-%m-%d %H:%M:%S")
+            event = Event(
+                external_id="stop-test-1",
+                scheduled_at=past,
+                home_team_id="royals2",
+                home_team_name="Royals",
+                away_team_id="rangers2",
+                away_team_name="Rangers",
+                sport="baseball",
+                status=Event.STATUS_SCHEDULED,
+            )
+            db.session.add(event)
+            db.session.commit()
+            channel = self._make_channel(
+                account.id,
+                "stop-ch-1",
+                f"MLB 10 | Royals x Rangers start:2026-05-31 19:35:00 stop:{stop_str}",
+            )
+            self._link_event(event, channel)
+            assert service.should_show_channel(channel) is True
+
+    def test_stop_token_past_falls_through_to_grace(self, app):
+        """Channel whose stop: time has passed but is within grace window stays shown."""
+        with app.app_context():
+            account, service = self._make_account_and_service(app)
+            # Game started 2 hours ago; stop: expired 30 min ago but within 4h baseball grace
+            past = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=2)
+            past_stop = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=30)
+            stop_str = past_stop.strftime("%Y-%m-%d %H:%M:%S")
+            event = Event(
+                external_id="stop-test-2",
+                scheduled_at=past,
+                home_team_id="royals3",
+                home_team_name="Royals",
+                away_team_id="rangers3",
+                away_team_name="Rangers",
+                sport="baseball",
+                status=Event.STATUS_SCHEDULED,
+            )
+            db.session.add(event)
+            db.session.commit()
+            channel = self._make_channel(
+                account.id,
+                "stop-ch-2",
+                f"MLB 10 | Royals x Rangers stop:{stop_str}",
+            )
+            self._link_event(event, channel)
+            # Within 4-hour baseball grace (only 2h elapsed) → show
+            assert service.should_show_channel(channel) is True
+
+    def test_grace_window_shows_in_progress_game(self, app):
+        """Scheduled event that started 90 min ago is shown within grace window."""
+        with app.app_context():
+            account, service = self._make_account_and_service(app)
+            # Game started 90 min ago; baseball grace is 4 hours
+            scheduled = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=90)
+            event = Event(
+                external_id="grace-test-1",
+                scheduled_at=scheduled,
+                home_team_id="royals4",
+                home_team_name="Royals",
+                away_team_id="rangers4",
+                away_team_name="Rangers",
+                sport="baseball",
+                status=Event.STATUS_SCHEDULED,
+            )
+            db.session.add(event)
+            db.session.commit()
+            channel = self._make_channel(account.id, "grace-ch-1", "MLB 10 | Royals x Rangers")
+            self._link_event(event, channel)
+            assert service.should_show_channel(channel) is True
+
+    def test_grace_window_hides_expired_game(self, app):
+        """Scheduled event well past grace window is hidden."""
+        with app.app_context():
+            account, service = self._make_account_and_service(app)
+            # Game started 8 hours ago; baseball grace is 4 hours
+            scheduled = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=8)
+            event = Event(
+                external_id="grace-test-2",
+                scheduled_at=scheduled,
+                home_team_id="royals5",
+                home_team_name="Royals",
+                away_team_id="rangers5",
+                away_team_name="Rangers",
+                sport="baseball",
+                status=Event.STATUS_SCHEDULED,
+            )
+            db.session.add(event)
+            db.session.commit()
+            channel = self._make_channel(account.id, "grace-ch-2", "MLB 10 | Royals x Rangers")
+            self._link_event(event, channel)
+            assert service.should_show_channel(channel) is False
+
+    def test_finished_event_hidden_regardless_of_grace(self, app):
+        """STATUS_FINISHED hides channel even if within grace window (regression)."""
+        with app.app_context():
+            account, service = self._make_account_and_service(app)
+            recent = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=30)
+            event = Event(
+                external_id="grace-finished-1",
+                scheduled_at=recent,
+                home_team_id="royals6",
+                home_team_name="Royals",
+                away_team_id="rangers6",
+                away_team_name="Rangers",
+                sport="baseball",
+                status=Event.STATUS_FINISHED,
+            )
+            db.session.add(event)
+            db.session.commit()
+            channel = self._make_channel(account.id, "grace-ch-3", "MLB 10 | Royals x Rangers")
+            self._link_event(event, channel)
+            assert service.should_show_channel(channel) is False
+
+    def test_boxing_uses_longer_grace_window(self, app):
+        """Boxing events use 12-hour grace window, keeping them visible longer."""
+        with app.app_context():
+            account, service = self._make_account_and_service(app)
+            # Fight started 10 hours ago; boxing grace is 12 hours
+            scheduled = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=10)
+            event = Event(
+                external_id="boxing-grace-1",
+                scheduled_at=scheduled,
+                home_team_id="fury",
+                home_team_name="Fury",
+                away_team_id="joshua",
+                away_team_name="Joshua",
+                sport="boxing",
+                status=Event.STATUS_SCHEDULED,
+            )
+            db.session.add(event)
+            db.session.commit()
+            channel = self._make_channel(account.id, "boxing-ch-1", "BOXING: Fury vs Joshua")
+            self._link_event(event, channel)
+            assert service.should_show_channel(channel) is True

@@ -87,6 +87,37 @@
             </div>
         </div>
 
+        <!-- FCC Channel Naming Card -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-pencil-square"></i> FCC Channel Naming
+            </div>
+            <div class="card-body">
+                <p class="mb-3">
+                    Rename FCC-matched channels in playlists using station data. Leave blank to use the original channel name.
+                </p>
+                <div id="fcc-rename-list" class="mb-3">
+                    <div class="text-center py-3">
+                        <div class="spinner-border spinner-border-sm" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-info small mt-3 mb-0">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Available tokens:</strong>
+                    <code>{network}</code>, <code>{callsign}</code>, <code>{broadcast_channel}</code>, <code>{market}</code>
+                    <br>
+                    <strong>Example:</strong>
+                    <code>{network} {callsign} {broadcast_channel} - {market}</code>
+                    <br>
+                    produces: <em>ABC KABC-TV 7 - Los Angeles</em>
+                    <br>
+                    Channels must have an FCC facility matched (via "Apply Enrichment" above).
+                </div>
+            </div>
+        </div>
+
         <!-- Station Lookup Card -->
         <div class="card mb-4">
             <div class="card-header">
@@ -657,9 +688,73 @@ async function loadAccounts() {
             option.textContent = `${acc.name} (${acc.channel_count || 0} channels)`;
             select.appendChild(option);
         });
+
+        loadFccRenameFormats(accounts);
     } catch (error) {
         console.error('Failed to load accounts:', error);
     }
+}
+
+async function loadFccRenameFormats(accounts) {
+    const container = document.getElementById('fcc-rename-list');
+    if (!accounts || !accounts.length) {
+        container.innerHTML = '<p class="text-muted small">No accounts configured.</p>';
+        return;
+    }
+
+    let html = '<div class="list-group">';
+    for (const account of accounts) {
+        const fmt = account.fcc_rename_format || '';
+        html += `
+            <div class="list-group-item">
+                <div class="row align-items-center g-2">
+                    <div class="col-md-3">
+                        <h6 class="mb-0">${escapeHtml(account.name)}</h6>
+                    </div>
+                    <div class="col-md-7">
+                        <input type="text" class="form-control form-control-sm fcc-rename-input"
+                               data-account-id="${account.id}"
+                               value="${escapeHtml(fmt)}"
+                               placeholder="e.g. {network} {callsign} {broadcast_channel} - {market}">
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-sm btn-outline-primary w-100 fcc-rename-save-btn"
+                                data-account-id="${account.id}">
+                            <i class="bi bi-save"></i> Save
+                        </button>
+                        <small class="fcc-rename-status-${account.id}"></small>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    html += '</div>';
+    container.innerHTML = html;
+
+    document.querySelectorAll('.fcc-rename-save-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const accountId = btn.dataset.accountId;
+            const input = document.querySelector(`.fcc-rename-input[data-account-id="${accountId}"]`);
+            const statusEl = document.querySelector(`.fcc-rename-status-${accountId}`);
+            const fmt = input ? input.value.trim() : '';
+            btn.disabled = true;
+            try {
+                const resp = await fetch(`/api/accounts/${accountId}/fcc-rename-format`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fcc_rename_format: fmt || null }),
+                });
+                if (!resp.ok) throw new Error(await resp.text());
+                statusEl.innerHTML = '<i class="bi bi-check-circle text-success"></i>';
+                setTimeout(() => { statusEl.innerHTML = ''; }, 2000);
+            } catch (err) {
+                statusEl.innerHTML = '<i class="bi bi-exclamation-triangle text-danger"></i>';
+                console.error('Error saving FCC rename format:', err);
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    });
 }
 
 async function previewEnrichment() {
