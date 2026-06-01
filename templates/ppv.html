@@ -261,6 +261,7 @@
 {% block extra_js %}
 <script type="module" src="{{ url_for('static', filename='js/pages/ppv_bootstrap.js') }}"></script>
 <script>
+/* global parseUtcTimestamp */
 const previewState = {
     view: 'events',
     accountId: '',
@@ -277,14 +278,7 @@ function escapeHtml(text) {
 }
 
 function parsePreviewDateTime(isoString) {
-    if (!isoString) return null;
-    let normalized = String(isoString);
-    if (!normalized.endsWith('Z') && !normalized.match(/[+-]\d{2}:\d{2}$/)) {
-        normalized = `${normalized}Z`;
-    }
-    const date = new Date(normalized);
-    if (Number.isNaN(date.getTime())) return null;
-    return date;
+    return parseUtcTimestamp(isoString);
 }
 
 function formatDateTime(isoString) {

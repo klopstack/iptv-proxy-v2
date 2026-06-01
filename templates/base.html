@@ -311,6 +311,24 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Shared datetime helpers for inline template scripts.
+        // Naive ISO strings are interpreted as UTC for consistency with backend transport.
+        function parseUtcTimestamp(isoString) {
+            if (!isoString) return null;
+            const raw = String(isoString);
+            const normalized = raw.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(raw)
+                ? raw
+                : `${raw}Z`;
+            const date = new Date(normalized);
+            return Number.isNaN(date.getTime()) ? null : date;
+        }
+
+        function formatUtcTimestamp(isoString, fallback = '-') {
+            const date = parseUtcTimestamp(isoString);
+            if (!date) return fallback;
+            return date.toLocaleString(undefined, { timeZoneName: 'short' });
+        }
+
         /**
          * Reusable TagSelector component for autocomplete tag selection
          * Usage:

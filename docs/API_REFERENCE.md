@@ -23,6 +23,26 @@ Most API endpoints require authentication. The proxy supports session-based auth
 - Logout: `POST /logout`
 - Sessions managed via Flask sessions
 
+## Datetime Semantics
+
+All API clients should treat datetime fields with the following rules:
+
+1. Canonical API datetime fields are UTC.
+2. UTC values are serialized with an explicit `Z` suffix when available.
+3. If a datetime string has no offset suffix (`Z` or `+/-HH:MM`), clients must treat it as UTC.
+4. UI display should convert UTC to viewer-local timezone and include timezone label where practical.
+
+### Recommended Client Parsing
+
+- Accept explicit UTC: `2026-06-01T12:00:00Z`
+- Accept explicit offset: `2026-06-01T08:00:00-04:00`
+- Treat naive ISO as UTC: `2026-06-01T12:00:00` -> `2026-06-01T12:00:00Z`
+
+### Notes for Xtream/XMLTV Consumers
+
+- Xtream EPG timestamp fields are normalized as UTC before epoch/format output.
+- XMLTV ingest normalizes source-offset times into canonical UTC for internal storage and transport.
+
 ## Playlist Endpoints
 
 ### Generate M3U Playlist

@@ -224,6 +224,7 @@
 </div>
 
 <script>
+/* global formatUtcTimestamp */
 // ============================================================================
 // Utility Functions
 // ============================================================================
@@ -238,20 +239,6 @@ function escapeHtml(text) {
         "'": '&#039;'
     };
     return String(text).replace(/[&<>"']/g, m => map[m]);
-}
-
-function parseUtcTimestamp(isoString) {
-    if (!isoString) return null;
-    const normalized = String(isoString).endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(String(isoString))
-        ? String(isoString)
-        : `${isoString}Z`;
-    return new Date(normalized);
-}
-
-function formatUtcTimestamp(isoString) {
-    const date = parseUtcTimestamp(isoString);
-    if (!date || Number.isNaN(date.getTime())) return isoString || 'Unknown';
-    return date.toLocaleString(undefined, { timeZoneName: 'short' });
 }
 
 // ============================================================================
@@ -275,7 +262,7 @@ async function loadFccStats() {
             return;
         }
         
-        const lastSync = stats.last_sync ? formatUtcTimestamp(stats.last_sync) : 'Unknown';
+        const lastSync = stats.last_sync ? formatUtcTimestamp(stats.last_sync, 'Unknown') : 'Unknown';
         const serviceBreakdown = Object.entries(stats.by_service_code || {})
             .map(([code, count]) => `<span class="badge bg-secondary me-1">${code}: ${count.toLocaleString()}</span>`)
             .join('');
