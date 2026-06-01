@@ -25,7 +25,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from queue import Empty, Queue
-from typing import TYPE_CHECKING, Callable, Dict, Generator, Optional
+from typing import TYPE_CHECKING, Callable, Dict, Generator, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -64,6 +64,11 @@ class FFmpegStream:
     credential_id: Optional[int]
     session_token: str
     user_agent: str = "okhttp/3.14.9"
+
+    # Failover chain: list of (stream_id, upstream_url); active_source_index selects current
+    fallback_sources: List[tuple[str, str]] = field(default_factory=list)
+    active_source_index: int = 0
+    failover_lock: threading.Lock = field(default_factory=threading.Lock)
 
     # State
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
@@ -157,9 +162,15 @@ class FFmpegStreamService:
         user_agent: str = "okhttp/3.14.9",
         on_stream_started: Optional[Callable[[FFmpegStream], None]] = None,
         on_stream_closed: Optional[Callable[[FFmpegStream], None]] = None,
+        fallback_sources: Optional[List[Tuple[str, str]]] = None,
+        active_source_index: int = 0,
     ) -> tuple[FFmpegStream, StreamSubscriber]:
         """Subscribe to a stream, creating it if needed."""
         stream_key = self._get_stream_key(account_id, stream_id, format)
+        chain = fallback_sources or [(stream_id, upstream_url)]
+        if active_source_index >= len(chain):
+            active_source_index = 0
+        active_stream_id, active_url = chain[active_source_index]
 
         with self._lock:
             stream = self._streams.get(stream_key)
@@ -170,24 +181,31 @@ class FFmpegStreamService:
                     f"({len(stream.subscribers)} existing subscribers)"
                 )
             else:
-                # Create new stream with ffmpeg
+                if stream and not stream.is_active:
+                    self._close_stream(stream, invoke_callback=False)
+                    del self._streams[stream_key]
+
                 stream = FFmpegStream(
                     stream_key=stream_key,
                     account_id=account_id,
                     stream_id=stream_id,
                     format=format,
-                    upstream_url=upstream_url,
+                    upstream_url=active_url,
                     credential_id=credential_id,
                     session_token=session_token,
                     user_agent=user_agent,
+                    fallback_sources=list(chain),
+                    active_source_index=active_source_index,
                     on_stream_closed=on_stream_closed,
                 )
                 self._streams[stream_key] = stream
 
-                # Start ffmpeg process
                 self._start_ffmpeg(stream)
 
-                logger.info(f"Created new ffmpeg stream {stream_key}")
+                logger.info(
+                    f"Created new ffmpeg stream {stream_key} "
+                    f"(source index {active_source_index}, upstream stream {active_stream_id})"
+                )
 
                 if on_stream_started:
                     on_stream_started(stream)
@@ -445,21 +463,71 @@ class FFmpegStreamService:
             logger.error(f"FFmpeg reader error for {stream.stream_key}: {e}")
             stream.error = str(e)
         finally:
-            stream.is_active = False
+            if not self._try_failover(stream):
+                stream.is_active = False
 
-            # Signal end to all subscribers
-            with stream.lock:
-                for subscriber in stream.subscribers.values():
-                    try:
-                        subscriber.queue.put_nowait(None)
-                    except Exception:
-                        pass
-                    subscriber.active = False
+                # Signal end to all subscribers
+                with stream.lock:
+                    for subscriber in stream.subscribers.values():
+                        try:
+                            subscriber.queue.put_nowait(None)
+                        except Exception:
+                            pass
+                        subscriber.active = False
 
+                logger.info(
+                    f"FFmpeg reader ended for {stream.stream_key} "
+                    f"(bytes: {stream.bytes_received}, error: {stream.error})"
+                )
+
+    def _try_failover(self, stream: FFmpegStream) -> bool:
+        """Attempt to restart ffmpeg on the next fallback source. Returns True if restarted."""
+        with stream.failover_lock:
+            if not stream.subscribers:
+                return False
+
+            next_index = stream.active_source_index + 1
+            if next_index >= len(stream.fallback_sources):
+                return False
+
+            next_stream_id, next_url = stream.fallback_sources[next_index]
             logger.info(
-                f"FFmpeg reader ended for {stream.stream_key} "
-                f"(bytes: {stream.bytes_received}, error: {stream.error})"
+                "Stream %s failing over from source %s to %s (index %s -> %s)",
+                stream.stream_key,
+                stream.fallback_sources[stream.active_source_index][0],
+                next_stream_id,
+                stream.active_source_index,
+                next_index,
             )
+
+            self._terminate_ffmpeg_process(stream)
+            stream.active_source_index = next_index
+            stream.upstream_url = next_url
+            stream.error = None
+            stream.is_active = True
+            stream.bytes_received = 0
+            self._start_ffmpeg(stream)
+            return True
+
+    def _terminate_ffmpeg_process(self, stream: FFmpegStream) -> None:
+        """Stop ffmpeg process without closing subscribers or invoking on_stream_closed."""
+        if stream.process:
+            try:
+                stream.process.terminate()
+                try:
+                    stream.process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    stream.process.kill()
+            except Exception as e:
+                logger.debug(f"Error terminating ffmpeg during failover: {e}")
+            stream.process = None
+
+    def _restart_ffmpeg(self, stream: FFmpegStream) -> None:
+        """Restart ffmpeg on the current upstream_url."""
+        self._terminate_ffmpeg_process(stream)
+        stream.error = None
+        stream.is_active = True
+        self._start_ffmpeg(stream)
 
     def _ffmpeg_error_monitor(self, stream: FFmpegStream) -> None:
         """Monitor ffmpeg stderr for errors."""
@@ -496,22 +564,13 @@ class FFmpegStreamService:
         except Exception as e:
             logger.debug(f"FFmpeg error monitor ended for {stream.stream_key}: {e}")
 
-    def _close_stream(self, stream: FFmpegStream) -> None:
+    def _close_stream(self, stream: FFmpegStream, invoke_callback: bool = True) -> None:
         """Close a stream and cleanup."""
         logger.info(f"Closing ffmpeg stream {stream.stream_key}")
 
         stream.is_active = False
 
-        # Kill ffmpeg process
-        if stream.process:
-            try:
-                stream.process.terminate()
-                try:
-                    stream.process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    stream.process.kill()
-            except Exception as e:
-                logger.debug(f"Error terminating ffmpeg: {e}")
+        self._terminate_ffmpeg_process(stream)
 
         # Signal all subscribers
         with stream.lock:
@@ -529,7 +588,7 @@ class FFmpegStreamService:
                 del self._streams[stream.stream_key]
 
         # Trigger cleanup callback (e.g., to release connection)
-        if stream.on_stream_closed:
+        if invoke_callback and stream.on_stream_closed:
             try:
                 # Wrap in app context if available (needed for database access)
                 if self._app:

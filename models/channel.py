@@ -266,9 +266,13 @@ class ChannelLink(db.Model):  # type: ignore[name-defined]
     - Time-shifted channels (East/West coast feeds)
     - Simulcast channels (same content, different stream)
     - HD/SD pairs (same content, different quality)
+    - Backup streams (primary channel_id -> backup source_channel_id for proxy failover)
 
     When generating EPG, if a channel has no direct EPG mapping but has a
     ChannelLink, the source channel's EPG is used with optional time offset.
+
+    For link_type="backup": channel_id is the playlist primary; source_channel_id
+    is the failover upstream (hidden from client playlists when fallback is enabled).
     """
 
     __tablename__ = "channel_links"
@@ -286,7 +290,7 @@ class ChannelLink(db.Model):  # type: ignore[name-defined]
 
     # Link type for clarity and filtering
     link_type = db.Column(db.String(50), default="time_shifted")
-    # Types: "time_shifted", "simulcast", "hd_sd_pair"
+    # Types: "time_shifted", "simulcast", "hd_sd_pair", "backup"
 
     # Whether this link was auto-detected or manually created
     auto_detected = db.Column(db.Boolean, default=False)

@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from sqlalchemy import delete, select, update
 
-from models import Account, Category, Channel, ChannelLink, ChannelTag, Tag, db
+from models import Account, Category, Channel, ChannelLink, ChannelTag, Settings, Tag, db
 from services.iptv_service import get_iptv_service_for_account
 from services.tag_service import TagService
 
@@ -231,6 +231,14 @@ class ChannelSyncService:
                         logger.error("PPV re-enrichment after sync failed: %s", e)
                         stats["errors"].append(f"PPV re-enrichment error: {str(e)}")
 
+                if Settings.get("stream_fallback_auto_detect", "true") != "false":
+                    try:
+                        backup_stats = ChannelSyncService.detect_backup_pairs(account_id)
+                        stats["backup_pair_detection"] = backup_stats
+                    except Exception as e:
+                        logger.error("Backup pair detection after sync failed: %s", e)
+                        stats["errors"].append(f"Backup pair detection error: {str(e)}")
+
             logger.info(
                 f"Sync completed for account {account.name}: "
                 f"{stats['channels_added']} added, {stats['channels_updated']} updated, "
@@ -244,6 +252,13 @@ class ChannelSyncService:
             db.session.rollback()
 
         return stats
+
+    @staticmethod
+    def detect_backup_pairs(account_id: Optional[int] = None) -> Dict[str, Any]:
+        """Auto-detect primary/backup stream pairs for proxy failover."""
+        from services.backup_pair_detection import detect_backup_pairs
+
+        return detect_backup_pairs(account_id)
 
     @staticmethod
     def prune_inactive_channel_tags(account_id: int) -> int:

@@ -23,7 +23,7 @@ class PPVEventExtractor:
 
     # Sport/event type patterns - extracted first to clean up channel names
     # Common sports and event types
-    SPORT_PATTERN = r"\b(Field\s+Hockey|Ice\s+Hockey|NCAA\s+Football|College\s+Football|NFL|NBA|MLB|NHL|Soccer|Football|Basketball|Volleyball|Tennis|Golf|Cricket|Rugby|Lacrosse|Curling|Skating|Weightlifting|Boxing|MMA|UFC|Wrestling|Judo|Karate|Taekwondo|Gymnastics|Swimming|Track\s+and\s+Field|Cross\s+Country|Rowing|Sailing|Cycling|Triathlon|Badminton|Squash|Table\s+Tennis|Handball|Netball|Australian\s+Rules|American\s+Football|Australian\s+Football)\b"
+    SPORT_PATTERN = r"\b(Field\s+Hockey|Ice\s+Hockey|NCAA\s+Football|College\s+Football|NFL|NBA|MLB|MILB|MiLB|NHL|Soccer|Football|Basketball|Volleyball|Tennis|Golf|Cricket|Rugby|Lacrosse|Curling|Skating|Weightlifting|Boxing|MMA|UFC|Wrestling|Judo|Karate|Taekwondo|Gymnastics|Swimming|Track\s+and\s+Field|Cross\s+Country|Rowing|Sailing|Cycling|Triathlon|Badminton|Squash|Table\s+Tennis|Handball|Netball|Australian\s+Rules|American\s+Football|Australian\s+Football)\b"
 
     # Tournament structure pattern - removes "Round 4 - Game 1" style patterns
     # Matched BEFORE competitor extraction to prevent false matches
@@ -311,8 +311,12 @@ class PPVEventExtractor:
                 # Create datetime for this year
                 dt = datetime(self.current_year, month, int(day), hour, int(minute))
 
-                # If date is in the past, try next year
-                if dt < datetime.now():
+                # If the calendar date is before today, assume next year.
+                # Compare dates only — same-day games stay on today's date even if
+                # the listed time has already passed (common for MILB/MLB PPV listings).
+                today = self.current_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                event_day = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+                if event_day < today:
                     dt = dt.replace(year=self.current_year + 1)
 
                 return dt
@@ -450,12 +454,14 @@ class PPVEventExtractor:
         4. Day of week only → Assume midnight on next occurrence
         5. Competitors always extracted if available
 
-        Returns dict with keys: competitors, date, weekday, is_placeholder, inferred_how, is_inactive
+        Returns dict with keys: competitors, date, weekday, sport, is_placeholder, inferred_how, is_inactive
         """
+        inline_sport, _ = self.extract_sport(channel_name)
         result: Dict = {
             "is_placeholder": self.is_placeholder(channel_name),
             "is_inactive": self.is_inactive_channel(channel_name),
             "competitors": self.extract_competitors(channel_name),
+            "sport": inline_sport,
             "date": None,
             "weekday": None,
             "time_only": None,

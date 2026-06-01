@@ -44,6 +44,52 @@ UPSTREAM_CONNECT_TIMEOUT = 60
 UPSTREAM_READ_TIMEOUT = 120
 
 
+def _prepare_fallback_chain(
+    account: Account,
+    credential: Any,
+    stream_id: str,
+    fmt: str,
+    user_agent: str,
+) -> Tuple[list[tuple[str, str]], int]:
+    """
+    Resolve backup sources and probe upstreams.
+
+    Returns (fallback_chain, active_source_index). Each chain entry is
+    (upstream_stream_id, upstream_url).
+    """
+    from services.stream_fallback_service import (
+        build_upstream_url,
+        is_fallback_enabled,
+        probe_and_select_upstream,
+        resolve_sources,
+    )
+    from services.stream_proxy_service import StreamConnectivityTester
+
+    sources = resolve_sources(account.id, stream_id)
+    if is_fallback_enabled() and len(sources) > 1:
+        chain, start_index, probe_error = probe_and_select_upstream(
+            account,
+            credential,
+            sources,
+            fmt,
+            user_agent,
+            StreamConnectivityTester,
+        )
+        if probe_error:
+            abort(502, description=probe_error)
+        return chain, start_index
+
+    url = build_upstream_url(account, credential, stream_id, fmt)
+    return [(stream_id, url)], 0
+
+
+def _stream_source_headers(stream: Any) -> tuple[int, str]:
+    from services.stream_fallback_service import source_role_label
+
+    index = int(getattr(stream, "active_source_index", 0))
+    return index, source_role_label(index)
+
+
 def _serve_m3u8_mediaflow_manifest(
     account: Account,
     account_id: int,
@@ -62,56 +108,71 @@ def _serve_m3u8_mediaflow_manifest(
         logger.warning(f"m3u8 manifest failed: no available credentials for account {account_id}")
         abort(503, description="No available connections. All streams are in use.")
 
-    upstream_url = f"https://{account.server}/live/{credential.username}/{credential.password}/{stream_id}.m3u8"
     user_agent = account.user_agent or "okhttp/3.14.9"
-    params = {
-        "d": upstream_url,
-        "h_user-agent": user_agent,
-        "force_playlist_proxy": "true",
-    }
-    if MEDIAFLOW_API_PASSWORD:
-        params["api_password"] = MEDIAFLOW_API_PASSWORD
+    chain, start_index = _prepare_fallback_chain(account, credential, stream_id, "m3u8", user_agent)
+    from services.stream_fallback_service import source_role_label
 
-    target_url = f"{MEDIAFLOW_PROXY_URL.rstrip('/')}/proxy/hls/manifest.m3u8?{urlencode(params)}"
-    logger.info(
-        f"Serving m3u8 manifest for stream {stream_id} account {account_id} " f"via MediaFlow (client={client_ip})"
-    )
+    last_error: str | None = None
+    manifest_bytes: bytes | None = None
 
-    try:
-        upstream = requests.get(
-            target_url,
-            headers={"User-Agent": user_agent, "Accept": "*/*"},
-            timeout=(UPSTREAM_CONNECT_TIMEOUT, UPSTREAM_READ_TIMEOUT),
+    for idx in range(start_index, len(chain)):
+        source_stream_id, upstream_url = chain[idx]
+        params = {
+            "d": upstream_url,
+            "h_user-agent": user_agent,
+            "force_playlist_proxy": "true",
+        }
+        if MEDIAFLOW_API_PASSWORD:
+            params["api_password"] = MEDIAFLOW_API_PASSWORD
+
+        target_url = f"{MEDIAFLOW_PROXY_URL.rstrip('/')}/proxy/hls/manifest.m3u8?{urlencode(params)}"
+        logger.info(
+            f"Serving m3u8 manifest for stream {stream_id} (source {source_stream_id}) "
+            f"account {account_id} via MediaFlow (client={client_ip})"
         )
-    except requests.exceptions.Timeout:
-        abort(504, description="MediaFlow proxy timeout")
-    except requests.exceptions.ConnectionError:
-        abort(502, description="MediaFlow proxy unavailable")
 
-    if upstream.status_code >= 400:
-        abort(upstream.status_code, description=f"MediaFlow proxy returned {upstream.status_code}")
+        try:
+            upstream = requests.get(
+                target_url,
+                headers={"User-Agent": user_agent, "Accept": "*/*"},
+                timeout=(UPSTREAM_CONNECT_TIMEOUT, UPSTREAM_READ_TIMEOUT),
+            )
+        except requests.exceptions.Timeout:
+            last_error = "MediaFlow proxy timeout"
+            continue
+        except requests.exceptions.ConnectionError:
+            last_error = "MediaFlow proxy unavailable"
+            continue
 
-    try:
-        manifest_text = rewrite_hls_manifest(
-            upstream.content.decode("utf-8"),
-            MEDIAFLOW_PROXY_URL,
-            get_proxy_base_url(),
+        if upstream.status_code >= 400:
+            last_error = f"MediaFlow proxy returned {upstream.status_code}"
+            continue
+
+        try:
+            manifest_text = rewrite_hls_manifest(
+                upstream.content.decode("utf-8"),
+                MEDIAFLOW_PROXY_URL,
+                get_proxy_base_url(),
+            )
+            manifest_bytes = manifest_text.encode("utf-8")
+        except Exception as e:
+            logger.warning(f"Failed to rewrite HLS manifest: {e}")
+            manifest_bytes = upstream.content
+
+        return Response(
+            manifest_bytes,
+            content_type="application/vnd.apple.mpegurl",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "Content-Length": str(len(manifest_bytes)),
+                "X-Stream-Source": source_role_label(idx),
+                "X-Stream-Source-Index": str(idx),
+            },
         )
-        manifest_bytes = manifest_text.encode("utf-8")
-    except Exception as e:
-        logger.warning(f"Failed to rewrite HLS manifest: {e}")
-        manifest_bytes = upstream.content
 
-    return Response(
-        manifest_bytes,
-        content_type="application/vnd.apple.mpegurl",
-        headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0",
-            "Content-Length": str(len(manifest_bytes)),
-        },
-    )
+    abort(502, description=last_error or "All stream sources unavailable")
 
 
 @streams_bp.route("/stream/mediaflow/<path:subpath>", methods=["GET", "HEAD"])
@@ -301,7 +362,7 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
     # Check if stream is already active (can join without needing a new credential)
     existing_stream = stream_service.get_active_stream(account_id, stream_id, format)
 
-    if existing_stream:
+    if existing_stream and existing_stream.is_active and not existing_stream.error:
         # Join existing stream - no need for new credential
         logger.info(
             f"Joining existing stream {stream_id} for account {account_id} "
@@ -344,10 +405,13 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
                     f"({subscriber.bytes_sent} bytes sent)"
                 )
 
+        source_index, source_role = _stream_source_headers(existing_stream)
         response_headers = StreamProxyService.build_stream_response_headers(
             session_token=existing_stream.session_token,
             subscriber_id=subscriber.subscriber_id,
             is_shared=True,
+            source_index=source_index,
+            source_role=source_role,
         )
 
         return Response(
@@ -380,12 +444,13 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
         logger.error(f"Stream request failed: could not acquire connection - {error}")
         abort(503, description=f"Could not acquire connection: {error}")
 
-    # Build upstream URL
-    upstream_url = f"https://{account.server}/live/{credential.username}/{credential.password}/{stream_id}.{format}"
-    safe_url = f"https://{account.server}/live/{credential.username}/***/{stream_id}.{format}"
-    logger.info(f"Creating new shared stream: {safe_url}")
-
+    # Build upstream URL chain with optional backup failover
     user_agent = account.user_agent or "okhttp/3.14.9"
+    fallback_chain, active_source_index = _prepare_fallback_chain(account, credential, stream_id, format, user_agent)
+    upstream_url = fallback_chain[active_source_index][1]
+    active_upstream_stream_id = fallback_chain[active_source_index][0]
+    safe_url = f"https://{account.server}/live/{credential.username}/***/{active_upstream_stream_id}.{format}"
+    logger.info(f"Creating new shared stream: {safe_url} (source index {active_source_index})")
 
     # Track whether we've released the connection
     connection_released = False
@@ -413,6 +478,8 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
             client_ip=client_ip,
             user_agent=user_agent,
             on_stream_closed=on_stream_closed_callback,
+            fallback_sources=fallback_chain,
+            active_source_index=active_source_index,
         )
 
         logger.info(
@@ -467,10 +534,13 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
             else:
                 abort(502, description=f"Upstream error: {error_msg}")
 
+        source_index, source_role = _stream_source_headers(shared_stream)
         response_headers = StreamProxyService.build_stream_response_headers(
             session_token=session_token,
             subscriber_id=subscriber.subscriber_id,
             is_shared=False,
+            source_index=source_index,
+            source_role=source_role,
         )
 
         return Response(
@@ -591,12 +661,38 @@ def test_stream(account_id: int, stream_id: str) -> Union[Dict[str, Any], Tuple[
     credential_id = getattr(credential, "id", None)
     checks["credential_id"] = credential_id
 
-    # Check 3: Test upstream connectivity
-    upstream_url = f"https://{account.server}/live/{credential.username}/" f"{credential.password}/{stream_id}.ts"
-    safe_url = f"https://{account.server}/live/{credential.username}/***/{stream_id}.ts"
-    checks["upstream_url"] = safe_url
-
     user_agent = account.user_agent or "okhttp/3.14.9"
+
+    from services.stream_fallback_service import (
+        build_upstream_url,
+        is_fallback_enabled,
+        probe_and_select_upstream,
+        resolve_sources,
+        source_role_label,
+    )
+
+    sources = resolve_sources(account_id, stream_id)
+    checks["fallback_enabled"] = is_fallback_enabled()
+    checks["source_chain"] = [{"stream_id": s.stream_id, "role": s.role, "channel_id": s.channel_id} for s in sources]
+
+    chain, start_index, probe_error = probe_and_select_upstream(
+        account,
+        credential,
+        sources,
+        "ts",
+        user_agent,
+        StreamConnectivityTester,
+    )
+    checks["active_source_index"] = start_index
+    checks["active_source_role"] = source_role_label(start_index)
+    if probe_error:
+        checks["probe_error"] = probe_error
+
+    upstream_url = chain[start_index][1] if chain else build_upstream_url(account, credential, stream_id, "ts")
+    safe_url = (
+        f"https://{account.server}/live/{credential.username}/***/{chain[start_index][0] if chain else stream_id}.ts"
+    )
+    checks["upstream_url"] = safe_url
 
     logger.info(f"Testing stream connectivity: {safe_url}")
 

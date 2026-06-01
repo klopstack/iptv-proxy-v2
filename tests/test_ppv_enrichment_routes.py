@@ -204,3 +204,36 @@ class TestPPVEnrichmentRoutes:
         data = response.get_json()
         assert data["running"] is False
         mock_service.stop_detail_fetcher.assert_called_once()
+
+    def test_get_enrichment_channels(self, client, test_account, test_ppv_channels):
+        """Test listing PPV channels with enrichment status."""
+        response = client.get("/api/ppv-enrichment/channels")
+        assert response.status_code == 200
+        data = response.get_json()
+
+        assert "channels" in data
+        assert "pagination" in data
+        assert "summary" in data
+        assert data["pagination"]["total"] == 3
+        assert len(data["channels"]) == 3
+        assert all(ch["ppv_enrichment_status"] == "queued" for ch in data["channels"])
+
+    def test_get_enrichment_channels_account_filter(self, client, test_account, test_ppv_channels):
+        """Test account filter on enrichment channels endpoint."""
+        response = client.get(f"/api/ppv-enrichment/channels?account_id={test_account}")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["pagination"]["total"] == 3
+
+    def test_get_enrichment_channels_status_filter(self, client, test_account, test_ppv_channels):
+        """Test status filter on enrichment channels endpoint."""
+        with client.application.app_context():
+            channel = db.session.get(Channel, test_ppv_channels[0])
+            channel.ppv_enrichment_status = "no_match"
+            db.session.commit()
+
+        response = client.get("/api/ppv-enrichment/channels?status=no_match")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["pagination"]["total"] == 1
+        assert data["channels"][0]["ppv_enrichment_status"] == "no_match"

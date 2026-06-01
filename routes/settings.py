@@ -168,3 +168,44 @@ def update_ppv_enrichment_config():
     except Exception as e:
         logger.error(f"Error updating PPV enrichment config: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@settings_bp.route("/api/stream-fallback/config", methods=["GET"])
+def get_stream_fallback_config():
+    """Get stream proxy fallback configuration."""
+    try:
+        enabled = Settings.get("stream_fallback_enabled", "true") != "false"
+        auto_detect = Settings.get("stream_fallback_auto_detect", "true") != "false"
+        return jsonify({"enabled": enabled, "auto_detect": auto_detect})
+    except Exception as e:
+        logger.error(f"Error fetching stream fallback config: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@settings_bp.route("/api/stream-fallback/config", methods=["PUT"])
+def update_stream_fallback_config():
+    """Update stream proxy fallback configuration."""
+    try:
+        data = request.get_json(silent=True)
+        if not data:
+            return jsonify({"error": "Request body required"}), 400
+
+        if "enabled" in data:
+            Settings.set("stream_fallback_enabled", "true" if data["enabled"] else "false")
+        if "auto_detect" in data:
+            Settings.set("stream_fallback_auto_detect", "true" if data["auto_detect"] else "false")
+
+        from services.stream_fallback_service import invalidate_cache
+
+        invalidate_cache()
+
+        return jsonify(
+            {
+                "enabled": Settings.get("stream_fallback_enabled", "true") != "false",
+                "auto_detect": Settings.get("stream_fallback_auto_detect", "true") != "false",
+                "message": "Stream fallback settings updated",
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error updating stream fallback config: {e}")
+        return jsonify({"error": str(e)}), 500

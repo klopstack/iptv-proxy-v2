@@ -53,7 +53,14 @@ class StreamProxyService:
         return None
 
     @staticmethod
-    def build_stream_response_headers(session_token: str, subscriber_id: str, is_shared: bool) -> Dict[str, str]:
+    def build_stream_response_headers(
+        session_token: str,
+        subscriber_id: str,
+        is_shared: bool,
+        *,
+        source_index: int = 0,
+        source_role: str = "primary",
+    ) -> Dict[str, str]:
         """
         Build response headers for stream proxy.
 
@@ -61,6 +68,8 @@ class StreamProxyService:
             session_token: The session token for this connection
             subscriber_id: The subscriber ID
             is_shared: Whether this is a shared stream
+            source_index: Active fallback source index (0 = primary)
+            source_role: "primary" or "backup"
 
         Returns:
             Dict of HTTP headers
@@ -72,6 +81,8 @@ class StreamProxyService:
             "X-Session-Token": session_token,
             "X-Stream-Shared": "true" if is_shared else "false",
             "X-Subscriber-Id": subscriber_id[:8],
+            "X-Stream-Source": source_role,
+            "X-Stream-Source-Index": str(source_index),
         }
 
 

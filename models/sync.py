@@ -176,6 +176,15 @@ class Settings(db.Model):  # type: ignore[name-defined]
             "",
             "API key for football-data.org (used for soccer standings and H2H context data).",
         ),
+        # Stream proxy failover to linked backup channels
+        "stream_fallback_enabled": (
+            "true",
+            "Enable transparent proxy failover to linked backup streams when primary upstream fails.",
+        ),
+        "stream_fallback_auto_detect": (
+            "true",
+            "Auto-detect primary/backup channel pairs after account sync.",
+        ),
     }
 
     @staticmethod

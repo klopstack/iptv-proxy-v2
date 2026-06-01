@@ -113,6 +113,21 @@ class TestPPVEventExtractor:
         result = self.extractor.extract_competitors("Blue Jays x Twins")
         assert result == ("Blue Jays", "Twins")
 
+    def test_extract_date_same_day_milb_listing(self):
+        """Same-day MILB listings should not roll to next year when time has passed."""
+        ref = datetime(2026, 5, 31, 15, 0)
+        extractor = PPVEventExtractor(current_date=ref)
+        result = extractor.extract_date("Clearwater Threshers vs Dunedin Blue Jays @ May 31 12:00 PM")
+        assert result == datetime(2026, 5, 31, 12, 0)
+
+    def test_extract_all_milb_active_channel(self):
+        ref = datetime(2026, 5, 31, 15, 0)
+        extractor = PPVEventExtractor(current_date=ref)
+        result = extractor.extract_all("Clearwater Threshers vs Dunedin Blue Jays @ May 31 12:00 PM :Milb  01")
+        assert result["competitors"] == ("Clearwater Threshers", "Dunedin Blue Jays")
+        assert result["date"] == datetime(2026, 5, 31, 12, 0)
+        assert result["is_placeholder"] is False
+
     # ========================================================================
     # Multi-word Team Names
     # ========================================================================

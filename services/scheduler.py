@@ -271,8 +271,11 @@ class SyncScheduler:
 
     def _run(self):
         """Main scheduler loop - checks periodically if sync is needed"""
-        # Wait a bit before first check to let app start up
-        time.sleep(30)
+        # Wait a bit before first check to let app start up (interruptible so stop() is fast)
+        for _ in range(30):
+            if not self.running:
+                return
+            time.sleep(1)
 
         while self.running:
             # Heartbeat before sync work so long-running jobs do not look dead

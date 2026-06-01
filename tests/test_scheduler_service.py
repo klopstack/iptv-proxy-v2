@@ -347,10 +347,14 @@ class TestSchedulerHeartbeat:
                 )
                 scheduler._touch_heartbeat()
 
+            def needs_sync_only_accounts(key, _interval_hours):
+                return key == SYNC_KEY_LAST_ACCOUNT_SYNC
+
             with patch.object(scheduler, "_sync_accounts", side_effect=slow_accounts):
-                with patch.object(scheduler, "_needs_sync", return_value=True):
+                with patch.object(scheduler, "_needs_sync", side_effect=needs_sync_only_accounts):
                     with patch.object(scheduler, "_set_last_sync_time"):
                         with patch.object(scheduler, "_scan_channel_health"):
-                            scheduler._check_and_sync()
+                            with patch.object(scheduler, "_sync_epg_sources_if_due"):
+                                scheduler._check_and_sync()
 
             assert scheduler.get_status()["running"] is True

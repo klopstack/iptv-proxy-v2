@@ -7,7 +7,6 @@
     <h1 class="h2">Pay-Per-View (PPV) Management</h1>
 </div>
 
-<!-- Tabs for different PPV sections -->
 <ul class="nav nav-tabs mb-4" id="ppvTabs" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="visibility-tab" data-bs-toggle="tab" data-bs-target="#visibility-section"
@@ -16,21 +15,14 @@
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link" id="filtering-tab" data-bs-toggle="tab" data-bs-target="#filtering-section"
-                type="button" role="tab">
-            <i class="bi bi-funnel"></i> Filtering
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
         <button class="nav-link" id="queue-tab" data-bs-toggle="tab" data-bs-target="#queue-section"
                 type="button" role="tab">
-            <i class="bi bi-hourglass-split"></i> Queue Status
+            <i class="bi bi-hourglass-split"></i> Enrichment Queue
         </button>
     </li>
 </ul>
 
 <div class="tab-content" id="ppvTabsContent">
-    <!-- Visibility Section -->
     <div class="tab-pane fade show active" id="visibility-section" role="tabpanel">
         <div class="row">
             <div class="col-md-8">
@@ -62,6 +54,42 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="card mb-4">
+                    <div class="card-header bg-dark text-white d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <h5 class="mb-0"><i class="bi bi-calendar-event"></i> Detection Preview</h5>
+                        <ul class="nav nav-pills nav-pills-sm" id="preview-view-tabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active py-1 px-2" id="preview-events-tab" type="button">Events</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link py-1 px-2" id="preview-channels-tab" type="button">Channels</button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                            <select class="form-select form-select-sm" id="preview-account-select" style="max-width: 220px;">
+                                <option value="">All accounts</option>
+                            </select>
+                            <input type="search" class="form-control form-control-sm" id="preview-search-input"
+                                   placeholder="Search..." style="max-width: 200px;">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="preview-refresh-btn">
+                                <i class="bi bi-arrow-clockwise"></i> Refresh
+                            </button>
+                        </div>
+
+                        <div id="preview-summary-pills" class="d-flex flex-wrap gap-2 mb-3 small"></div>
+
+                        <div id="preview-table-container" style="max-height: 400px; overflow-y: auto;">
+                            <div class="text-center py-4">
+                                <div class="spinner-border spinner-border-sm" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="col-md-4">
@@ -70,22 +98,32 @@
                         <h6 class="mb-0"><i class="bi bi-info-circle"></i> About PPV Enrichment</h6>
                     </div>
                     <div class="card-body">
-                        <p class="small mb-2"><strong>What is enrichment?</strong></p>
                         <p class="small">
-                            PPV enrichment matches your channel names against TheSportsDB's extensive database of sports events.
-                            This adds rich metadata to your PPV channels for better organization and filtering.
+                            PPV enrichment matches channel names against TheSportsDB sports events and adds metadata for organization and filtering.
                         </p>
-                        <p class="small mb-2"><strong>Data added:</strong></p>
-                        <ul class="small">
-                            <li>Sport type (Football, Basketball, etc.)</li>
-                            <li>Team/league information</li>
-                            <li>Venue and location</li>
+                        <ul class="small mb-0">
+                            <li>Sport type and league</li>
+                            <li>Teams, venue, and location</li>
                             <li>Event status and timing</li>
-                            <li>Broadcast details</li>
                         </ul>
-                        <p class="small text-muted">
-                            <strong>Note:</strong> Enrichment runs automatically via scheduler (hourly) and works best with channel names containing event/team information.
+                    </div>
+                </div>
+
+                <div class="card bg-light mb-4">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-funnel"></i> Filtering</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="small">
+                            Use <a href="/filters">Filters</a> to include or exclude PPV channels by category or name. Filters combine with visibility settings above.
                         </p>
+                        <ul class="small mb-3">
+                            <li>Category filters for PPV categories</li>
+                            <li>Regex patterns for event or sport names</li>
+                        </ul>
+                        <a href="/filters" class="btn btn-sm btn-outline-success">
+                            <i class="bi bi-pencil"></i> Go to Filters
+                        </a>
                     </div>
                 </div>
 
@@ -107,67 +145,16 @@
         </div>
     </div>
 
-    <!-- Filtering Section -->
-    <div class="tab-pane fade" id="filtering-section" role="tabpanel">
-        <div class="row">
-            <div class="col-md-10">
-                <div class="card mb-4">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0"><i class="bi bi-funnel"></i> PPV Event Filtering</h5>
-                    </div>
-                    <div class="card-body">
-                        <p class="text-muted small mb-4">
-                            Use filters to include or exclude PPV channels based on categories, names, or custom patterns.
-                        </p>
-
-                        <div class="alert alert-info small mb-4">
-                            <i class="bi bi-lightbulb"></i>
-                            <strong>Filtering Tips:</strong>
-                            <ul class="mb-0 mt-2">
-                                <li>Go to <a href="/filters" class="alert-link">Filters</a> to create account-specific filter rules</li>
-                                <li>Use category filters to include/exclude PPV categories by name</li>
-                                <li>Use regex patterns to match specific event names or sports types</li>
-                                <li>Combine with visibility settings for complete control</li>
-                                <li>Use tag-based filters on playlists after enrichment to filter by event type</li>
-                            </ul>
-                        </div>
-
-                        <h6 class="mb-3"><i class="bi bi-book"></i> Quick Start</h6>
-                        <ol class="small">
-                            <li>Go to <strong>Filters</strong> page</li>
-                            <li>Select your IPTV account</li>
-                            <li>Create a new filter with type <code>category</code> or <code>channel_name</code></li>
-                            <li>Set value to PPV category name (e.g., "PPV Events")</li>
-                            <li>Choose <code>Include</code> to show only those categories, or <code>Exclude</code> to hide them</li>
-                        </ol>
-
-                        <div class="alert alert-warning small mt-4">
-                            <i class="bi bi-exclamation-triangle"></i>
-                            <strong>Note:</strong> Filters work in combination with visibility settings. 
-                            For example, if visibility is "Hide Inactive PPV" and a filter excludes a category, 
-                            only upcoming/active events in non-excluded categories will show.
-                        </div>
-
-                        <a href="/filters" class="btn btn-success">
-                            <i class="bi bi-pencil"></i> Go to Filters
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Queue Status Section -->
     <div class="tab-pane fade" id="queue-section" role="tabpanel">
         <div class="row">
             <div class="col-md-10">
                 <div class="card mb-4">
                     <div class="card-header bg-secondary text-white">
-                        <h5 class="mb-0"><i class="bi bi-hourglass-split"></i> Enrichment Queue Status</h5>
+                        <h5 class="mb-0"><i class="bi bi-hourglass-split"></i> Enrichment Queue</h5>
                     </div>
                     <div class="card-body">
                         <p class="text-muted small mb-3">
-                            Monitor the status of PPV enrichment queue processing. Shows current progress and API usage statistics.
+                            Monitor PPV enrichment queue processing, progress, and API usage statistics.
                         </p>
 
                         <div id="queue-status-container" class="mb-4">
@@ -180,8 +167,8 @@
 
                         <h6 class="mb-3"><i class="bi bi-play-circle"></i> Manual Processing</h6>
                         <p class="small text-muted mb-3">
-                            Trigger enrichment processing for queued PPV channels. Calendar matching has no rate limits, 
-                            but detailed event fetching is rate limited to 30 API requests per minute.
+                            Trigger enrichment for queued PPV channels. Calendar matching has no rate limits;
+                            detailed event fetching is rate limited to 30 API requests per minute.
                         </p>
 
                         <button id="process-queue-btn" class="btn btn-primary">
@@ -243,46 +230,133 @@
 {% block extra_js %}
 <script type="module" src="{{ url_for('static', filename='js/pages/ppv_bootstrap.js') }}"></script>
 <script>
-// ============================================================================
-// PPV Enrichment Settings
-// ============================================================================
+const previewState = {
+    view: 'events',
+    accountId: '',
+    search: '',
+    accounts: {},
+    initialized: false,
+};
+
+function escapeHtml(text) {
+    if (text == null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+function formatDateTime(isoString) {
+    if (!isoString) return '—';
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return isoString;
+    return date.toLocaleString();
+}
+
+function getAccountVisibility(accountId) {
+    if (!accountId) return null;
+    return previewState.accounts[accountId]?.ppv_visibility || 'hide_inactive';
+}
+
+function isEventVisibleUnderMode(event, mode) {
+    if (!mode) return null;
+    if (mode === 'hide_all') return false;
+    if (mode === 'show_all') return true;
+    if (event.status === 'finished' || event.status === 'cancelled') return false;
+    if (event.scheduled_at) {
+        return new Date(event.scheduled_at) >= new Date();
+    }
+    return true;
+}
+
+function isChannelVisibleUnderMode(channel, mode) {
+    if (!mode) return null;
+    if (mode === 'hide_all') return false;
+    if (mode === 'show_all') return true;
+
+    const status = channel.ppv_enrichment_status;
+    if (status === 'no_match') return false;
+    if (status === 'queued' || status === 'processing' || status === 'error') return true;
+
+    const linked = channel.linked_event;
+    if (!linked) return false;
+    if (linked.status === 'finished' || linked.status === 'cancelled') return false;
+    if (linked.scheduled_at) {
+        return new Date(linked.scheduled_at) >= new Date();
+    }
+    return true;
+}
+
+function visibilityIndicator(visible) {
+    if (visible === null) return '';
+    if (visible) {
+        return '<i class="bi bi-eye text-success" title="Visible in playlist"></i>';
+    }
+    return '<i class="bi bi-eye-slash text-muted" title="Hidden in playlist"></i>';
+}
+
+function statusBadge(status, type = 'event') {
+    const maps = {
+        event: {
+            scheduled: 'secondary',
+            live: 'danger',
+            finished: 'dark',
+            cancelled: 'warning',
+        },
+        enrichment: {
+            matched: 'success',
+            queued: 'secondary',
+            processing: 'info',
+            no_match: 'warning',
+            error: 'danger',
+            retry_pending: 'secondary',
+        },
+        completeness: {
+            basic: 'info',
+            full: 'success',
+            partial: 'secondary',
+        },
+    };
+    const label = status || 'unknown';
+    const color = (maps[type] && maps[type][label]) || 'secondary';
+    return `<span class="badge bg-${color}">${escapeHtml(label)}</span>`;
+}
 
 async function loadEnrichmentSettings() {
     try {
         const data = await window.PpvApi.fetchPpvEnrichmentSettings();
-
-        const html = `
-            <div class="row">
-                <div class="col-md-6">
-                    <dl class="small">
-                        <dt>Detail Fetch Batch Size</dt>
-                        <dd>${data.detail_fetch_batch_size} events per minute</dd>
-                        <dt>API Rate Limiting</dt>
-                        <dd>${data.api_requests_per_minute} requests/minute (detail fetching only)</dd>
-                    </dl>
-                </div>
-                <div class="col-md-6">
-                    <dl class="small">
-                        <dt>Calendar Scraping</dt>
-                        <dd>${data.calendar_scraping.rate_limited ? 'Rate limited' : 'No rate limit'} (cached ${data.calendar_scraping.cache_ttl_seconds}s)</dd>
-                        <dt>Detail Fetching</dt>
-                        <dd>Rate limited, ${data.detail_fetching.requests_per_minute} req/min</dd>
-                    </dl>
-                </div>
-            </div>
+        document.getElementById('enrichment-settings-info').innerHTML = `
+            <dl class="mb-0">
+                <dt>Detail Fetch Batch</dt>
+                <dd>${data.detail_fetch_batch_size} events/min</dd>
+                <dt>API Rate Limit</dt>
+                <dd>${data.api_requests_per_minute} req/min</dd>
+                <dt>Calendar Scraping</dt>
+                <dd>${data.calendar_scraping.rate_limited ? 'Rate limited' : 'No limit'} (${data.calendar_scraping.cache_ttl_seconds}s cache)</dd>
+            </dl>
         `;
-
-        document.getElementById('enrichment-settings-info').innerHTML = html;
     } catch (error) {
         console.error('Error loading enrichment settings:', error);
         document.getElementById('enrichment-settings-info').innerHTML =
-            `<div class="alert alert-danger small">Error loading settings: ${error.message}</div>`;
+            `<div class="alert alert-danger small mb-0">Error loading settings: ${escapeHtml(error.message)}</div>`;
     }
 }
 
-// ============================================================================
-// PPV Visibility Management
-// ============================================================================
+function populatePreviewAccountSelect(accounts) {
+    const select = document.getElementById('preview-account-select');
+    const current = select.value;
+    select.innerHTML = '<option value="">All accounts</option>';
+    accounts.forEach((account) => {
+        previewState.accounts[String(account.id)] = account;
+        const option = document.createElement('option');
+        option.value = account.id;
+        option.textContent = account.name;
+        select.appendChild(option);
+    });
+    if (current && previewState.accounts[current]) {
+        select.value = current;
+    }
+    previewState.accountId = select.value;
+}
 
 async function loadAccountsVisibility() {
     try {
@@ -297,8 +371,8 @@ async function loadAccountsVisibility() {
                 <div class="list-group-item">
                     <div class="row align-items-center">
                         <div class="col-md-3">
-                            <h6 class="mb-0">${account.name}</h6>
-                            <small class="text-muted">${account.server}</small>
+                            <h6 class="mb-0">${escapeHtml(account.name)}</h6>
+                            <small class="text-muted">${escapeHtml(account.server)}</small>
                         </div>
                         <div class="col-md-6">
                             <select class="form-select form-select-sm ppv-visibility-select" data-account-id="${account.id}" data-current="${account.ppv_visibility}">
@@ -307,7 +381,7 @@ async function loadAccountsVisibility() {
             for (const option of visibilityOptions) {
                 const selected = account.ppv_visibility === option.value ? 'selected' : '';
                 const suffix = option.value === 'hide_inactive' ? ' (default)' : '';
-                html += `<option value="${option.value}" ${selected}>${option.label}${suffix}</option>`;
+                html += `<option value="${option.value}" ${selected}>${escapeHtml(option.label)}${suffix}</option>`;
             }
 
             html += `
@@ -324,14 +398,19 @@ async function loadAccountsVisibility() {
         html += '</div>';
         document.getElementById('accounts-visibility-list').innerHTML = html;
 
-        // Add event listeners to all visibility selects
-        document.querySelectorAll('.ppv-visibility-select').forEach(select => {
+        populatePreviewAccountSelect(accounts);
+
+        document.querySelectorAll('.ppv-visibility-select').forEach((select) => {
             select.addEventListener('change', handleVisibilityChange);
+            select.addEventListener('focus', () => {
+                document.getElementById('preview-account-select').value = select.dataset.accountId;
+                previewState.accountId = select.dataset.accountId;
+            });
         });
     } catch (error) {
         console.error('Error loading accounts visibility:', error);
         document.getElementById('accounts-visibility-list').innerHTML =
-            `<div class="alert alert-danger">Error loading visibility settings: ${error.message}</div>`;
+            `<div class="alert alert-danger">Error loading visibility settings: ${escapeHtml(error.message)}</div>`;
     }
 }
 
@@ -341,38 +420,308 @@ async function handleVisibilityChange(e) {
     const newVisibility = select.value;
     const statusEl = document.querySelector(`.visibility-status-${accountId}`);
 
+    document.getElementById('preview-account-select').value = accountId;
+    previewState.accountId = accountId;
+    if (previewState.accounts[accountId]) {
+        previewState.accounts[accountId].ppv_visibility = newVisibility;
+    }
+
     try {
         statusEl.innerHTML = '<i class="bi bi-hourglass-split"></i> Saving...';
-
         await window.AccountApi.updateAccountPpvVisibility(accountId, newVisibility);
-
         statusEl.innerHTML = '<i class="bi bi-check-circle text-success"></i> Saved';
-        setTimeout(() => {
-            statusEl.innerHTML = '';
-        }, 2000);
+        setTimeout(() => { statusEl.innerHTML = ''; }, 2000);
+        renderPreviewTable();
     } catch (error) {
-        statusEl.innerHTML = `<i class="bi bi-exclamation-triangle text-danger"></i> Error`;
+        statusEl.innerHTML = '<i class="bi bi-exclamation-triangle text-danger"></i> Error';
         console.error('Error updating visibility:', error);
     }
 }
 
-// ============================================================================
-// Queue Status and Processing
-// ============================================================================
+function renderPreviewSummaryPills(summary, view) {
+    const container = document.getElementById('preview-summary-pills');
+    if (!summary) {
+        container.innerHTML = '';
+        return;
+    }
+
+    if (view === 'events') {
+        const total = summary.total || 0;
+        const byStatus = summary.by_status || {};
+        container.innerHTML = `
+            <span class="badge rounded-pill text-bg-primary">${total} events</span>
+            <span class="badge rounded-pill text-bg-secondary">${byStatus.scheduled || 0} scheduled</span>
+            <span class="badge rounded-pill text-bg-danger">${byStatus.live || 0} live</span>
+            <span class="badge rounded-pill text-bg-dark">${byStatus.finished || 0} finished</span>
+        `;
+        return;
+    }
+
+    const byStatus = summary.by_status || {};
+    container.innerHTML = `
+        <span class="badge rounded-pill text-bg-success">${byStatus.matched || 0} matched</span>
+        <span class="badge rounded-pill text-bg-secondary">${byStatus.queued || 0} queued</span>
+        <span class="badge rounded-pill text-bg-warning">${byStatus.no_match || 0} no match</span>
+        <span class="badge rounded-pill text-bg-danger">${byStatus.error || 0} error</span>
+    `;
+}
+
+function buildPreviewParams() {
+    const params = { mode: 'all', per_page: 100 };
+    if (previewState.accountId) params.account_id = previewState.accountId;
+    if (previewState.search) params.search = previewState.search;
+    return params;
+}
+
+async function loadPreviewData() {
+    const container = document.getElementById('preview-table-container');
+    container.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border spinner-border-sm" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    `;
+
+    try {
+        const params = buildPreviewParams();
+        if (previewState.view === 'events') {
+            const data = await window.PpvApi.fetchPpvEvents(params);
+            previewState.lastData = data;
+            renderPreviewSummaryPills(data.summary, 'events');
+            renderEventsPreviewTable(data.events || []);
+        } else {
+            const data = await window.PpvApi.fetchPpvEnrichmentChannels(params);
+            previewState.lastData = data;
+            renderPreviewSummaryPills(data.summary, 'channels');
+            renderChannelsPreviewTable(data.channels || []);
+        }
+    } catch (error) {
+        console.error('Error loading preview:', error);
+        container.innerHTML = `<div class="alert alert-danger small mb-0">${escapeHtml(error.message)}</div>`;
+        document.getElementById('preview-summary-pills').innerHTML = '';
+    }
+}
+
+function renderPreviewTable() {
+    if (!previewState.lastData) {
+        loadPreviewData();
+        return;
+    }
+    if (previewState.view === 'events') {
+        renderPreviewSummaryPills(previewState.lastData.summary, 'events');
+        renderEventsPreviewTable(previewState.lastData.events || []);
+    } else {
+        renderPreviewSummaryPills(previewState.lastData.summary, 'channels');
+        renderChannelsPreviewTable(previewState.lastData.channels || []);
+    }
+}
+
+function renderEventsPreviewTable(events) {
+    const container = document.getElementById('preview-table-container');
+    const mode = previewState.accountId ? getAccountVisibility(previewState.accountId) : null;
+
+    if (!events.length) {
+        container.innerHTML = '<p class="text-muted small mb-0">No matched events found.</p>';
+        return;
+    }
+
+    let rows = '';
+    events.forEach((event) => {
+        const title = event.title || `${event.home_team} vs ${event.away_team}`;
+        const visible = isEventVisibleUnderMode(event, mode);
+        const rowClass = visible === false ? 'table-secondary text-muted' : '';
+        rows += `
+            <tr class="${rowClass}">
+                <td>${visibilityIndicator(visible)}</td>
+                <td>${escapeHtml(title)}</td>
+                <td>${escapeHtml(event.sport || '—')}<br><small class="text-muted">${escapeHtml(event.league || '')}</small></td>
+                <td>${formatDateTime(event.scheduled_at)}</td>
+                <td>${statusBadge(event.status, 'event')}</td>
+                <td>${statusBadge(event.data_completeness, 'completeness')}</td>
+                <td>${event.channel_count || 0}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-secondary preview-expand-btn" data-event-id="${event.id}">
+                        <i class="bi bi-chevron-down"></i>
+                    </button>
+                </td>
+            </tr>
+            <tr class="d-none preview-detail-row" id="preview-event-detail-${event.id}">
+                <td colspan="8"><div class="small preview-detail-content p-2">Loading...</div></td>
+            </tr>
+        `;
+    });
+
+    container.innerHTML = `
+        <table class="table table-sm table-hover mb-0">
+            <thead class="table-light sticky-top">
+                <tr>
+                    <th></th>
+                    <th>Event</th>
+                    <th>Sport / League</th>
+                    <th>Scheduled</th>
+                    <th>Status</th>
+                    <th>Data</th>
+                    <th>Ch.</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+
+    container.querySelectorAll('.preview-expand-btn').forEach((btn) => {
+        btn.addEventListener('click', () => toggleEventDetail(btn.dataset.eventId, btn));
+    });
+}
+
+function renderChannelsPreviewTable(channels) {
+    const container = document.getElementById('preview-table-container');
+    const mode = previewState.accountId ? getAccountVisibility(previewState.accountId) : null;
+
+    if (!channels.length) {
+        container.innerHTML = '<p class="text-muted small mb-0">No PPV channels found.</p>';
+        return;
+    }
+
+    let rows = '';
+    channels.forEach((channel) => {
+        const linked = channel.linked_event;
+        const linkedLabel = linked
+            ? `${escapeHtml(linked.home_team)} vs ${escapeHtml(linked.away_team)}<br><small class="text-muted">${formatDateTime(linked.scheduled_at)}</small>`
+            : '—';
+        const visible = isChannelVisibleUnderMode(channel, mode);
+        const rowClass = visible === false ? 'table-secondary text-muted' : '';
+        const errorText = channel.ppv_enrichment_error
+            ? escapeHtml(channel.ppv_enrichment_error.substring(0, 60)) + (channel.ppv_enrichment_error.length > 60 ? '…' : '')
+            : '—';
+
+        rows += `
+            <tr class="${rowClass}">
+                <td>${visibilityIndicator(visible)}</td>
+                <td>${escapeHtml(channel.channel_name)}</td>
+                <td>${escapeHtml(channel.account_name || '—')}</td>
+                <td>${statusBadge(channel.ppv_enrichment_status, 'enrichment')}</td>
+                <td>${linkedLabel}</td>
+                <td>${linked ? `${Math.round((linked.match_confidence || 0) * 100)}%` : '—'}</td>
+                <td>${formatDateTime(channel.ppv_enrichment_last_attempt)}</td>
+                <td><small>${errorText}</small></td>
+            </tr>
+        `;
+    });
+
+    container.innerHTML = `
+        <table class="table table-sm table-hover mb-0">
+            <thead class="table-light sticky-top">
+                <tr>
+                    <th></th>
+                    <th>Channel</th>
+                    <th>Account</th>
+                    <th>Status</th>
+                    <th>Linked Event</th>
+                    <th>Conf.</th>
+                    <th>Last Attempt</th>
+                    <th>Error</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+}
+
+async function toggleEventDetail(eventId, btn) {
+    const detailRow = document.getElementById(`preview-event-detail-${eventId}`);
+    const contentEl = detailRow.querySelector('.preview-detail-content');
+    const isOpen = !detailRow.classList.contains('d-none');
+
+    if (isOpen) {
+        detailRow.classList.add('d-none');
+        btn.innerHTML = '<i class="bi bi-chevron-down"></i>';
+        return;
+    }
+
+    detailRow.classList.remove('d-none');
+    btn.innerHTML = '<i class="bi bi-chevron-up"></i>';
+    contentEl.textContent = 'Loading...';
+
+    try {
+        const data = await window.PpvApi.fetchPpvEventDetail(eventId);
+        const event = data.event;
+        const channels = data.channels || [];
+        const channelList = channels.map((ch) =>
+            `<li>${escapeHtml(ch.channel_name)} (${Math.round((ch.match_confidence || 0) * 100)}%, ${escapeHtml(ch.match_method || '')})</li>`
+        ).join('');
+
+        contentEl.innerHTML = `
+            <div class="row">
+                <div class="col-md-8">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-3">Venue</dt><dd class="col-sm-9">${escapeHtml(event.venue || '—')}</dd>
+                        <dt class="col-sm-3">Location</dt><dd class="col-sm-9">${escapeHtml([event.city, event.country].filter(Boolean).join(', ') || '—')}</dd>
+                        <dt class="col-sm-3">TheSportsDB</dt><dd class="col-sm-9">${event.external_id ? `<a href="https://www.thesportsdb.com/event/${escapeHtml(event.external_id)}" target="_blank" rel="noopener">${escapeHtml(event.external_id)}</a>` : '—'}</dd>
+                        <dt class="col-sm-3">Updated</dt><dd class="col-sm-9">${formatDateTime(event.last_updated_at)}</dd>
+                        <dt class="col-sm-3">Channels</dt><dd class="col-sm-9"><ul class="mb-0">${channelList || '<li>None</li>'}</ul></dd>
+                    </dl>
+                </div>
+                <div class="col-md-4 text-center">
+                    ${event.event_image ? `<img src="${escapeHtml(event.event_image)}" alt="Event" class="img-fluid rounded mb-2" style="max-height: 80px;">` : ''}
+                    <div class="d-flex justify-content-center gap-2">
+                        ${event.home_team_badge ? `<img src="${escapeHtml(event.home_team_badge)}" alt="Home" style="max-height: 40px;">` : ''}
+                        ${event.away_team_badge ? `<img src="${escapeHtml(event.away_team_badge)}" alt="Away" style="max-height: 40px;">` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        contentEl.textContent = error.message;
+    }
+}
+
+function initPreviewPanel() {
+    if (previewState.initialized) return;
+    previewState.initialized = true;
+
+    document.getElementById('preview-events-tab').addEventListener('click', () => {
+        previewState.view = 'events';
+        document.getElementById('preview-events-tab').classList.add('active');
+        document.getElementById('preview-channels-tab').classList.remove('active');
+        loadPreviewData();
+    });
+
+    document.getElementById('preview-channels-tab').addEventListener('click', () => {
+        previewState.view = 'channels';
+        document.getElementById('preview-channels-tab').classList.add('active');
+        document.getElementById('preview-events-tab').classList.remove('active');
+        loadPreviewData();
+    });
+
+    document.getElementById('preview-account-select').addEventListener('change', (e) => {
+        previewState.accountId = e.target.value;
+        loadPreviewData();
+    });
+
+    document.getElementById('preview-search-input').addEventListener('input', (e) => {
+        previewState.search = e.target.value.trim();
+        clearTimeout(previewState.searchTimeout);
+        previewState.searchTimeout = setTimeout(loadPreviewData, 300);
+    });
+
+    document.getElementById('preview-refresh-btn').addEventListener('click', loadPreviewData);
+}
 
 async function loadQueueStatus() {
     try {
         const response = await fetch('/api/ppv-enrichment/status');
         const data = await response.json();
 
-        const threadStatus = data.detail_thread_running ? 
-            '<span class="badge bg-success">Running</span>' : 
+        const threadStatus = data.detail_thread_running ?
+            '<span class="badge bg-success">Running</span>' :
             '<span class="badge bg-secondary">Idle</span>';
 
         const cacheStats = data.calendar_cache_stats || {};
         const sessionStats = data.session_stats || {};
-        
-        const html = `
+
+        document.getElementById('queue-status-container').innerHTML = `
             <div class="row text-center">
                 <div class="col-md-4">
                     <div class="h5 mb-0 text-primary">${parseInt(data.cumulative_stats.calendar_processed) || 0}</div>
@@ -387,9 +736,7 @@ async function loadQueueStatus() {
                     <small class="text-muted">Detail Queue Size</small>
                 </div>
             </div>
-
             <hr>
-
             <div class="row small">
                 <div class="col-md-6">
                     <h6>Calendar Scraping Cache</h6>
@@ -413,12 +760,10 @@ async function loadQueueStatus() {
                 </div>
             </div>
         `;
-
-        document.getElementById('queue-status-container').innerHTML = html;
     } catch (error) {
         console.error('Error loading queue status:', error);
         document.getElementById('queue-status-container').innerHTML =
-            `<div class="alert alert-danger">Error loading queue status: ${error.message}</div>`;
+            `<div class="alert alert-danger">Error loading queue status: ${escapeHtml(error.message)}</div>`;
     }
 }
 
@@ -427,7 +772,7 @@ async function loadQueueStats() {
         const response = await fetch('/api/ppv-enrichment/status');
         const data = await response.json();
 
-        const html = `
+        document.getElementById('queue-stats').innerHTML = `
             <div class="row small">
                 <div class="col-md-6">
                     <dl>
@@ -447,12 +792,10 @@ async function loadQueueStats() {
                 </div>
             </div>
         `;
-
-        document.getElementById('queue-stats').innerHTML = html;
     } catch (error) {
         console.error('Error loading queue stats:', error);
         document.getElementById('queue-stats').innerHTML =
-            `<div class="alert alert-danger small">Error loading stats: ${error.message}</div>`;
+            `<div class="alert alert-danger small">Error loading stats: ${escapeHtml(error.message)}</div>`;
     }
 }
 
@@ -475,7 +818,6 @@ document.getElementById('process-queue-btn').addEventListener('click', async fun
         if (!response.ok) throw new Error('Failed to process enrichment');
 
         const result = await response.json();
-
         statusEl.className = 'alert alert-success';
         statusEl.innerHTML = `
             <i class="bi bi-check-circle"></i> Enrichment completed!<br>
@@ -483,12 +825,12 @@ document.getElementById('process-queue-btn').addEventListener('click', async fun
         `;
         statusEl.style.display = 'block';
 
-        // Refresh queue status
         await loadQueueStatus();
         await loadQueueStats();
+        if (previewState.initialized) await loadPreviewData();
     } catch (error) {
         statusEl.className = 'alert alert-danger';
-        statusEl.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Error: ${error.message}`;
+        statusEl.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Error: ${escapeHtml(error.message)}`;
         statusEl.style.display = 'block';
     } finally {
         btn.disabled = false;
@@ -518,7 +860,6 @@ document.getElementById('queue-all-ppv-btn').addEventListener('click', async fun
         if (!response.ok) throw new Error('Failed to queue PPV channels');
 
         const result = await response.json();
-
         statusEl.className = 'alert alert-success';
         statusEl.innerHTML = `
             <i class="bi bi-check-circle"></i> Channels queued successfully!<br>
@@ -526,12 +867,12 @@ document.getElementById('queue-all-ppv-btn').addEventListener('click', async fun
         `;
         statusEl.style.display = 'block';
 
-        // Refresh queue status
         await loadQueueStatus();
         await loadQueueStats();
+        if (previewState.initialized) await loadPreviewData();
     } catch (error) {
         statusEl.className = 'alert alert-danger';
-        statusEl.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Error: ${error.message}`;
+        statusEl.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Error: ${escapeHtml(error.message)}`;
         statusEl.style.display = 'block';
     } finally {
         btn.disabled = false;
@@ -539,13 +880,12 @@ document.getElementById('queue-all-ppv-btn').addEventListener('click', async fun
     }
 });
 
-// ============================================================================
-// Page Load (after module bootstrap assigns window.PpvApi / window.AccountApi)
-// ============================================================================
-
 document.addEventListener('DOMContentLoaded', () => {
     loadEnrichmentSettings();
-    loadAccountsVisibility();
+    loadAccountsVisibility().then(() => {
+        initPreviewPanel();
+        loadPreviewData();
+    });
     loadQueueStatus();
     loadQueueStats();
 

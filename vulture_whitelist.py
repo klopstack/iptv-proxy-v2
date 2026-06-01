@@ -90,7 +90,12 @@ update_channel_link
 delete_channel_link
 bulk_create_channel_links
 delete_auto_detected_links
+detect_backup_channel_links
 get_links_for_channel
+
+# settings.py stream fallback
+get_stream_fallback_config
+update_stream_fallback_config
 
 # epg.py
 get_epg_sources

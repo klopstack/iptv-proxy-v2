@@ -203,3 +203,22 @@ class TestPpvEnrichmentConfigRoutes:
     def test_update_ppv_enrichment_config_requires_body(self, client):
         response = client.put("/api/ppv-enrichment/config")
         assert response.status_code == 400
+
+
+class TestStreamFallbackConfigRoutes:
+    def test_get_stream_fallback_config_defaults(self, client):
+        response = client.get("/api/stream-fallback/config")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["enabled"] is True
+        assert data["auto_detect"] is True
+
+    def test_update_stream_fallback_config(self, client):
+        response = client.put(
+            "/api/stream-fallback/config",
+            json={"enabled": False, "auto_detect": False},
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["enabled"] is False
+        assert data["auto_detect"] is False

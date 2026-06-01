@@ -8,10 +8,13 @@ import json
 import logging
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+from sqlalchemy import func, or_
 
 from models import Channel, Event, EventChannelLink, db
 from services.filter_service import FilterService
+from services.ppv.serializers import serialize_event_detail, serialize_event_summary
 
 logger = logging.getLogger(__name__)
 
@@ -223,6 +226,114 @@ class PPVEpgService:
         )
 
         return ET.tostring(root, encoding="unicode", xml_declaration=True).encode("utf-8")
+
+    @staticmethod
+    def list_ppv_events(
+        mode: str = "all",
+        account_id: Optional[int] = None,
+        days_ahead: int = 7,
+        status: Optional[str] = None,
+        data_completeness: Optional[str] = None,
+        search: Optional[str] = None,
+        page: int = 1,
+        per_page: int = 50,
+    ) -> Dict[str, Any]:
+        """
+        List PPV events with filtering, pagination, and summary statistics.
+        """
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        query = db.session.query(Event).filter(Event.is_ppv == True)  # noqa: E712
+
+        if account_id:
+            query = (
+                query.join(EventChannelLink, Event.id == EventChannelLink.event_id)
+                .join(Channel, EventChannelLink.channel_id == Channel.id)
+                .filter(Channel.account_id == account_id)
+                .distinct()
+            )
+
+        if mode == "upcoming":
+            future = now + timedelta(days=days_ahead)
+            query = query.filter(Event.scheduled_at >= now, Event.scheduled_at <= future)
+        elif mode == "past":
+            query = query.filter(Event.scheduled_at < now)
+
+        if status:
+            query = query.filter(Event.status == status)
+
+        if data_completeness:
+            query = query.filter(Event.data_completeness == data_completeness)
+
+        if search:
+            term = f"%{search.strip()}%"
+            query = query.filter(
+                or_(
+                    Event.title.ilike(term),
+                    Event.home_team_name.ilike(term),
+                    Event.away_team_name.ilike(term),
+                    Event.league_name.ilike(term),
+                    Event.sport.ilike(term),
+                )
+            )
+
+        total = query.count()
+
+        status_rows = query.with_entities(Event.status, func.count(Event.id)).group_by(Event.status).all()
+        by_status = {row[0] or "unknown": row[1] for row in status_rows}
+
+        completeness_rows = (
+            query.with_entities(Event.data_completeness, func.count(Event.id)).group_by(Event.data_completeness).all()
+        )
+        by_completeness = {row[0] or "unknown": row[1] for row in completeness_rows}
+
+        per_page = max(1, min(per_page, 200))
+        page = max(1, page)
+        total_pages = max(1, (total + per_page - 1) // per_page) if total else 1
+        if page > total_pages:
+            page = total_pages
+
+        offset = (page - 1) * per_page
+        events = query.order_by(Event.scheduled_at.desc()).offset(offset).limit(per_page).all()
+
+        event_ids = [event.id for event in events]
+        channel_counts: Dict[int, int] = {}
+        if event_ids:
+            counts = (
+                db.session.query(EventChannelLink.event_id, func.count(EventChannelLink.id))
+                .filter(EventChannelLink.event_id.in_(event_ids))
+                .group_by(EventChannelLink.event_id)
+                .all()
+            )
+            channel_counts = {event_id: count for event_id, count in counts}
+
+        return {
+            "events": [
+                serialize_event_summary(event, channel_count=channel_counts.get(event.id, 0)) for event in events
+            ],
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "total_pages": total_pages,
+            },
+            "summary": {
+                "total": total,
+                "by_status": by_status,
+                "by_completeness": by_completeness,
+            },
+        }
+
+    @staticmethod
+    def get_ppv_event_detail(event_id: int) -> Optional[Dict[str, Any]]:
+        """Return full event detail with linked channels."""
+        event = db.session.get(Event, event_id)
+        if not event:
+            return None
+
+        return {
+            "event": serialize_event_detail(event),
+            "channels": PPVEpgService.get_event_channels(event_id),
+        }
 
     @staticmethod
     def get_ppv_events_for_account(account_id: int) -> List[Dict]:

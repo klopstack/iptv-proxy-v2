@@ -1,0 +1,164 @@
+[
+  {
+    "id": "mlb_royals_rangers",
+    "description": "Production MLB 10 slot - mascot-only team names",
+    "channel_name": "MLB 10 | Royals x Rangers start:2026-05-31 19:35:00 stop:2026-06-01 02:48:20",
+    "category_name": "US| MLB PPV",
+    "competitors": ["Royals", "Rangers"],
+    "expected_sport_keys": ["mlb"],
+    "event": {
+      "event_id": "2387740",
+      "event_name": "Texas Rangers vs Kansas City Royals",
+      "league_name": "MLB",
+      "time_utc": "18:35",
+      "date": "2026-05-31",
+      "home_team": "Texas Rangers",
+      "away_team": "Kansas City Royals"
+    },
+    "should_match": true
+  },
+  {
+    "id": "mlb_rangers_guardians",
+    "description": "MLB slot with Rangers mascot vs Guardians",
+    "channel_name": "MLB 11 | Rangers x Guardians start:2025-09-28 20:10:00 stop:2025-09-29 03:23:20",
+    "category_name": "US| MLB PPV",
+    "competitors": ["Rangers", "Guardians"],
+    "expected_sport_keys": ["mlb"],
+    "event": {
+      "event_id": "2387001",
+      "event_name": "Texas Rangers vs Cleveland Guardians",
+      "league_name": "MLB",
+      "time_utc": "20:10",
+      "date": "2025-09-28",
+      "home_team": "Texas Rangers",
+      "away_team": "Cleveland Guardians"
+    },
+    "should_match": true
+  },
+  {
+    "id": "mlb_dodgers_blue_jays",
+    "description": "MLB slot with multi-word and mascot nicknames",
+    "channel_name": "MLB 1 | Dodgers x Blue Jays start:2025-11-02 12:00am Sun",
+    "category_name": "US| MLB PPV",
+    "competitors": ["Dodgers", "Blue Jays"],
+    "expected_sport_keys": ["mlb"],
+    "event": {
+      "event_id": "2386500",
+      "event_name": "Los Angeles Dodgers vs Toronto Blue Jays",
+      "league_name": "MLB",
+      "time_utc": "00:00",
+      "date": "2025-11-02",
+      "home_team": "Los Angeles Dodgers",
+      "away_team": "Toronto Blue Jays"
+    },
+    "should_match": true
+  },
+  {
+    "id": "nhl_senators_rangers",
+    "description": "NHL DAZN PPV feed with NY Rangers mascot",
+    "channel_name": "NL: DAZN PPV 7 - SENATORS @ RANGERS | Thu 15 Jan 00:20 | 8K EXCLUSIVE",
+    "category_name": "NL| NHL PPV",
+    "competitors": ["SENATORS", "RANGERS"],
+    "expected_sport_keys": ["nhl"],
+    "event": {
+      "event_id": "2348100",
+      "event_name": "New York Rangers vs Ottawa Senators",
+      "league_name": "NHL",
+      "time_utc": "00:20",
+      "date": "2026-01-15",
+      "home_team": "New York Rangers",
+      "away_team": "Ottawa Senators"
+    },
+    "should_match": true
+  },
+  {
+    "id": "nba_knicks_timberwolves",
+    "description": "NBA slot with parenthetical abbreviations",
+    "channel_name": "NBA 02: Knicks (NYK) x Timberwolves (MIN) start:2025-01-18 00:20:00 stop:2025-01-18 04:20:00",
+    "category_name": "US| NBA PPV",
+    "competitors": ["Knicks (NYK)", "Timberwolves (MIN)"],
+    "expected_sport_keys": ["nba"],
+    "event": {
+      "event_id": "2200100",
+      "event_name": "New York Knicks vs Minnesota Timberwolves",
+      "league_name": "NBA",
+      "time_utc": "00:20",
+      "date": "2025-01-18",
+      "home_team": "New York Knicks",
+      "away_team": "Minnesota Timberwolves"
+    },
+    "should_match": true
+  },
+  {
+    "id": "wnba_sparks_valkyries",
+    "description": "WNBA full team names",
+    "channel_name": "US (WNBA 43) | Los Angeles Sparks at Golden State Valkyries (2026-06-16 02:00:00)",
+    "category_name": "US| WNBA PPV",
+    "competitors": ["Los Angeles Sparks", "Golden State Valkyries"],
+    "expected_sport_keys": ["wnba"],
+    "event": {
+      "event_id": "2449059",
+      "event_name": "Golden State Valkyries vs Los Angeles Sparks",
+      "league_name": "WNBA",
+      "time_utc": "02:00",
+      "date": "2026-06-16",
+      "home_team": "Golden State Valkyries",
+      "away_team": "Los Angeles Sparks"
+    },
+    "should_match": true
+  },
+  {
+    "id": "reject_soccer_ppv_mlb_event",
+    "description": "Mislabeled SOCCER PPV feed must not match MLB calendar event",
+    "channel_name": "End | Royals at Rangers | all | 31-05-2026 | 20:35 (GMT) | 8K EXCLUSIVE | NL: SOCCER PPV 94",
+    "category_name": "NL| SOCCER PPV",
+    "competitors": ["Royals", "Rangers"],
+    "expected_sport_keys": ["soccer"],
+    "event": {
+      "event_id": "2387740",
+      "event_name": "Texas Rangers vs Kansas City Royals",
+      "league_name": "MLB",
+      "time_utc": "18:35",
+      "date": "2026-05-31",
+      "home_team": "Texas Rangers",
+      "away_team": "Kansas City Royals"
+    },
+    "should_match": false
+  },
+  {
+    "id": "reject_echl_mlb_event",
+    "description": "ECHL Reading Royals must not match MLB Royals/Rangers",
+    "channel_name": "(FLSP 097) | flohockey: 2026 Reading Royals vs Worcester Railers (Home) (2026-01-14 19:05:30)",
+    "category_name": "US| HOCKEY PPV",
+    "competitors": ["Reading Royals", "Worcester Railers"],
+    "expected_sport_keys": ["nhl"],
+    "event": {
+      "event_id": "2387740",
+      "event_name": "Texas Rangers vs Kansas City Royals",
+      "league_name": "MLB",
+      "time_utc": "18:35",
+      "date": "2026-05-31",
+      "home_team": "Texas Rangers",
+      "away_team": "Kansas City Royals"
+    },
+    "should_match": false
+  },
+  {
+    "id": "reject_junior_hockey_mlb_event",
+    "description": "Junior hockey Rangers/Royals must not match MLB",
+    "channel_name": "(FLSP 605) | flohockey: 2026 North York Rangers vs Markham Royals (Home) (2026-01-16 19:30:25)",
+    "category_name": "US| HOCKEY PPV",
+    "competitors": ["North York Rangers", "Markham Royals"],
+    "expected_sport_keys": ["nhl"],
+    "event": {
+      "event_id": "2387740",
+      "event_name": "Texas Rangers vs Kansas City Royals",
+      "league_name": "MLB",
+      "time_utc": "18:35",
+      "date": "2026-05-31",
+      "home_team": "Texas Rangers",
+      "away_team": "Kansas City Royals"
+    },
+    "should_match": false
+  }
+]

@@ -64,23 +64,57 @@ def get_ppv_events():
     Query Parameters:
         account_id (optional): Filter to specific account
         days_ahead (optional): Number of days ahead for upcoming events (default: 7)
-        mode (optional): "upcoming" or "all" (default: "all")
+        mode (optional): "upcoming", "past", or "all" (default: "all")
+        status (optional): Filter by event status
+        data_completeness (optional): Filter by data completeness
+        search (optional): Search teams, league, sport, title
+        page (optional): Page number (default: 1)
+        per_page (optional): Results per page (default: 50)
 
     Returns:
-        JSON list of event records
+        JSON list of event records with pagination and summary
     """
     account_id = request.args.get("account_id", type=int)
     days_ahead = request.args.get("days_ahead", 7, type=int)
     mode = request.args.get("mode", "all")
+    status = request.args.get("status")
+    data_completeness = request.args.get("data_completeness")
+    search = request.args.get("search")
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 50, type=int)
 
-    if mode == "upcoming":
+    legacy_upcoming = mode == "upcoming" and page == 1 and not search and not status and not data_completeness
+    legacy_account = account_id and mode == "all" and page == 1 and not search and not status and not data_completeness
+
+    if legacy_upcoming and not account_id:
         events = PPVEpgService.get_upcoming_ppv_events(days_ahead=days_ahead)
         return jsonify({"events": events, "count": len(events)})
-    elif account_id:
+    if legacy_account:
         events = PPVEpgService.get_ppv_events_for_account(account_id)
         return jsonify({"events": events, "count": len(events)})
-    else:
-        return jsonify({"error": "Either mode=upcoming or account_id must be specified"}), 400
+
+    result = PPVEpgService.list_ppv_events(
+        mode=mode,
+        account_id=account_id,
+        days_ahead=days_ahead,
+        status=status,
+        data_completeness=data_completeness,
+        search=search,
+        page=page,
+        per_page=per_page,
+    )
+    return jsonify(result)
+
+
+@ppv_epg_bp.route("/events/<int:event_id>", methods=["GET"])
+@cross_origin()
+@handle_errors()
+def get_ppv_event_detail(event_id):
+    """Get full PPV event detail with linked channels."""
+    detail = PPVEpgService.get_ppv_event_detail(event_id)
+    if not detail:
+        return jsonify({"error": "Event not found"}), 404
+    return jsonify(detail)
 
 
 @ppv_epg_bp.route("/events/<int:event_id>/channels", methods=["GET"])

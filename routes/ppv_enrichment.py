@@ -246,6 +246,42 @@ def queue_all_ppv_channels():
         return jsonify({"error": str(e)}), 500
 
 
+@ppv_enrichment_bp.route("/channels", methods=["GET"])
+@cross_origin()
+def get_enrichment_channels():
+    """
+    List PPV channels with enrichment status and linked event summaries.
+
+    Query Parameters:
+        account_id (optional): Filter to specific account
+        status (optional): Comma-separated enrichment statuses
+        search (optional): Search channel names
+        page (optional): Page number (default: 1)
+        per_page (optional): Results per page (default: 50)
+    """
+    try:
+        from services.ppv.preview import list_ppv_enrichment_channels
+
+        account_id = request.args.get("account_id", type=int)
+        status = request.args.get("status")
+        search = request.args.get("search")
+        page = request.args.get("page", 1, type=int)
+        per_page = request.args.get("per_page", 50, type=int)
+
+        result = list_ppv_enrichment_channels(
+            account_id=account_id,
+            status=status,
+            search=search,
+            page=page,
+            per_page=per_page,
+        )
+        return jsonify(result), 200
+
+    except Exception as e:
+        logger.error(f"Error listing PPV enrichment channels: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @ppv_enrichment_bp.route("/settings", methods=["GET"])
 @cross_origin()
 def get_enrichment_settings():

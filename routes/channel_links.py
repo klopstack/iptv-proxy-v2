@@ -143,6 +143,10 @@ def create_channel_link():
     db.session.add(link)
     db.session.commit()
 
+    from services.stream_fallback_service import invalidate_cache
+
+    invalidate_cache()
+
     logger.info(f"Created channel link: {channel.name} -> {source_channel.name}")
     return jsonify(channel_link_to_dict(link)), 201
 
@@ -173,6 +177,10 @@ def update_channel_link(link_id):
 
     db.session.commit()
 
+    from services.stream_fallback_service import invalidate_cache
+
+    invalidate_cache()
+
     logger.info(f"Updated channel link {link_id}")
     return jsonify(channel_link_to_dict(link))
 
@@ -187,6 +195,10 @@ def delete_channel_link(link_id):
 
     db.session.delete(link)
     db.session.commit()
+
+    from services.stream_fallback_service import invalidate_cache
+
+    invalidate_cache()
 
     logger.info(f"Deleted channel link {link_id}")
     return jsonify({"message": "Channel link deleted successfully"})
@@ -257,6 +269,9 @@ def bulk_create_channel_links():
 
     if created:
         db.session.commit()
+        from services.stream_fallback_service import invalidate_cache
+
+        invalidate_cache()
 
     return jsonify(
         {
@@ -310,6 +325,36 @@ def detect_channel_links():
         logger.info(f"Cleared {deleted} existing auto-detected links before detection")
 
     stats = ChannelSyncService.detect_channel_links(account_id)
+    return jsonify(stats)
+
+
+@channel_links_bp.route("/api/channel-links/detect-backups", methods=["POST"])
+@handle_errors(return_json=True, default_message="Error detecting backup channel links")
+def detect_backup_channel_links():
+    """
+    Auto-detect primary/backup channel pairs for stream proxy failover.
+
+    Query params:
+        - account_id: Optional account ID to limit detection to
+        - clear_existing: If true, delete existing auto-detected backup links first
+    """
+    from services.sync_service import ChannelSyncService
+
+    account_id = request.args.get("account_id", type=int)
+    clear_existing = request.args.get("clear_existing", "").lower() in ("true", "1", "yes")
+
+    if clear_existing:
+        query = ChannelLink.query.filter_by(auto_detected=True, link_type="backup")
+        if account_id:
+            query = query.join(Channel, ChannelLink.channel_id == Channel.id).filter(Channel.account_id == account_id)
+        deleted = query.delete(synchronize_session="fetch")
+        db.session.commit()
+        from services.stream_fallback_service import invalidate_cache
+
+        invalidate_cache()
+        logger.info("Cleared %s auto-detected backup links before detection", deleted)
+
+    stats = ChannelSyncService.detect_backup_pairs(account_id)
     return jsonify(stats)
 
 

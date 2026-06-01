@@ -515,6 +515,88 @@ class TestPPVEpgRoutes:
             assert data["count"] == 2
             assert all("channel_name" in evt for evt in data["events"])
 
+    def test_get_ppv_events_mode_all(self, app, client, sample_events):
+        """Test GET /api/ppv-epg/events?mode=all with pagination"""
+        with app.app_context():
+            response = client.get("/api/ppv-epg/events?mode=all&page=1&per_page=10")
+
+            assert response.status_code == 200
+            data = response.get_json()
+
+            assert "events" in data
+            assert "pagination" in data
+            assert "summary" in data
+            assert data["pagination"]["total"] == 2
+            assert len(data["events"]) == 2
+            assert "data_completeness" in data["events"][0]
+            assert "channel_count" in data["events"][0]
+
+    def test_get_ppv_events_search(self, app, client, sample_events):
+        """Test GET /api/ppv-epg/events?mode=all&search=Arsenal"""
+        with app.app_context():
+            response = client.get("/api/ppv-epg/events?mode=all&search=Arsenal")
+
+            assert response.status_code == 200
+            data = response.get_json()
+            assert data["pagination"]["total"] == 1
+            assert data["events"][0]["home_team"] == "Arsenal"
+
+    def test_get_ppv_event_detail_route(self, app, client, sample_events):
+        """Test GET /api/ppv-epg/events/<id>"""
+        with app.app_context():
+            event = Event.query.first()
+
+            response = client.get(f"/api/ppv-epg/events/{event.id}")
+
+            assert response.status_code == 200
+            data = response.get_json()
+            assert "event" in data
+            assert "channels" in data
+            assert data["event"]["id"] == event.id
+            assert data["event"]["external_id"] == event.external_id
+            assert len(data["channels"]) == 1
+
+    def test_get_ppv_event_detail_not_found(self, app, client):
+        """Test GET /api/ppv-epg/events/<id> for missing event"""
+        with app.app_context():
+            response = client.get("/api/ppv-epg/events/99999")
+            assert response.status_code == 404
+
+    def test_list_ppv_events_service(self, app, sample_events):
+        """Test PPVEpgService.list_ppv_events filtering"""
+        with app.app_context():
+            from models import Account
+
+            account = Account.query.first()
+            result = PPVEpgService.list_ppv_events(mode="all", account_id=account.id)
+
+            assert result["pagination"]["total"] == 2
+            assert result["summary"]["total"] == 2
+            assert all("channel_count" in evt for evt in result["events"])
+
+    def test_get_enrichment_channels_with_linked_event(self, app, client, sample_events):
+        """Test matched channel includes linked event summary."""
+        with app.app_context():
+            from models import Account
+
+            account = Account.query.first()
+            channel = Channel.query.filter_by(stream_id=1001).first()
+            channel.is_ppv = True
+            channel.ppv_enrichment_status = "matched"
+            db.session.commit()
+            channel_id = channel.id
+            account_id = account.id
+
+        response = client.get(f"/api/ppv-enrichment/channels?account_id={account_id}&status=matched")
+        assert response.status_code == 200
+        data = response.get_json()
+
+        matched = [ch for ch in data["channels"] if ch["channel_id"] == channel_id]
+        assert len(matched) == 1
+        assert matched[0]["linked_event"] is not None
+        assert matched[0]["linked_event"]["home_team"] == "Arsenal"
+        assert matched[0]["linked_event"]["match_confidence"] == 0.95
+
     def test_get_event_channels_route(self, app, client, sample_events):
         """Test GET /api/ppv-epg/events/<event_id>/channels"""
         with app.app_context():

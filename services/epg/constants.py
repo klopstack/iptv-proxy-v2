@@ -49,14 +49,19 @@ PPV_PLACEHOLDER_PATTERNS = [
     r"^(?:[A-Z]{2}[:\s])?(?:[A-Z0-9\+\s]+)?PPV[\s\-]*\d+\s*(?:ᴿᴬᵂ|ᴴᴰ|⁴ᴷ|4K|HD|SD)?$",
     # Event channels with just numbers: "EVENT 1", "VIDIO EVENT 1"
     r"EVENT\s+\d+\s*$",
-    # Empty event slots: "PPV 1 -", "UFC 09:", ":MAX NL 05"
-    r"(?:PPV|UFC|NBA|NHL|MLB|MLS|WNBA)\s*\d+\s*[:\-]?\s*$",
+    # Empty event slots: "PPV 1 -", "UFC 09:", "MILB 100:", "MLB 01 -"
+    r"(?:PPV|UFC|NBA|NHL|MLB|MILB|MLS|WNBA)\s*\d{1,3}\s*[:\-]?\s*$",
+    # Provider-wrapped empty MiLB slots: "US (MiLB 100)", "(MiLB 009)"
+    r"^(?:[A-Z]{2}\s*)?\(MiLB\s+\d{1,3}\)\s*$",
+    # Trailing MiLB slot markers without event info: ":Milb  100", "Milb  01"
+    r"^:?Milb\s+\d{1,3}\s*$",
     # Placeholder colon format: ":Viaplay NL  14", ":MAX US 03"
     r"^:?\s*(?:[A-Z]+\s+)?(?:Viaplay|MAX|ESPN)\s+[A-Z]{2}\s+\d+\s*$",
     # Coming Soon/TBA placeholders
     r"^(?:COMING\s+SOON|TBA|TBD|OFFLINE).*$",
-    # Generic brand + slot number: "DIRTVISION 03", "GOLF 10 HD", "US: GOLF 10"
-    r"^(?:[A-Z]{2}\s*[:\|]\s*)?[A-Za-z]+\s+\d{1,2}\s*(?:ᴿᴬᵂ|ᴴᴰ|⁴ᴷ|4K|HD|SD|FHD|UHD)?$",
+    # Generic brand + slot number: "DIRTVISION 03", "GOLF 10 HD", "Florugby 00"
+    # Use a brand whitelist so real event titles like "Bellator 300" are not hidden.
+    r"^(?:[A-Z]{2}\s*[:\|]\s*)?(?:DIRTVISION|GOLF|Milb|MILB|Florugby)\s+\d{1,3}\s*(?:ᴿᴬᵂ|ᴴᴰ|⁴ᴷ|4K|HD|SD|FHD|UHD)?$",
     # Empty fixture slots: "GaaGo Fixtures 10:", "LOI 06 |"
     r"Fixtures?\s+\d+\s*[:\|]?\s*$",
     # NIFL/GAA empty: "NIFL 5 |", "ULSTER GAA 06 |"
