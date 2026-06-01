@@ -14,7 +14,7 @@ from sqlalchemy import func, or_
 
 from models import Channel, Event, EventChannelLink, db
 from services.filter_service import FilterService
-from services.ppv.serializers import serialize_event_detail, serialize_event_summary
+from services.ppv.serializers import serialize_event_detail, serialize_event_summary, serialize_utc_iso
 
 logger = logging.getLogger(__name__)
 
@@ -364,7 +364,7 @@ class PPVEpgService:
                     "league": event.league_name,
                     "home_team": event.home_team_name,
                     "away_team": event.away_team_name,
-                    "scheduled_at": event.scheduled_at.isoformat() if event.scheduled_at else None,
+                    "scheduled_at": serialize_utc_iso(event.scheduled_at),
                     "status": event.status,
                     "venue": event.venue_name,
                     "city": event.city,
@@ -417,7 +417,7 @@ class PPVEpgService:
                     "league": event.league_name,
                     "home_team": event.home_team_name,
                     "away_team": event.away_team_name,
-                    "scheduled_at": event.scheduled_at.isoformat() if event.scheduled_at else None,
+                    "scheduled_at": serialize_utc_iso(event.scheduled_at),
                     "status": event.status,
                     "venue": event.venue_name,
                     "channel_count": channel_count,

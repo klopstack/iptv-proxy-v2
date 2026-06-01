@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import func, or_
 
 from models import Account, Channel, Event, EventChannelLink, db
-from services.ppv.serializers import serialize_linked_event_summary
+from services.ppv.serializers import serialize_linked_event_summary, serialize_utc_iso
 
 
 def list_ppv_enrichment_channels(
@@ -88,9 +88,7 @@ def list_ppv_enrichment_channels(
                 "ppv_enrichment_status": channel.ppv_enrichment_status,
                 "ppv_enrichment_attempts": channel.ppv_enrichment_attempts or 0,
                 "ppv_enrichment_error": channel.ppv_enrichment_error,
-                "ppv_enrichment_last_attempt": (
-                    channel.ppv_enrichment_last_attempt.isoformat() if channel.ppv_enrichment_last_attempt else None
-                ),
+                "ppv_enrichment_last_attempt": serialize_utc_iso(channel.ppv_enrichment_last_attempt),
                 "linked_event": linked_event,
             }
         )

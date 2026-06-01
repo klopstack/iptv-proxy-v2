@@ -1,8 +1,20 @@
 """Shared serializers for PPV event and channel preview APIs."""
 
+from datetime import timezone
 from typing import Any, Dict, Optional
 
 from models import Event, EventChannelLink
+
+
+def serialize_utc_iso(dt) -> Optional[str]:
+    """Serialize datetime as explicit UTC ISO8601 string with Z suffix."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.isoformat().replace("+00:00", "Z")
 
 
 def serialize_event_summary(event: Event, channel_count: Optional[int] = None) -> Dict[str, Any]:
@@ -15,7 +27,7 @@ def serialize_event_summary(event: Event, channel_count: Optional[int] = None) -
         "league": event.league_name,
         "home_team": event.home_team_name,
         "away_team": event.away_team_name,
-        "scheduled_at": event.scheduled_at.isoformat() if event.scheduled_at else None,
+        "scheduled_at": serialize_utc_iso(event.scheduled_at),
         "status": event.status,
         "venue": event.venue_name,
         "city": event.city,
@@ -24,7 +36,7 @@ def serialize_event_summary(event: Event, channel_count: Optional[int] = None) -
         "event_image": event.event_image,
         "home_team_badge": event.home_team_badge,
         "away_team_badge": event.away_team_badge,
-        "last_updated_at": event.last_updated_at.isoformat() if event.last_updated_at else None,
+        "last_updated_at": serialize_utc_iso(event.last_updated_at),
     }
     if channel_count is not None:
         result["channel_count"] = channel_count
@@ -40,12 +52,12 @@ def serialize_event_detail(event: Event) -> Dict[str, Any]:
             "league_id": event.league_id,
             "home_team_id": event.home_team_id,
             "away_team_id": event.away_team_id,
-            "start_at": event.start_at.isoformat() if event.start_at else None,
-            "end_at": event.end_at.isoformat() if event.end_at else None,
+            "start_at": serialize_utc_iso(event.start_at),
+            "end_at": serialize_utc_iso(event.end_at),
             "timezone": event.timezone,
             "venue_id": event.venue_id,
             "is_ppv": event.is_ppv,
-            "created_at": event.created_at.isoformat() if event.created_at else None,
+            "created_at": serialize_utc_iso(event.created_at),
         }
     )
     return data
@@ -58,7 +70,7 @@ def serialize_linked_event_summary(event: Event, link: EventChannelLink) -> Dict
         "external_id": event.external_id,
         "home_team": event.home_team_name,
         "away_team": event.away_team_name,
-        "scheduled_at": event.scheduled_at.isoformat() if event.scheduled_at else None,
+        "scheduled_at": serialize_utc_iso(event.scheduled_at),
         "status": event.status,
         "match_confidence": link.match_confidence,
         "match_method": link.match_method,
