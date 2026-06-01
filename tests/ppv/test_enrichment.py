@@ -4,7 +4,7 @@ Tests for PPV Calendar Enrichment Service
 Comprehensive test coverage for the calendar-based PPV event enrichment workflow.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 import pytest
@@ -811,3 +811,111 @@ class TestGenericPatterns:
         """Test that we have expected number of patterns."""
         # Should have at least 10 generic patterns
         assert len(GENERIC_CHANNEL_PATTERNS) >= 10
+
+
+class TestFarFutureEnrichmentFilter:
+    """Tests that channels with dates >31 days in the future are skipped during enrichment."""
+
+    def _make_channel(self, name):
+        ch = Mock()
+        ch.name = name
+        ch.ppv_enrichment_status = None
+        return ch
+
+    def test_far_future_channel_skipped(self, app):
+        """A channel with an extracted date >31 days away is filtered out before matching."""
+        with app.app_context():
+            service = PPVCalendarEnrichmentService(app)
+            far_date = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=45)
+
+            # Patch the internal steps so we can inspect the valid_extractions list
+            with patch.object(service, "_extract_all_channels") as mock_extract, patch.object(
+                service, "_group_by_date"
+            ) as mock_group, patch.object(service, "_update_stats"), patch(
+                "services.ppv.enrichment.sync_enrichment_status_from_links"
+            ), patch(
+                "services.ppv.enrichment.prune_orphan_ppv_events"
+            ):
+                ch = self._make_channel("UFC 405: Jones vs Smith")
+                mock_extract.return_value = [
+                    (
+                        ch,
+                        {
+                            "is_placeholder": False,
+                            "is_inactive": False,
+                            "competitors": ("Jones", "Smith"),
+                            "date": far_date,
+                        },
+                    )
+                ]
+                # Return an empty group so nothing tries to match
+                mock_group.return_value = {}
+
+                result = service.enrich_channels([ch], fetch_details=False)
+
+            # The channel was filtered out (counted as no_extraction, reason: far_future)
+            assert result["no_extraction"] == 1
+            assert result["far_future_skipped"] == 1
+            assert result["processed"] == 0
+
+    def test_channel_within_31_days_not_skipped(self, app):
+        """A channel with an extracted date <=31 days away proceeds to matching."""
+        with app.app_context():
+            service = PPVCalendarEnrichmentService(app)
+            near_date = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=20)
+
+            with patch.object(service, "_extract_all_channels") as mock_extract, patch.object(
+                service, "_group_by_date"
+            ) as mock_group, patch.object(service, "_update_stats"), patch(
+                "services.ppv.enrichment.sync_enrichment_status_from_links"
+            ), patch(
+                "services.ppv.enrichment.prune_orphan_ppv_events"
+            ):
+                ch = self._make_channel("UFC 403: Brown vs White")
+                mock_extract.return_value = [
+                    (
+                        ch,
+                        {
+                            "is_placeholder": False,
+                            "is_inactive": False,
+                            "competitors": ("Brown", "White"),
+                            "date": near_date,
+                        },
+                    )
+                ]
+                mock_group.return_value = {}
+
+                result = service.enrich_channels([ch], fetch_details=False)
+
+            # Channel was NOT filtered as far_future — it was accepted into valid_extractions
+            assert result["no_extraction"] == 0
+
+    def test_channel_with_no_date_not_skipped(self, app):
+        """A channel with no extracted date is not affected by the far-future filter."""
+        with app.app_context():
+            service = PPVCalendarEnrichmentService(app)
+
+            with patch.object(service, "_extract_all_channels") as mock_extract, patch.object(
+                service, "_group_by_date"
+            ) as mock_group, patch.object(service, "_update_stats"), patch(
+                "services.ppv.enrichment.sync_enrichment_status_from_links"
+            ), patch(
+                "services.ppv.enrichment.prune_orphan_ppv_events"
+            ):
+                ch = self._make_channel("UFC 404: Fighter vs Fighter")
+                mock_extract.return_value = [
+                    (
+                        ch,
+                        {
+                            "is_placeholder": False,
+                            "is_inactive": False,
+                            "competitors": ("Fighter A", "Fighter B"),
+                            "date": None,
+                        },
+                    )
+                ]
+                mock_group.return_value = {}
+
+                result = service.enrich_channels([ch], fetch_details=False)
+
+            assert result["no_extraction"] == 0

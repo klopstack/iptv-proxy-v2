@@ -72,6 +72,16 @@ class PPVVisibilityService:
             return self._is_ppv_active(channel)
 
     @staticmethod
+    def _is_far_future_channel(channel_name: str) -> bool:
+        """Return True if the channel name contains an explicit date more than 31 days away."""
+        extraction = PPVEventExtractor().extract_all(channel_name)
+        event_date = extraction.get("date")
+        if not isinstance(event_date, datetime):
+            return False
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=31)
+        return event_date.replace(tzinfo=None) > cutoff
+
+    @staticmethod
     def _is_inactive_ppv_slot_name(channel_name: str) -> bool:
         """True for generic numbered PPV slots without a real event title."""
         return is_ppv_placeholder_name(channel_name) or is_generic_channel_name(channel_name)
@@ -120,7 +130,11 @@ class PPVVisibilityService:
                     return False
 
                 # If enrichment is queued or processing, show channel (optimistic)
+                # but still hide if the channel name indicates a far-future event
                 if channel.ppv_enrichment_status in ("queued", "processing"):
+                    if self._is_far_future_channel(channel.name):
+                        logger.debug(f"Hiding far-future channel (>1 month away): {channel.name[:60]}")
+                        return False
                     logger.debug(f"Showing channel being enriched: {channel.name[:60]}")
                     return True
 
@@ -161,8 +175,15 @@ class PPVVisibilityService:
                     return True
                 # stop: time has passed — fall through to grace-window check
 
-            # Future event: show unconditionally
+            # Future event: show unless it's more than a month away
             if event.scheduled_at >= current_time:
+                far_future_cutoff = current_time + timedelta(days=31)
+                if event.scheduled_at > far_future_cutoff:
+                    logger.debug(
+                        f"Hiding far-future event (>1 month away): {channel.name[:60]} "
+                        f"(date: {event.scheduled_at}, event: {event.external_id})"
+                    )
+                    return False
                 logger.debug(
                     f"Showing future event: {channel.name[:60]} "
                     f"(date: {event.scheduled_at}, event: {event.external_id})"

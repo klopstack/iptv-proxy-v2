@@ -849,3 +849,144 @@ class TestLiveGameVisibility:
             channel = self._make_channel(account.id, "boxing-ch-1", "BOXING: Fury vs Joshua")
             self._link_event(event, channel)
             assert service.should_show_channel(channel) is True
+
+
+class TestFarFutureVisibility:
+    """Tests for hiding PPV events more than one month in the future."""
+
+    def _make_account_and_service(self, app_ctx):
+        account = Account(name="FarFutureTest", server="http://test.com", ppv_visibility="hide_inactive")
+        db.session.add(account)
+        db.session.commit()
+        return account, PPVVisibilityService(account)
+
+    def _make_event(self, scheduled_at, external_id="ff-event-1"):
+        event = Event(
+            external_id=external_id,
+            scheduled_at=scheduled_at,
+            home_team_id="home-id",
+            home_team_name="Home",
+            away_team_id="away-id",
+            away_team_name="Away",
+            league_name="MMA",
+            status=Event.STATUS_SCHEDULED,
+        )
+        db.session.add(event)
+        db.session.commit()
+        return event
+
+    def test_event_exactly_one_month_away_is_shown(self, app):
+        """Events exactly 31 days away are still shown (boundary: <=31 days)."""
+        with app.app_context():
+            account, service = self._make_account_and_service(app)
+            scheduled = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=31)
+            event = self._make_event(scheduled)
+            channel = Channel(
+                account_id=account.id,
+                stream_id="ff-ch-boundary",
+                name="UFC 400: Jones vs Miocic",
+                is_ppv=True,
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+            db.session.add(EventChannelLink(event_id=event.id, channel_id=channel.id))
+            db.session.commit()
+            assert service.should_show_channel(channel) is True
+
+    def test_event_more_than_one_month_away_is_hidden(self, app):
+        """Events scheduled more than 31 days away are hidden."""
+        with app.app_context():
+            account, service = self._make_account_and_service(app)
+            scheduled = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=32)
+            event = self._make_event(scheduled, external_id="ff-event-2")
+            channel = Channel(
+                account_id=account.id,
+                stream_id="ff-ch-far",
+                name="UFC 400: Jones vs Miocic",
+                is_ppv=True,
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+            db.session.add(EventChannelLink(event_id=event.id, channel_id=channel.id))
+            db.session.commit()
+            assert service.should_show_channel(channel) is False
+
+    def test_event_two_months_away_is_hidden(self, app):
+        """Events two months away are hidden."""
+        with app.app_context():
+            account, service = self._make_account_and_service(app)
+            scheduled = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=60)
+            event = self._make_event(scheduled, external_id="ff-event-3")
+            channel = Channel(
+                account_id=account.id,
+                stream_id="ff-ch-60d",
+                name="UFC 401: Smith vs Jones",
+                is_ppv=True,
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+            db.session.add(EventChannelLink(event_id=event.id, channel_id=channel.id))
+            db.session.commit()
+            assert service.should_show_channel(channel) is False
+
+    def test_show_all_mode_ignores_far_future_filter(self, app):
+        """In show_all mode, far-future events are still shown."""
+        with app.app_context():
+            account = Account(name="ShowAllTest", server="http://test.com", ppv_visibility="show_all")
+            db.session.add(account)
+            db.session.commit()
+            service = PPVVisibilityService(account)
+            scheduled = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=60)
+            event = self._make_event(scheduled, external_id="ff-event-4")
+            channel = Channel(
+                account_id=account.id,
+                stream_id="ff-ch-show-all",
+                name="UFC 402: Far Future Fight",
+                is_ppv=True,
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+            db.session.add(EventChannelLink(event_id=event.id, channel_id=channel.id))
+            db.session.commit()
+            assert service.should_show_channel(channel) is True
+
+    def test_queued_channel_with_far_future_date_in_name_is_hidden(self, app):
+        """A queued channel whose name contains an explicit date >31 days away is hidden."""
+        with app.app_context():
+            account, service = self._make_account_and_service(app)
+            # Build a channel name with an explicit ISO date >31 days from now
+            far_date = datetime.now(timezone.utc) + timedelta(days=45)
+            date_str = far_date.strftime("%Y-%m-%d %H:%M")
+            channel = Channel(
+                account_id=account.id,
+                stream_id="ff-ch-queued",
+                name=f"UFC 405: Smith vs Jones | start:{date_str}",
+                is_ppv=True,
+                is_active=True,
+                ppv_enrichment_status="queued",
+            )
+            db.session.add(channel)
+            db.session.commit()
+            assert service.should_show_channel(channel) is False
+
+    def test_queued_channel_near_future_date_in_name_is_shown(self, app):
+        """A queued channel with a date within 31 days is shown optimistically."""
+        with app.app_context():
+            account, service = self._make_account_and_service(app)
+            near_date = datetime.now(timezone.utc) + timedelta(days=7)
+            date_str = near_date.strftime("%Y-%m-%d %H:%M")
+            channel = Channel(
+                account_id=account.id,
+                stream_id="ff-ch-queued-near",
+                name=f"UFC 403: Brown vs White | start:{date_str}",
+                is_ppv=True,
+                is_active=True,
+                ppv_enrichment_status="queued",
+            )
+            db.session.add(channel)
+            db.session.commit()
+            assert service.should_show_channel(channel) is True
