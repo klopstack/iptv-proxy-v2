@@ -836,7 +836,6 @@ class TestFarFutureEnrichmentFilter:
             ), patch(
                 "services.ppv.enrichment.prune_orphan_ppv_events"
             ):
-
                 ch = self._make_channel("UFC 405: Jones vs Smith")
                 mock_extract.return_value = [
                     (
@@ -872,7 +871,6 @@ class TestFarFutureEnrichmentFilter:
             ), patch(
                 "services.ppv.enrichment.prune_orphan_ppv_events"
             ):
-
                 ch = self._make_channel("UFC 403: Brown vs White")
                 mock_extract.return_value = [
                     (
@@ -904,7 +902,6 @@ class TestFarFutureEnrichmentFilter:
             ), patch(
                 "services.ppv.enrichment.prune_orphan_ppv_events"
             ):
-
                 ch = self._make_channel("UFC 404: Fighter vs Fighter")
                 mock_extract.return_value = [
                     (
