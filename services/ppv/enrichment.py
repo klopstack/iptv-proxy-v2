@@ -32,7 +32,7 @@ import random
 import threading
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from queue import Empty, Queue
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -187,6 +187,15 @@ class PPVCalendarEnrichmentService:
                     else:
                         filter_reasons["no_competitors"] += 1
                     continue
+
+                # Skip channels whose extracted date is more than a month in the future —
+                # data coverage improves as events approach, so early enrichment is not useful.
+                event_date = ex.get("date")
+                if isinstance(event_date, datetime):
+                    far_future_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=31)
+                    if event_date.replace(tzinfo=None) > far_future_cutoff:
+                        filter_reasons["far_future"] += 1
+                        continue
 
                 valid_extractions.append((ch, ex))
 
