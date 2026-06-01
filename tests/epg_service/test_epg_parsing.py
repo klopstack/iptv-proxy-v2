@@ -614,6 +614,26 @@ class TestParseXmltvTime:
         result = parse_xmltv_time("invalid")
         assert result is None
 
+    def test_timezone_offset_converts_to_utc(self):
+        """Test that timezone offsets are normalized to naive UTC."""
+        result = parse_xmltv_time("20240101120000 +0100")
+        assert result is not None
+        assert result.year == 2024
+        assert result.month == 1
+        assert result.day == 1
+        assert result.hour == 11
+        assert result.minute == 0
+
+    def test_negative_timezone_offset_converts_to_utc(self):
+        """Test that negative offsets are normalized to naive UTC."""
+        result = parse_xmltv_time("20240101120000 -0500")
+        assert result is not None
+        assert result.year == 2024
+        assert result.month == 1
+        assert result.day == 1
+        assert result.hour == 17
+        assert result.minute == 0
+
 
 # ============================================================================
 # EPG Coverage Stats Tests

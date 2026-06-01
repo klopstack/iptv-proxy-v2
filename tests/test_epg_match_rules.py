@@ -16,10 +16,12 @@ from models import (
     AccountEpgMatchRuleSet,
     Category,
     Channel,
+    ChannelEpgMapping,
     EpgChannel,
     EpgExclusionPattern,
     EpgMatchRule,
     EpgMatchRuleSet,
+    EpgProgram,
     EpgSource,
     db,
 )
@@ -603,6 +605,72 @@ class TestEpgMatchRulesService:
             rulesets = EpgMatchRulesService.get_rulesets_for_account(account.id)
             assert len(rulesets) >= 1
             assert any(r.is_default for r in rulesets)
+
+    def test_match_channels_skips_epg_channels_without_programs(self, app):
+        """Test that auto-matching ignores EPG channels with no program data"""
+        from services.epg.match_rules import EpgMatchRulesService
+
+        with app.app_context():
+            account = Account(
+                name="Test Account Service 5",
+                server="http://test.server.com",
+                username="testuser5",
+                password="testpass",
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            ruleset = EpgMatchRuleSet(
+                name="Match Empty Program Channel",
+                description="Regression test ruleset",
+                is_default=True,
+                enabled=True,
+                priority=100,
+            )
+            db.session.add(ruleset)
+            db.session.commit()
+
+            rule = EpgMatchRule(
+                ruleset_id=ruleset.id,
+                name="Exact Name Match",
+                match_type="exact_name",
+                source="cleaned_name",
+                priority=10,
+                enabled=True,
+            )
+            db.session.add(rule)
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="9001",
+                name="No Data Network",
+                cleaned_name="No Data Network",
+                is_active=True,
+            )
+            db.session.add(channel)
+
+            source = EpgSource(
+                name="Test Programless EPG Source",
+                source_type="xmltv_url",
+                url="http://test.epg.com/programless.xml",
+            )
+            db.session.add(source)
+            db.session.commit()
+
+            epg_channel = EpgChannel(
+                source_id=source.id,
+                channel_id="no-data-network.us",
+                display_name="No Data Network",
+            )
+            db.session.add(epg_channel)
+            db.session.commit()
+
+            stats = EpgMatchRulesService.match_channels_with_rules(account.id, include_filtered=True)
+
+            assert stats["matched"] == 0
+            assert stats["unmatched"] == 1
+            assert db.session.query(EpgProgram).count() == 0
+            assert db.session.query(ChannelEpgMapping).count() == 0
 
 
 class TestPreviewEndpoints:

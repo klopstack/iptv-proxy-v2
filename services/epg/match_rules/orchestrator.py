@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Set
 
-from models import Channel, ChannelEpgMapping, ChannelTag, EpgChannel, EpgMatchRule, Tag, db
+from models import Channel, ChannelEpgMapping, ChannelTag, EpgChannel, EpgMatchRule, EpgProgram, Tag, db
 from services.epg.match_rules.exclusion import ExclusionMixin
 from services.epg.match_rules.fcc_integration import FccIntegrationMixin
 from services.epg.match_rules.matching import MatchingMixin
@@ -217,6 +217,24 @@ class OrchestratorMixin:
                 epg_query = epg_query.filter(~EpgChannel.source_id.in_(ppv_source_ids))
         epg_channels = epg_query.all()
         logger.info(f"EPG matching: Found {len(epg_channels)} EPG channels")
+
+        # Ignore EPG channels that have no current/future program data.
+        if epg_channels:
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            epg_channel_ids = [ec.id for ec in epg_channels]
+            channels_with_programs = {
+                epg_channel_id
+                for (epg_channel_id,) in db.session.query(EpgProgram.epg_channel_id)
+                .filter(EpgProgram.epg_channel_id.in_(epg_channel_ids), EpgProgram.stop_time > now)
+                .distinct()
+                .all()
+            }
+
+            if len(channels_with_programs) != len(epg_channels):
+                filtered_count = len(epg_channels) - len(channels_with_programs)
+                logger.info(f"EPG matching: Skipping {filtered_count} EPG channels without programs")
+
+            epg_channels = [ec for ec in epg_channels if ec.id in channels_with_programs]
 
         # Build indices
         epg_by_id = {ec.channel_id.lower(): ec for ec in epg_channels}
