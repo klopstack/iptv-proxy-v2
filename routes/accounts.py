@@ -204,7 +204,7 @@ def update_ppv_visibility(account_id):
 
     Request body:
     {
-        "ppv_visibility": "hide_all" | "hide_inactive" | "show_all"
+        "ppv_visibility": "hide_all" | "hide_inactive" | "group_live_replay" | "show_all"
     }
     """
     account = Account.query.get_or_404(account_id)
