@@ -849,8 +849,9 @@ class TestFarFutureEnrichmentFilter:
 
                 result = service.enrich_channels([ch], fetch_details=False)
 
-            # The channel was filtered out (counted as no_extraction)
+            # The channel was filtered out (counted as no_extraction, reason: far_future)
             assert result["no_extraction"] == 1
+            assert result["far_future_skipped"] == 1
             assert result["processed"] == 0
 
     def test_channel_within_31_days_not_skipped(self, app):

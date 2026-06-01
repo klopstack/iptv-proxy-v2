@@ -156,6 +156,7 @@ class PPVCalendarEnrichmentService:
                 "events_updated": 0,
                 "calendar_requests_made": 0,
                 "detail_queue_size": 0,
+                "far_future_skipped": 0,
             }
 
             # Step 1: Extract event info from all channels
@@ -201,6 +202,7 @@ class PPVCalendarEnrichmentService:
 
             no_extraction_count = len(extraction_results) - len(valid_extractions)
             results["no_extraction"] = no_extraction_count
+            results["far_future_skipped"] = filter_reasons.get("far_future", 0)
 
             # Log filter breakdown
             if filter_reasons:

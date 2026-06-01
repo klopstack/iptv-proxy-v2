@@ -78,8 +78,8 @@ class PPVVisibilityService:
         event_date = extraction.get("date")
         if not isinstance(event_date, datetime):
             return False
-        cutoff = datetime.now() + timedelta(days=31)
-        return event_date.replace(tzinfo=None) > cutoff.replace(tzinfo=None)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=31)
+        return event_date.replace(tzinfo=None) > cutoff
 
     @staticmethod
     def _is_inactive_ppv_slot_name(channel_name: str) -> bool:
