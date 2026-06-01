@@ -120,6 +120,8 @@ class TestSyncStatus:
             status = scheduler.get_status()
             assert status["syncs"]["accounts"]["overdue"] is False
             assert status["syncs"]["accounts"]["last_sync"] is not None
+            assert status["syncs"]["accounts"]["last_sync"].endswith("Z")
+            assert status["syncs"]["accounts"]["next_sync"].endswith("Z")
 
 
 class TestSyncTimeTracking:

@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 from urllib.parse import quote
 
 from models import Account, Credential, EpgSource, db
+from services.datetime_utils import serialize_utc_iso
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ def serialize_account_xmltv_epg_source(source: Optional[EpgSource]) -> Optional[
         "source_type": source.source_type,
         "url": source.url,
         "enabled": source.enabled,
-        "last_sync": source.last_sync.isoformat() if source.last_sync else None,
+        "last_sync": serialize_utc_iso(source.last_sync),
         "last_sync_status": source.last_sync_status,
         "channel_count": source.channel_count,
     }

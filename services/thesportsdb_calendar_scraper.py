@@ -24,6 +24,8 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
+from services.datetime_utils import serialize_utc_iso
+
 logger = logging.getLogger(__name__)
 
 # Calendar page URL template
@@ -149,7 +151,7 @@ class CalendarEvent:
             "event_url": self.event_url,
             "league_icon_url": self.league_icon_url,
             "country_flag_url": self.country_flag_url,
-            "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
+            "scheduled_at": serialize_utc_iso(self.scheduled_at),
         }
 
     def __repr__(self) -> str:

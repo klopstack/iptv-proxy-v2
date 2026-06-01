@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 from models import EpgSource, db
+from services.datetime_utils import serialize_utc_iso
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class EpgSyncProgress:
         for key, value in counts.items():
             if value is not None:
                 progress[key] = value
-        progress["updated_at"] = now.isoformat()
+        progress["updated_at"] = serialize_utc_iso(now)
         source.sync_progress = json.dumps(progress)
         db.session.commit()
 
@@ -58,7 +59,7 @@ class EpgSyncProgress:
         for key, value in counts.items():
             if value is not None:
                 progress[key] = value
-        progress["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+        progress["updated_at"] = serialize_utc_iso(datetime.now(timezone.utc).replace(tzinfo=None))
         source.sync_progress = json.dumps(progress)
         db.session.commit()
 
@@ -76,8 +77,8 @@ class EpgSyncProgress:
             "enabled": source.enabled,
             "sync_in_progress": bool(source.sync_in_progress),
             "sync_phase": source.sync_phase or PHASE_IDLE,
-            "sync_started_at": source.sync_started_at.isoformat() if source.sync_started_at else None,
-            "last_sync": source.last_sync.isoformat() if source.last_sync else None,
+            "sync_started_at": serialize_utc_iso(source.sync_started_at),
+            "last_sync": serialize_utc_iso(source.last_sync),
             "last_sync_status": source.last_sync_status,
             "last_sync_message": source.last_sync_message,
             "progress": progress,

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from services.ppv.serializers import (
@@ -52,6 +52,12 @@ def test_serialize_utc_iso_aware_converts_to_utc_z():
     dt = datetime(2026, 6, 1, 8, 0, 0, tzinfo=timezone.utc)
     result = serialize_utc_iso(dt)
     assert result == "2026-06-01T08:00:00Z"
+
+
+def test_serialize_utc_iso_non_utc_offset_converts_to_z():
+    dt = datetime(2026, 6, 1, 8, 0, 0, tzinfo=timezone(timedelta(hours=-4)))
+    result = serialize_utc_iso(dt)
+    assert result == "2026-06-01T12:00:00Z"
 
 
 def test_serialize_event_summary_uses_explicit_utc():

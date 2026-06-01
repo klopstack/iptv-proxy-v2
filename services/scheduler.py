@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from models import Account, EpgSource, SyncMetadata
+from services.datetime_utils import serialize_utc_iso
 from services.epg_sync_orchestrator import SYNC_KEY_LAST_EPG_SYNC
 from services.scheduler_lock import SchedulerLock
 from services.sync_service import ChannelSyncService
@@ -154,8 +155,8 @@ class SyncScheduler:
 
                 return {
                     "interval_hours": interval_hours,
-                    "last_sync": last_sync.isoformat() if last_sync else None,
-                    "next_sync": next_sync.isoformat() if next_sync else None,
+                    "last_sync": serialize_utc_iso(last_sync),
+                    "next_sync": serialize_utc_iso(next_sync),
                     "overdue": overdue,
                 }
 
