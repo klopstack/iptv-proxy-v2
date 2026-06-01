@@ -364,3 +364,142 @@ def stop_detail_thread():
     except Exception as e:
         logger.error(f"Error stopping detail thread: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
+
+
+@ppv_enrichment_bp.route("/coverage", methods=["GET"])
+@cross_origin()
+def get_coverage_report():
+    """
+    Return a matrix showing which sports/leagues have which context data types covered.
+
+    Useful for identifying gaps in provider coverage and debugging enrichment.
+    """
+    try:
+        from services.ppv.context.registry import get_registry
+
+        report = get_registry().coverage_report()
+        return jsonify(report), 200
+    except Exception as e:
+        logger.error(f"Error generating coverage report: {e}", exc_info=True)
+        return jsonify({"error": "Failed to generate coverage report"}), 500
+
+
+@ppv_enrichment_bp.route("/provider-settings", methods=["GET"])
+@cross_origin()
+def get_provider_settings():
+    """
+    Return settings fields and current values for all context data providers
+    plus the LLM enrichment virtual provider.
+
+    Response shape::
+
+        {
+            "providers": [
+                {
+                    "name": "football_data",
+                    "fields": [
+                        {
+                            "key": "api_key",
+                            "label": "API Key",
+                            "type": "password",
+                            "description": "...",
+                            "required": true,
+                            "current_value": "ab12****"
+                        }
+                    ]
+                },
+                ...
+            ]
+        }
+
+    Password fields are masked in the response (first 4 chars + ``****``).
+    """
+    try:
+        from models.provider_settings import ProviderSettings
+        from services.ppv.context.llm_client import LLMEnrichmentSettings
+        from services.ppv.context.registry import get_registry
+
+        registry = get_registry()
+        all_providers = list(registry.all_providers()) + [LLMEnrichmentSettings()]
+
+        result = []
+        for provider in all_providers:
+            fields = provider.settings_fields()
+            if not fields:
+                continue
+
+            stored = ProviderSettings.get_all_for(provider.name)
+            enriched_fields = []
+            for f in fields:
+                key = f["key"]
+                raw = stored.get(key, f.get("default", ""))
+                display = _mask_value(f.get("type", "text"), raw)
+                enriched_fields.append({**f, "current_value": display})
+
+            result.append({"name": provider.name, "fields": enriched_fields})
+
+        return jsonify({"providers": result}), 200
+
+    except Exception as e:
+        logger.error("Error fetching provider settings: %s", e, exc_info=True)
+        return jsonify({"error": "Internal server error fetching provider settings"}), 500
+
+
+@ppv_enrichment_bp.route("/provider-settings/<provider_name>/<key>", methods=["PUT"])
+@cross_origin()
+def set_provider_setting(provider_name, key):
+    """
+    Store a single setting value for a context data provider.
+
+    URL parameters:
+        provider_name  - Provider name, e.g. ``football_data`` or ``llm_enrichment``.
+        key            - Setting key as declared in the provider's ``settings_fields()``.
+
+    JSON body::
+
+        {"value": "my-api-key"}
+
+    Returns the stored key/provider on success.
+    """
+    try:
+        from models.provider_settings import ProviderSettings
+        from services.ppv.context.llm_client import LLMEnrichmentSettings
+        from services.ppv.context.registry import get_registry
+
+        # Validate that the provider + key are known
+        registry = get_registry()
+        all_providers = {p.name: p for p in registry.all_providers()}
+        all_providers[LLMEnrichmentSettings.name] = LLMEnrichmentSettings()
+
+        provider = all_providers.get(provider_name)
+        if provider is None:
+            return jsonify({"error": f"Unknown provider: {provider_name!r}"}), 404
+
+        valid_keys = {f["key"] for f in provider.settings_fields()}
+        if key not in valid_keys:
+            return jsonify({"error": f"Unknown setting key {key!r} for provider {provider_name!r}"}), 400
+
+        data = request.get_json()
+        if not data or "value" not in data:
+            return jsonify({"error": "JSON body with 'value' key is required"}), 400
+
+        value = str(data["value"])
+        description = next(
+            (f.get("description", "") for f in provider.settings_fields() if f["key"] == key),
+            "",
+        )
+        ProviderSettings.set(provider_name, key, value, description=description)
+
+        return jsonify({"provider": provider_name, "key": key, "message": "Setting saved"}), 200
+
+    except Exception as e:
+        logger.error("Error saving provider setting %s/%s: %s", provider_name, key, e, exc_info=True)
+        return jsonify({"error": "Internal server error saving provider setting"}), 500
+
+
+def _mask_value(field_type: str, value: str) -> str:
+    """Return a masked representation of *value* for password fields."""
+    if field_type != "password" or not value:
+        return value
+    visible = min(4, len(value))
+    return value[:visible] + "****"

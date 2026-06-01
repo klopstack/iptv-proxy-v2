@@ -237,3 +237,79 @@ class TestPPVEnrichmentRoutes:
         data = response.get_json()
         assert data["pagination"]["total"] == 1
         assert data["channels"][0]["ppv_enrichment_status"] == "no_match"
+
+    # ------------------------------------------------------------------
+    # Provider settings endpoints
+    # ------------------------------------------------------------------
+
+    def test_get_provider_settings_returns_list(self, client):
+        """GET /api/ppv-enrichment/provider-settings returns a providers list."""
+        response = client.get("/api/ppv-enrichment/provider-settings")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert "providers" in data
+        # The LLM enrichment virtual provider should always be present
+        names = [p["name"] for p in data["providers"]]
+        assert "llm_enrichment" in names
+
+    def test_get_provider_settings_football_data_fields(self, client):
+        """football_data provider exposes an api_key field."""
+        response = client.get("/api/ppv-enrichment/provider-settings")
+        assert response.status_code == 200
+        providers = {p["name"]: p for p in response.get_json()["providers"]}
+        assert "football_data" in providers
+        keys = [f["key"] for f in providers["football_data"]["fields"]]
+        assert "api_key" in keys
+
+    def test_set_provider_setting_stores_value(self, client, app):
+        """PUT /api/ppv-enrichment/provider-settings stores a value."""
+        from models.provider_settings import ProviderSettings
+
+        response = client.put(
+            "/api/ppv-enrichment/provider-settings/football_data/api_key",
+            json={"value": "test-key-123"},
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["key"] == "api_key"
+        assert data["provider"] == "football_data"
+
+        with app.app_context():
+            assert ProviderSettings.get("football_data", "api_key") == "test-key-123"
+
+    def test_set_provider_setting_unknown_provider(self, client):
+        """PUT for unknown provider returns 404."""
+        response = client.put(
+            "/api/ppv-enrichment/provider-settings/nonexistent/api_key",
+            json={"value": "x"},
+        )
+        assert response.status_code == 404
+
+    def test_set_provider_setting_unknown_key(self, client):
+        """PUT for unknown key on a known provider returns 400."""
+        response = client.put(
+            "/api/ppv-enrichment/provider-settings/football_data/nonexistent_key",
+            json={"value": "x"},
+        )
+        assert response.status_code == 400
+
+    def test_set_provider_setting_missing_body(self, client):
+        """PUT without a body returns 400."""
+        response = client.put(
+            "/api/ppv-enrichment/provider-settings/football_data/api_key",
+            json={},
+        )
+        assert response.status_code == 400
+
+    def test_password_fields_are_masked(self, client, app):
+        """Password field values are masked in GET response."""
+        from models.provider_settings import ProviderSettings
+
+        with app.app_context():
+            ProviderSettings.set("football_data", "api_key", "secretvalue")
+
+        response = client.get("/api/ppv-enrichment/provider-settings")
+        providers = {p["name"]: p for p in response.get_json()["providers"]}
+        api_key_field = next(f for f in providers["football_data"]["fields"] if f["key"] == "api_key")
+        assert "****" in api_key_field["current_value"]
+        assert "secretvalue" not in api_key_field["current_value"]
