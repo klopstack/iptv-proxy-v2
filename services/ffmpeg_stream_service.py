@@ -183,7 +183,6 @@ class FFmpegStreamService:
             else:
                 if stream and not stream.is_active:
                     self._close_stream(stream, invoke_callback=False)
-                    del self._streams[stream_key]
 
                 stream = FFmpegStream(
                     stream_key=stream_key,

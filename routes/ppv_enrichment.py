@@ -48,9 +48,22 @@ def get_enrichment_status():
     """
     try:
         from models import db
+        from services.ppv.orchestrator import get_ppv_orchestrator
 
         service = get_calendar_enrichment_service(current_app._get_current_object())
         status = service.get_status()
+
+        # Augment with queue depth metrics
+        try:
+            orchestrator = get_ppv_orchestrator(current_app._get_current_object())
+            queue_stats = orchestrator.get_queue_stats()
+            queued_count = queue_stats["queued_count"]
+            batch_size = status.get("batch_size", 100)
+            status["queued_count"] = queued_count
+            status["hot_queued_count"] = queue_stats["hot_queued_count"]
+            status["estimated_hours_at_current_rate"] = max(0, queued_count // batch_size) if batch_size > 0 else 0
+        except Exception:
+            pass
 
         # Clean up any lingering database connections
         db.session.remove()

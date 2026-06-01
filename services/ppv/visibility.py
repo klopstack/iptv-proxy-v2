@@ -5,11 +5,13 @@ Uses database Event records created by services.ppv.enrichment for filtering.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from models import Event, EventChannelLink, db
 from services.epg.ppv import is_ppv_placeholder_name
+from services.ppv.constants import get_sport_grace_hours
 from services.ppv.detection import is_generic_channel_name
+from services.ppv.extraction import PPVEventExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -131,10 +133,10 @@ class PPVVisibilityService:
                 logger.debug(f"Hiding channel with no linked event: {channel.name[:60]}")
                 return False
 
-            # Have an event - check if it's in the future
+            # Have an event — check status then timing
             current_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
-            # Check event status first
+            # Explicit terminal statuses: hide immediately
             if event.status == Event.STATUS_CANCELLED:
                 logger.debug(f"Hiding cancelled event: {channel.name[:60]} (event: {event.external_id})")
                 return False
@@ -143,19 +145,47 @@ class PPVVisibilityService:
                 logger.debug(f"Hiding finished event: {channel.name[:60]} (event: {event.external_id})")
                 return False
 
-            # Check scheduled time
-            if event.scheduled_at < current_time:
-                # Event in past - hide it
-                logger.debug(
-                    f"Hiding past event: {channel.name[:60]} (date: {event.scheduled_at}, event: {event.external_id})"
-                )
-                return False
+            # STATUS_LIVE: provider confirmed in-progress — always show
+            if event.status == Event.STATUS_LIVE:
+                logger.debug(f"Showing live event: {channel.name[:60]} (event: {event.external_id})")
+                return True
 
-            # Event is in the future or live - show it
+            # Provider-supplied stop time: show until that moment passes
+            stop_time = PPVEventExtractor.extract_stop_time(channel.name)
+            if stop_time is not None:
+                if current_time < stop_time:
+                    logger.debug(
+                        f"Showing event within stop: window: {channel.name[:60]} "
+                        f"(stop: {stop_time}, event: {event.external_id})"
+                    )
+                    return True
+                # stop: time has passed — fall through to grace-window check
+
+            # Future event: show unconditionally
+            if event.scheduled_at >= current_time:
+                logger.debug(
+                    f"Showing future event: {channel.name[:60]} "
+                    f"(date: {event.scheduled_at}, event: {event.external_id})"
+                )
+                return True
+
+            # Event started in the past but may still be in-progress:
+            # use a sport-aware grace window so games don't vanish mid-broadcast.
+            grace_hours = get_sport_grace_hours(event.sport)
+            effective_end = event.scheduled_at + timedelta(hours=grace_hours)
+            if current_time < effective_end:
+                logger.debug(
+                    f"Showing event within grace window: {channel.name[:60]} "
+                    f"(grace: {grace_hours}h, effective_end: {effective_end}, event: {event.external_id})"
+                )
+                return True
+
+            # Past grace window — hide
             logger.debug(
-                f"Showing future/live event: {channel.name[:60]} (date: {event.scheduled_at}, event: {event.external_id})"
+                f"Hiding past event (grace expired): {channel.name[:60]} "
+                f"(date: {event.scheduled_at}, grace: {grace_hours}h, event: {event.external_id})"
             )
-            return True
+            return False
 
         except Exception as e:
             # Log error but don't crash - default to showing to avoid hiding valid channels

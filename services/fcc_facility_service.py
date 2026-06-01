@@ -924,11 +924,13 @@ class FccFacilityService:
                     "account_id": channel.account_id,
                     "channel_name": channel.name,
                     "extracted_callsign": callsign,
+                    "fcc_facility_db_id": facility.id,
                     "fcc_callsign": facility.callsign,
                     "city": facility.community_city,
                     "state": facility.community_state,
                     "network": facility.network_affiliation,
                     "dma": facility.nielsen_dma,
+                    "virtual_channel": facility.tv_virtual_channel,
                     "potential_tags": FccFacilityService._get_potential_tags(facility, channel.name),
                 }
             )
@@ -1031,11 +1033,24 @@ class FccFacilityService:
             tag_cache[name] = tag
             return tag
 
+        # Build a map of stream_id -> channel for fcc_facility_id updates
+        stream_ids = [m["stream_id"] for m in matches]
+        from models import Channel
+
+        channel_map = {
+            c.stream_id: c
+            for c in Channel.query.filter(Channel.account_id == account_id, Channel.stream_id.in_(stream_ids)).all()
+        }
+
         # Apply enrichment
         for match in matches:
             try:
                 stream_id = match["stream_id"]
                 tags_to_add = []
+
+                # Store the FCC facility ID on the channel for rename format support
+                if match.get("fcc_facility_db_id") and stream_id in channel_map:
+                    channel_map[stream_id].fcc_facility_id = match["fcc_facility_db_id"]
 
                 if options.get("create_network_tags"):
                     network = None
