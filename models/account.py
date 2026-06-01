@@ -25,7 +25,7 @@ class Account(db.Model):  # type: ignore[name-defined]
     sync_in_progress = db.Column(db.Boolean, default=False)  # Prevents concurrent syncs
     sync_started_at = db.Column(db.DateTime)  # When current sync lock was acquired
 
-    # PPV visibility settings: 'hide_all' | 'hide_inactive' (default) | 'show_all'
+    # PPV visibility settings: 'hide_all' | 'hide_inactive' (default) | 'group_live_replay' | 'show_all'
     ppv_visibility = db.Column(db.String(20), default="hide_inactive", nullable=False)
 
     # Channel rename format templates (None = use original cleaned_name)

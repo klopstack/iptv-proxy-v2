@@ -634,15 +634,81 @@ class TestPPVVisibilityService:
         """Test that visibility options are returned correctly"""
         options = PPVVisibilityService.get_visibility_options()
 
-        assert len(options) == 3
+        assert len(options) == 4
         assert "hide_all" in options
         assert "hide_inactive" in options
+        assert "group_live_replay" in options
         assert "show_all" in options
 
         # Check structure
         assert options["hide_all"]["value"] == "hide_all"
         assert "label" in options["hide_all"]
         assert "description" in options["hide_all"]
+
+    def test_group_live_replay_shows_replays_and_hides_far_future_events(self, app):
+        """Group mode shows replay events but hides events scheduled beyond 24 hours."""
+        with app.app_context():
+            account = Account(name="Test", server="http://test.com", ppv_visibility="group_live_replay")
+            db.session.add(account)
+            db.session.commit()
+
+            replay_channel = Channel(
+                account_id=account.id, stream_id="2001", name="Replay", is_ppv=True, is_active=True
+            )
+            future_channel = Channel(
+                account_id=account.id, stream_id="2002", name="Future", is_ppv=True, is_active=True
+            )
+            db.session.add_all([replay_channel, future_channel])
+            db.session.commit()
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            replay_event = Event(
+                external_id="replay-event",
+                scheduled_at=now - timedelta(hours=2),
+                home_team_id="a",
+                home_team_name="A",
+                away_team_id="b",
+                away_team_name="B",
+                status=Event.STATUS_FINISHED,
+            )
+            future_event = Event(
+                external_id="future-event",
+                scheduled_at=now + timedelta(hours=30),
+                home_team_id="c",
+                home_team_name="C",
+                away_team_id="d",
+                away_team_name="D",
+                status=Event.STATUS_SCHEDULED,
+            )
+            db.session.add_all([replay_event, future_event])
+            db.session.flush()
+            db.session.add_all(
+                [
+                    EventChannelLink(event_id=replay_event.id, channel_id=replay_channel.id),
+                    EventChannelLink(event_id=future_event.id, channel_id=future_channel.id),
+                ]
+            )
+            db.session.commit()
+
+            service = PPVVisibilityService(account)
+            assert service.should_show_channel(replay_channel) is True
+            assert service.classify_live_replay_channel(replay_channel) == PPVVisibilityService.PPV_GROUP_REPLAY
+            assert service.should_show_channel(future_channel) is False
+
+    def test_group_live_replay_hides_unmatched_ppv_channels(self, app):
+        """Group mode excludes PPV channels that cannot be classified into Live or Replay."""
+        with app.app_context():
+            account = Account(name="Test", server="http://test.com", ppv_visibility="group_live_replay")
+            channel = Channel(account_id=1, stream_id="2003", name="Unknown PPV", is_ppv=True, is_active=True)
+            db.session.add(account)
+            db.session.flush()
+            channel.account_id = account.id
+            db.session.add(channel)
+            db.session.commit()
+
+            service = PPVVisibilityService(account)
+            assert service.should_show_channel(channel) is False
+            assert service.classify_live_replay_channel(channel) is None
 
 
 class TestLiveGameVisibility:

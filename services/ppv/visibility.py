@@ -22,9 +22,13 @@ class PPVVisibilityService:
     # Visibility modes
     HIDE_ALL = "hide_all"
     HIDE_INACTIVE = "hide_inactive"  # Hide inactive/past events
+    GROUP_LIVE_REPLAY = "group_live_replay"
     SHOW_ALL = "show_all"
 
-    VALID_MODES = [HIDE_ALL, HIDE_INACTIVE, SHOW_ALL]
+    PPV_GROUP_LIVE = "live"
+    PPV_GROUP_REPLAY = "replay"
+
+    VALID_MODES = [HIDE_ALL, HIDE_INACTIVE, GROUP_LIVE_REPLAY, SHOW_ALL]
 
     def __init__(self, account):
         """
@@ -64,12 +68,41 @@ class PPVVisibilityService:
         elif self.ppv_visibility == self.HIDE_INACTIVE:
             # Use event extractor to determine if channel has an active event
             return self._is_ppv_active(channel)
+        elif self.ppv_visibility == self.GROUP_LIVE_REPLAY:
+            return self.classify_live_replay_channel(channel) is not None
         elif self.ppv_visibility == self.SHOW_ALL:
             # Show all PPV channels
             return True
         else:
             # Unknown mode - default to hiding inactive
             return self._is_ppv_active(channel)
+
+    def classify_live_replay_channel(self, channel, current_time=None):
+        """Classify a PPV channel as 'live', 'replay', or None for Live/Replay grouping."""
+        if not channel.is_ppv:
+            return None
+
+        event = self.get_linked_event(channel)
+        return self.classify_live_replay_event(event, current_time=current_time)
+
+    @classmethod
+    def classify_live_replay_event(cls, event, current_time=None):
+        """Classify an event as 'live', 'replay', or None using a 24-hour Live window."""
+        if not event or event.status == Event.STATUS_CANCELLED:
+            return None
+
+        current_time = current_time or datetime.now(timezone.utc).replace(tzinfo=None)
+        live_cutoff = current_time + timedelta(hours=24)
+
+        if event.status == Event.STATUS_LIVE:
+            return cls.PPV_GROUP_LIVE
+        if not event.scheduled_at:
+            return None
+        if event.scheduled_at < current_time:
+            return cls.PPV_GROUP_REPLAY
+        if event.scheduled_at <= live_cutoff:
+            return cls.PPV_GROUP_LIVE
+        return None
 
     @staticmethod
     def _is_far_future_channel(channel_name: str) -> bool:
@@ -85,6 +118,19 @@ class PPVVisibilityService:
     def _is_inactive_ppv_slot_name(channel_name: str) -> bool:
         """True for generic numbered PPV slots without a real event title."""
         return is_ppv_placeholder_name(channel_name) or is_generic_channel_name(channel_name)
+
+    def get_linked_event(self, channel):
+        """Return the most relevant linked event for a channel, if any."""
+        cache_key = channel.id
+        if cache_key not in self._event_cache:
+            self._event_cache[cache_key] = (
+                db.session.query(Event)
+                .join(EventChannelLink, Event.id == EventChannelLink.event_id)
+                .filter(EventChannelLink.channel_id == channel.id)
+                .order_by(Event.scheduled_at.desc())  # Most recent event first
+                .first()
+            )
+        return self._event_cache[cache_key]
 
     def _is_ppv_active(self, channel):
         """
@@ -103,20 +149,7 @@ class PPVVisibilityService:
             bool: True if event is active/upcoming, False if inactive/past/no event
         """
         try:
-            # Check cache first
-            cache_key = channel.id
-            if cache_key in self._event_cache:
-                event = self._event_cache[cache_key]
-            else:
-                # Query linked event for this channel
-                event = (
-                    db.session.query(Event)
-                    .join(EventChannelLink, Event.id == EventChannelLink.event_id)
-                    .filter(EventChannelLink.channel_id == channel.id)
-                    .order_by(Event.scheduled_at.desc())  # Most recent event first
-                    .first()
-                )
-                self._event_cache[cache_key] = event
+            event = self.get_linked_event(channel)
 
             # If no event linked, check enrichment status
             if not event:
@@ -226,6 +259,11 @@ class PPVVisibilityService:
                 "value": PPVVisibilityService.HIDE_INACTIVE,
                 "label": "Hide Inactive PPV",
                 "description": "Show only upcoming/active PPV events, hide past events",
+            },
+            PPVVisibilityService.GROUP_LIVE_REPLAY: {
+                "value": PPVVisibilityService.GROUP_LIVE_REPLAY,
+                "label": "Group PPV as Live/Replay",
+                "description": "Hide PPV categories and group events into Live (next 24 hours) and Replay",
             },
             PPVVisibilityService.SHOW_ALL: {
                 "value": PPVVisibilityService.SHOW_ALL,

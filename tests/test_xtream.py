@@ -9,11 +9,23 @@ Covers:
 - Channel filtering and collapsing
 """
 import json
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
 
-from models import Account, Channel, ChannelTag, PlaylistConfig, Tag, XtreamCredential, db
+from models import (
+    Account,
+    Category,
+    Channel,
+    ChannelTag,
+    Event,
+    EventChannelLink,
+    PlaylistConfig,
+    Tag,
+    XtreamCredential,
+    db,
+)
 
 # ============================================================================
 # Fixtures
@@ -281,6 +293,243 @@ class TestXtreamPlayerAPI:
             data = response.json
             assert isinstance(data, list)
             assert len(data) == 3
+
+    def test_get_live_categories_groups_ppv_into_live_and_replay(self, app, client, xtream_credential, test_account):
+        """Grouped PPV mode hides PPV categories and exposes Live/Replay virtual categories."""
+        with app.app_context():
+            account = db.session.get(Account, test_account)
+            account.ppv_visibility = "group_live_replay"
+
+            sports = Category(account_id=test_account, category_id="sports", category_name="Sports")
+            ppv = Category(account_id=test_account, category_id="ppv", category_name="PPV Events")
+            db.session.add_all([sports, ppv])
+            db.session.flush()
+
+            sports_channel = Channel(
+                account_id=test_account,
+                stream_id="1100",
+                name="Sports Channel",
+                cleaned_name="Sports Channel",
+                category_id=sports.id,
+                is_active=True,
+                is_visible=True,
+            )
+            live_channel = Channel(
+                account_id=test_account,
+                stream_id="1101",
+                name="Live Event",
+                cleaned_name="Live Event",
+                category_id=ppv.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            replay_channel = Channel(
+                account_id=test_account,
+                stream_id="1102",
+                name="Replay Event",
+                cleaned_name="Replay Event",
+                category_id=ppv.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            hidden_future_channel = Channel(
+                account_id=test_account,
+                stream_id="1103",
+                name="Future Event",
+                cleaned_name="Future Event",
+                category_id=ppv.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            db.session.add_all([sports_channel, live_channel, replay_channel, hidden_future_channel])
+            db.session.flush()
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            events = [
+                Event(
+                    external_id="live-event",
+                    scheduled_at=now + timedelta(hours=3),
+                    home_team_id="home-live",
+                    home_team_name="Home Live",
+                    away_team_id="away-live",
+                    away_team_name="Away Live",
+                    status=Event.STATUS_SCHEDULED,
+                ),
+                Event(
+                    external_id="replay-event",
+                    scheduled_at=now - timedelta(hours=2),
+                    home_team_id="home-replay",
+                    home_team_name="Home Replay",
+                    away_team_id="away-replay",
+                    away_team_name="Away Replay",
+                    status=Event.STATUS_FINISHED,
+                ),
+                Event(
+                    external_id="future-event",
+                    scheduled_at=now + timedelta(hours=30),
+                    home_team_id="home-future",
+                    home_team_name="Home Future",
+                    away_team_id="away-future",
+                    away_team_name="Away Future",
+                    status=Event.STATUS_SCHEDULED,
+                ),
+            ]
+            db.session.add_all(events)
+            db.session.flush()
+            db.session.add_all(
+                [
+                    EventChannelLink(event_id=events[0].id, channel_id=live_channel.id),
+                    EventChannelLink(event_id=events[1].id, channel_id=replay_channel.id),
+                    EventChannelLink(event_id=events[2].id, channel_id=hidden_future_channel.id),
+                ]
+            )
+            db.session.commit()
+
+        response = client.get(
+            "/player_api.php",
+            query_string={
+                "username": "xtream_user",
+                "password": "xtream_pass",
+                "action": "get_live_categories",
+            },
+        )
+        assert response.status_code == 200
+        data = response.json
+        category_names = {item["category_name"] for item in data}
+        assert category_names == {"Sports", "Live", "Replay"}
+
+    def test_get_live_streams_by_grouped_ppv_category(self, app, client, xtream_credential, test_account):
+        """Grouped PPV virtual categories return correctly sorted streams."""
+        with app.app_context():
+            account = db.session.get(Account, test_account)
+            account.ppv_visibility = "group_live_replay"
+
+            ppv = Category(account_id=test_account, category_id="ppv", category_name="PPV Events")
+            db.session.add(ppv)
+            db.session.flush()
+
+            live_soon = Channel(
+                account_id=test_account,
+                stream_id="1201",
+                name="Soon",
+                cleaned_name="Soon",
+                category_id=ppv.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            live_later = Channel(
+                account_id=test_account,
+                stream_id="1202",
+                name="Later",
+                cleaned_name="Later",
+                category_id=ppv.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            replay_recent = Channel(
+                account_id=test_account,
+                stream_id="1203",
+                name="Replay Recent",
+                cleaned_name="Replay Recent",
+                category_id=ppv.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            replay_old = Channel(
+                account_id=test_account,
+                stream_id="1204",
+                name="Replay Old",
+                cleaned_name="Replay Old",
+                category_id=ppv.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            db.session.add_all([live_soon, live_later, replay_recent, replay_old])
+            db.session.flush()
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            events = [
+                Event(
+                    external_id="soon-event",
+                    scheduled_at=now + timedelta(hours=1),
+                    home_team_id="a1",
+                    home_team_name="A1",
+                    away_team_id="b1",
+                    away_team_name="B1",
+                    status=Event.STATUS_SCHEDULED,
+                ),
+                Event(
+                    external_id="later-event",
+                    scheduled_at=now + timedelta(hours=6),
+                    home_team_id="a2",
+                    home_team_name="A2",
+                    away_team_id="b2",
+                    away_team_name="B2",
+                    status=Event.STATUS_SCHEDULED,
+                ),
+                Event(
+                    external_id="recent-replay",
+                    scheduled_at=now - timedelta(hours=1),
+                    home_team_id="a3",
+                    home_team_name="A3",
+                    away_team_id="b3",
+                    away_team_name="B3",
+                    status=Event.STATUS_FINISHED,
+                ),
+                Event(
+                    external_id="old-replay",
+                    scheduled_at=now - timedelta(hours=5),
+                    home_team_id="a4",
+                    home_team_name="A4",
+                    away_team_id="b4",
+                    away_team_name="B4",
+                    status=Event.STATUS_FINISHED,
+                ),
+            ]
+            db.session.add_all(events)
+            db.session.flush()
+            db.session.add_all(
+                [
+                    EventChannelLink(event_id=events[0].id, channel_id=live_soon.id),
+                    EventChannelLink(event_id=events[1].id, channel_id=live_later.id),
+                    EventChannelLink(event_id=events[2].id, channel_id=replay_recent.id),
+                    EventChannelLink(event_id=events[3].id, channel_id=replay_old.id),
+                ]
+            )
+            db.session.commit()
+
+        live_response = client.get(
+            "/player_api.php",
+            query_string={
+                "username": "xtream_user",
+                "password": "xtream_pass",
+                "action": "get_live_streams",
+                "category_id": "-10",
+            },
+        )
+        assert live_response.status_code == 200
+        assert [item["stream_id"] for item in live_response.json] == [1201, 1202]
+        assert all(item["category_id"] == "-10" for item in live_response.json)
+
+        replay_response = client.get(
+            "/player_api.php",
+            query_string={
+                "username": "xtream_user",
+                "password": "xtream_pass",
+                "action": "get_live_streams",
+                "category_id": "-11",
+            },
+        )
+        assert replay_response.status_code == 200
+        assert [item["stream_id"] for item in replay_response.json] == [1203, 1204]
+        assert all(item["category_id"] == "-11" for item in replay_response.json)
 
     def test_get_vod_categories(self, app, client, xtream_credential):
         """VOD is not supported; return empty list for client compatibility."""

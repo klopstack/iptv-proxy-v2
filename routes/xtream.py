@@ -14,12 +14,17 @@ from services.channel_query_service import ChannelQueryService
 from services.datetime_utils import serialize_utc_iso
 from services.epg.ppv import is_ppv_category
 from services.image_cache_service import ImageCacheService
+from services.ppv.visibility import PPVVisibilityService
 from services.url_service import get_proxy_base_url
 
 logger = logging.getLogger(__name__)
 
 # Create blueprint
 xtream_bp = Blueprint("xtream", __name__)
+
+PPV_EVENTS_CATEGORY_ID = "-1"
+PPV_LIVE_CATEGORY_ID = "-10"
+PPV_REPLAY_CATEGORY_ID = "-11"
 
 
 def _as_utc_aware(dt):
@@ -41,6 +46,60 @@ def _utc_unix_timestamp(dt):
     """Return Unix timestamp seconds from a datetime interpreted as UTC."""
     aware = _as_utc_aware(dt)
     return int(aware.timestamp()) if aware else 0
+
+
+def _ppv_group_services(channels, account=None):
+    """Return per-account PPV grouping services for accounts using Live/Replay mode."""
+    if account:
+        if getattr(account, "ppv_visibility", None) == PPVVisibilityService.GROUP_LIVE_REPLAY:
+            return {account.id: PPVVisibilityService(account)}
+        return {}
+
+    account_ids = sorted({ch.account_id for ch in channels if ch.is_ppv})
+    if not account_ids:
+        return {}
+
+    accounts = Account.query.filter(Account.id.in_(account_ids)).all()
+    return {
+        acc.id: PPVVisibilityService(acc)
+        for acc in accounts
+        if getattr(acc, "ppv_visibility", None) == PPVVisibilityService.GROUP_LIVE_REPLAY
+    }
+
+
+def _build_ppv_grouping(channels, account=None):
+    """Map channel IDs to virtual Live/Replay PPV categories and linked events."""
+    services = _ppv_group_services(channels, account=account)
+    grouped = {}
+    for channel in channels:
+        service = services.get(channel.account_id)
+        if not service:
+            continue
+        classification = service.classify_live_replay_channel(channel)
+        if classification == PPVVisibilityService.PPV_GROUP_LIVE:
+            grouped[channel.id] = {
+                "category_id": PPV_LIVE_CATEGORY_ID,
+                "event": service.get_linked_event(channel),
+            }
+        elif classification == PPVVisibilityService.PPV_GROUP_REPLAY:
+            grouped[channel.id] = {
+                "category_id": PPV_REPLAY_CATEGORY_ID,
+                "event": service.get_linked_event(channel),
+            }
+    return grouped
+
+
+def _sort_grouped_ppv_channels(channels, grouped_ppv, category_id):
+    """Sort PPV Live by soonest first and Replay by most recent first, with missing dates falling last."""
+    reverse = category_id == PPV_REPLAY_CATEGORY_ID
+    fallback = datetime.max.replace(tzinfo=timezone.utc) if not reverse else datetime.min.replace(tzinfo=timezone.utc)
+
+    def sort_key(channel):
+        event = grouped_ppv.get(channel.id, {}).get("event")
+        scheduled_at = _as_utc_aware(event.scheduled_at) if event and event.scheduled_at else fallback
+        return scheduled_at
+
+    return sorted(channels, key=sort_key, reverse=reverse)
 
 
 def authenticate_xtream():
@@ -182,16 +241,19 @@ def get_live_categories(xtream_cred, account, playlist_config):
     Return list of live stream categories
     Endpoint: /player_api.php?action=get_live_categories
 
-    PPV categories are nested under a virtual 'PPV Events' parent category.
-    Non-PPV categories have parent_id: 0
+    PPV categories are nested under a virtual 'PPV Events' parent category
+    unless the account groups PPV channels into Live/Replay virtual categories.
     """
     channels = get_channels_for_credential(xtream_cred, account, playlist_config)
+    grouped_ppv = _build_ppv_grouping(channels, account=account)
 
     # Group channels by category
     category_ids = set()
     category_map = {}
     ppv_category_ids = set()
     for ch in channels:
+        if ch.id in grouped_ppv:
+            continue
         if ch.category:
             category_ids.add(ch.category.id)
             if ch.category.id not in category_map:
@@ -203,11 +265,29 @@ def get_live_categories(xtream_cred, account, playlist_config):
     # Build category list
     categories = []
 
+    if any(data["category_id"] == PPV_LIVE_CATEGORY_ID for data in grouped_ppv.values()):
+        categories.append(
+            {
+                "category_id": PPV_LIVE_CATEGORY_ID,
+                "category_name": "Live",
+                "parent_id": 0,
+            }
+        )
+
+    if any(data["category_id"] == PPV_REPLAY_CATEGORY_ID for data in grouped_ppv.values()):
+        categories.append(
+            {
+                "category_id": PPV_REPLAY_CATEGORY_ID,
+                "category_name": "Replay",
+                "parent_id": 0,
+            }
+        )
+
     # Add virtual PPV Events parent category if there are PPV categories
     if ppv_category_ids:
         categories.append(
             {
-                "category_id": "-1",
+                "category_id": PPV_EVENTS_CATEGORY_ID,
                 "category_name": "PPV Events",
                 "parent_id": 0,
             }
@@ -235,19 +315,31 @@ def get_live_streams(xtream_cred, account, playlist_config):
     Endpoint: /player_api.php?action=get_live_streams
     Query params: category_id (optional)
 
-    Special handling: category_id=-1 returns all PPV channels
+    Special handling:
+    - category_id=-1 returns all non-grouped PPV channels
+    - virtual Live/Replay category IDs return grouped PPV events
     """
     category_id = request.args.get("category_id")
     channels = get_channels_for_credential(xtream_cred, account, playlist_config)
+    grouped_ppv = _build_ppv_grouping(channels, account=account)
 
     # Filter by category if requested
     if category_id:
-        if category_id == "-1":
+        if category_id in (PPV_LIVE_CATEGORY_ID, PPV_REPLAY_CATEGORY_ID):
+            channels = [ch for ch in channels if grouped_ppv.get(ch.id, {}).get("category_id") == category_id]
+            channels = _sort_grouped_ppv_channels(channels, grouped_ppv, category_id)
+        elif category_id == PPV_EVENTS_CATEGORY_ID:
             # Virtual PPV Events category - return all PPV channels
-            channels = [ch for ch in channels if ch.category and is_ppv_category(ch.category.category_name)]
+            channels = [
+                ch
+                for ch in channels
+                if ch.id not in grouped_ppv and ch.category and is_ppv_category(ch.category.category_name)
+            ]
         else:
             # Regular category - return channels in that category
-            channels = [ch for ch in channels if ch.category and str(ch.category.id) == category_id]
+            channels = [
+                ch for ch in channels if ch.id not in grouped_ppv and ch.category and str(ch.category.id) == category_id
+            ]
 
     # Get proxy base URL
     proxy_base = get_proxy_base_url()
@@ -274,7 +366,8 @@ def get_live_streams(xtream_cred, account, playlist_config):
             "stream_icon": icon_url,
             "epg_channel_id": ChannelQueryService.epg_channel_id_for_channel(ch),
             "added": str(_utc_unix_timestamp(ch.created_at)) if ch.created_at else "",
-            "category_id": str(ch.category.id) if ch.category else "0",
+            "category_id": grouped_ppv.get(ch.id, {}).get("category_id")
+            or (str(ch.category.id) if ch.category else "0"),
             "custom_sid": "",
             "tv_archive": 0,
             "direct_source": "",

@@ -10,12 +10,14 @@ These tests cover the complex M3U generation logic including:
 - Unsynced account detection
 """
 import json
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Tag, db
-from services.playlist_format_service import sanitize_m3u_value
+from models import Account, Category, Channel, ChannelTag, Event, EventChannelLink, PlaylistConfig, Tag, db
+from services.playlist_format_service import render_account_m3u_playlist, sanitize_m3u_value
+from services.url_service import get_proxy_base_url
 
 
 @pytest.fixture
@@ -453,6 +455,82 @@ class TestPPVVisibility:
         # Both channels should be included (no PPV rules configured)
         assert "ESPN" in content
         assert "FOX Sports" in content
+
+    def test_group_live_replay_updates_m3u_group_titles(self, app, client, test_account1):
+        """Grouped PPV mode emits Live/Replay group titles for visible PPV events."""
+        with app.app_context():
+            account = db.session.get(Account, test_account1)
+            account.ppv_visibility = "group_live_replay"
+
+            ppv_category = Category(account_id=account.id, category_id="ppv", category_name="PPV Events")
+            db.session.add(ppv_category)
+            db.session.flush()
+
+            live_channel = Channel(
+                account_id=account.id,
+                stream_id=101,
+                name="Live PPV",
+                cleaned_name="Live PPV",
+                category_id=ppv_category.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            replay_channel = Channel(
+                account_id=account.id,
+                stream_id=102,
+                name="Replay PPV",
+                cleaned_name="Replay PPV",
+                category_id=ppv_category.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            db.session.add_all([live_channel, replay_channel])
+            db.session.flush()
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            live_event = Event(
+                external_id="playlist-live",
+                scheduled_at=now + timedelta(hours=2),
+                home_team_id="h1",
+                home_team_name="Home 1",
+                away_team_id="a1",
+                away_team_name="Away 1",
+                status=Event.STATUS_SCHEDULED,
+            )
+            replay_event = Event(
+                external_id="playlist-replay",
+                scheduled_at=now - timedelta(hours=3),
+                home_team_id="h2",
+                home_team_name="Home 2",
+                away_team_id="a2",
+                away_team_name="Away 2",
+                status=Event.STATUS_FINISHED,
+            )
+            db.session.add_all([live_event, replay_event])
+            db.session.flush()
+            db.session.add_all(
+                [
+                    EventChannelLink(event_id=live_event.id, channel_id=live_channel.id),
+                    EventChannelLink(event_id=replay_event.id, channel_id=replay_channel.id),
+                ]
+            )
+            db.session.commit()
+
+            channels = [live_channel, replay_channel]
+            with app.test_request_context("/"):
+                content = render_account_m3u_playlist(
+                    channels,
+                    account=account,
+                    proxy_base=get_proxy_base_url(),
+                    use_proxy=True,
+                    proxy_icons=False,
+                    primary_cred=None,
+                )
+
+            assert 'group-title="Live"' in content
+            assert 'group-title="Replay"' in content
 
 
 class TestUnsyncedAccounts:
