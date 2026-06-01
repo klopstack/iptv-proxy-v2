@@ -9,13 +9,13 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from services.ppv.constants import GENERIC_CHANNEL_PATTERNS
+from services.ppv.detection import is_generic_channel_name
 from services.ppv.enrichment import (
-    GENERIC_CHANNEL_PATTERNS,
     EnrichmentResult,
     PPVCalendarEnrichmentService,
     enrich_ppv_channels_batch,
     get_calendar_enrichment_service,
-    is_generic_channel_name,
 )
 from services.thesportsdb_calendar_scraper import CalendarEvent
 
@@ -46,7 +46,13 @@ class TestIsGenericChannelName:
             ("PPV HD 1", True),
             ("(ESPN)", True),
             ("(Fanatiz 012)", True),
+            ("MILB 01", True),
+            ("MILB 100", True),
+            ("Milb  100", True),
+            ("US (MiLB 100)", True),
             # Real event names - should NOT be filtered
+            ("Clearwater Threshers vs Dunedin Blue Jays @ May 31 12:00 PM :Milb  01", False),
+            ("US (MiLB 009) | Syracuse Mets @ Rochester Red Wings (2026-05-31 13:05:10)", False),
             ("UFC 300 Pereira vs Hill", False),
             ("Boxing: Fury vs Usyk", False),
             ("WWE WrestleMania 40", False),

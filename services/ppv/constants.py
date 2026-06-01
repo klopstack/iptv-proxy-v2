@@ -34,6 +34,13 @@ GENERIC_CHANNEL_PATTERNS = [
     re.compile(r"^MMA\s*Event\s*\d*$", re.IGNORECASE),
     re.compile(r"^Sports?\s*Event\s*\d*$", re.IGNORECASE),
     re.compile(r"^Live\s*Event\s*\d*$", re.IGNORECASE),
+    re.compile(r"^Event\s*\d+$", re.IGNORECASE),
+    re.compile(r"^\d+\s*-\s*PPV", re.IGNORECASE),
+    re.compile(r"^PPV\s*HD\s*\d*$", re.IGNORECASE),
+    re.compile(r"^\(.*\)$", re.IGNORECASE),
+    re.compile(r"^MILB\s*\d{1,3}$", re.IGNORECASE),
+    re.compile(r"^:?Milb\s+\d{1,3}$", re.IGNORECASE),
+    re.compile(r"^(?:[A-Z]{2}\s*)?\(MiLB\s+\d{1,3}\)\s*$", re.IGNORECASE),
 ]
 
 # Enrichment thresholds (aligned with calendar enrichment service)
