@@ -338,9 +338,7 @@ def get_live_streams(xtream_cred, account, playlist_config):
         else:
             # Regular category - return channels in that category
             channels = [
-                ch
-                for ch in channels
-                if ch.id not in grouped_ppv and ch.category and str(ch.category.id) == category_id
+                ch for ch in channels if ch.id not in grouped_ppv and ch.category and str(ch.category.id) == category_id
             ]
 
     # Get proxy base URL
@@ -368,7 +366,8 @@ def get_live_streams(xtream_cred, account, playlist_config):
             "stream_icon": icon_url,
             "epg_channel_id": ChannelQueryService.epg_channel_id_for_channel(ch),
             "added": str(_utc_unix_timestamp(ch.created_at)) if ch.created_at else "",
-            "category_id": grouped_ppv.get(ch.id, {}).get("category_id") or (str(ch.category.id) if ch.category else "0"),
+            "category_id": grouped_ppv.get(ch.id, {}).get("category_id")
+            or (str(ch.category.id) if ch.category else "0"),
             "custom_sid": "",
             "tv_archive": 0,
             "direct_source": "",

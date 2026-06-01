@@ -14,7 +14,18 @@ from unittest.mock import patch
 
 import pytest
 
-from models import Account, Category, Channel, ChannelTag, Event, EventChannelLink, PlaylistConfig, Tag, XtreamCredential, db
+from models import (
+    Account,
+    Category,
+    Channel,
+    ChannelTag,
+    Event,
+    EventChannelLink,
+    PlaylistConfig,
+    Tag,
+    XtreamCredential,
+    db,
+)
 
 # ============================================================================
 # Fixtures

@@ -652,8 +652,12 @@ class TestPPVVisibilityService:
             db.session.add(account)
             db.session.commit()
 
-            replay_channel = Channel(account_id=account.id, stream_id="2001", name="Replay", is_ppv=True, is_active=True)
-            future_channel = Channel(account_id=account.id, stream_id="2002", name="Future", is_ppv=True, is_active=True)
+            replay_channel = Channel(
+                account_id=account.id, stream_id="2001", name="Replay", is_ppv=True, is_active=True
+            )
+            future_channel = Channel(
+                account_id=account.id, stream_id="2002", name="Future", is_ppv=True, is_active=True
+            )
             db.session.add_all([replay_channel, future_channel])
             db.session.commit()
 

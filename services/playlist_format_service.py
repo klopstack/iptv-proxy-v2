@@ -241,7 +241,9 @@ def render_account_m3u_playlist(
         password = cred.password
 
     # Pre-fetch event and FCC data to avoid per-channel queries
-    needs_event_map = bool(account.ppv_rename_format or account.ppv_visibility == PPVVisibilityService.GROUP_LIVE_REPLAY)
+    needs_event_map = bool(
+        account.ppv_rename_format or account.ppv_visibility == PPVVisibilityService.GROUP_LIVE_REPLAY
+    )
     needs_fcc_map = bool(account.fcc_rename_format)
     event_map = _build_channel_event_map(channels) if needs_event_map else {}
     fcc_map = _build_channel_fcc_map(channels) if needs_fcc_map else {}
