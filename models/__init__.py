@@ -44,6 +44,7 @@ from models.fcc import (
 )
 from models.health import ChannelHealthCheck, ChannelHealthConfig, ChannelHealthStatus
 from models.ppv import Event, EventChannelLink, SportsTeam
+from models.provider_settings import ProviderSettings
 from models.sync import Settings, SyncMetadata
 
 __all__ = [
@@ -70,6 +71,7 @@ __all__ = [
     "Event",
     "EventChannelLink",
     "SportsTeam",
+    "ProviderSettings",
     "EpgSource",
     "EpgChannel",
     "EpgProgram",

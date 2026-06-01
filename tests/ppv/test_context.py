@@ -382,3 +382,63 @@ class TestBuildEventContext:
         assert ctx.home_team.name == "Team A"
         assert ctx.away_team.name == "Team B"
         assert isinstance(ctx.data_sources, list)
+
+
+# ---------------------------------------------------------------------------
+# ContextDataProvider settings API
+# ---------------------------------------------------------------------------
+
+class _SettingsProvider(ContextDataProvider):
+    """Provider that declares a settings field."""
+    name = "settings_test"
+    supported_sports = {"Soccer"}
+    supported_leagues = set()
+    provided_data_types = {DataType.STANDINGS}
+    priority = 50
+
+    def settings_fields(self):
+        return [
+            {
+                "key": "api_key",
+                "label": "API Key",
+                "type": "password",
+                "description": "Test key",
+                "required": True,
+            },
+        ]
+
+    def get_standings(self, *a, **kw): return None
+    def get_head_to_head(self, *a, **kw): return None
+    def get_team_form(self, *a, **kw): return None
+    def get_event_notes(self, *a, **kw): return None
+
+
+class TestProviderSettingsAPI:
+    def test_settings_fields_default_empty(self):
+        """ContextDataProvider.settings_fields() returns [] by default."""
+        p = _DummyProvider()
+        assert p.settings_fields() == []
+
+    def test_settings_fields_declared(self):
+        """settings_fields() returns declared fields."""
+        p = _SettingsProvider()
+        fields = p.settings_fields()
+        assert len(fields) == 1
+        assert fields[0]["key"] == "api_key"
+        assert fields[0]["type"] == "password"
+
+    def test_get_setting_returns_default_when_no_db(self):
+        """get_setting() returns default when ProviderSettings is unavailable."""
+        p = _SettingsProvider()
+        with patch("models.provider_settings.ProviderSettings.get", side_effect=Exception("db unavailable")):
+            result = p.get_setting("api_key", default="fallback")
+        assert result == "fallback"
+
+    def test_get_setting_reads_from_db(self, app):
+        """get_setting() returns the stored value from the database."""
+        from models.provider_settings import ProviderSettings
+
+        p = _SettingsProvider()
+        with app.app_context():
+            ProviderSettings.set("settings_test", "api_key", "secret123")
+            assert p.get_setting("api_key") == "secret123"

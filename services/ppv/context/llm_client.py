@@ -2,15 +2,16 @@
 Lightweight LLM client for PPV event description generation.
 
 Supports OpenAI-compatible REST APIs (OpenAI, local Ollama, etc.) and
-Anthropic's Messages API.  The provider and model are read from Settings
-at call time so they can be changed without restarting the service.
+Anthropic's Messages API.  The provider and model are read from the
+``provider_settings`` table under the ``"llm_enrichment"`` namespace so
+they can be changed without restarting the service.
 
-Settings keys used:
-    ppv_llm_enrichment_enabled  - "true" / "false" (default "false")
-    ppv_llm_provider            - "openai" | "anthropic" (default "openai")
-    ppv_llm_api_key             - API key for the selected provider
-    ppv_llm_model               - model name (default "gpt-4o-mini")
-    ppv_llm_base_url            - optional base URL override (e.g. Ollama)
+Provider settings keys (namespace ``"llm_enrichment"``):
+    enabled     - "true" / "false" (default "false")
+    provider    - "openai" | "anthropic" (default "openai")
+    api_key     - API key for the selected LLM provider
+    model       - model name (default "gpt-4o-mini")
+    base_url    - optional base URL override (e.g. Ollama)
 
 Returns None (not raises) on any failure so callers can fall back gracefully.
 """
@@ -18,11 +19,11 @@ Returns None (not raises) on any failure so callers can fall back gracefully.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Dict, List, Optional
 
 import requests
 
-from services.ppv.context.base import EventContext
+from services.ppv.context.base import ContextDataProvider, EventContext
 from services.ppv.context.prompt_builder import (
     build_mechanical_description,
     build_prompt,
@@ -38,6 +39,94 @@ _DEFAULT_ANTHROPIC_BASE = "https://api.anthropic.com"
 _ANTHROPIC_VERSION = "2023-06-01"
 _REQUEST_TIMEOUT = 30  # seconds
 
+# ---------------------------------------------------------------------------
+# LLM enrichment settings descriptor (not a real provider — no sports coverage)
+# ---------------------------------------------------------------------------
+
+_LLM_NAMESPACE = "llm_enrichment"
+
+
+class LLMEnrichmentSettings(ContextDataProvider):
+    """
+    Virtual provider that owns the LLM enrichment settings namespace.
+
+    This class is *not* registered in the provider registry and does not
+    supply any sports data.  Its sole purpose is to declare the UI-visible
+    settings fields for the LLM description-generation feature so that
+    ``/api/ppv-enrichment/provider-settings`` can serve them alongside
+    real data-provider settings.
+    """
+
+    name = _LLM_NAMESPACE
+    supported_sports: set = set()
+    supported_leagues: set = set()
+    provided_data_types: set = set()
+    priority = 0
+
+    def settings_fields(self) -> List[Dict]:
+        return [
+            {
+                "key": "enabled",
+                "label": "Enable LLM Description Generation",
+                "type": "toggle",
+                "description": (
+                    "Generate a 2-sentence EPG description for each PPV event using an LLM. "
+                    "Requires a valid API key below."
+                ),
+                "required": False,
+                "default": "false",
+            },
+            {
+                "key": "provider",
+                "label": "LLM Provider",
+                "type": "select",
+                "description": "Which LLM provider to use for description generation.",
+                "required": False,
+                "default": "openai",
+                "options": [
+                    {"value": "openai", "label": "OpenAI (or compatible)"},
+                    {"value": "anthropic", "label": "Anthropic"},
+                ],
+            },
+            {
+                "key": "api_key",
+                "label": "API Key",
+                "type": "password",
+                "description": "API key for the selected LLM provider.",
+                "required": True,
+            },
+            {
+                "key": "model",
+                "label": "Model",
+                "type": "text",
+                "description": (
+                    "Model name, e.g. gpt-4o-mini or claude-3-haiku-20240307."
+                ),
+                "required": False,
+                "default": _DEFAULT_MODEL,
+            },
+            {
+                "key": "base_url",
+                "label": "Base URL Override",
+                "type": "text",
+                "description": (
+                    "Optional base URL for OpenAI-compatible APIs (e.g. Ollama, LiteLLM). "
+                    "Leave empty to use the provider default."
+                ),
+                "required": False,
+                "default": "",
+            },
+        ]
+
+
+def _llm_setting(key: str, default: str = "") -> str:
+    """Read an LLM enrichment setting from the provider_settings table."""
+    try:
+        from models.provider_settings import ProviderSettings
+        return ProviderSettings.get(_LLM_NAMESPACE, key, default=default)
+    except Exception:
+        return default
+
 
 def generate_event_description(context: EventContext) -> Optional[str]:
     """
@@ -52,24 +141,19 @@ def generate_event_description(context: EventContext) -> Optional[str]:
     Falls back to build_mechanical_description() when returning None
     is not acceptable (callers decide).
     """
-    try:
-        from models.sync import Settings
-    except ImportError:
-        return None
-
-    enabled = Settings.get("ppv_llm_enrichment_enabled", "false")
+    enabled = _llm_setting("enabled", "false")
     if str(enabled).lower() not in ("true", "1", "yes"):
         logger.debug("LLM enrichment disabled via settings")
         return None
 
-    api_key = (Settings.get("ppv_llm_api_key", "") or "").strip()
+    api_key = _llm_setting("api_key", "").strip()
     if not api_key:
         logger.debug("No LLM API key configured; skipping description generation")
         return None
 
-    provider = (Settings.get("ppv_llm_provider", "openai") or "openai").strip().lower()
-    model = (Settings.get("ppv_llm_model", _DEFAULT_MODEL) or _DEFAULT_MODEL).strip()
-    base_url = (Settings.get("ppv_llm_base_url", "") or "").strip()
+    provider = (_llm_setting("provider", "openai") or "openai").strip().lower()
+    model = (_llm_setting("model", _DEFAULT_MODEL) or _DEFAULT_MODEL).strip()
+    base_url = _llm_setting("base_url", "").strip()
 
     prompt = build_prompt(context)
     system = get_system_prompt()

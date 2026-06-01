@@ -151,31 +151,6 @@ class Settings(db.Model):  # type: ignore[name-defined]
             "",
             "TheSportsDB website password for authenticated calendar scraping.",
         ),
-        # LLM-based EPG description generation
-        "ppv_llm_enrichment_enabled": (
-            "false",
-            "Enable LLM-generated EPG descriptions for PPV events. Requires a valid LLM API key.",
-        ),
-        "ppv_llm_provider": (
-            "openai",
-            "LLM provider for description generation: 'openai' or 'anthropic'.",
-        ),
-        "ppv_llm_api_key": (
-            "",
-            "API key for the configured LLM provider (OpenAI or Anthropic).",
-        ),
-        "ppv_llm_model": (
-            "gpt-4o-mini",
-            "LLM model name for PPV description generation (e.g. gpt-4o-mini, claude-3-haiku-20240307).",
-        ),
-        "ppv_llm_base_url": (
-            "",
-            "Optional base URL override for OpenAI-compatible APIs (e.g. Ollama, LiteLLM). Leave empty to use provider default.",
-        ),
-        "ppv_football_data_api_key": (
-            "",
-            "API key for football-data.org (used for soccer standings and H2H context data).",
-        ),
         # Stream proxy failover to linked backup channels
         "stream_fallback_enabled": (
             "true",

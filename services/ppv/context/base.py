@@ -11,6 +11,25 @@ Every provider must subclass ContextDataProvider and declare:
 Providers implement the four data-type methods.  A method should return None
 (not raise) when data is unavailable so the assembler can fall through to the
 next provider.
+
+Provider settings
+-----------------
+Each provider can declare UI-visible settings fields by overriding
+``settings_fields()``.  Settings are stored in the ``provider_settings``
+database table and accessed via ``get_setting()`` / ``set_setting()``.
+
+Example ``settings_fields()`` implementation::
+
+    def settings_fields(self):
+        return [
+            {
+                "key": "api_key",
+                "label": "API Key",
+                "type": "password",
+                "description": "Your API key from example.com.",
+                "required": True,
+            },
+        ]
 """
 
 from __future__ import annotations
@@ -19,7 +38,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional, Set
+from typing import Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +173,52 @@ class ContextDataProvider(ABC):
         Example: "Clinching scenario: Chiefs can secure #1 seed with a win."
         """
         return None  # pragma: no cover
+
+    # ------------------------------------------------------------------
+    # Plugin settings API
+    # ------------------------------------------------------------------
+
+    def settings_fields(self) -> List[Dict]:
+        """
+        Return a list of setting field definitions for this provider.
+
+        Each entry is a dict with the following keys:
+
+        ``key`` (str)
+            Setting identifier, used with :meth:`get_setting` / :meth:`set_setting`.
+        ``label`` (str)
+            Human-readable label shown in the UI.
+        ``type`` (str)
+            Field type: ``"text"``, ``"password"``, ``"select"``, or ``"toggle"``.
+        ``description`` (str, optional)
+            Explanatory text shown below the field.
+        ``required`` (bool, optional)
+            Whether the field must be set for the provider to function.
+        ``options`` (list of ``{"value": ..., "label": ...}``, optional)
+            Choices for ``"select"`` fields.
+        ``default`` (str, optional)
+            Default value shown in the UI when nothing is stored.
+
+        Override this method in subclasses to expose provider-specific
+        configuration (API keys, credentials, etc.).
+        """
+        return []
+
+    def get_setting(self, key: str, default: str = "") -> str:
+        """Read a provider setting from the database.
+
+        Falls back to *default* when the setting has not been stored yet.
+        """
+        try:
+            from models.provider_settings import ProviderSettings
+            return ProviderSettings.get(self.name, key, default=default)
+        except Exception:
+            return default
+
+    def set_setting(self, key: str, value: str) -> None:
+        """Persist a provider setting to the database."""
+        from models.provider_settings import ProviderSettings
+        ProviderSettings.set(self.name, key, value)
 
     # ------------------------------------------------------------------
     # Helpers

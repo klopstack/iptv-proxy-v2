@@ -2,7 +2,8 @@
 football-data.org context data provider.
 
 Covers the major European soccer leagues and international competitions.
-Requires a free API key stored in the app Settings as ``ppv_football_data_api_key``.
+Requires a free API key stored via the provider settings system
+(provider: ``football_data``, key: ``api_key``).
 
 API docs: https://www.football-data.org/documentation/quickstart
 """
@@ -66,14 +67,6 @@ _SUPPORTED_LEAGUES: Set[str] = {
 }
 
 
-def _get_api_key() -> str:
-    try:
-        from models.sync import Settings
-        return Settings.get("ppv_football_data_api_key") or ""
-    except Exception:
-        return ""
-
-
 def _league_code(league: str) -> Optional[str]:
     return _LEAGUE_CODES.get(league.lower())
 
@@ -87,12 +80,26 @@ class FootballDataProvider(ContextDataProvider):
     provided_data_types = {DataType.STANDINGS, DataType.HEAD_TO_HEAD}
     priority = 15
 
+    def settings_fields(self):
+        return [
+            {
+                "key": "api_key",
+                "label": "API Key",
+                "type": "password",
+                "description": (
+                    "API key from football-data.org. "
+                    "A free tier key is available at https://www.football-data.org/."
+                ),
+                "required": True,
+            },
+        ]
+
     # ------------------------------------------------------------------
     # Standings
     # ------------------------------------------------------------------
 
     def get_standings(self, sport: str, league: str, season: Optional[str] = None) -> Optional[dict]:
-        api_key = _get_api_key()
+        api_key = self.get_setting("api_key")
         if not api_key:
             return None
 
@@ -169,7 +176,7 @@ class FootballDataProvider(ContextDataProvider):
         away_team_id: Optional[str] = None,
         limit: int = 5,
     ) -> Optional[List[str]]:
-        api_key = _get_api_key()
+        api_key = self.get_setting("api_key")
         if not api_key:
             return None
 

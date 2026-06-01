@@ -651,8 +651,8 @@ class PPVCalendarEnrichmentService:
             # LLM-based EPG description enrichment (optional, feature-flagged)
             # ------------------------------------------------------------------
             try:
-                from models.sync import Settings
-                if Settings.get("ppv_llm_enrichment_enabled", "false").lower() == "true":
+                from models.provider_settings import ProviderSettings
+                if ProviderSettings.get("llm_enrichment", "enabled", "false").lower() == "true":
                     from services.ppv.context import build_event_context, generate_event_description_or_fallback
                     from services.ppv.context.assembler import persist_context_metadata
                     context = build_event_context(event)
