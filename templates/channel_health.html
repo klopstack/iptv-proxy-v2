@@ -367,6 +367,7 @@
 </div>
 
 <script>
+/* global parseUtcTimestamp */
 // State management
 let accounts = [];
 let categories = [];
@@ -929,14 +930,6 @@ function getResultBadge(result) {
         skipped: '<span class="badge bg-secondary">Skipped</span>',
     };
     return badges[result] || `<span class="badge bg-secondary">${escapeHtml(result)}</span>`;
-}
-
-function parseUtcTimestamp(isoString) {
-    if (!isoString) return null;
-    const normalized = isoString.endsWith('Z') || isoString.includes('+')
-        ? isoString
-        : `${isoString}Z`;
-    return new Date(normalized);
 }
 
 function formatUtcTimestamp(isoString) {

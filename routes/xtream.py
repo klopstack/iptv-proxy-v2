@@ -11,6 +11,7 @@ from flask import Blueprint, jsonify, redirect, request
 from error_handling import handle_errors, handle_xml_errors
 from models import Account, PlaylistConfig, XtreamCredential, db
 from services.channel_query_service import ChannelQueryService
+from services.datetime_utils import serialize_utc_iso
 from services.epg.ppv import is_ppv_category
 from services.image_cache_service import ImageCacheService
 from services.url_service import get_proxy_base_url
@@ -19,6 +20,27 @@ logger = logging.getLogger(__name__)
 
 # Create blueprint
 xtream_bp = Blueprint("xtream", __name__)
+
+
+def _as_utc_aware(dt):
+    """Normalize datetimes to timezone-aware UTC for safe serialization."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _utc_xmltv_datetime(dt):
+    """Format datetime in XMLTV-compatible UTC format."""
+    aware = _as_utc_aware(dt)
+    return aware.strftime("%Y%m%d%H%M%S %z") if aware else ""
+
+
+def _utc_unix_timestamp(dt):
+    """Return Unix timestamp seconds from a datetime interpreted as UTC."""
+    aware = _as_utc_aware(dt)
+    return int(aware.timestamp()) if aware else 0
 
 
 def authenticate_xtream():
@@ -135,7 +157,7 @@ def get_user_info(xtream_cred, account, playlist_config):
         "exp_date": None,  # No expiration
         "is_trial": "0",
         "active_cons": "0",
-        "created_at": int(xtream_cred.created_at.timestamp()),
+        "created_at": _utc_unix_timestamp(xtream_cred.created_at),
         "max_connections": "100",
         "allowed_output_formats": ["m3u8", "ts"],
     }
@@ -251,7 +273,7 @@ def get_live_streams(xtream_cred, account, playlist_config):
             "stream_id": int(ch.stream_id),
             "stream_icon": icon_url,
             "epg_channel_id": ChannelQueryService.epg_channel_id_for_channel(ch),
-            "added": str(int(ch.created_at.timestamp())) if ch.created_at else "",
+            "added": str(_utc_unix_timestamp(ch.created_at)) if ch.created_at else "",
             "category_id": str(ch.category.id) if ch.category else "0",
             "custom_sid": "",
             "tv_archive": 0,
@@ -307,12 +329,12 @@ def get_short_epg(xtream_cred, account, playlist_config):
                     "epg_id": epg_channel_id,
                     "title": prog.title or "",
                     "lang": "en",
-                    "start": prog.start_time.strftime("%Y%m%d%H%M%S %z") if prog.start_time else "",
-                    "end": prog.stop_time.strftime("%Y%m%d%H%M%S %z") if prog.stop_time else "",
+                    "start": _utc_xmltv_datetime(prog.start_time),
+                    "end": _utc_xmltv_datetime(prog.stop_time),
                     "description": prog.description or "",
                     "channel_id": stream_id,
-                    "start_timestamp": int(prog.start_time.timestamp()) if prog.start_time else 0,
-                    "stop_timestamp": int(prog.stop_time.timestamp()) if prog.stop_time else 0,
+                    "start_timestamp": _utc_unix_timestamp(prog.start_time),
+                    "stop_timestamp": _utc_unix_timestamp(prog.stop_time),
                 }
             )
 
@@ -332,12 +354,12 @@ def get_short_epg(xtream_cred, account, playlist_config):
                         "epg_id": epg_channel_id,
                         "title": title,
                         "lang": "en",
-                        "start": start.strftime("%Y%m%d%H%M%S %z"),
-                        "end": end.strftime("%Y%m%d%H%M%S %z"),
+                        "start": _utc_xmltv_datetime(start),
+                        "end": _utc_xmltv_datetime(end),
                         "description": event.league_name or "",
                         "channel_id": stream_id,
-                        "start_timestamp": int(start.timestamp()),
-                        "stop_timestamp": int(end.timestamp()),
+                        "start_timestamp": _utc_unix_timestamp(start),
+                        "stop_timestamp": _utc_unix_timestamp(end),
                     }
                 )
 
@@ -374,7 +396,7 @@ def get_simple_data_table(xtream_cred, account, playlist_config):
         "stream_id": int(channel.stream_id),
         "stream_icon": icon_url,
         "epg_channel_id": ChannelQueryService.epg_channel_id_for_channel(channel),
-        "added": str(int(channel.created_at.timestamp())) if channel.created_at else "",
+        "added": str(_utc_unix_timestamp(channel.created_at)) if channel.created_at else "",
         "category_id": str(channel.category.id) if channel.category else "0",
         "category_name": channel.category.cleaned_name or channel.category.category_name if channel.category else "",
         "custom_sid": "",
@@ -565,7 +587,7 @@ def list_xtream_credentials():
                 "collapse_duplicates": c.collapse_duplicates,
                 "enabled": c.enabled,
                 "description": c.description,
-                "created_at": c.created_at.isoformat() if c.created_at else None,
+                "created_at": serialize_utc_iso(c.created_at),
             }
             for c in credentials
         ]

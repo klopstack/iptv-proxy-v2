@@ -376,6 +376,7 @@
 {% block extra_js %}
 <script type="module" src="{{ url_for('static', filename='js/pages/settings_bootstrap.js') }}"></script>
 <script>
+/* global parseUtcTimestamp */
 let currentStatus = null;
 
 // ============================================================================
@@ -574,7 +575,8 @@ document.getElementById('ppv-clear-api-key-btn').addEventListener('click', async
 
 function formatRelativeTime(isoString) {
     if (!isoString) return 'Never';
-    const date = new Date(isoString);
+    const date = parseUtcTimestamp(isoString);
+    if (!date || Number.isNaN(date.getTime())) return 'Unknown';
     const now = new Date();
     const diffMs = date - now;
     const diffMins = Math.round(diffMs / 60000);

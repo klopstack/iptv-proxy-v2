@@ -177,6 +177,7 @@ class TestSportsipyEvent:
         assert data["away_team"] == "BOS"
         assert data["event_name"] == "BOS @ NYY"
         assert data["sport"] == "mlb"
+        assert data["date"].endswith("Z")
 
 
 class TestSportsipyServiceWithMocks:

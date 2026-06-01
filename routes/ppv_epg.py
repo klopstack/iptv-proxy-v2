@@ -11,6 +11,7 @@ from flask_cors import cross_origin
 
 from error_handling import handle_errors
 from models import Account, db
+from services.datetime_utils import serialize_utc_iso
 from services.ppv.epg import PPVEpgService
 
 logger = logging.getLogger(__name__)
@@ -279,7 +280,7 @@ def get_ppv_epg_source_info(source_id):
             "enabled": epg_source.enabled,
             "priority": epg_source.priority,
             "channel_count": epg_source.channel_count,
-            "last_sync": epg_source.last_sync.isoformat() if epg_source.last_sync else None,
+            "last_sync": serialize_utc_iso(epg_source.last_sync),
             "last_sync_status": epg_source.last_sync_status,
         }
     )

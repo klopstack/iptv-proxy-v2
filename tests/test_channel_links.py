@@ -69,6 +69,8 @@ class TestChannelLinksAPI:
         assert data["time_offset_hours"] == -3
         assert data["link_type"] == "time_shifted"
         assert data["auto_detected"] is False
+        assert data["created_at"].endswith("Z")
+        assert data["updated_at"].endswith("Z")
 
     def test_create_channel_link_missing_fields(self, client):
         """Test creating a channel link with missing fields"""

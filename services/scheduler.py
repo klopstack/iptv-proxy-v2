@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from models import Account, EpgSource, SyncMetadata
+from services.datetime_utils import serialize_utc_iso
 from services.epg_sync_orchestrator import SYNC_KEY_LAST_EPG_SYNC
 from services.scheduler_lock import SchedulerLock
 from services.sync_service import ChannelSyncService
@@ -154,8 +155,8 @@ class SyncScheduler:
 
                 return {
                     "interval_hours": interval_hours,
-                    "last_sync": last_sync.isoformat() if last_sync else None,
-                    "next_sync": next_sync.isoformat() if next_sync else None,
+                    "last_sync": serialize_utc_iso(last_sync),
+                    "next_sync": serialize_utc_iso(next_sync),
                     "overdue": overdue,
                 }
 
@@ -215,7 +216,7 @@ class SyncScheduler:
 
     def _update_heartbeat(self):
         """Update the scheduler heartbeat timestamp"""
-        SyncMetadata.set(SYNC_KEY_SCHEDULER_HEARTBEAT, datetime.now(timezone.utc).isoformat())
+        SyncMetadata.set(SYNC_KEY_SCHEDULER_HEARTBEAT, serialize_utc_iso(datetime.now(timezone.utc)))
 
     def _touch_heartbeat(self):
         """Update heartbeat; log but do not raise on failure."""
@@ -254,7 +255,7 @@ class SyncScheduler:
         """Set the last sync time in persistent storage"""
         if when is None:
             when = datetime.now(timezone.utc)
-        SyncMetadata.set(key, when.isoformat())
+        SyncMetadata.set(key, serialize_utc_iso(when))
 
     def _needs_sync(self, key: str, interval_hours: int) -> bool:
         """Check if a sync is needed based on last sync time"""

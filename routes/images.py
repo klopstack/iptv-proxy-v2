@@ -10,6 +10,7 @@ import logging
 from flask import Blueprint, Response, jsonify, request
 
 from error_handling import handle_errors
+from services.datetime_utils import serialize_utc_iso
 from services.image_cache_service import get_image_cache
 
 logger = logging.getLogger(__name__)
@@ -190,9 +191,9 @@ def list_cache_entries():
                     "status": e.status,
                     "hit_count": e.hit_count,
                     "fetch_count": e.fetch_count,
-                    "fetched_at": e.fetched_at.isoformat() if e.fetched_at else None,
-                    "expires_at": e.expires_at.isoformat() if e.expires_at else None,
-                    "last_accessed_at": e.last_accessed_at.isoformat() if e.last_accessed_at else None,
+                    "fetched_at": serialize_utc_iso(e.fetched_at),
+                    "expires_at": serialize_utc_iso(e.expires_at),
+                    "last_accessed_at": serialize_utc_iso(e.last_accessed_at),
                 }
                 for e in entries
             ],

@@ -660,6 +660,9 @@ class TestPPVEpgRoutes:
         """Test GET /api/ppv-epg/source/<source_id>"""
         with app.app_context():
             source_id = PPVEpgService.create_epg_source_for_ppv_events(name="Test Source")
+            source = db.session.get(EpgSource, source_id)
+            source.last_sync = datetime.now(timezone.utc).replace(tzinfo=None)
+            db.session.commit()
 
             response = client.get(f"/api/ppv-epg/source/{source_id}")
 
@@ -669,6 +672,7 @@ class TestPPVEpgRoutes:
             assert data["id"] == source_id
             assert data["name"] == "Test Source"
             assert data["source_type"] == "ppv_events"
+            assert data["last_sync"].endswith("Z")
 
     def test_auto_creation_after_enrichment(self, app):
         """Test that PPV EPG source is auto-created after successful enrichment"""

@@ -146,6 +146,7 @@ class TestCalendarEvent:
         assert data["home_team"] == "Team A"
         assert data["away_team"] == "Team B"
         assert data["scheduled_at"] is not None
+        assert data["scheduled_at"].endswith("Z")
 
 
 class TestTheSportsDBCalendarScraper:

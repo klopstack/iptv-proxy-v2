@@ -141,9 +141,14 @@
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">&nbsp;</label>
-                                <button class="btn btn-sm btn-primary w-100" id="auto-match-btn" disabled>
-                                    <i class="bi bi-magic"></i> Auto-Match
-                                </button>
+                                <div class="d-grid gap-2">
+                                    <button class="btn btn-sm btn-primary" id="auto-match-btn" disabled>
+                                        <i class="bi bi-magic"></i> Auto-Match
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-primary" id="rematch-auto-btn" disabled>
+                                        <i class="bi bi-arrow-repeat"></i> Re-Match Auto
+                                    </button>
+                                </div>
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">&nbsp;</label>
@@ -1193,7 +1198,7 @@
 /* global
     bootstrap, accounts, sources, matchTypes, debounce, escapeHtml, showToast, initializeBootstrapModals,
     loadAccounts, loadSources, loadMatchTypes, loadEpgChannels, loadMappings, loadMoreMappings,
-    loadCategoriesForAccount, updateAutoMatchButton, runAutoMatch, clearCategoryMappings,
+    loadCategoriesForAccount, updateAutoMatchButton, runAutoMatch, rematchAutoMatches, clearCategoryMappings,
     mappingsState, onSourceTypeChange, saveSource, testSdCredentials, loadCoverage,
     testGrabber, loadSdStatus, populateSdSourceSelect, loadSdLineups, searchLineups,
     searchEpgChannels, saveManualMapping, setupEpgChannelScroll, filterStations,
@@ -1283,6 +1288,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     addListener('mappingViewSelect', 'change', loadMappings);
     addListener('showFilteredChannels', 'change', loadMappings);
     addListener('auto-match-btn', 'click', () => runAutoMatch());
+    addListener('rematch-auto-btn', 'click', () => rematchAutoMatches());
     
     // Infinite scroll for mappings
     const mappingsList = document.getElementById('mappings-list');

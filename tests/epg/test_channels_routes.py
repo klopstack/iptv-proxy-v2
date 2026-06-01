@@ -1,5 +1,6 @@
 """Tests for EPG channel list endpoints and account EPG source creation."""
 
+from datetime import datetime, timezone
 
 from models import EpgChannel, EpgSource, db
 
@@ -83,6 +84,24 @@ class TestEpgChannels:
         data = response.json
         assert data["total"] == 5
         assert len(data["channels"]) == 2
+
+    def test_get_epg_channels_program_times_are_explicit_utc_z(self, app, client, test_epg_source):
+        with app.app_context():
+            epg_channel = EpgChannel(
+                source_id=test_epg_source,
+                channel_id="timed_ch",
+                display_name="Timed Channel",
+                first_program=datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc),
+                last_program=datetime(2026, 6, 1, 13, 0, 0, tzinfo=timezone.utc),
+            )
+            db.session.add(epg_channel)
+            db.session.commit()
+
+        response = client.get(f"/api/epg/channels?source_id={test_epg_source}")
+        assert response.status_code == 200
+        channel = next(c for c in response.json["channels"] if c["channel_id"] == "timed_ch")
+        assert channel["first_program"].endswith("Z")
+        assert channel["last_program"].endswith("Z")
 
 
 class TestAccountEpgSource:

@@ -31,6 +31,7 @@ from models import (
 )
 from services.channel_query_service import ChannelQueryService
 from services.connection_manager import ConnectionManager
+from services.datetime_utils import serialize_utc_iso
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +46,7 @@ class ChannelHealthService:
     @staticmethod
     def _iso_utc(dt: Optional[datetime]) -> Optional[str]:
         """Serialize a naive-UTC datetime for JSON (always includes Z suffix)."""
-        if dt is None:
-            return None
-        if dt.tzinfo is not None:
-            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
-        return f"{dt.isoformat()}Z"
+        return serialize_utc_iso(dt)
 
     @staticmethod
     def get_available_scan_connections(account_id: int) -> int:

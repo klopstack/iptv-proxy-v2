@@ -224,6 +224,7 @@
 </div>
 
 <script>
+/* global formatUtcTimestamp */
 // ============================================================================
 // Utility Functions
 // ============================================================================
@@ -261,7 +262,7 @@ async function loadFccStats() {
             return;
         }
         
-        const lastSync = stats.last_sync ? new Date(stats.last_sync).toLocaleString() : 'Unknown';
+        const lastSync = stats.last_sync ? formatUtcTimestamp(stats.last_sync, 'Unknown') : 'Unknown';
         const serviceBreakdown = Object.entries(stats.by_service_code || {})
             .map(([code, count]) => `<span class="badge bg-secondary me-1">${code}: ${count.toLocaleString()}</span>`)
             .join('');

@@ -29,6 +29,8 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from services.datetime_utils import serialize_utc_iso
+
 logger = logging.getLogger(__name__)
 
 # Track whether sportsipy is available
@@ -99,7 +101,7 @@ class SportsipyEvent:
             "home_team": self.home_team,
             "away_team": self.away_team,
             "event_name": self.event_name,
-            "date": self.date.isoformat() if self.date else None,
+            "date": serialize_utc_iso(self.date),
             "sport": self.sport,
             "league": self.league,
             "location": self.location,

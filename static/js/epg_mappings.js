@@ -21,16 +21,22 @@ function updateAutoMatchButton() {
     const sourceId = sourceSelect?.value;
     const sourceType = sourceSelect?.selectedOptions?.[0]?.dataset?.sourceType;
     const btn = document.getElementById('auto-match-btn');
+    const rematchBtn = document.getElementById('rematch-auto-btn');
     const dropdown = document.getElementById('auto-match-dropdown');
     const rulesetInfo = document.getElementById('account-ruleset-info');
     const isPpvSource = sourceType === 'ppv_events';
+    const canMatch = !!accountId && !isPpvSource;
 
     if (!btn) {
         return;
     }
 
-    if (accountId && !isPpvSource) {
-        btn.disabled = false;
+    btn.disabled = !canMatch;
+    if (rematchBtn) {
+        rematchBtn.disabled = !canMatch;
+    }
+
+    if (canMatch) {
         if (dropdown) dropdown.disabled = false;
         if (rulesetInfo) {
             rulesetInfo.style.display = 'flex';
@@ -518,6 +524,99 @@ async function runAutoMatch() {
     } finally {
         updateAutoMatchButton();
         if (dropdown) dropdown.disabled = !accountId;
+        btn.innerHTML = originalHtml;
+    }
+}
+
+async function rematchAutoMatches() {
+    const accountId = document.getElementById('mappingAccountSelect').value;
+    const categoryId = document.getElementById('mappingCategorySelect').value;
+    const includeFiltered = document.getElementById('showFilteredChannels').checked;
+    const sourceSelect = document.getElementById('mappingEpgSourceSelect');
+    const sourceId = sourceSelect.value;
+    const sourceType = sourceSelect?.selectedOptions?.[0]?.dataset?.sourceType;
+
+    if (!accountId) {
+        alert('Please select an account');
+        return;
+    }
+
+    if (sourceType === 'ppv_events') {
+        alert('PPV Events are mapped automatically during enrichment. Use the PPV page to process the enrichment queue.');
+        return;
+    }
+
+    if (!confirm('This will remove auto-matched mappings in the current view and run matching again. Continue?')) {
+        return;
+    }
+
+    const btn = document.getElementById('rematch-auto-btn');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Re-matching...`;
+
+    const listContainer = document.getElementById('mappings-list');
+    const originalListContent = listContainer.innerHTML;
+
+    const alertDiv = document.getElementById('autoMatchResultsAlert');
+    if (alertDiv) alertDiv.classList.add('d-none');
+
+    try {
+        const response = await fetch('/api/epg/mappings/rematch-auto', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                account_id: parseInt(accountId),
+                category_id: categoryId ? parseInt(categoryId) : null,
+                source_id: sourceId ? parseInt(sourceId) : null,
+                include_filtered: includeFiltered,
+            })
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || 'Auto rematch failed');
+        }
+
+        const stats = result.stats || {};
+        const matchedCount = stats.matched || 0;
+        const deletedCount = result.deleted_count || 0;
+
+        listContainer.innerHTML = originalListContent;
+        if (alertDiv) {
+            alertDiv.classList.remove('d-none', 'alert-danger');
+            alertDiv.classList.add('alert-success');
+            const contentDiv = document.getElementById('autoMatchResultsContent');
+            if (contentDiv) {
+                contentDiv.innerHTML = `<strong><i class="bi bi-arrow-repeat"></i> Re-Match Auto:</strong> ${matchedCount} channels matched after removing ${deletedCount} old auto mappings`;
+            }
+        } else {
+            showToast(`Re-matched ${matchedCount} channels`, 'success');
+        }
+
+        await loadMappings();
+    } catch (error) {
+        listContainer.innerHTML = originalListContent;
+
+        let errorMsg = error.message;
+        if (error.name === 'AbortError') {
+            errorMsg = 'Operation timed out after 10 minutes. Try filtering by category to rematch fewer channels at once.';
+        } else if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+            errorMsg = 'Network error or server timeout. For large channel lists, try filtering by category first.';
+        }
+
+        if (alertDiv) {
+            alertDiv.classList.remove('d-none', 'alert-info', 'alert-success');
+            alertDiv.classList.add('alert-danger');
+            const contentDiv = document.getElementById('autoMatchResultsContent');
+            if (contentDiv) {
+                contentDiv.innerHTML = `<strong><i class="bi bi-x-circle"></i> Error:</strong> ${errorMsg}`;
+            }
+        } else {
+            showToast(errorMsg, 'error');
+        }
+    } finally {
+        updateAutoMatchButton();
         btn.innerHTML = originalHtml;
     }
 }

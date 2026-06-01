@@ -18,6 +18,7 @@ from services.account_epg_source_service import (
 from services.cache_service import CacheService
 from services.channel_query_service import ChannelQueryService
 from services.connection_manager import ConnectionManager
+from services.datetime_utils import serialize_utc_iso
 from services.iptv_service import IPTVService, get_iptv_service_for_account
 from services.tag_service import TagService
 
@@ -507,7 +508,7 @@ def get_account_stats(account_id):
                 "category_counts": category_counts,
                 "using_database": True,
                 "synced": True,
-                "last_sync": account.updated_at.isoformat() if account.updated_at else None,
+                "last_sync": serialize_utc_iso(account.updated_at),
             }
         )
 
@@ -605,7 +606,7 @@ def get_sync_status(account_id):
         {
             "account_id": account_id,
             "channel_count": channel_count,
-            "last_sync": last_sync.isoformat() if last_sync else None,
+            "last_sync": serialize_utc_iso(last_sync),
         }
     )
 
@@ -860,9 +861,9 @@ def get_channel_details(account_id, stream_id):
             "is_active": channel.is_active,
             "is_visible": channel.is_visible,
             "tags": tags,
-            "last_seen": channel.last_seen.isoformat() if channel.last_seen else None,
-            "created_at": channel.created_at.isoformat() if channel.created_at else None,
-            "updated_at": channel.updated_at.isoformat() if channel.updated_at else None,
+            "last_seen": serialize_utc_iso(channel.last_seen),
+            "created_at": serialize_utc_iso(channel.created_at),
+            "updated_at": serialize_utc_iso(channel.updated_at),
         }
     )
 

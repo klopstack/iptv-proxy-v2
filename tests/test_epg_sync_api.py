@@ -158,6 +158,8 @@ class TestEpgSyncApi:
                 enabled=True,
                 sync_phase="programs",
                 sync_in_progress=True,
+                sync_started_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                last_sync=datetime.now(timezone.utc).replace(tzinfo=None),
                 sync_progress='{"programmes_parsed": 1000}',
             )
             db.session.add(source)
@@ -175,6 +177,8 @@ class TestEpgSyncApi:
             assert row["sync_in_progress"] is True
             assert row["progress"]["programmes_parsed"] == 1000
             assert "due" in row
+            assert row["sync_started_at"].endswith("Z")
+            assert row["last_sync"].endswith("Z")
 
     def test_scheduler_status_includes_epg_sources(self, app, client):
         with app.app_context():

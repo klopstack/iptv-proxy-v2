@@ -33,6 +33,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
 from models import ChannelEpgMapping, EpgChannel, EpgProgram, EpgSource, db
+from services.datetime_utils import serialize_utc_iso
 from services.epg.utils import get_decompressing_stream, parse_xmltv_time
 
 ProgressCallback = Optional[Callable[..., None]]
@@ -732,8 +733,8 @@ def get_schedule_around_time(
 
     return {
         "epg_channel_id": epg_channel_id,
-        "reference_time": reference_time.isoformat(),
-        "adjusted_time": adjusted_time.isoformat(),
+        "reference_time": serialize_utc_iso(reference_time),
+        "adjusted_time": serialize_utc_iso(adjusted_time),
         "offset_hours": offset_hours,
         "current_program": current_program.to_dict() if current_program else None,
         "programs_before": [p.to_dict() for p in programs_before[-5:]],  # Last 5 before

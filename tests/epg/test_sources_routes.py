@@ -1,5 +1,6 @@
 """Tests for EPG source CRUD and source-mapping endpoints."""
 
+from datetime import datetime, timezone
 
 from models import Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
 
@@ -21,6 +22,24 @@ class TestEpgSources:
         assert len(sources) == 1
         assert sources[0]["name"] == "Test EPG Source"
         assert sources[0]["source_type"] == "xmltv_url"
+
+    def test_get_epg_sources_last_sync_is_explicit_utc_z(self, app, client):
+        with app.app_context():
+            source = EpgSource(
+                name="Timed Source",
+                source_type="xmltv_url",
+                url="http://example.com/epg.xml",
+                enabled=True,
+                last_sync=datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc),
+            )
+            db.session.add(source)
+            db.session.commit()
+            source_id = source.id
+
+        response = client.get("/api/epg/sources")
+        assert response.status_code == 200
+        payload = next(s for s in response.json if s["id"] == source_id)
+        assert payload["last_sync"].endswith("Z")
 
     def test_create_epg_source_missing_name(self, app, client):
         """Test creating EPG source without name"""

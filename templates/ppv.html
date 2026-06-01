@@ -261,6 +261,7 @@
 {% block extra_js %}
 <script type="module" src="{{ url_for('static', filename='js/pages/ppv_bootstrap.js') }}"></script>
 <script>
+/* global parseUtcTimestamp */
 const previewState = {
     view: 'events',
     accountId: '',
@@ -270,20 +271,20 @@ const previewState = {
 };
 
 function escapeHtml(text) {
-    if (text == null) return '';
+    if (text === null || text === undefined) return '';
     const div = document.createElement('div');
     div.textContent = String(text);
     return div.innerHTML;
 }
 
+function parsePreviewDateTime(isoString) {
+    return parseUtcTimestamp(isoString);
+}
+
 function formatDateTime(isoString) {
     if (!isoString) return '—';
-    let normalized = String(isoString);
-    if (!normalized.endsWith('Z') && !normalized.match(/[+-]\d{2}:\d{2}$/)) {
-        normalized = `${normalized}Z`;
-    }
-    const date = new Date(normalized);
-    if (Number.isNaN(date.getTime())) return isoString;
+    const date = parsePreviewDateTime(isoString);
+    if (!date) return isoString;
     return date.toLocaleString(undefined, {
         year: 'numeric',
         month: 'short',
@@ -305,7 +306,8 @@ function isEventVisibleUnderMode(event, mode) {
     if (mode === 'show_all') return true;
     if (event.status === 'finished' || event.status === 'cancelled') return false;
     if (event.scheduled_at) {
-        return new Date(event.scheduled_at) >= new Date();
+        const scheduled = parsePreviewDateTime(event.scheduled_at);
+        return scheduled ? scheduled >= new Date() : true;
     }
     return true;
 }
@@ -323,7 +325,8 @@ function isChannelVisibleUnderMode(channel, mode) {
     if (!linked) return false;
     if (linked.status === 'finished' || linked.status === 'cancelled') return false;
     if (linked.scheduled_at) {
-        return new Date(linked.scheduled_at) >= new Date();
+        const scheduled = parsePreviewDateTime(linked.scheduled_at);
+        return scheduled ? scheduled >= new Date() : true;
     }
     return true;
 }

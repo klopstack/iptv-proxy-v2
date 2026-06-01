@@ -9,6 +9,7 @@ from error_handling import handle_errors
 from models import Account, Category, Channel, ChannelTag, Tag, db
 from services.cache_service import CacheService
 from services.channel_query_service import ChannelQueryService
+from services.datetime_utils import serialize_utc_iso
 from services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
@@ -275,11 +276,16 @@ def get_tags():
                 count = ChannelTag.query.filter_by(tag_id=tag.id).count()
 
             result.append(
-                {"id": tag.id, "name": tag.name, "created_at": tag.created_at.isoformat(), "channel_count": count}
+                {
+                    "id": tag.id,
+                    "name": tag.name,
+                    "created_at": serialize_utc_iso(tag.created_at),
+                    "channel_count": count,
+                }
             )
         return jsonify(result)
     else:
-        return jsonify([{"id": t.id, "name": t.name, "created_at": t.created_at.isoformat()} for t in tags])
+        return jsonify([{"id": t.id, "name": t.name, "created_at": serialize_utc_iso(t.created_at)} for t in tags])
 
 
 # ============================================================================

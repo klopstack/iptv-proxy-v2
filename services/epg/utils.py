@@ -228,19 +228,35 @@ def copy_element(elem: ET.Element) -> ET.Element:
 
 
 def parse_xmltv_time(time_str: str) -> Optional[datetime]:
-    """Parse XMLTV datetime format (YYYYMMDDHHmmss +ZZZZ)"""
+    """Parse XMLTV datetime format and return naive UTC datetime."""
     if not time_str:
         return None
 
-    # Remove timezone for basic parsing (just need date range)
-    time_str = time_str.split()[0]  # Remove timezone offset
+    parts = time_str.split()
+    datetime_part = parts[0]
+    tz_part = parts[1] if len(parts) > 1 else None
+
     try:
-        return datetime.strptime(time_str, "%Y%m%d%H%M%S")
+        parsed = datetime.strptime(datetime_part, "%Y%m%d%H%M%S")
     except ValueError:
         try:
-            return datetime.strptime(time_str, "%Y%m%d%H%M")
+            parsed = datetime.strptime(datetime_part, "%Y%m%d%H%M")
         except ValueError:
             return None
+
+    # XMLTV offsets are source-local offsets from UTC.
+    # Convert to UTC while keeping storage convention as naive datetime.
+    if tz_part and re.match(r"^[+-]\d{4}$", tz_part):
+        sign = 1 if tz_part[0] == "+" else -1
+        offset_hours = int(tz_part[1:3])
+        offset_minutes = int(tz_part[3:5])
+        offset = timedelta(hours=offset_hours, minutes=offset_minutes)
+        if sign > 0:
+            parsed -= offset
+        else:
+            parsed += offset
+
+    return parsed
 
 
 def normalize_channel_name(name: str) -> str:

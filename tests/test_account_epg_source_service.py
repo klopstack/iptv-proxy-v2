@@ -1,13 +1,16 @@
 """Tests for account-linked XMLTV EPG source helpers."""
 
+from datetime import datetime, timezone
+
 import pytest
 
-from models import Account, db
+from models import Account, EpgSource, db
 from services.account_epg_source_service import (
     ACCOUNT_XMLTV_NAME_SUFFIX,
     build_account_xmltv_url,
     find_account_xmltv_epg_source,
     normalize_account_server,
+    serialize_account_xmltv_epg_source,
     upsert_account_xmltv_epg_source,
 )
 
@@ -63,3 +66,19 @@ class TestUpsertAccountXmltvEpgSource:
 
             with pytest.raises(ValueError, match="no credentials"):
                 upsert_account_xmltv_epg_source(account)
+
+
+class TestSerializeAccountXmltvEpgSource:
+    def test_last_sync_serializes_with_explicit_utc_z(self):
+        source = EpgSource(
+            id=123,
+            name="Test XMLTV",
+            source_type="xmltv_url",
+            url="https://example.com/xmltv.php",
+            enabled=True,
+            last_sync=datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc),
+        )
+
+        payload = serialize_account_xmltv_epg_source(source)
+
+        assert payload["last_sync"].endswith("Z")

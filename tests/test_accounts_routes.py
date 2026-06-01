@@ -502,6 +502,7 @@ class TestAccountSync:
         assert "channel_count" in data
         assert "last_sync" in data
         assert data["channel_count"] == 5
+        assert data["last_sync"].endswith("Z")
 
 
 # ============================================================================
@@ -646,6 +647,8 @@ class TestChannelDetails:
         assert data["stream_id"] == "ch0"
         assert "name" in data
         assert "tags" in data
+        assert data["created_at"].endswith("Z")
+        assert data["updated_at"].endswith("Z")
 
 
 # ============================================================================
@@ -865,6 +868,7 @@ class TestAccountStatsPlaylistVisible:
         assert data["total_channels"] == 2
         assert data["visible_channels"] == 1
         assert data["hidden_channels"] == 1
+        assert data["last_sync"].endswith("Z")
 
     def test_stats_include_visibility_counts(self, app, client, test_account):
         """Stats report visible/hidden counts using playlist-visible semantics."""
@@ -909,6 +913,7 @@ class TestAccountStatsPlaylistVisible:
         assert data["total_channels"] == 8
         assert data["visible_channels"] == 5
         assert data["hidden_channels"] == 3
+        assert data["last_sync"].endswith("Z")
 
 
 # ============================================================================

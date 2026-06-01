@@ -578,6 +578,7 @@ class TestStationsRoutes:
         assert response.status_code == 200
         data = response.get_json()
         assert data["total_facilities"] == 2
+        assert data["last_sync"].endswith("Z")
 
     def test_lookup_callsign(self, client_with_facilities):
         """Test callsign lookup endpoint"""

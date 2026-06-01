@@ -8,7 +8,9 @@ from flask import Blueprint, jsonify, request
 from error_handling import handle_errors
 from models import Account, Channel, ChannelEpgMapping, EpgChannel, EpgSource, Event, EventChannelLink, db
 from services.channel_query_service import ChannelQueryService
+from services.datetime_utils import serialize_utc_iso
 from services.epg.match_rules import EpgMatchRulesService
+from services.filter_service import FilterService
 
 logger = logging.getLogger(__name__)
 
@@ -93,8 +95,8 @@ def get_epg_channels():
                     "display_name": c.display_name,
                     "icon_url": c.icon_url,
                     "program_count": c.program_count,
-                    "first_program": c.first_program.isoformat() if c.first_program else None,
-                    "last_program": c.last_program.isoformat() if c.last_program else None,
+                    "first_program": serialize_utc_iso(c.first_program),
+                    "last_program": serialize_utc_iso(c.last_program),
                     "mapping_count": len(c.channel_mappings),
                 }
                 for c in channels
@@ -658,6 +660,86 @@ def bulk_delete_epg_mappings():
     db.session.commit()
 
     return jsonify({"success": True, "deleted_count": deleted_count, "message": f"Deleted {deleted_count} mappings"})
+
+
+@epg_channels_bp.route("/mappings/rematch-auto", methods=["POST"])
+@handle_errors(return_json=True, default_message="Error rematching auto-mapped channels")
+def rematch_auto_mappings():
+    """Delete auto-matched mappings in the current scope and run matching again."""
+    data = request.get_json() or {}
+    account_id = data.get("account_id")
+    category_id = data.get("category_id")
+    source_id = data.get("source_id")
+    include_filtered = bool(data.get("include_filtered", False))
+
+    if not account_id:
+        return jsonify({"error": "account_id is required"}), 400
+
+    Account.query.get_or_404(account_id)
+
+    if source_id:
+        epg_source = db.session.get(EpgSource, source_id)
+        if epg_source and epg_source.source_type == "ppv_events":
+            return (
+                jsonify({"error": "PPV Events are rematched automatically during enrichment, not via auto-match."}),
+                400,
+            )
+
+    query = Channel.query.filter_by(account_id=account_id, is_active=True)
+    if category_id:
+        query = query.filter_by(category_id=category_id)
+
+    channels = query.all()
+    if not include_filtered:
+        FilterService.apply_filters_to_channels(channels, account_id)
+        channels = [ch for ch in channels if ch.is_visible]
+
+    channel_ids = [ch.id for ch in channels]
+    deleted_count = 0
+
+    if channel_ids:
+        mapping_ids_query = db.session.query(ChannelEpgMapping.id).filter(
+            ChannelEpgMapping.channel_id.in_(channel_ids),
+            ChannelEpgMapping.mapping_type != "manual",
+            ChannelEpgMapping.mapping_type != "ppv_event",
+        )
+
+        if source_id:
+            mapping_ids_query = mapping_ids_query.join(
+                EpgChannel, ChannelEpgMapping.epg_channel_id == EpgChannel.id
+            ).filter(EpgChannel.source_id == source_id)
+
+        deleted_count = ChannelEpgMapping.query.filter(ChannelEpgMapping.id.in_(mapping_ids_query)).delete(
+            synchronize_session=False
+        )
+        if deleted_count:
+            db.session.commit()
+
+    stats = EpgMatchRulesService.match_channels_with_rules(
+        account_id,
+        source_id=source_id,
+        category_id=category_id,
+        include_filtered=include_filtered,
+    )
+
+    matched_count = stats.get("matched", 0)
+    skipped_existing = stats.get("skipped_existing", 0)
+    excluded = stats.get("excluded", 0)
+
+    return jsonify(
+        {
+            "success": True,
+            "deleted_count": deleted_count,
+            "message": f"Rematched {matched_count} channels after removing {deleted_count} auto-matched mappings",
+            "stats": stats,
+            "summary": {
+                "matched": matched_count,
+                "deleted_count": deleted_count,
+                "skipped_existing": skipped_existing,
+                "excluded": excluded,
+            },
+        }
+    )
 
 
 # ============================================================================

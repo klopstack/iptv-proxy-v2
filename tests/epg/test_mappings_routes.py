@@ -333,6 +333,108 @@ class TestEpgMappings:
         assert response.status_code == 200
         assert response.json["deleted_count"] == 0
 
+    def test_rematch_auto_mappings_replaces_programless_target(self, app, client, test_account):
+        """Test rematching auto mappings replaces a target that has no programs."""
+        from datetime import timedelta
+
+        from models import EpgChannel, EpgMatchRule, EpgMatchRuleSet, EpgProgram
+
+        with app.app_context():
+            category = Category(
+                account_id=test_account,
+                category_id="cat-rematch",
+                category_name="Rematch Category",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            source = EpgSource(name="Rematch Source", source_type="xmltv_url", url="http://example.com/epg.xml")
+            db.session.add(source)
+            db.session.flush()
+
+            ruleset = EpgMatchRuleSet(
+                name="Rematch Ruleset",
+                description="Test rematch rules",
+                is_default=True,
+                enabled=True,
+                priority=10,
+            )
+            db.session.add(ruleset)
+            db.session.flush()
+
+            rule = EpgMatchRule(
+                ruleset_id=ruleset.id,
+                name="Exact Name",
+                match_type="exact_name",
+                source="cleaned_name",
+                priority=10,
+                enabled=True,
+            )
+            db.session.add(rule)
+
+            channel = Channel(
+                account_id=test_account,
+                stream_id="rematch-stream",
+                name="Rematch Channel",
+                cleaned_name="Rematch Channel",
+                category_id=category.id,
+                is_active=True,
+                is_visible=True,
+            )
+            db.session.add(channel)
+            db.session.flush()
+
+            programless_epg = EpgChannel(
+                source_id=source.id,
+                channel_id="rematch-empty.us",
+                display_name="Rematch Channel",
+            )
+            programmed_epg = EpgChannel(
+                source_id=source.id,
+                channel_id="rematch-full.us",
+                display_name="Rematch Channel",
+            )
+            db.session.add_all([programless_epg, programmed_epg])
+            db.session.flush()
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            db.session.add(
+                EpgProgram(
+                    epg_channel_id=programmed_epg.id,
+                    start_time=now,
+                    stop_time=now + timedelta(hours=1),
+                    title="Live Program",
+                )
+            )
+
+            db.session.add(
+                ChannelEpgMapping(
+                    channel_id=channel.id,
+                    epg_channel_id=programless_epg.id,
+                    mapping_type="exact_name",
+                    confidence=0.95,
+                )
+            )
+            db.session.commit()
+            channel_id = channel.id
+            category_id = category.id
+            replacement_epg_id = programmed_epg.id
+
+        response = client.post(
+            "/api/epg/mappings/rematch-auto",
+            json={"account_id": test_account, "category_id": category_id},
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        assert response.json["success"] is True
+        assert response.json["deleted_count"] == 1
+
+        with app.app_context():
+            mapping = ChannelEpgMapping.query.filter_by(channel_id=channel_id).first()
+            assert mapping is not None
+            assert mapping.epg_channel_id == replacement_epg_id
+
     def test_ppv_mapped_view_includes_playlist_hidden_channels(self, app, client):
         """PPV event mappings admin view shows all linked channels, not just visible ones."""
         with app.app_context():
