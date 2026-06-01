@@ -216,7 +216,7 @@ class SyncScheduler:
 
     def _update_heartbeat(self):
         """Update the scheduler heartbeat timestamp"""
-        SyncMetadata.set(SYNC_KEY_SCHEDULER_HEARTBEAT, datetime.now(timezone.utc).isoformat())
+        SyncMetadata.set(SYNC_KEY_SCHEDULER_HEARTBEAT, serialize_utc_iso(datetime.now(timezone.utc)))
 
     def _touch_heartbeat(self):
         """Update heartbeat; log but do not raise on failure."""
@@ -255,7 +255,7 @@ class SyncScheduler:
         """Set the last sync time in persistent storage"""
         if when is None:
             when = datetime.now(timezone.utc)
-        SyncMetadata.set(key, when.isoformat())
+        SyncMetadata.set(key, serialize_utc_iso(when))
 
     def _needs_sync(self, key: str, interval_hours: int) -> bool:
         """Check if a sync is needed based on last sync time"""

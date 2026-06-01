@@ -14,9 +14,11 @@ import logging
 import os
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+from services.datetime_utils import serialize_utc_iso
 
 logger = logging.getLogger(__name__)
 
@@ -226,7 +228,7 @@ class XmltvGrabberService:
                     {
                         "name": config_name,
                         "file": str(config_file),
-                        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        "modified": serialize_utc_iso(datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)),
                         "size": stat.st_size,
                     }
                 )

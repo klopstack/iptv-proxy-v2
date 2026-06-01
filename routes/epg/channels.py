@@ -8,6 +8,7 @@ from flask import Blueprint, jsonify, request
 from error_handling import handle_errors
 from models import Account, Channel, ChannelEpgMapping, EpgChannel, EpgSource, Event, EventChannelLink, db
 from services.channel_query_service import ChannelQueryService
+from services.datetime_utils import serialize_utc_iso
 from services.epg.match_rules import EpgMatchRulesService
 from services.filter_service import FilterService
 
@@ -94,8 +95,8 @@ def get_epg_channels():
                     "display_name": c.display_name,
                     "icon_url": c.icon_url,
                     "program_count": c.program_count,
-                    "first_program": c.first_program.isoformat() if c.first_program else None,
-                    "last_program": c.last_program.isoformat() if c.last_program else None,
+                    "first_program": serialize_utc_iso(c.first_program),
+                    "last_program": serialize_utc_iso(c.last_program),
                     "mapping_count": len(c.channel_mappings),
                 }
                 for c in channels

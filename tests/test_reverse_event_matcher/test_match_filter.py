@@ -362,6 +362,7 @@ class TestChannelDateBoosting:
         assert filtered[0].confidence == 0.85
         assert filtered[0].details["date_match"] is True
         assert filtered[0].details["date_boost"] == 0.15
+        assert filtered[0].details["channel_date"].endswith("Z")
 
     def test_channel_date_filters_non_matching_events(self, match_filter, now):
         """Test that channel date filters out events with non-matching dates."""

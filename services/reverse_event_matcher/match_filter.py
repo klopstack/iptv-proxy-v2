@@ -14,6 +14,7 @@ from enum import Enum
 from typing import List, Optional, Set
 from zoneinfo import ZoneInfo
 
+from services.datetime_utils import serialize_utc_iso
 from services.reverse_event_matcher.match_strategy import MatchResult
 
 logger = logging.getLogger(__name__)
@@ -260,7 +261,7 @@ class MatchFilter:
                 match.confidence = min(match.confidence + date_boost, 1.0)
                 match.details["date_match"] = True
                 match.details["date_boost"] = date_boost
-                match.details["channel_date"] = channel_date.isoformat()
+                match.details["channel_date"] = serialize_utc_iso(channel_date)
 
         # Third, apply date range filter (from DateFilter enum)
         if event_date is not None:

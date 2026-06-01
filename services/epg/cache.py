@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from services.datetime_utils import serialize_utc_iso
+
 logger = logging.getLogger(__name__)
 
 # Default cache directory - can be overridden via environment variable
@@ -249,8 +251,8 @@ def get_cache_stats() -> dict:
             "file_count": file_count,
             "total_size_bytes": total_size,
             "total_size_mb": round(total_size / (1024 * 1024), 2),
-            "oldest_cache": oldest.isoformat() if oldest else None,
-            "newest_cache": newest.isoformat() if newest else None,
+            "oldest_cache": serialize_utc_iso(oldest),
+            "newest_cache": serialize_utc_iso(newest),
         }
 
     except Exception as e:

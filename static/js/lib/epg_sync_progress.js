@@ -16,7 +16,7 @@ export const PHASE_LABEL = {
 const ACTIVE_PHASES = new Set(['queued', 'fetching', 'channels', 'programs']);
 
 export function escapeHtml(text) {
-    if (text == null) return '';
+    if (text === null || text === undefined) return '';
     return String(text)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -32,10 +32,10 @@ export function formatProgressDetail(src) {
     const prog = src.progress || {};
     let detail = prog.message || src.last_sync_message || '';
 
-    if (prog.programmes_parsed != null) {
+    if (prog.programmes_parsed !== null && prog.programmes_parsed !== undefined) {
         const total = prog.programmes_total_estimate ? ` / ~${prog.programmes_total_estimate}` : '';
         detail = `Parsed ${prog.programmes_parsed}${total} programmes`;
-        if (prog.programs_added != null) {
+        if (prog.programs_added !== null && prog.programs_added !== undefined) {
             detail += ` · +${prog.programs_added} added`;
         }
     }

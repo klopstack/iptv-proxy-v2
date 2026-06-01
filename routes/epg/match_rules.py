@@ -32,6 +32,7 @@ from schemas import (
     validate_request_data,
 )
 from services.cache_service import CacheService
+from services.datetime_utils import serialize_utc_iso
 from services.epg.match_rules import clear_fcc_pattern_cache
 
 logger = logging.getLogger(__name__)
@@ -102,8 +103,8 @@ def _serialize_channel_name_mapping(mapping: EpgChannelNameMapping) -> dict:
         "case_sensitive": mapping.case_sensitive,
         "priority": mapping.priority,
         "enabled": mapping.enabled,
-        "created_at": mapping.created_at.isoformat() if mapping.created_at else None,
-        "updated_at": mapping.updated_at.isoformat() if mapping.updated_at else None,
+        "created_at": serialize_utc_iso(mapping.created_at),
+        "updated_at": serialize_utc_iso(mapping.updated_at),
     }
 
 

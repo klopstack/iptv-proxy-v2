@@ -1333,6 +1333,8 @@ class TestNameMappings:
         assert data["name"] == "Test Mapping"
         assert data["old_name"] == "ESPN HD"
         assert data["new_name"] == "ESPN"
+        assert data["created_at"].endswith("Z")
+        assert data["updated_at"].endswith("Z")
 
     def test_get_name_mappings(self, client, app):
         """Test getting all name mappings"""
@@ -1361,6 +1363,8 @@ class TestNameMappings:
         assert response.status_code == 200
         data = response.get_json()
         assert data["id"] == mapping_id
+        assert data["created_at"].endswith("Z")
+        assert data["updated_at"].endswith("Z")
 
     def test_update_name_mapping(self, client, app):
         """Test updating a name mapping"""

@@ -304,6 +304,8 @@ class TestGetCacheStats:
         assert stats["total_size_mb"] >= 0
         assert stats["oldest_cache"] is not None
         assert stats["newest_cache"] is not None
+        assert stats["oldest_cache"].endswith("Z")
+        assert stats["newest_cache"].endswith("Z")
 
     def test_stats_empty_cache(self, mock_cache_dir):
         """Test getting stats for empty cache."""

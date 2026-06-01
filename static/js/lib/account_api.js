@@ -46,7 +46,7 @@ export function accountXmltvEpgSourceUrl(accountId, { sync = false } = {}) {
  * @returns {string}
  */
 export function accountCredentialsUrl(accountId, credId = null) {
-    if (credId != null && credId !== '') {
+    if (credId !== null && credId !== undefined && credId !== '') {
         return accountPath(accountId, `credentials/${credId}`);
     }
     return accountPath(accountId, 'credentials');

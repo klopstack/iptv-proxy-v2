@@ -206,6 +206,7 @@ class TestXmltvGrabberServiceConfig:
                 names = [c["name"] for c in configs]
                 assert "config1" in names
                 assert "config2" in names
+                assert all(c["modified"].endswith("Z") for c in configs)
 
     def test_delete_grabber_config_not_found(self):
         """Test deleting non-existent config"""

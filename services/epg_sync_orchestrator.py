@@ -12,6 +12,7 @@ from flask import Flask
 from sqlalchemy import update
 
 from models import EpgSource, SyncMetadata, db
+from services.datetime_utils import serialize_utc_iso
 from services.epg_sync_progress import PHASE_COMPLETE, PHASE_ERROR, PHASE_QUEUED, EpgSyncProgress
 from services.epg_sync_service import EpgSyncService
 
@@ -234,7 +235,7 @@ class EpgSyncOrchestrator:
 
         with self.app.app_context():
             if success_count > 0:
-                SyncMetadata.set(SYNC_KEY_LAST_EPG_SYNC, datetime.now(timezone.utc).isoformat())
+                SyncMetadata.set(SYNC_KEY_LAST_EPG_SYNC, serialize_utc_iso(datetime.now(timezone.utc)))
             else:
                 logger.warning(
                     "EPG sync pass: 0/%s sources succeeded; global last_epg_sync not updated",

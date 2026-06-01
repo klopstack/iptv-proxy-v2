@@ -605,6 +605,8 @@ class TestGetScheduleAroundTime:
             assert result["current_program"]["title"] == "Current Show"
             assert len(result["programs_before"]) >= 1
             assert len(result["programs_after"]) >= 1
+            assert result["reference_time"].endswith("Z")
+            assert result["adjusted_time"].endswith("Z")
 
     def test_schedule_with_time_offset(self, app, db, sample_epg_channels):
         """Test getting schedule with time offset applied."""
@@ -628,6 +630,8 @@ class TestGetScheduleAroundTime:
             assert result["offset_hours"] == 2
             assert result["current_program"] is not None
             assert result["current_program"]["title"] == "Future Program"
+            assert result["reference_time"].endswith("Z")
+            assert result["adjusted_time"].endswith("Z")
 
 
 class TestCleanupExpiredPrograms:
