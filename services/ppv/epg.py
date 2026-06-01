@@ -149,35 +149,39 @@ class PPVEpgService:
                 subtitle_elem = ET.SubElement(programme, "sub-title", lang="en")
                 subtitle_elem.text = event.league_name
 
-            # Description - build from available metadata
-            desc_parts = []
-            if event.sport:
-                desc_parts.append(f"Sport: {event.sport}")
-            if event.league_name:
-                desc_parts.append(f"League: {event.league_name}")
-            if event.venue_name:
-                desc_parts.append(f"Venue: {event.venue_name}")
-            if event.city and event.country:
-                desc_parts.append(f"Location: {event.city}, {event.country}")
-            elif event.country:
-                desc_parts.append(f"Location: {event.country}")
-
-            # Add status info
-            status_display = {
-                Event.STATUS_SCHEDULED: "Scheduled",
-                Event.STATUS_LIVE: "Live Now",
-                Event.STATUS_FINISHED: "Finished",
-                Event.STATUS_CANCELLED: "Cancelled",
-            }
-            if event.status in status_display:
-                desc_parts.append(f"Status: {status_display[event.status]}")
-
-            # Add match confidence if not perfect
-            if link.match_confidence < 1.0:
-                desc_parts.append(f"Match Confidence: {link.match_confidence * 100:.0f}%")
-
+            # Description - use LLM-generated description when available,
+            # otherwise fall back to mechanical label-value format.
             desc_elem = ET.SubElement(programme, "desc", lang="en")
-            desc_elem.text = "\n".join(desc_parts) if desc_parts else "Pay-Per-View Sports Event"
+            if getattr(event, "description", None):
+                desc_elem.text = event.description
+            else:
+                desc_parts = []
+                if event.sport:
+                    desc_parts.append(f"Sport: {event.sport}")
+                if event.league_name:
+                    desc_parts.append(f"League: {event.league_name}")
+                if event.venue_name:
+                    desc_parts.append(f"Venue: {event.venue_name}")
+                if event.city and event.country:
+                    desc_parts.append(f"Location: {event.city}, {event.country}")
+                elif event.country:
+                    desc_parts.append(f"Location: {event.country}")
+
+                # Add status info
+                status_display = {
+                    Event.STATUS_SCHEDULED: "Scheduled",
+                    Event.STATUS_LIVE: "Live Now",
+                    Event.STATUS_FINISHED: "Finished",
+                    Event.STATUS_CANCELLED: "Cancelled",
+                }
+                if event.status in status_display:
+                    desc_parts.append(f"Status: {status_display[event.status]}")
+
+                # Add match confidence if not perfect
+                if link.match_confidence < 1.0:
+                    desc_parts.append(f"Match Confidence: {link.match_confidence * 100:.0f}%")
+
+                desc_elem.text = "\n".join(desc_parts) if desc_parts else "Pay-Per-View Sports Event"
 
             # Category
             category_elem = ET.SubElement(programme, "category", lang="en")

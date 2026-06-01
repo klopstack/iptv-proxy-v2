@@ -641,7 +641,7 @@ class PPVCalendarEnrichmentService:
                 return
 
             # Skip if already has full details
-            if event.data_completeness == "full":
+            if event.data_completeness in ("full", "enriched"):
                 logger.debug(f"Event {event_id} already has full details")
                 return
 
@@ -657,6 +657,24 @@ class PPVCalendarEnrichmentService:
 
             logger.info(f"Fetched full details for event {event_id}")
             self._stats["api_requests"] += 1
+
+            # ------------------------------------------------------------------
+            # LLM-based EPG description enrichment (optional, feature-flagged)
+            # ------------------------------------------------------------------
+            try:
+                from models.sync import Settings
+                if Settings.get("ppv_llm_enrichment_enabled", "false").lower() == "true":
+                    from services.ppv.context import build_event_context, generate_event_description_or_fallback
+                    from services.ppv.context.assembler import persist_context_metadata
+                    context = build_event_context(event)
+                    persist_context_metadata(event, context)
+                    description = generate_event_description_or_fallback(context)
+                    if description:
+                        event.description = description
+                        event.data_completeness = "enriched"
+                        db.session.commit()
+            except Exception as llm_exc:
+                logger.warning(f"LLM description enrichment failed for event {event_id}: {llm_exc}")
 
         except Exception as e:
             logger.error(f"Error fetching details for event {event_id}: {e}")

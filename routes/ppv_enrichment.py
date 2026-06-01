@@ -315,3 +315,21 @@ def stop_detail_thread():
     except Exception as e:
         logger.error(f"Error stopping detail thread: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
+
+
+
+@ppv_enrichment_bp.route("/coverage", methods=["GET"])
+@cross_origin()
+def get_coverage_report():
+    """
+    Return a matrix showing which sports/leagues have which context data types covered.
+
+    Useful for identifying gaps in provider coverage and debugging enrichment.
+    """
+    try:
+        from services.ppv.context.registry import get_registry
+        report = get_registry().coverage_report()
+        return jsonify(report), 200
+    except Exception as e:
+        logger.error(f"Error generating coverage report: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500

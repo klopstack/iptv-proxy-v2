@@ -65,6 +65,9 @@ class Event(db.Model):  # type: ignore[name-defined]
     city = db.Column(db.String(100))
     country = db.Column(db.String(100))
 
+    # LLM-generated or enriched human-readable description for EPG display
+    description = db.Column(db.Text)
+
     # Event metadata (JSON)
     # Stores: goal scorers, statistics, highlights, betting odds, etc.
     event_metadata = db.Column(db.Text)
