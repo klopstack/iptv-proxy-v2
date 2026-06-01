@@ -151,6 +151,15 @@ class Settings(db.Model):  # type: ignore[name-defined]
             "",
             "TheSportsDB website password for authenticated calendar scraping.",
         ),
+        # Stream proxy failover to linked backup channels
+        "stream_fallback_enabled": (
+            "true",
+            "Enable transparent proxy failover to linked backup streams when primary upstream fails.",
+        ),
+        "stream_fallback_auto_detect": (
+            "true",
+            "Auto-detect primary/backup channel pairs after account sync.",
+        ),
     }
 
     @staticmethod

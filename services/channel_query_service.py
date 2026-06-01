@@ -465,12 +465,23 @@ class ChannelQueryService:
         return (channel.account_id, str(channel.stream_id)) in playlist_visible_keys
 
     @staticmethod
+    def exclude_linked_backup_targets(channels: List[Channel]) -> List[Channel]:
+        """Remove channels that are backup-only targets (linked via backup ChannelLink)."""
+        from services.stream_fallback_service import get_backup_channel_ids
+
+        backup_ids = get_backup_channel_ids()
+        if not backup_ids:
+            return channels
+        return [ch for ch in channels if ch.id not in backup_ids]
+
+    @staticmethod
     def channels_for_account_candidates(
         account_id: int,
         candidates: List[Channel],
         *,
         apply_filters: bool = True,
         apply_ppv_visibility: bool = True,
+        exclude_linked_backups: bool = False,
     ) -> List[Channel]:
         """Apply account selection rules to an already-narrowed channel list."""
         if apply_filters:
@@ -478,6 +489,8 @@ class ChannelQueryService:
         if apply_ppv_visibility:
             candidates = ChannelQueryService.apply_ppv_visibility_to_channels(candidates)
         candidates = ChannelQueryService._exclude_health_auto_disabled(candidates)
+        if exclude_linked_backups:
+            candidates = ChannelQueryService.exclude_linked_backup_targets(candidates)
         return candidates
 
     @staticmethod
@@ -486,6 +499,7 @@ class ChannelQueryService:
         *,
         apply_filters: bool = True,
         apply_ppv_visibility: bool = True,
+        exclude_linked_backups: bool = False,
     ) -> List[Channel]:
         """Apply per-account selection rules to a multi-account candidate list."""
         if not candidates:
@@ -503,11 +517,15 @@ class ChannelQueryService:
                     acc_channels,
                     apply_filters=apply_filters,
                     apply_ppv_visibility=False,
+                    exclude_linked_backups=exclude_linked_backups,
                 )
             )
 
         if apply_ppv_visibility:
             filtered = ChannelQueryService.apply_ppv_visibility_to_channels(filtered)
+
+        if exclude_linked_backups:
+            filtered = ChannelQueryService.exclude_linked_backup_targets(filtered)
 
         return ChannelQueryService._exclude_health_auto_disabled(filtered)
 
@@ -639,6 +657,7 @@ class ChannelQueryService:
             channels,
             apply_filters=apply_filters,
             apply_ppv_visibility=apply_ppv_visibility,
+            exclude_linked_backups=True,
         )
 
     @staticmethod
@@ -705,6 +724,8 @@ class ChannelQueryService:
 
         if apply_ppv_visibility:
             channels = ChannelQueryService.apply_ppv_visibility_to_channels(channels)
+
+        channels = ChannelQueryService.exclude_linked_backup_targets(channels)
 
         return channels
 
