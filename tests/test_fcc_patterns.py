@@ -363,6 +363,9 @@ class TestCountryTags:
                 },
             )
             assert response.status_code == 201
+            data = response.get_json()
+            assert data["created_at"].endswith("Z")
+            assert data["updated_at"].endswith("Z")
 
     def test_update_country_tag(self, client, app):
         """Test updating a country tag"""
@@ -413,6 +416,9 @@ class TestQualityTags:
                 },
             )
             assert response.status_code == 201
+            data = response.get_json()
+            assert data["created_at"].endswith("Z")
+            assert data["updated_at"].endswith("Z")
 
     def test_update_quality_tag(self, client, app):
         """Test updating a quality tag"""
@@ -463,6 +469,9 @@ class TestEpgCountrySuffixes:
                 },
             )
             assert response.status_code == 201
+            data = response.get_json()
+            assert data["created_at"].endswith("Z")
+            assert data["updated_at"].endswith("Z")
 
     def test_update_epg_suffix(self, client, app):
         """Test updating an EPG suffix"""
@@ -526,6 +535,9 @@ class TestCallsignSuffixes:
                 },
             )
             assert response.status_code == 201
+            data = response.get_json()
+            assert data["created_at"].endswith("Z")
+            assert data["updated_at"].endswith("Z")
 
     def test_update_callsign_suffix(self, client, app):
         """Test updating a callsign suffix"""

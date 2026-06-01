@@ -108,6 +108,7 @@ def test_get_tags_all(app, client, test_channel_with_tags):
             assert "id" in tag
             assert "name" in tag
             assert "created_at" in tag
+            assert tag["created_at"].endswith("Z")
             assert "channel_count" not in tag  # No counts without flag
 
 
@@ -125,6 +126,7 @@ def test_get_tags_with_counts(app, client, test_channel_with_tags):
         for tag in data:
             assert "channel_count" in tag
             assert tag["channel_count"] == 1  # Each tag used by 1 channel
+            assert tag["created_at"].endswith("Z")
 
 
 def test_get_tags_filtered_by_account(app, client, test_channel_with_tags, test_account):

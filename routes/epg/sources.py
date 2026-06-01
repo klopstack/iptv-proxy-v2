@@ -7,6 +7,7 @@ from flask import Blueprint, jsonify, request
 
 from error_handling import handle_errors
 from models import Account, ChannelEpgMapping, EpgChannel, EpgProgram, EpgSource, SdLineup, SdStation, db
+from services.datetime_utils import serialize_utc_iso
 from services.epg.coverage import get_category_epg_coverage, get_epg_coverage_stats
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ def _serialize_epg_source(source, *, mapping_count=0):
         "url": source.url,
         "priority": source.priority,
         "enabled": source.enabled,
-        "last_sync": source.last_sync.isoformat() if source.last_sync else None,
+        "last_sync": serialize_utc_iso(source.last_sync),
         "last_sync_status": source.last_sync_status,
         "last_sync_message": source.last_sync_message,
         "channel_count": source.channel_count,

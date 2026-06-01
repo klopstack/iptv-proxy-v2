@@ -277,6 +277,9 @@ class TestImageRoutes:
                     url_hash=f"hash{i}" + "0" * 59,
                     original_url=f"https://example.com/icon{i}.png",
                     status=status,
+                    fetched_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                    expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1),
+                    last_accessed_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 )
                 db.session.add(cached)
             db.session.commit()
@@ -287,6 +290,9 @@ class TestImageRoutes:
         data = response.get_json()
         assert data["total"] == 1
         assert all(e["status"] == "cached" for e in data["entries"])
+        assert data["entries"][0]["fetched_at"].endswith("Z")
+        assert data["entries"][0]["expires_at"].endswith("Z")
+        assert data["entries"][0]["last_accessed_at"].endswith("Z")
 
     def test_fetch_and_cache_icon_no_url(self, image_cache_client):
         """Test fetch endpoint without URL"""

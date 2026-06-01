@@ -9,6 +9,7 @@ from flask import Blueprint, jsonify, request
 
 from error_handling import handle_errors
 from models import Channel, ChannelLink, db
+from services.datetime_utils import serialize_utc_iso
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +30,8 @@ def channel_link_to_dict(link):
         "time_offset_hours": link.time_offset_hours,
         "link_type": link.link_type,
         "auto_detected": link.auto_detected,
-        "created_at": link.created_at.isoformat() if link.created_at else None,
-        "updated_at": link.updated_at.isoformat() if link.updated_at else None,
+        "created_at": serialize_utc_iso(link.created_at),
+        "updated_at": serialize_utc_iso(link.updated_at),
     }
 
 

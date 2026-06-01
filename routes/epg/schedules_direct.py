@@ -8,6 +8,7 @@ from flask import Blueprint, jsonify, request
 
 from error_handling import handle_errors
 from models import Account, EpgSource, SdLineup, SdStation, db
+from services.datetime_utils import serialize_utc_iso
 from services.schedules_direct import SchedulesDirectClient, SchedulesDirectError
 
 logger = logging.getLogger(__name__)
@@ -126,7 +127,7 @@ def get_sd_lineups():
             "lineup_type": lineup.lineup_type,
             "transport": lineup.transport,
             "channel_count": lineup.channel_count,
-            "last_sync": lineup.last_sync.isoformat() if lineup.last_sync else None,
+            "last_sync": serialize_utc_iso(lineup.last_sync),
         }
         for lineup in lineups
     ]

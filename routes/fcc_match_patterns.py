@@ -28,6 +28,7 @@ from models import (
     db,
 )
 from services.cache_service import CacheService
+from services.datetime_utils import serialize_utc_iso
 from services.epg.match_rules import clear_fcc_pattern_cache
 
 logger = logging.getLogger(__name__)
@@ -600,8 +601,8 @@ def _serialize_country_suffix(suffix: EpgCountrySuffix) -> dict:
         "epg_suffixes": json.loads(suffix.epg_suffixes) if suffix.epg_suffixes else [],
         "enabled": suffix.enabled,
         "priority": suffix.priority,
-        "created_at": suffix.created_at.isoformat() if suffix.created_at else None,
-        "updated_at": suffix.updated_at.isoformat() if suffix.updated_at else None,
+        "created_at": serialize_utc_iso(suffix.created_at),
+        "updated_at": serialize_utc_iso(suffix.updated_at),
     }
 
 
@@ -686,8 +687,8 @@ def _serialize_quality_tag(tag: QualityTag) -> dict:
         "quality_score": tag.quality_score,
         "exclude_from_location": tag.exclude_from_location,
         "enabled": tag.enabled,
-        "created_at": tag.created_at.isoformat() if tag.created_at else None,
-        "updated_at": tag.updated_at.isoformat() if tag.updated_at else None,
+        "created_at": serialize_utc_iso(tag.created_at),
+        "updated_at": serialize_utc_iso(tag.updated_at),
     }
 
 
@@ -772,8 +773,8 @@ def _serialize_country_tag(tag: CountryTag) -> dict:
         "iso_code": tag.iso_code,
         "exclude_from_location": tag.exclude_from_location,
         "enabled": tag.enabled,
-        "created_at": tag.created_at.isoformat() if tag.created_at else None,
-        "updated_at": tag.updated_at.isoformat() if tag.updated_at else None,
+        "created_at": serialize_utc_iso(tag.created_at),
+        "updated_at": serialize_utc_iso(tag.updated_at),
     }
 
 
@@ -857,8 +858,8 @@ def _serialize_callsign_suffix(suffix: CallsignSuffix) -> dict:
         "strip_on_normalize": suffix.strip_on_normalize,
         "enabled": suffix.enabled,
         "priority": suffix.priority,
-        "created_at": suffix.created_at.isoformat() if suffix.created_at else None,
-        "updated_at": suffix.updated_at.isoformat() if suffix.updated_at else None,
+        "created_at": serialize_utc_iso(suffix.created_at),
+        "updated_at": serialize_utc_iso(suffix.updated_at),
     }
 
 
