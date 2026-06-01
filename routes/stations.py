@@ -291,20 +291,22 @@ def get_network_list():
 def get_channels_by_callsign(callsign):
     """Find channels that match a given callsign.
 
-    Searches across all accounts for channels containing the callsign
-    in their name (typically in parentheses like "(KABC)").
+    Searches across all accounts for channels either containing the callsign
+    in their name (typically in parentheses like "(KABC)") or linked to an FCC
+    facility with that callsign via the fcc_facility_id relationship (set during
+    enrichment).
 
     Args:
-        callsign: Station callsign to search for (e.g., "KABC", "WNBC")
+        callsign: Station callsign to search for (e.g., "KABC", "KABC-TV", "WNBC")
 
     Returns:
         JSON with matching channels grouped by account
     """
-    from models import Account, Channel
+    from models import Account, Channel, FccFacility
 
     callsign = callsign.upper().strip()
 
-    # Search patterns - look for callsign in parentheses or as word
+    # Name-based search patterns - look for callsign in parentheses or as word
     # e.g., "(KABC)", "KABC-TV", "KABC "
     search_patterns = [
         f"%({callsign})%",  # (KABC)
@@ -316,9 +318,22 @@ def get_channels_by_callsign(callsign):
     # Query channels matching any pattern
     from sqlalchemy import or_
 
-    conditions = [Channel.name.ilike(p) for p in search_patterns]
+    name_conditions = [Channel.name.ilike(p) for p in search_patterns]
+
+    # FCC facility-based conditions: channels enriched with a matching facility callsign.
+    # Use an explicit join so the database can use its callsign index efficiently.
+    # Match exact callsign or callsign prefix (e.g., "KABC" matches "KABC-TV").
+    facility_conditions = [
+        FccFacility.callsign.ilike(callsign),
+        FccFacility.callsign.ilike(f"{callsign}-%"),
+    ]
+
     channels = (
-        Channel.query.filter(Channel.is_active == True, or_(*conditions))  # noqa: E712
+        Channel.query.outerjoin(FccFacility, Channel.fcc_facility_id == FccFacility.id)
+        .filter(
+            Channel.is_active == True,  # noqa: E712
+            or_(*name_conditions, *facility_conditions),
+        )
         .order_by(Channel.account_id, Channel.name)
         .limit(100)
         .all()

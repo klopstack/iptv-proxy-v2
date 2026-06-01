@@ -722,6 +722,71 @@ class TestChannelsCallsignLookup:
         assert data["total_channels"] == 0
         assert data["accounts"] == []
 
+    @pytest.fixture
+    def client_with_enriched_channels(self, app):
+        """Create test client with channels linked to FCC facilities (no callsign in name)"""
+        from models import Account, Channel
+
+        with app.app_context():
+            # Create FCC facility
+            facility = FccFacility(
+                facility_id=5001,
+                callsign="KABC-TV",
+                service_code="DTV",
+                network_affiliation="ABC",
+                nielsen_dma="Los Angeles",
+                community_city="LOS ANGELES",
+                community_state="CA",
+                active=True,
+            )
+            db.session.add(facility)
+            db.session.flush()
+
+            # Create account
+            account = Account(
+                name="Test Account",
+                server="http://test.example.com",
+                username="test",
+                password="test",
+            )
+            db.session.add(account)
+            db.session.flush()
+
+            # Create channel whose name does NOT contain the callsign,
+            # but which has been enriched (fcc_facility_id is set)
+            channel = Channel(
+                account_id=account.id,
+                stream_id="abc_la_enriched",
+                name="ABC Los Angeles",
+                cleaned_name="ABC Los Angeles",
+                category_id=None,
+                is_active=True,
+                fcc_facility_id=facility.id,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            with app.test_client() as client:
+                yield client
+
+    def test_find_enriched_channels_by_exact_callsign(self, client_with_enriched_channels):
+        """Test finding enriched channels by exact callsign match on linked facility"""
+        response = client_with_enriched_channels.get("/api/fcc/channels/by-callsign/KABC-TV")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["callsign"] == "KABC-TV"
+        assert data["total_channels"] == 1
+        assert data["accounts"][0]["channels"][0]["name"] == "ABC Los Angeles"
+
+    def test_find_enriched_channels_by_prefix_callsign(self, client_with_enriched_channels):
+        """Test finding enriched channels by base callsign prefix (KABC matches KABC-TV)"""
+        response = client_with_enriched_channels.get("/api/fcc/channels/by-callsign/KABC")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["callsign"] == "KABC"
+        assert data["total_channels"] == 1
+        assert data["accounts"][0]["channels"][0]["name"] == "ABC Los Angeles"
+
 
 class TestChannelEnrichment:
     """Tests for channel enrichment functionality"""
