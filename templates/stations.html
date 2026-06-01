@@ -321,13 +321,19 @@ function loadPopularDmas(stats) {
     
     const dmaList = stats.top_dmas.slice(0, 15).map(([dma, count]) => `
         <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-1" 
-           onclick="searchByDma('${escapeHtml(dma)}');return false;">
-            <small>${dma}</small>
+           data-dma="${escapeHtml(dma)}">
+            <small>${escapeHtml(dma)}</small>
             <span class="badge bg-primary rounded-pill">${count}</span>
         </a>
     `).join('');
     
     dmasDiv.innerHTML = `<div class="list-group list-group-flush">${dmaList}</div>`;
+    dmasDiv.querySelectorAll('a[data-dma]').forEach(el => {
+        el.addEventListener('click', function(e) {
+            e.preventDefault();
+            searchByDma(this.dataset.dma);
+        });
+    });
 }
 
 async function syncFccData() {
