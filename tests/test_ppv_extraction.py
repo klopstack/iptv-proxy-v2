@@ -509,6 +509,20 @@ class TestPPVEventExtractor:
         # Should extract first vs match
         assert result["competitors"] is not None
 
+    def test_extract_all_weekday_time_24_hour_overflow(self):
+        """Weekday+time extraction should normalize 24:xx without crashing."""
+        result = self.extractor.extract_all("Team A vs Team B | Sat 24:20")
+        assert result["inferred_how"] == "weekday_plus_time"
+        assert result["date"] is not None
+        assert result["date"].hour == 0
+        assert result["date"].minute == 20
+
+    def test_combine_date_and_time_normalizes_overflow(self):
+        """Explicit overflow values should roll forward correctly."""
+        base = datetime(2026, 1, 10, 9, 0, 0)
+        result = self.extractor.combine_date_and_time(base, 24, 75)
+        assert result == datetime(2026, 1, 11, 1, 15, 0)
+
 
 class TestDAZNStyleExtraction:
     """Tests for provider-prefixed DAZN/ESPN channel name extraction.

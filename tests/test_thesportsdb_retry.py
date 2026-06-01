@@ -5,6 +5,9 @@ from unittest.mock import MagicMock, patch
 import requests
 
 from services.thesportsdb_retry import (
+    BACKOFF_MULTIPLIER,
+    INITIAL_BACKOFF_SECONDS,
+    MAX_BACKOFF_SECONDS,
     backoff_delay,
     call_thesportsdb_api,
     fetch_url_with_retry,
@@ -87,3 +90,13 @@ class TestFetchUrlWithRetry:
 class TestBackoffDelay:
     def test_backoff_grows_with_attempt(self):
         assert backoff_delay(0) <= backoff_delay(1) * 2
+
+    @patch("services.thesportsdb_retry.random.uniform", return_value=1.0)
+    def test_backoff_uses_configured_base_and_multiplier(self, _mock_jitter):
+        assert backoff_delay(0) == INITIAL_BACKOFF_SECONDS
+        assert backoff_delay(1) == INITIAL_BACKOFF_SECONDS * BACKOFF_MULTIPLIER
+        assert backoff_delay(2) == INITIAL_BACKOFF_SECONDS * (BACKOFF_MULTIPLIER**2)
+
+    @patch("services.thesportsdb_retry.random.uniform", return_value=1.0)
+    def test_backoff_is_capped(self, _mock_jitter):
+        assert backoff_delay(20) == MAX_BACKOFF_SECONDS
