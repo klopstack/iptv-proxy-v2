@@ -381,4 +381,4 @@ class TestBuildEventContext:
         assert ctx.sport == "Soccer"
         assert ctx.home_team.name == "Team A"
         assert ctx.away_team.name == "Team B"
-        assert "espn" in ctx.data_sources or "mock" in ctx.data_sources or len(ctx.data_sources) >= 0
+        assert isinstance(ctx.data_sources, list)

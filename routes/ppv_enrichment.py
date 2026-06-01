@@ -332,4 +332,4 @@ def get_coverage_report():
         return jsonify(report), 200
     except Exception as e:
         logger.error(f"Error generating coverage report: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Failed to generate coverage report"}), 500

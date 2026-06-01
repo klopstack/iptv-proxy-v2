@@ -53,7 +53,7 @@ def generate_event_description(context: EventContext) -> Optional[str]:
     is not acceptable (callers decide).
     """
     try:
-        from models import Settings
+        from models.sync import Settings
     except ImportError:
         return None
 

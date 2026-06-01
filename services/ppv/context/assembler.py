@@ -57,15 +57,20 @@ def build_event_context(event: "Event") -> EventContext:
         try:
             result = provider.get_standings(sport, league)
             if result:
-                home_standing = result.get("home", {})
-                away_standing = result.get("away", {})
-                # Providers populate home/away keyed by team name
-                if isinstance(home_standing, dict):
-                    home_ctx.record = home_standing.get("record")
-                    home_ctx.standing = home_standing.get("standing")
-                if isinstance(away_standing, dict):
-                    away_ctx.record = away_standing.get("record")
-                    away_ctx.standing = away_standing.get("standing")
+                # All providers return {"_all_teams": {team_name_lower: {"record":..., "standing":...}}}
+                all_teams = result.get("_all_teams", {})
+                for team_ctx, team_name in ((home_ctx, home_name), (away_ctx, away_name)):
+                    name_lower = team_name.lower()
+                    entry = all_teams.get(name_lower)
+                    if not entry:
+                        # Try partial match
+                        for k, v in all_teams.items():
+                            if name_lower in k or k in name_lower:
+                                entry = v
+                                break
+                    if entry:
+                        team_ctx.record = entry.get("record")
+                        team_ctx.standing = entry.get("standing")
                 data_sources.append(f"{provider.name}:standings")
                 standings_fetched = True
                 break
