@@ -11,6 +11,7 @@ from flask import Blueprint, jsonify, redirect, request
 from error_handling import handle_errors, handle_xml_errors
 from models import Account, PlaylistConfig, XtreamCredential, db
 from services.channel_query_service import ChannelQueryService
+from services.datetime_utils import serialize_utc_iso
 from services.epg.ppv import is_ppv_category
 from services.image_cache_service import ImageCacheService
 from services.url_service import get_proxy_base_url
@@ -586,7 +587,7 @@ def list_xtream_credentials():
                 "collapse_duplicates": c.collapse_duplicates,
                 "enabled": c.enabled,
                 "description": c.description,
-                "created_at": c.created_at.isoformat() if c.created_at else None,
+                "created_at": serialize_utc_iso(c.created_at),
             }
             for c in credentials
         ]

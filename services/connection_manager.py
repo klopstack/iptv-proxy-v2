@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Tuple
 
 from models import Account, ActiveStream, Credential, db
+from services.datetime_utils import serialize_utc_iso
 
 logger = logging.getLogger(__name__)
 
@@ -280,8 +281,8 @@ class ConnectionManager:
                 "stream_id": s.stream_id,
                 "credential_id": s.credential_id,
                 "client_ip": s.client_ip,
-                "started_at": s.started_at.isoformat() if s.started_at else None,
-                "last_activity": s.last_activity.isoformat() if s.last_activity else None,
+                "started_at": serialize_utc_iso(s.started_at),
+                "last_activity": serialize_utc_iso(s.last_activity),
             }
             for s in streams
         ]

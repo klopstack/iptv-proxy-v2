@@ -410,3 +410,5 @@ class TestGetActiveStreams:
 
             result = ConnectionManager.get_active_streams(account_id)
             assert len(result) >= 1
+            assert result[0]["started_at"].endswith("Z")
+            assert result[0]["last_activity"].endswith("Z")

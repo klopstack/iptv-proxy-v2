@@ -518,6 +518,7 @@ class TestXtreamCredentialManagement:
             assert isinstance(data, list)
             assert len(data) == 1
             assert data[0]["username"] == "xtream_user"
+            assert data[0]["created_at"].endswith("Z")
 
     def test_create_credential_account(self, app, client, test_account):
         """Test creating credential for account"""

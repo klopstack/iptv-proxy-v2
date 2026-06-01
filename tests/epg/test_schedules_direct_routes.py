@@ -190,3 +190,33 @@ class TestSchedulesDirectAPI:
         assert response.status_code == 200
         assert len(response.json["lineups"]) == 1
         assert response.json["lineups"][0]["last_sync"].endswith("Z")
+
+    def test_get_sd_lineup_status_uses_explicit_utc_z(self, app, client):
+        with app.app_context():
+            source = EpgSource(name="SD Source", source_type="schedules_direct", enabled=True)
+            db.session.add(source)
+            db.session.flush()
+
+            lineup = SdLineup(epg_source_id=source.id, lineup_id="USA-TEST-X", name="Test Lineup")
+            db.session.add(lineup)
+            db.session.commit()
+
+            from services.sd_lineup_sync_progress import PHASE_COMPLETE, PHASE_QUEUED, SdLineupSyncProgress
+
+            SdLineupSyncProgress.set_phase(lineup.id, PHASE_QUEUED, message="Queued")
+            SdLineupSyncProgress.set_phase(
+                lineup.id,
+                PHASE_COMPLETE,
+                message="Done",
+                channels_synced=1,
+                channels_updated=0,
+                total_channels=1,
+            )
+            lineup_id = lineup.id
+
+        response = client.get(f"/api/epg/sd/lineups/{lineup_id}/status")
+        assert response.status_code == 200
+        status = response.json["status"]
+        assert status["sync_started_at"].endswith("Z")
+        assert status["last_sync"].endswith("Z")
+        assert status["progress"]["updated_at"].endswith("Z")

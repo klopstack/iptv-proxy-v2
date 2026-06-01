@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 from models import SdLineup, SdLineupSyncStatus, db
+from services.datetime_utils import serialize_utc_iso
 
 PHASE_IDLE = "idle"
 PHASE_QUEUED = "queued"
@@ -48,7 +49,7 @@ class SdLineupSyncProgress:
         for key, value in counts.items():
             if value is not None:
                 progress[key] = value
-        progress["updated_at"] = now.isoformat()
+        progress["updated_at"] = serialize_utc_iso(now)
         status.sync_progress = json.dumps(progress)
 
         if phase == PHASE_COMPLETE:
@@ -70,7 +71,7 @@ class SdLineupSyncProgress:
         for key, value in counts.items():
             if value is not None:
                 progress[key] = value
-        progress["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+        progress["updated_at"] = serialize_utc_iso(datetime.now(timezone.utc).replace(tzinfo=None))
         status.sync_progress = json.dumps(progress)
         db.session.commit()
 
@@ -90,8 +91,8 @@ class SdLineupSyncProgress:
             "channel_count": lineup.channel_count,
             "sync_in_progress": bool(status.sync_in_progress) if status else False,
             "sync_phase": status.sync_phase if status and status.sync_phase else PHASE_IDLE,
-            "sync_started_at": status.sync_started_at.isoformat() if status and status.sync_started_at else None,
-            "last_sync": status.last_sync.isoformat() if status and status.last_sync else None,
+            "sync_started_at": serialize_utc_iso(status.sync_started_at if status else None),
+            "last_sync": serialize_utc_iso(status.last_sync if status else None),
             "last_sync_status": status.last_sync_status if status else None,
             "last_sync_message": status.last_sync_message if status else None,
             "progress": prog,

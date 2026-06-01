@@ -34,6 +34,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import requests
 
 from models import FccCorrection, FccFacility, db
+from services.datetime_utils import serialize_utc_iso
 
 logger = logging.getLogger(__name__)
 
@@ -751,7 +752,7 @@ class FccFacilityService:
             "by_service_code": dict(by_service),
             "top_networks": dict(by_network),
             "top_dmas": [[dma, count] for dma, count in top_dmas if dma],
-            "last_sync": latest_update.isoformat() if latest_update else None,
+            "last_sync": serialize_utc_iso(latest_update),
         }
 
     @staticmethod
