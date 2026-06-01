@@ -90,7 +90,7 @@ def _build_ppv_grouping(channels, account=None):
 
 
 def _sort_grouped_ppv_channels(channels, grouped_ppv, category_id):
-    """Sort PPV Live by soonest first and Replay by most recent first."""
+    """Sort PPV Live by soonest first and Replay by most recent first, with missing dates falling last."""
     reverse = category_id == PPV_REPLAY_CATEGORY_ID
     fallback = datetime.max.replace(tzinfo=timezone.utc) if not reverse else datetime.min.replace(tzinfo=timezone.utc)
 

@@ -78,7 +78,7 @@ class PPVVisibilityService:
             return self._is_ppv_active(channel)
 
     def classify_live_replay_channel(self, channel, current_time=None):
-        """Classify a PPV channel for Live/Replay grouping, or return None."""
+        """Classify a PPV channel as 'live', 'replay', or None for Live/Replay grouping."""
         if not channel.is_ppv:
             return None
 
@@ -87,7 +87,7 @@ class PPVVisibilityService:
 
     @classmethod
     def classify_live_replay_event(cls, event, current_time=None):
-        """Classify an event for Live/Replay grouping, or return None."""
+        """Classify an event as 'live', 'replay', or None using a 24-hour Live window."""
         if not event or event.status == Event.STATUS_CANCELLED:
             return None
 
