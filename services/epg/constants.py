@@ -59,8 +59,9 @@ PPV_PLACEHOLDER_PATTERNS = [
     r"^:?\s*(?:[A-Z]+\s+)?(?:Viaplay|MAX|ESPN)\s+[A-Z]{2}\s+\d+\s*$",
     # Coming Soon/TBA placeholders
     r"^(?:COMING\s+SOON|TBA|TBD|OFFLINE).*$",
-    # Generic brand + slot number: "DIRTVISION 03", "GOLF 10 HD", "Milb  100"
-    r"^(?:[A-Z]{2}\s*[:\|]\s*)?[A-Za-z]+\s+\d{1,3}\s*(?:ᴿᴬᵂ|ᴴᴰ|⁴ᴷ|4K|HD|SD|FHD|UHD)?$",
+    # Generic brand + slot number: "DIRTVISION 03", "GOLF 10 HD", "Florugby 00"
+    # Use a brand whitelist so real event titles like "Bellator 300" are not hidden.
+    r"^(?:[A-Z]{2}\s*[:\|]\s*)?(?:DIRTVISION|GOLF|Milb|MILB|Florugby)\s+\d{1,3}\s*(?:ᴿᴬᵂ|ᴴᴰ|⁴ᴷ|4K|HD|SD|FHD|UHD)?$",
     # Empty fixture slots: "GaaGo Fixtures 10:", "LOI 06 |"
     r"Fixtures?\s+\d+\s*[:\|]?\s*$",
     # NIFL/GAA empty: "NIFL 5 |", "ULSTER GAA 06 |"

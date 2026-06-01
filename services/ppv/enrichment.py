@@ -427,6 +427,14 @@ class PPVCalendarEnrichmentService:
             use_channel_date=True,  # Enable date extraction and validation
         )
 
+        if not match_results:
+            return EnrichmentResult(
+                channel=channel,
+                matched=False,
+                extraction_result=extraction,
+                match_method="no_match_found",
+            )
+
         competitors = extraction.get("competitors")
         if competitors and len(competitors) == 2:
             validated_results = []
@@ -436,18 +444,17 @@ class PPVCalendarEnrichmentService:
                 if result.match_type != "both_teams" and not competitors_match_event(competitors, result.event):
                     continue
                 validated_results.append(result)
+            if not validated_results:
+                return EnrichmentResult(
+                    channel=channel,
+                    matched=False,
+                    extraction_result=extraction,
+                    match_method="competitor_mismatch",
+                )
             match_results = validated_results
 
         # Convert MatchResult objects to (CalendarEvent, confidence) tuples
         matches = [(result.event, result.confidence) for result in match_results]
-
-        if not matches:
-            return EnrichmentResult(
-                channel=channel,
-                matched=False,
-                extraction_result=extraction,
-                match_method="competitor_mismatch",
-            )
 
         # Get best match
         best_event, confidence = matches[0]

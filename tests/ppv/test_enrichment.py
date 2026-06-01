@@ -365,10 +365,12 @@ class TestMatchChannelToCalendar:
             mock_match1 = Mock()
             mock_match1.event = mock_event1
             mock_match1.confidence = 0.45  # Low confidence
+            mock_match1.match_type = "both_teams"
 
             mock_match2 = Mock()
             mock_match2.event = mock_event2
             mock_match2.confidence = 0.40  # Close to first match (gap = 0.05 < 0.2)
+            mock_match2.match_type = "both_teams"
 
             service.reverse_matcher = Mock()
             service.reverse_matcher.load_events_for_date_range = Mock()
