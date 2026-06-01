@@ -829,20 +829,25 @@ class TestFarFutureEnrichmentFilter:
             far_date = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=45)
 
             # Patch the internal steps so we can inspect the valid_extractions list
-            with patch.object(service, "_extract_all_channels") as mock_extract, \
-                 patch.object(service, "_group_by_date") as mock_group, \
-                 patch.object(service, "_update_stats"), \
-                 patch("services.ppv.enrichment.sync_enrichment_status_from_links"), \
-                 patch("services.ppv.enrichment.prune_orphan_ppv_events"):
+            with patch.object(service, "_extract_all_channels") as mock_extract, patch.object(
+                service, "_group_by_date"
+            ) as mock_group, patch.object(service, "_update_stats"), patch(
+                "services.ppv.enrichment.sync_enrichment_status_from_links"
+            ), patch(
+                "services.ppv.enrichment.prune_orphan_ppv_events"
+            ):
 
                 ch = self._make_channel("UFC 405: Jones vs Smith")
                 mock_extract.return_value = [
-                    (ch, {
-                        "is_placeholder": False,
-                        "is_inactive": False,
-                        "competitors": ("Jones", "Smith"),
-                        "date": far_date,
-                    })
+                    (
+                        ch,
+                        {
+                            "is_placeholder": False,
+                            "is_inactive": False,
+                            "competitors": ("Jones", "Smith"),
+                            "date": far_date,
+                        },
+                    )
                 ]
                 # Return an empty group so nothing tries to match
                 mock_group.return_value = {}
@@ -860,20 +865,25 @@ class TestFarFutureEnrichmentFilter:
             service = PPVCalendarEnrichmentService(app)
             near_date = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=20)
 
-            with patch.object(service, "_extract_all_channels") as mock_extract, \
-                 patch.object(service, "_group_by_date") as mock_group, \
-                 patch.object(service, "_update_stats"), \
-                 patch("services.ppv.enrichment.sync_enrichment_status_from_links"), \
-                 patch("services.ppv.enrichment.prune_orphan_ppv_events"):
+            with patch.object(service, "_extract_all_channels") as mock_extract, patch.object(
+                service, "_group_by_date"
+            ) as mock_group, patch.object(service, "_update_stats"), patch(
+                "services.ppv.enrichment.sync_enrichment_status_from_links"
+            ), patch(
+                "services.ppv.enrichment.prune_orphan_ppv_events"
+            ):
 
                 ch = self._make_channel("UFC 403: Brown vs White")
                 mock_extract.return_value = [
-                    (ch, {
-                        "is_placeholder": False,
-                        "is_inactive": False,
-                        "competitors": ("Brown", "White"),
-                        "date": near_date,
-                    })
+                    (
+                        ch,
+                        {
+                            "is_placeholder": False,
+                            "is_inactive": False,
+                            "competitors": ("Brown", "White"),
+                            "date": near_date,
+                        },
+                    )
                 ]
                 mock_group.return_value = {}
 
@@ -887,20 +897,25 @@ class TestFarFutureEnrichmentFilter:
         with app.app_context():
             service = PPVCalendarEnrichmentService(app)
 
-            with patch.object(service, "_extract_all_channels") as mock_extract, \
-                 patch.object(service, "_group_by_date") as mock_group, \
-                 patch.object(service, "_update_stats"), \
-                 patch("services.ppv.enrichment.sync_enrichment_status_from_links"), \
-                 patch("services.ppv.enrichment.prune_orphan_ppv_events"):
+            with patch.object(service, "_extract_all_channels") as mock_extract, patch.object(
+                service, "_group_by_date"
+            ) as mock_group, patch.object(service, "_update_stats"), patch(
+                "services.ppv.enrichment.sync_enrichment_status_from_links"
+            ), patch(
+                "services.ppv.enrichment.prune_orphan_ppv_events"
+            ):
 
                 ch = self._make_channel("UFC 404: Fighter vs Fighter")
                 mock_extract.return_value = [
-                    (ch, {
-                        "is_placeholder": False,
-                        "is_inactive": False,
-                        "competitors": ("Fighter A", "Fighter B"),
-                        "date": None,
-                    })
+                    (
+                        ch,
+                        {
+                            "is_placeholder": False,
+                            "is_inactive": False,
+                            "competitors": ("Fighter A", "Fighter B"),
+                            "date": None,
+                        },
+                    )
                 ]
                 mock_group.return_value = {}
 
