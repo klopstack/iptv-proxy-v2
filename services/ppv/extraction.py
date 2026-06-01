@@ -12,7 +12,7 @@ Strategies:
 
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -520,6 +520,10 @@ class PPVEventExtractor:
 
         Returns: Combined datetime.
         """
+        # Ensure inputs are integers
+        hour = int(hour)
+        minute = int(minute)
+
         # Normalize to 24-hour format
         if ampm:
             ampm = ampm.lower()
@@ -528,7 +532,9 @@ class PPVEventExtractor:
             elif ampm == "am" and hour == 12:
                 hour = 0
 
-        return date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        # Normalize overflow safely (e.g., 24:20 -> next day 00:20)
+        date_midnight = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        return date_midnight + timedelta(hours=hour, minutes=minute)
 
     def extract_all(self, channel_name: str) -> Dict:
         """

@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 MAX_RETRIES = 4
-INITIAL_BACKOFF_SECONDS = 1.0
-MAX_BACKOFF_SECONDS = 45.0
+INITIAL_BACKOFF_SECONDS = 2.0
+BACKOFF_MULTIPLIER = 2.5
+MAX_BACKOFF_SECONDS = 90.0
 
 # Substrings common in Cloudflare / rate-limit HTML error pages
 HTML_BLOCK_INDICATORS = (
@@ -32,8 +33,8 @@ HTML_BLOCK_INDICATORS = (
 
 def backoff_delay(attempt: int) -> float:
     """Exponential backoff with jitter for retry attempt index (0-based)."""
-    delay = min(MAX_BACKOFF_SECONDS, INITIAL_BACKOFF_SECONDS * (2**attempt))
-    return delay * random.uniform(0.75, 1.25)
+    delay = min(MAX_BACKOFF_SECONDS, INITIAL_BACKOFF_SECONDS * (BACKOFF_MULTIPLIER**attempt))
+    return delay * random.uniform(0.9, 1.3)
 
 
 def is_retryable_thesportsdb_result(result: Any) -> bool:
