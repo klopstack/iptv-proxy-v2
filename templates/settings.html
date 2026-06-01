@@ -48,6 +48,52 @@
                 <div id="proxy-settings-status" class="mt-3" style="display: none;"></div>
             </div>
         </div>
+
+        <!-- Configuration Backup & Restore -->
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="bi bi-download"></i> Configuration Backup & Restore</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    Export and import complete configuration bundles including rulesets, filters, EPG match rules,
+                    and FCC matching patterns.
+                </p>
+
+                <div class="mb-3">
+                    <button id="export-config-btn" class="btn btn-outline-primary">
+                        <i class="bi bi-download"></i> Export Configuration Bundle
+                    </button>
+                </div>
+
+                <hr>
+
+                <div class="mb-3">
+                    <label for="import-config-file" class="form-label"><strong>Import Bundle</strong></label>
+                    <input type="file" id="import-config-file" class="form-control" accept=".json,application/json">
+                    <div class="form-text">Select a previously exported configuration JSON bundle.</div>
+                </div>
+
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="import-config-overwrite">
+                    <label class="form-check-label" for="import-config-overwrite">
+                        Overwrite existing matching records
+                    </label>
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="import-config-create-accounts">
+                    <label class="form-check-label" for="import-config-create-accounts">
+                        Create missing accounts referenced by the bundle
+                    </label>
+                </div>
+
+                <button id="import-config-btn" class="btn btn-warning" disabled>
+                    <i class="bi bi-upload"></i> Import Configuration Bundle
+                </button>
+
+                <div id="config-transfer-status" class="mt-3" style="display: none;"></div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -566,6 +612,162 @@ document.getElementById('ppv-clear-api-key-btn').addEventListener('click', async
         statusEl.className = 'alert alert-danger mt-3';
         statusEl.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Error: ${error.message}`;
         statusEl.style.display = 'block';
+    }
+});
+
+// ============================================================================
+// Configuration Bundle Backup / Restore
+// ============================================================================
+
+let configBundleImportData = null;
+
+function setConfigTransferStatus(type, message) {
+    const statusEl = document.getElementById('config-transfer-status');
+    statusEl.className = `alert alert-${type} mt-3`;
+    statusEl.innerHTML = message;
+    statusEl.style.display = 'block';
+}
+
+function parseDownloadFilename(contentDisposition, fallbackName) {
+    if (!contentDisposition) {
+        return fallbackName;
+    }
+
+    const encodedMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+    if (encodedMatch && encodedMatch[1]) {
+        try {
+            return decodeURIComponent(encodedMatch[1]);
+        } catch {
+            return fallbackName;
+        }
+    }
+
+    const plainMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+    if (plainMatch && plainMatch[1]) {
+        return plainMatch[1];
+    }
+
+    return fallbackName;
+}
+
+document.getElementById('export-config-btn').addEventListener('click', async function() {
+    const btn = this;
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Exporting...';
+
+    try {
+        const response = await fetch('/api/config/export');
+        if (!response.ok) {
+            throw new Error('Failed to export configuration bundle');
+        }
+
+        const blob = await response.blob();
+        const filename = parseDownloadFilename(
+            response.headers.get('content-disposition'),
+            'iptv_proxy_config_bundle.json'
+        );
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+
+        setConfigTransferStatus('success',
+            '<i class="bi bi-check-circle"></i> Configuration bundle exported successfully.'
+        );
+    } catch (error) {
+        setConfigTransferStatus('danger',
+            `<i class="bi bi-exclamation-triangle"></i> Export failed: ${error.message}`
+        );
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+});
+
+document.getElementById('import-config-file').addEventListener('change', async function(e) {
+    const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+    const importBtn = document.getElementById('import-config-btn');
+
+    configBundleImportData = null;
+    importBtn.disabled = true;
+
+    if (!file) {
+        return;
+    }
+
+    try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        if (parsed.type !== 'iptv-proxy-config-bundle') {
+            throw new Error('Selected file is not a valid IPTV Proxy configuration bundle.');
+        }
+
+        configBundleImportData = parsed;
+        importBtn.disabled = false;
+        setConfigTransferStatus('info',
+            `<i class="bi bi-info-circle"></i> Ready to import <strong>${file.name}</strong>.`
+        );
+    } catch (error) {
+        setConfigTransferStatus('danger',
+            `<i class="bi bi-exclamation-triangle"></i> Invalid import file: ${error.message}`
+        );
+    }
+});
+
+document.getElementById('import-config-btn').addEventListener('click', async function() {
+    if (!configBundleImportData) {
+        setConfigTransferStatus('warning',
+            '<i class="bi bi-exclamation-circle"></i> Please select a valid configuration bundle first.'
+        );
+        return;
+    }
+
+    if (!confirm('Import configuration bundle now? Existing data may be updated if overwrite is enabled.')) {
+        return;
+    }
+
+    const btn = this;
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Importing...';
+
+    try {
+        const payload = {
+            ...configBundleImportData,
+            options: {
+                ...(configBundleImportData.options || {}),
+                overwrite: document.getElementById('import-config-overwrite').checked,
+                create_missing_accounts: document.getElementById('import-config-create-accounts').checked,
+            },
+        };
+
+        const response = await fetch('/api/config/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Import failed');
+        }
+
+        setConfigTransferStatus('success',
+            '<i class="bi bi-check-circle"></i> Configuration bundle imported successfully.'
+        );
+    } catch (error) {
+        setConfigTransferStatus('danger',
+            `<i class="bi bi-exclamation-triangle"></i> Import failed: ${error.message}`
+        );
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
     }
 });
 

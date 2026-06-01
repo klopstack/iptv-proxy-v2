@@ -87,6 +87,7 @@ from routes.accounts import accounts_bp
 from routes.api import api_bp, set_scheduler
 from routes.channel_health import channel_health_bp
 from routes.channel_links import channel_links_bp
+from routes.config_transfer import config_transfer_bp
 from routes.epg.channels import account_epg_channels_bp, epg_channels_bp
 from routes.epg.match_rules import account_epg_match_rules_bp, epg_match_rules_bp
 from routes.epg.schedules_direct import schedules_direct_bp
@@ -128,6 +129,7 @@ app.register_blueprint(ppv_enrichment_bp)
 app.register_blueprint(ppv_epg_bp)
 app.register_blueprint(settings_bp)
 app.register_blueprint(xtream_bp)
+app.register_blueprint(config_transfer_bp)
 
 # Pass scheduler to API blueprint
 set_scheduler(sync_scheduler)
