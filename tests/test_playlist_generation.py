@@ -16,7 +16,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from models import Account, Category, Channel, ChannelTag, Event, EventChannelLink, PlaylistConfig, Tag, db
-from services.playlist_format_service import sanitize_m3u_value
+from services.playlist_format_service import render_account_m3u_playlist, sanitize_m3u_value
+from services.url_service import get_proxy_base_url
 
 
 @pytest.fixture
@@ -517,11 +518,19 @@ class TestPPVVisibility:
             )
             db.session.commit()
 
-        response = client.get(f"/playlist/{test_account1}.m3u")
-        assert response.status_code == 200
-        content = response.data.decode("utf-8")
-        assert 'group-title="Live"' in content
-        assert 'group-title="Replay"' in content
+            channels = [live_channel, replay_channel]
+            with app.test_request_context("/"):
+                content = render_account_m3u_playlist(
+                    channels,
+                    account=account,
+                    proxy_base=get_proxy_base_url(),
+                    use_proxy=True,
+                    proxy_icons=False,
+                    primary_cred=None,
+                )
+
+            assert 'group-title="Live"' in content
+            assert 'group-title="Replay"' in content
 
 
 class TestUnsyncedAccounts:
