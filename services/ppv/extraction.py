@@ -454,12 +454,14 @@ class PPVEventExtractor:
         4. Day of week only → Assume midnight on next occurrence
         5. Competitors always extracted if available
 
-        Returns dict with keys: competitors, date, weekday, is_placeholder, inferred_how, is_inactive
+        Returns dict with keys: competitors, date, weekday, sport, is_placeholder, inferred_how, is_inactive
         """
+        inline_sport, _ = self.extract_sport(channel_name)
         result: Dict = {
             "is_placeholder": self.is_placeholder(channel_name),
             "is_inactive": self.is_inactive_channel(channel_name),
             "competitors": self.extract_competitors(channel_name),
+            "sport": inline_sport,
             "date": None,
             "weekday": None,
             "time_only": None,

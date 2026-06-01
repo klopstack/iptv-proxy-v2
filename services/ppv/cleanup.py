@@ -102,6 +102,7 @@ def remove_invalid_event_links() -> int:
     Returns count of links removed.
     """
     from services.ppv.extraction import PPVEventExtractor
+    from services.ppv.matching.context import resolve_sport_league_context
     from services.ppv.matching.validation import competitors_match_event
 
     extractor = PPVEventExtractor()
@@ -121,8 +122,11 @@ def remove_invalid_event_links() -> int:
         if not competitors or len(competitors) != 2:
             continue
 
+        category_name = channel.category.category_name if channel.category else None
+        sport_context = resolve_sport_league_context(channel.name, category_name)
+
         calendar_event = _event_to_calendar_event(event)
-        if calendar_event and competitors_match_event(competitors, calendar_event):
+        if calendar_event and competitors_match_event(competitors, calendar_event, context=sport_context):
             continue
 
         db.session.delete(link)

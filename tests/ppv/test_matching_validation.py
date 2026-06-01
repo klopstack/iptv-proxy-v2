@@ -1,6 +1,12 @@
 """Tests for PPV competitor validation."""
 
-from services.ppv.matching.validation import competitors_match_event, is_weak_match_type, team_names_match
+from services.ppv.matching.context import resolve_sport_league_context
+from services.ppv.matching.validation import (
+    competitors_match_event,
+    is_weak_match_type,
+    team_names_match,
+    team_names_match_for_event_validation,
+)
 from services.thesportsdb_calendar_scraper import CalendarEvent
 
 
@@ -42,6 +48,42 @@ class TestCompetitorValidation:
     def test_competitors_match_mlb_dbacks_mariners(self):
         event = _event("Seattle Mariners", "Arizona Diamondbacks")
         assert competitors_match_event(("D-backs", "Mariners"), event)
+
+    def test_mlb_royals_rangers_mascots_with_context(self):
+        event = CalendarEvent(
+            event_id="2387740",
+            event_name="Texas Rangers vs Kansas City Royals",
+            league_name="MLB",
+            time_utc="18:35",
+            date="2026-05-31",
+            home_team="Texas Rangers",
+            away_team="Kansas City Royals",
+        )
+        ctx = resolve_sport_league_context(
+            "MLB 10 | Royals x Rangers start:2026-05-31 19:35:00",
+            "US| MLB PPV",
+        )
+        assert competitors_match_event(("Royals", "Rangers"), event, context=ctx)
+
+    def test_strict_vs_event_validation_rangers(self):
+        assert not team_names_match("Rangers", "Texas Rangers")
+        assert team_names_match_for_event_validation("Rangers", "Texas Rangers", sport_key="mlb")
+
+    def test_competitors_reject_mlb_for_soccer_context(self):
+        event = CalendarEvent(
+            event_id="2387740",
+            event_name="Texas Rangers vs Kansas City Royals",
+            league_name="MLB",
+            time_utc="18:35",
+            date="2026-05-31",
+            home_team="Texas Rangers",
+            away_team="Kansas City Royals",
+        )
+        ctx = resolve_sport_league_context(
+            "End | Royals at Rangers | NL: SOCCER PPV 94",
+            "NL| SOCCER PPV",
+        )
+        assert not competitors_match_event(("Royals", "Rangers"), event, context=ctx)
 
     def test_competitors_match_event_both_teams(self):
         event = _event("Dallas Wings", "Las Vegas Aces")

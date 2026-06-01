@@ -50,7 +50,8 @@ from services.ppv.constants import (
 )
 from services.ppv.detection import is_generic_channel_name
 from services.ppv.extraction import PPVEventExtractor
-from services.ppv.matching.validation import competitors_match_event, is_weak_match_type
+from services.ppv.matching.context import context_for_event, resolve_sport_league_context
+from services.ppv.matching.validation import competitors_match_event
 from services.ppv.persistence import create_or_update_event, link_channel_to_event, sync_enrichment_status_from_links
 from services.reverse_event_matcher.orchestrator import ReverseEventMatcher
 from services.thesportsdb_calendar_scraper import CalendarEvent, get_calendar_scraper
@@ -435,13 +436,31 @@ class PPVCalendarEnrichmentService:
                 match_method="no_match_found",
             )
 
+        category_name = None
+        category = getattr(channel, "category", None)
+        if category is not None:
+            raw_name = getattr(category, "category_name", None)
+            if isinstance(raw_name, str):
+                category_name = raw_name
+
+        sport_context = resolve_sport_league_context(channel.name, category_name)
+        if not sport_context.is_empty:
+            match_results = [r for r in match_results if context_for_event(r.event, sport_context)]
+            if not match_results:
+                return EnrichmentResult(
+                    channel=channel,
+                    matched=False,
+                    extraction_result=extraction,
+                    match_method="league_context_mismatch",
+                )
+
         competitors = extraction.get("competitors")
         if competitors and len(competitors) == 2:
             validated_results = []
             for result in match_results:
-                if is_weak_match_type(result.match_type):
-                    continue
-                if result.match_type != "both_teams" and not competitors_match_event(competitors, result.event):
+                if result.match_type != "both_teams" and not competitors_match_event(
+                    competitors, result.event, context=sport_context
+                ):
                     continue
                 validated_results.append(result)
             if not validated_results:
