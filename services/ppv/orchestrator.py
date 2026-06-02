@@ -10,16 +10,15 @@ from flask import Flask
 from sqlalchemy import or_
 
 from models import Account, Channel, Settings, db
-from services.epg.ppv import is_ppv_placeholder_name
 from services.ppv.constants import (
     ENRICHMENT_BACKLOG_BATCH_SIZE,
     ENRICHMENT_BATCH_SIZE,
     PPV_ENRICHMENT_BACKLOG_THRESHOLD,
-    PPV_ENRICHMENT_HOT_BATCH_SIZE,
     PPV_ENRICHMENT_HOT_WINDOW_HOURS,
+    PPV_ENRICHMENT_MAX_SCAN_MULTIPLIER,
     SETTING_PPV_ENRICHMENT_ENABLED,
 )
-from services.ppv.detection import is_generic_channel_name
+from services.ppv.enrichability import classify_ppv_enrichment, skip_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -84,10 +83,10 @@ class PPVEnrichmentOrchestrator:
             "channels_processed": 0,
             "channels_matched": 0,
             "channels_no_match": 0,
+            "channels_skipped": 0,
             "errors": 0,
         }
 
-        hot_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=PPV_ENRICHMENT_HOT_WINDOW_HOURS)
         pending_status_filter = or_(
             Channel.ppv_enrichment_status.is_(None),
             Channel.ppv_enrichment_status.in_(["queued", "retry_pending"]),
@@ -97,74 +96,82 @@ class PPVEnrichmentOrchestrator:
             if not account or not account.enabled:
                 continue
 
-            base_filter = [
-                Channel.account_id == account.id,
-                Channel.is_ppv.is_(True),
+            channels, skipped_marked = self._select_enrichable_batch(
+                account.id,
+                batch_size,
                 pending_status_filter,
-            ]
-
-            # --- Hot pass: recently-seen channels first ---
-            hot_channels = (
-                Channel.query.filter(
-                    *base_filter,
-                    Channel.last_seen >= hot_cutoff,
-                )
-                .order_by(
-                    Channel.last_seen.desc(),
-                    Channel.updated_at.desc(),
-                    Channel.id.asc(),
-                )
-                .limit(PPV_ENRICHMENT_HOT_BATCH_SIZE)
-                .all()
             )
 
-            # --- Cold pass: fill remaining budget, skip placeholder names ---
-            remaining = batch_size - len(hot_channels)
-            cold_channels: list = []
-            if remaining > 0:
-                hot_ids = {ch.id for ch in hot_channels}
-                cold_candidates = (
-                    Channel.query.filter(
-                        *base_filter,
-                        Channel.last_seen < hot_cutoff,
-                    )
-                    .order_by(
-                        Channel.last_seen.desc(),
-                        Channel.updated_at.desc(),
-                        Channel.id.asc(),
-                    )
-                    .limit(remaining * 2)  # over-fetch to allow skipping placeholders
-                    .all()
-                )
-                for ch in cold_candidates:
-                    if ch.id in hot_ids:
-                        continue
-                    if is_ppv_placeholder_name(ch.name) or is_generic_channel_name(ch.name):
-                        continue
-                    cold_channels.append(ch)
-                    if len(cold_channels) >= remaining:
-                        break
-
-            channels = hot_channels + cold_channels
+            if skipped_marked:
+                total_stats["channels_skipped"] += skipped_marked
 
             if not channels:
                 continue
 
             logger.info(
-                "Enriching %s PPV channels for account %s (%s hot, %s cold)",
+                "Enriching %s PPV channels for account %s (marked %s skipped while scanning)",
                 len(channels),
                 account.name,
-                len(hot_channels),
-                len(cold_channels),
+                skipped_marked,
             )
             result = service.enrich_channels(channels)
             total_stats["accounts_processed"] += 1
             total_stats["channels_processed"] += result.get("processed", 0)
             total_stats["channels_matched"] += result.get("matched", 0)
             total_stats["channels_no_match"] += result.get("no_match", 0)
+            total_stats["channels_skipped"] += result.get("channels_skipped", 0)
             total_stats["errors"] += result.get("errors", 0)
 
         return total_stats
+
+    @staticmethod
+    def _select_enrichable_batch(
+        account_id: int,
+        batch_size: int,
+        pending_status_filter,
+    ) -> tuple[list, int]:
+        """Scan pending channels (recent first) until batch_size enrichable or max_scan."""
+        max_scan = batch_size * PPV_ENRICHMENT_MAX_SCAN_MULTIPLIER
+        selected: list = []
+        skipped_marked = 0
+        scanned = 0
+        skip_commit_batch = 500
+        pending_skip_writes = 0
+
+        query = Channel.query.filter(
+            Channel.account_id == account_id,
+            Channel.is_ppv.is_(True),
+            pending_status_filter,
+        ).order_by(
+            Channel.last_seen.desc(),
+            Channel.updated_at.desc(),
+            Channel.id.asc(),
+        )
+
+        for channel in query.yield_per(200):
+            scanned += 1
+            if scanned > max_scan:
+                break
+
+            reason = classify_ppv_enrichment(channel.name)
+            if reason is not None:
+                channel.ppv_enrichment_status = "skipped"
+                channel.ppv_enrichment_error = skip_error_message(reason)
+                skipped_marked += 1
+                pending_skip_writes += 1
+                if pending_skip_writes >= skip_commit_batch:
+                    db.session.commit()
+                    pending_skip_writes = 0
+                continue
+
+            selected.append(channel)
+            if len(selected) >= batch_size:
+                break
+
+        if pending_skip_writes:
+            db.session.commit()
+
+        return selected, skipped_marked
 
     def prefetch_calendars(self, days_ahead: int = 30, days_back: int = 7) -> Dict[str, Any]:
         """Warm calendar cache for upcoming PPV dates."""

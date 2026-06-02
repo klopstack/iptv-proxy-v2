@@ -59,6 +59,23 @@ class TestTimezoneResolution:
         res = resolve_channel_timezone("CA: Leafs vs Habs :Sportsnet+")
         assert res.timezone == "America/Toronto"
 
+    def test_max_us_suffix(self):
+        res = resolve_channel_timezone("Baseball: Padres at Phillies @ Jun 2 18:00 PM :MAX US 63")
+        assert res.timezone == "America/New_York"
+        assert res.source == "provider_max_us"
+
+    def test_iso_paren_utc_wnba(self):
+        name = "US (WNBA 03) | Portland Fire at Golden State Valkyries (2026-06-03 02:00:00)"
+        res = resolve_channel_timezone(
+            name,
+            competitors=("Portland Fire", "Golden State Valkyries"),
+        )
+        assert res.timezone == "UTC"
+        assert res.source == "iso_paren_utc"
+        naive = datetime(2026, 6, 3, 2, 0, 0)
+        utc = local_channel_datetime_to_utc(naive, res)
+        assert utc == naive
+
     def test_es_prefix(self):
         res = resolve_channel_timezone("ES: LALIGA+ PPV 3 - Real vs Barca")
         assert res.timezone == "Europe/Madrid"

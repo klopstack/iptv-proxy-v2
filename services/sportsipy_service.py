@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 # Track whether sportsipy is available
 SPORTSIPY_AVAILABLE = False
+SPORTSIPY_IMPORT_ERROR: Optional[str] = None
 SPORTSIPY_INSTALL_INSTRUCTIONS = "pip install git+https://github.com/davidjkrause/sportsipy@master"
 
 try:
@@ -53,6 +54,7 @@ try:
     SPORTSIPY_AVAILABLE = True
     logger.info("sportsipy library loaded successfully (davidjkrause fork)")
 except ImportError as e:
+    SPORTSIPY_IMPORT_ERROR = str(e)
     logger.warning(f"sportsipy not available: {e}. Install with: {SPORTSIPY_INSTALL_INSTRUCTIONS}")
 
 # Sport detection patterns - built dynamically from database
@@ -396,6 +398,7 @@ def refresh_teams_from_sportsipy(
         return {
             "success": False,
             "error": f"sportsipy not available. {SPORTSIPY_INSTALL_INSTRUCTIONS}",
+            "import_error": SPORTSIPY_IMPORT_ERROR,
         }
 
     from models import SportsTeam, db

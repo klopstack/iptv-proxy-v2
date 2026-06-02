@@ -212,6 +212,14 @@ class TestPPVEventExtractor:
         assert result["date"] == datetime(2026, 6, 2, 17, 0, 0)
         assert result["inferred_how"] == "full_date"
 
+    def test_extract_all_iso_paren_utc_wnba(self):
+        name = "US (WNBA 03) | Portland Fire at Golden State Valkyries (2026-06-03 02:00:00)"
+        ext = PPVEventExtractor(current_date=datetime(2026, 6, 2, 12, 0))
+        result = ext.extract_all(name)
+        assert result["date"] == datetime(2026, 6, 3, 2, 0, 0)
+        assert result["inferred_how"] == "iso_paren_utc"
+        assert result["timezone"] == "UTC"
+
     # ========================================================================
     # Date Format Tests - Month DD HH:MM format with ordinal suffixes
     # ========================================================================

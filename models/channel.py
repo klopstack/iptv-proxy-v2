@@ -187,7 +187,7 @@ class Channel(db.Model):  # type: ignore[name-defined]
         default=None,
         nullable=True,
         index=True,
-    )  # queued, processing, matched, no_match, retry_pending, error
+    )  # queued, processing, matched, no_match, skipped, retry_pending, error
     ppv_enrichment_queue_id = db.Column(
         db.String(100), nullable=True, index=True
     )  # Unique ID for this enrichment attempt

@@ -48,7 +48,7 @@ from services.ppv.constants import (
     METADATA_KEY_DETAILS_FETCHED,
     MIN_MATCH_CONFIDENCE,
 )
-from services.ppv.detection import is_generic_channel_name
+from services.ppv.enrichability import classify_ppv_enrichment, skip_error_message
 from services.ppv.extraction import PPVEventExtractor
 from services.ppv.matching.context import context_for_event, resolve_sport_league_context
 from services.ppv.matching.validation import competitors_match_event
@@ -145,6 +145,7 @@ class PPVCalendarEnrichmentService:
                 "matched": 0,
                 "no_extraction": 0,
                 "no_match": 0,
+                "channels_skipped": 0,
                 "errors": 0,
                 "events_created": 0,
                 "events_updated": 0,
@@ -161,36 +162,14 @@ class PPVCalendarEnrichmentService:
             valid_extractions = []
 
             for ch, ex in extraction_results:
-                # Check various filter conditions
-                if ex["is_placeholder"]:
-                    filter_reasons["placeholder"] += 1
+                skip_reason = classify_ppv_enrichment(ch.name)
+                if skip_reason is not None:
+                    filter_reasons[skip_reason] += 1
+                    if ch.ppv_enrichment_status in (None, "queued", "retry_pending"):
+                        ch.ppv_enrichment_status = "skipped"
+                        ch.ppv_enrichment_error = skip_error_message(skip_reason)
+                        results["channels_skipped"] += 1
                     continue
-                if ex.get("is_inactive", False):
-                    filter_reasons["inactive"] += 1
-                    continue
-                if is_generic_channel_name(ch.name):
-                    filter_reasons["generic_name"] += 1
-                    continue
-                if not ex.get("competitors"):
-                    # Log unusual case: has date but no competitors
-                    if ex.get("date") or ex.get("time_only"):
-                        logger.debug(
-                            f"Channel has date but no competitors: '{ch.name}' - "
-                            f"date={ex.get('date')}, time={ex.get('time_only')}, inferred_how={ex.get('inferred_how')}"
-                        )
-                        filter_reasons["date_but_no_competitors"] += 1
-                    else:
-                        filter_reasons["no_competitors"] += 1
-                    continue
-
-                # Skip channels whose extracted date is more than a month in the future —
-                # data coverage improves as events approach, so early enrichment is not useful.
-                event_date = ex.get("date")
-                if isinstance(event_date, datetime):
-                    far_future_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=31)
-                    if event_date.replace(tzinfo=None) > far_future_cutoff:
-                        filter_reasons["far_future"] += 1
-                        continue
 
                 valid_extractions.append((ch, ex))
 
@@ -205,6 +184,16 @@ class PPVCalendarEnrichmentService:
             logger.info(
                 f"Extracted info from {len(valid_extractions)} channels, " f"{no_extraction_count} filtered out"
             )
+
+            if results["channels_skipped"]:
+                try:
+                    db.session.commit()
+                except Exception as e:
+                    logger.error("Error committing skipped channel statuses: %s", e, exc_info=True)
+                    db.session.rollback()
+
+            if not valid_extractions:
+                return results
 
             # Step 3: Group channels by inferred date
             channels_by_date = self._group_by_date(valid_extractions)

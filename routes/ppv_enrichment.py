@@ -538,6 +538,30 @@ def set_provider_setting(provider_name, key):
         return jsonify({"error": "Internal server error saving provider setting"}), 500
 
 
+@ppv_enrichment_bp.route("/queue/cleanup", methods=["POST"])
+@cross_origin()
+def cleanup_enrichment_queue():
+    """
+    Mark non-enrichable queued PPV channels as skipped.
+
+    Optional JSON body: {"dry_run": true, "account_id": 1}
+    Empty POST is accepted.
+    """
+    try:
+        from services.ppv.queue_cleanup import cleanup_ppv_queue
+
+        data = request.get_json(silent=True) or {}
+        dry_run = bool(data.get("dry_run", False))
+        account_id = data.get("account_id")
+
+        result = cleanup_ppv_queue(dry_run=dry_run, account_id=account_id)
+        return jsonify(result), 200
+
+    except Exception as e:
+        logger.error("Error cleaning up PPV enrichment queue: %s", e, exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @ppv_enrichment_bp.route("/sportsipy-refresh", methods=["POST"])
 @cross_origin()
 def refresh_sportsipy_teams():

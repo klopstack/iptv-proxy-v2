@@ -68,6 +68,10 @@ def resolve_channel_timezone(
     if token_tz:
         return ChannelTimezoneResolution(token_tz, 0.95, "title_token", venue_mode)
 
+    # Parenthetical ISO datetime — provider-supplied UTC (WNBA/NBA feeds)
+    if PPVEventExtractor.has_iso_paren_utc_datetime(channel_name):
+        return ChannelTimezoneResolution("UTC", 0.95, "iso_paren_utc", venue_mode)
+
     # Provider suffix (e.g. ":Viaplay SE", ":Telia FI") before generic fallbacks
     provider_tz = _provider_suffix_timezone(channel_name)
     if provider_tz:

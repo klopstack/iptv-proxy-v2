@@ -9,7 +9,14 @@ logger = logging.getLogger(__name__)
 
 
 def _merge_enrichment_stats(total: Dict[str, Any], batch: Dict[str, Any]) -> None:
-    for key in ("accounts_processed", "channels_processed", "channels_matched", "channels_no_match", "errors"):
+    for key in (
+        "accounts_processed",
+        "channels_processed",
+        "channels_matched",
+        "channels_no_match",
+        "channels_skipped",
+        "errors",
+    ):
         total[key] = total.get(key, 0) + batch.get(key, 0)
 
 
@@ -24,6 +31,7 @@ def run_ppv_enrichment(app: Flask) -> Dict[str, Any]:
         "channels_processed": 0,
         "channels_matched": 0,
         "channels_no_match": 0,
+        "channels_skipped": 0,
         "errors": 0,
         "batches_run": 0,
     }

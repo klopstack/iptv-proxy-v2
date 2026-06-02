@@ -66,6 +66,8 @@ PPV_ENRICHMENT_BACKLOG_THRESHOLD = 1000
 PPV_ENRICHMENT_HOT_WINDOW_HOURS = 24
 # Max enrich_pending_channels() loops per scheduler/API run (0 = drain until queue empty)
 PPV_ENRICHMENT_MAX_BATCHES_PER_RUN = 0
+# Max channels scanned per batch when skipping non-enrichable slots
+PPV_ENRICHMENT_MAX_SCAN_MULTIPLIER = 20
 
 # Sport-aware grace windows for live-game visibility (hours after scheduled_at)
 SPORT_GRACE_HOURS = {
@@ -130,6 +132,7 @@ PROVIDER_SUFFIX_TZ: list[tuple[re.Pattern[str], str, str]] = [
     (re.compile(r"[:|]\s*Viaplay\s+NL(?:/|\b)", re.I), "Europe/Amsterdam", "provider_viaplay_nl"),
     (re.compile(r"Viaplay\s+SE/DK/NO", re.I), "Europe/Stockholm", "provider_viaplay_nordic"),
     (re.compile(r"[:|]\s*Telia\s+FI\b", re.I), "Europe/Helsinki", "provider_telia_fi"),
+    (re.compile(r"[:|]\s*MAX\s+US\b", re.I), "America/New_York", "provider_max_us"),
     (re.compile(r"[:|]\s*MAX\s+ES\b", re.I), "Europe/Madrid", "provider_max_es"),
     (re.compile(r"[:|]\s*Sportsnet\+", re.I), "America/Toronto", "provider_sportsnet_ca"),
     (re.compile(r"[:|]\s*beIN\s+Sports\s+FR\b", re.I), "Europe/Paris", "provider_bein_fr"),

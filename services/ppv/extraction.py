@@ -82,6 +82,9 @@ class PPVEventExtractor:
     # Pipe-delimited ISO date: "2026-06-02 | 17:00" or "2026-06-02 | 17:00 (GMT)"
     ISO_PIPE_DATE_PATTERN = r"(\d{4})-(\d{1,2})-(\d{1,2})\s*\|\s*(\d{1,2}):(\d{2})"
 
+    # Parenthetical ISO datetime (provider UTC): "(2026-06-03 02:00:00)"
+    ISO_PAREN_DATETIME_PATTERN = r"\((\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\)"
+
     # DD/MM date pattern: "DD/MM HH:MM" (common in Europe, e.g., "24/10 16:00")
     # Can optionally have year before it: "2025 24/10 16:00"
     # Interprets as day/month, infers year from context or current year
@@ -391,6 +394,11 @@ class PPVEventExtractor:
 
         return (comp1, comp2)
 
+    @staticmethod
+    def has_iso_paren_utc_datetime(channel_name: str) -> bool:
+        """True when title contains (YYYY-MM-DD HH:MM[:SS]) — provider UTC wall clock."""
+        return bool(re.search(PPVEventExtractor.ISO_PAREN_DATETIME_PATTERN, channel_name, re.IGNORECASE))
+
     def extract_date(self, channel_name: str) -> Optional[datetime]:
         """
         Extract date/time from channel name.
@@ -404,6 +412,19 @@ class PPVEventExtractor:
 
         Returns datetime object.
         """
+        # Parenthetical ISO with optional seconds — common on US WNBA/NBA feeds (UTC)
+        iso_paren_match = re.search(self.ISO_PAREN_DATETIME_PATTERN, channel_name, re.IGNORECASE)
+        if iso_paren_match:
+            year, month, day, hour, minute, second = iso_paren_match.groups()
+            try:
+                sec = int(second) if second else 0
+                dt = datetime(int(year), int(month), int(day), int(hour), int(minute), sec)
+                if self.is_date_far_future(dt):
+                    return None
+                return dt
+            except ValueError:
+                pass
+
         # Try pipe-delimited ISO: YYYY-MM-DD | HH:MM (common on European feeds)
         iso_pipe_match = re.search(self.ISO_PIPE_DATE_PATTERN, channel_name, re.IGNORECASE)
         if iso_pipe_match:
@@ -710,7 +731,11 @@ class PPVEventExtractor:
                 return result
 
             result["date"] = full_date
-            result["inferred_how"] = "full_date"
+            if re.search(self.ISO_PAREN_DATETIME_PATTERN, channel_name, re.IGNORECASE):
+                result["timezone"] = "UTC"
+                result["inferred_how"] = "iso_paren_utc"
+            else:
+                result["inferred_how"] = "full_date"
             return result
 
         # Extract components we might need
