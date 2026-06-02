@@ -11,8 +11,8 @@ dateparser>=1.2.0
 numpy>=1.26.0,<2
 lxml>=4.9.0
 pyquery>=2.0.0
-# Sportsipy for North American sports data (maintained fork)
-sportsipy @ git+https://github.com/davidjkrause/sportsipy@c88c0b63086e227139ffdd30fea45987eaafb83b
+# Sportsipy for North American sports data (benklop fork with upstream PR/issue fixes)
+sportsipy @ git+https://github.com/benklop/sportsipy@948a97c
 # MediaFlow Proxy client utilities (optional, for direct API integration)
 # The proxy itself runs as a separate container
 httpx>=0.25.0
