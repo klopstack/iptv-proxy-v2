@@ -58,6 +58,7 @@ MAX_EVENT_AGE_DAYS = 30
 MAX_EVENT_FUTURE_DAYS = 365
 MAX_RETRY_ATTEMPTS = 3
 ENRICHMENT_BATCH_SIZE = 100
+ENRICHMENT_BACKLOG_BATCH_SIZE = 500
 
 # Queue throughput tuning
 PPV_ENRICHMENT_HOT_BATCH_SIZE = 50
@@ -118,6 +119,20 @@ COUNTRY_PREFIX_TZ: dict[str, str] = {
 }
 
 US_STYLE_REGION_CODES = frozenset({"US", "CA", "JP"})
+
+# Provider suffix on channel names (after country prefix) → default IANA timezone
+PROVIDER_SUFFIX_TZ: list[tuple[re.Pattern[str], str, str]] = [
+    (re.compile(r"[:|]\s*Viaplay\s+SE(?:/|\b)", re.I), "Europe/Stockholm", "provider_viaplay_se"),
+    (re.compile(r"[:|]\s*Viaplay\s+DK(?:/|\b)", re.I), "Europe/Copenhagen", "provider_viaplay_dk"),
+    (re.compile(r"[:|]\s*Viaplay\s+NO(?:/|\b)", re.I), "Europe/Oslo", "provider_viaplay_no"),
+    (re.compile(r"[:|]\s*Viaplay\s+NL(?:/|\b)", re.I), "Europe/Amsterdam", "provider_viaplay_nl"),
+    (re.compile(r"Viaplay\s+SE/DK/NO", re.I), "Europe/Stockholm", "provider_viaplay_nordic"),
+    (re.compile(r"[:|]\s*Telia\s+FI\b", re.I), "Europe/Helsinki", "provider_telia_fi"),
+    (re.compile(r"[:|]\s*MAX\s+ES\b", re.I), "Europe/Madrid", "provider_max_es"),
+    (re.compile(r"[:|]\s*Sportsnet\+", re.I), "America/Toronto", "provider_sportsnet_ca"),
+    (re.compile(r"[:|]\s*beIN\s+Sports\s+FR\b", re.I), "Europe/Paris", "provider_bein_fr"),
+    (re.compile(r"[:|]\s*Sky\s+Sports\s+NZ\b", re.I), "Pacific/Auckland", "provider_sky_nz"),
+]
 
 
 def get_sport_grace_hours(sport_name: Optional[str]) -> int:

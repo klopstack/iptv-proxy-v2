@@ -79,6 +79,9 @@ class PPVEventExtractor:
     # ISO date pattern: "YYYY-MM-DD HH:MM"
     ISO_DATE_PATTERN = r"(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})"
 
+    # Pipe-delimited ISO date: "2026-06-02 | 17:00" or "2026-06-02 | 17:00 (GMT)"
+    ISO_PIPE_DATE_PATTERN = r"(\d{4})-(\d{1,2})-(\d{1,2})\s*\|\s*(\d{1,2}):(\d{2})"
+
     # DD/MM date pattern: "DD/MM HH:MM" (common in Europe, e.g., "24/10 16:00")
     # Can optionally have year before it: "2025 24/10 16:00"
     # Interprets as day/month, infers year from context or current year
@@ -401,7 +404,19 @@ class PPVEventExtractor:
 
         Returns datetime object.
         """
-        # Try ISO format first: YYYY-MM-DD HH:MM
+        # Try pipe-delimited ISO: YYYY-MM-DD | HH:MM (common on European feeds)
+        iso_pipe_match = re.search(self.ISO_PIPE_DATE_PATTERN, channel_name, re.IGNORECASE)
+        if iso_pipe_match:
+            year, month, day, hour, minute = iso_pipe_match.groups()
+            try:
+                dt = datetime(int(year), int(month), int(day), int(hour), int(minute))
+                if self.is_date_far_future(dt):
+                    return None
+                return dt
+            except ValueError:
+                pass
+
+        # Try ISO format: YYYY-MM-DD HH:MM
         iso_match = re.search(self.ISO_DATE_PATTERN, channel_name, re.IGNORECASE)
         if iso_match:
             year, month, day, hour, minute = iso_match.groups()

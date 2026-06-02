@@ -12,7 +12,9 @@ from sqlalchemy import or_
 from models import Account, Channel, Settings, db
 from services.epg.ppv import is_ppv_placeholder_name
 from services.ppv.constants import (
+    ENRICHMENT_BACKLOG_BATCH_SIZE,
     ENRICHMENT_BATCH_SIZE,
+    PPV_ENRICHMENT_BACKLOG_THRESHOLD,
     PPV_ENRICHMENT_HOT_BATCH_SIZE,
     PPV_ENRICHMENT_HOT_WINDOW_HOURS,
     SETTING_PPV_ENRICHMENT_ENABLED,
@@ -60,12 +62,19 @@ class PPVEnrichmentOrchestrator:
     def enrich_pending_channels(
         self,
         account_id: Optional[int] = None,
-        batch_size: int = ENRICHMENT_BATCH_SIZE,
+        batch_size: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Run calendar-based enrichment for queued/unprocessed PPV channels."""
         if not self.is_enabled():
             logger.info("PPV enrichment disabled via settings")
             return {"skipped": True, "reason": "disabled"}
+
+        if batch_size is None:
+            queue_stats = self.get_queue_stats()
+            if queue_stats.get("queued_count", 0) > PPV_ENRICHMENT_BACKLOG_THRESHOLD:
+                batch_size = ENRICHMENT_BACKLOG_BATCH_SIZE
+            else:
+                batch_size = ENRICHMENT_BATCH_SIZE
 
         service = self._get_enrichment_service()
         accounts = [db.session.get(Account, account_id)] if account_id else Account.query.filter_by(enabled=True).all()

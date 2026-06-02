@@ -388,6 +388,25 @@ def reset_thesportsdb_api_key_config() -> None:
     _configured_api_key = None
 
 
+def get_thesportsdb_api_requests_per_minute() -> int:
+    """Return API rate limit; paid keys default to 100/min, free tier to 30/min."""
+    try:
+        from models import Settings
+
+        configured = Settings.get("ppv_thesportsdb_api_rpm")
+        if configured is not None and str(configured).strip().isdigit():
+            return max(1, int(configured))
+        api_key = (Settings.get("ppv_thesportsdb_api_key", "") or "").strip()
+    except Exception:
+        api_key = ""
+    return 100 if api_key else 30
+
+
+def get_thesportsdb_api_request_interval() -> float:
+    """Seconds to wait between TheSportsDB API requests."""
+    return 60.0 / get_thesportsdb_api_requests_per_minute()
+
+
 def parse_thesportsdb_api_response(result: Any) -> Optional[Dict[str, Any]]:
     """Return the response dict when the SDK returned JSON, else None."""
     if isinstance(result, dict):

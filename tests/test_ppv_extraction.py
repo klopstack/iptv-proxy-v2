@@ -200,6 +200,18 @@ class TestPPVEventExtractor:
         result = self.extractor.extract_date("Victory+ 001 | Team A at Team B (2025-12-27 16:00:00)")
         assert result == datetime(2025, 12, 27, 16, 0, 0)
 
+    def test_extract_date_iso_pipe_format(self):
+        """Pipe-delimited ISO date must not fall back to time-only inference."""
+        result = self.extractor.extract_date("UCAM Murcia vs Barcelona | 2026-06-02 | 17:00 (GMT)")
+        assert result == datetime(2026, 6, 2, 17, 0, 0)
+
+    def test_extract_all_iso_pipe_after_listed_time(self):
+        """Explicit pipe date stays on listed day even when wall clock has passed."""
+        ext = PPVEventExtractor(current_date=datetime(2026, 6, 2, 18, 0))
+        result = ext.extract_all("UCAM Murcia vs Barcelona | 2026-06-02 | 17:00 (GMT)")
+        assert result["date"] == datetime(2026, 6, 2, 17, 0, 0)
+        assert result["inferred_how"] == "full_date"
+
     # ========================================================================
     # Date Format Tests - Month DD HH:MM format with ordinal suffixes
     # ========================================================================

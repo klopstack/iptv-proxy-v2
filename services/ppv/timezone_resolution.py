@@ -15,7 +15,7 @@ from services.ppv.venue_inference import VenueInferenceMode, detect_venue_infere
 
 logger = logging.getLogger(__name__)
 
-from services.ppv.constants import COUNTRY_PREFIX_TZ, US_STYLE_REGION_CODES
+from services.ppv.constants import COUNTRY_PREFIX_TZ, PROVIDER_SUFFIX_TZ, US_STYLE_REGION_CODES
 
 
 @dataclass
@@ -68,6 +68,11 @@ def resolve_channel_timezone(
     if token_tz:
         return ChannelTimezoneResolution(token_tz, 0.95, "title_token", venue_mode)
 
+    # Provider suffix (e.g. ":Viaplay SE", ":Telia FI") before generic fallbacks
+    provider_tz = _provider_suffix_timezone(channel_name)
+    if provider_tz:
+        return provider_tz
+
     # metadata_only: skip home venue; use prefix/tags only
     if venue_mode.mode == "metadata_only":
         prefix = extract_country_prefix(channel_name) or (
@@ -114,6 +119,13 @@ def resolve_channel_timezone(
             return ChannelTimezoneResolution(COUNTRY_PREFIX_TZ[cat_prefix.upper()], 0.75, "category_prefix", venue_mode)
 
     return ChannelTimezoneResolution("America/New_York", 0.25, "fallback", venue_mode)
+
+
+def _provider_suffix_timezone(channel_name: str) -> Optional[ChannelTimezoneResolution]:
+    for pattern, tz, source in PROVIDER_SUFFIX_TZ:
+        if pattern.search(channel_name):
+            return ChannelTimezoneResolution(tz, 0.85, source, None)
+    return None
 
 
 def _home_team_timezone(home_team: str, sport: Optional[str]) -> Optional[str]:

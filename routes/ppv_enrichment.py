@@ -304,20 +304,22 @@ def get_enrichment_settings():
     Returns configuration details including rate limits for detail fetching.
     """
     try:
-        from services.ppv.enrichment import API_REQUESTS_PER_MINUTE, DETAIL_FETCH_BATCH_SIZE
+        from services.ppv.enrichment import DETAIL_FETCH_BATCH_SIZE
+        from services.thesportsdb_service import get_thesportsdb_api_requests_per_minute
 
+        rpm = get_thesportsdb_api_requests_per_minute()
         return (
             jsonify(
                 {
                     "detail_fetch_batch_size": DETAIL_FETCH_BATCH_SIZE,
-                    "api_requests_per_minute": API_REQUESTS_PER_MINUTE,
+                    "api_requests_per_minute": rpm,
                     "calendar_scraping": {
                         "rate_limited": False,
                         "cache_ttl_seconds": 3600,
                     },
                     "detail_fetching": {
                         "rate_limited": True,
-                        "requests_per_minute": API_REQUESTS_PER_MINUTE,
+                        "requests_per_minute": rpm,
                     },
                 }
             ),
@@ -495,6 +497,29 @@ def set_provider_setting(provider_name, key):
     except Exception as e:
         logger.error("Error saving provider setting %s/%s: %s", provider_name, key, e, exc_info=True)
         return jsonify({"error": "Internal server error saving provider setting"}), 500
+
+
+@ppv_enrichment_bp.route("/sportsipy-refresh", methods=["POST"])
+@cross_origin()
+def refresh_sportsipy_teams():
+    """
+    Trigger a sportsipy team data refresh (same job as the weekly scheduler task).
+
+    No UI exists for this; use this endpoint or wait for the scheduled run.
+    """
+    try:
+        from services.sportsipy_service import refresh_teams_from_sportsipy, seed_initial_team_data
+
+        seed_result = seed_initial_team_data()
+        result = refresh_teams_from_sportsipy(
+            sports=["fb", "mlb", "nba", "ncaab", "ncaaf", "nfl", "nhl"],
+            delay_seconds=3.0,
+        )
+        return jsonify({"seed": seed_result, "refresh": result}), 200 if result.get("success") else 500
+
+    except Exception as e:
+        logger.error("Error refreshing sportsipy teams: %s", e, exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
 
 def _mask_value(field_type: str, value: str) -> str:

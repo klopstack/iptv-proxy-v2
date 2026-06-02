@@ -56,22 +56,25 @@ from services.ppv.matching.validation import competitors_match_event
 from services.ppv.persistence import create_or_update_event, link_channel_to_event, sync_enrichment_status_from_links
 from services.reverse_event_matcher.orchestrator import ReverseEventMatcher
 from services.thesportsdb_calendar_scraper import CalendarEvent, get_calendar_scraper
-from services.thesportsdb_service import TheSportsDBService
+from services.thesportsdb_service import (
+    TheSportsDBService,
+    get_thesportsdb_api_request_interval,
+    get_thesportsdb_api_requests_per_minute,
+)
 
 logger = logging.getLogger(__name__)
 
-# Rate limiting for API (used only for event detail fetching)
-API_REQUESTS_PER_MINUTE = 30  # TheSportsDB official limit
-API_REQUEST_INTERVAL = 60.0 / API_REQUESTS_PER_MINUTE  # ~2 seconds between requests
+# Rate limiting for API (used only for event detail fetching; see get_thesportsdb_api_requests_per_minute)
+API_REQUESTS_PER_MINUTE = 30  # default for free tier; paid key uses 100/min via settings
 
 # Jitter for calendar requests (to avoid bot detection)
-CALENDAR_REQUEST_MIN_DELAY = 0.5  # Minimum delay between calendar requests (seconds)
-CALENDAR_REQUEST_MAX_DELAY = 3.0  # Maximum delay between calendar requests (seconds)
+CALENDAR_REQUEST_MIN_DELAY = 0.5
+CALENDAR_REQUEST_MAX_DELAY = 3.0
+CALENDAR_REQUEST_FAST_MIN_DELAY = 0.05
+CALENDAR_REQUEST_FAST_MAX_DELAY = 0.25
 
 # Processing configuration
-ENRICHMENT_BATCH_SIZE = 100  # Channels to process per batch (larger since no API limits)
-DETAIL_FETCH_BATCH_SIZE = 25  # Events to fetch details for per minute
-MAX_RETRY_ATTEMPTS = 3
+DETAIL_FETCH_BATCH_SIZE = 25
 
 
 class EnrichmentResult:
@@ -221,15 +224,16 @@ class PPVCalendarEnrichmentService:
 
             # Step 4: Fetch calendar data for each unique date (cached)
             calendar_data = {}
+            fast_calendar = len(channels) >= 50
+            cal_min = CALENDAR_REQUEST_FAST_MIN_DELAY if fast_calendar else CALENDAR_REQUEST_MIN_DELAY
+            cal_max = CALENDAR_REQUEST_FAST_MAX_DELAY if fast_calendar else CALENDAR_REQUEST_MAX_DELAY
             for date_str in unique_dates:
                 events = self.calendar_scraper.get_events_for_date(date_str)
                 calendar_data[date_str] = events
                 results["calendar_requests_made"] += 1
 
-                # Add jitter to avoid bot detection
-                if date_str != unique_dates[-1]:  # Don't sleep after last request
-                    jitter_delay = random.uniform(CALENDAR_REQUEST_MIN_DELAY, CALENDAR_REQUEST_MAX_DELAY)
-                    time.sleep(jitter_delay)
+                if date_str != unique_dates[-1]:
+                    time.sleep(random.uniform(cal_min, cal_max))
 
             logger.info(
                 f"Loaded calendar data for {len(unique_dates)} dates, "
@@ -243,36 +247,37 @@ class PPVCalendarEnrichmentService:
             for date_str, channel_extractions in channels_by_date.items():
                 calendar_events = calendar_data.get(date_str, [])
 
+                # Build matcher index once per calendar day (not per channel)
+                self.reverse_matcher.load_events_for_date_range(
+                    start_date=date_str,
+                    end_date=date_str,
+                    days_ahead=0,
+                    days_back=0,
+                )
+
                 for channel, extraction in channel_extractions:
-                    result = self._match_channel_to_calendar(channel, extraction, calendar_events, date_str)
+                    result = self._match_channel_to_calendar(
+                        channel, extraction, calendar_events, date_str, index_loaded=True
+                    )
 
                     results["processed"] += 1
 
                     if result.matched:
                         results["matched"] += 1
 
-                        # Create or get event record (calendar_event is set when matched)
                         if result.calendar_event:
                             event = self._create_or_update_event(result.calendar_event)
                             if event:
                                 results["events_created"] += 1
-
-                                # Link channel to event
                                 self._link_channel_to_event(channel, event, result.confidence, result.match_method)
-
-                                # Queue for detail fetch
                                 event_ids_to_fetch.add(result.calendar_event.event_id)
-
-                                # Update channel status
                                 channel.ppv_enrichment_status = "matched"
                         else:
-                            # Should never happen if matched is True, but handle gracefully
                             channel.ppv_enrichment_status = "no_match"
                     else:
                         results["no_match"] += 1
                         match_failure_reasons[result.match_method] += 1
 
-                        # Log detailed info for failed matches (sample to avoid log spam)
                         if results["no_match"] <= 10 or results["no_match"] % 100 == 0:
                             competitors = extraction.get("competitors")
                             logger.debug(
@@ -286,7 +291,11 @@ class PPVCalendarEnrichmentService:
 
                         channel.ppv_enrichment_status = "no_match"
 
+                try:
                     db.session.commit()
+                except Exception as e:
+                    logger.error("Error committing enrichment batch for date %s: %s", date_str, e, exc_info=True)
+                    db.session.rollback()
 
             # Log match failure breakdown
             if match_failure_reasons:
@@ -403,6 +412,8 @@ class PPVCalendarEnrichmentService:
         extraction: Dict,
         calendar_events: List[CalendarEvent],
         date_str: str,
+        *,
+        index_loaded: bool = False,
     ) -> EnrichmentResult:
         """
         Match a channel to a calendar event.
@@ -424,14 +435,14 @@ class PPVCalendarEnrichmentService:
                 match_method="no_calendar_events",
             )
 
-        # Load events for this date range using ReverseEventMatcher
-        # (it caches internally so multiple calls are efficient)
-        self.reverse_matcher.load_events_for_date_range(
-            start_date=date_str,
-            end_date=date_str,  # Single day
-            days_ahead=0,
-            days_back=0,
-        )
+        # Load events for this date range using ReverseEventMatcher when not pre-loaded
+        if not index_loaded:
+            self.reverse_matcher.load_events_for_date_range(
+                start_date=date_str,
+                end_date=date_str,
+                days_ahead=0,
+                days_back=0,
+            )
 
         # Use ReverseEventMatcher's find_matches with resolved UTC date/timezone
         match_ctx = extraction.get("_matching_context") or {}
@@ -617,8 +628,8 @@ class PPVCalendarEnrichmentService:
                 try:
                     self._fetch_event_details(event_id, force_refresh=force_refresh)
 
-                    # Rate limit: wait between requests
-                    time.sleep(API_REQUEST_INTERVAL)
+                    # Rate limit: wait between requests (paid API keys allow higher throughput)
+                    time.sleep(get_thesportsdb_api_request_interval())
 
                     if force_refresh:
                         self._refresh_queue.task_done()

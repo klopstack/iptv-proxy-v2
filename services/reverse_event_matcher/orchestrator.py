@@ -95,6 +95,7 @@ class ReverseEventMatcher:
         # Track whether events have been loaded
         self._events_loaded = False
         self._load_date_range: Optional[tuple[str, str]] = None
+        self._last_event_count: int = 0
 
     @property
     def scraper(self) -> TheSportsDBCalendarScraper:
@@ -137,6 +138,10 @@ class ReverseEventMatcher:
             actual_end = now + timedelta(days=days_ahead)
             end_date = actual_end.strftime("%Y-%m-%d")
 
+        if self._events_loaded and self._load_date_range == (start_date, end_date):
+            logger.debug("Reusing cached event index for %s to %s", start_date, end_date)
+            return self._last_event_count
+
         logger.info(f"Loading calendar events from {start_date} to {end_date} " f"(sports: {sports or 'all'})")
 
         # Load events from calendar scraper
@@ -168,6 +173,7 @@ class ReverseEventMatcher:
 
         self._events_loaded = True
         self._load_date_range = (start_date, end_date)
+        self._last_event_count = len(events)
 
         stats = self._event_index.get_stats()
         logger.info(

@@ -46,6 +46,19 @@ class TestTimezoneResolution:
         assert res.timezone == COUNTRY_PREFIX_TZ["NL"]
         assert res.confidence >= 0.8
 
+    def test_viaplay_se_suffix(self):
+        res = resolve_channel_timezone("DE: Team A vs Team B :Viaplay SE")
+        assert res.timezone == "Europe/Stockholm"
+        assert res.source == "provider_viaplay_se"
+
+    def test_telia_fi_suffix(self):
+        res = resolve_channel_timezone("UK: Match :Telia FI - HIFK vs JYP")
+        assert res.timezone == "Europe/Helsinki"
+
+    def test_sportsnet_plus_suffix(self):
+        res = resolve_channel_timezone("CA: Leafs vs Habs :Sportsnet+")
+        assert res.timezone == "America/Toronto"
+
     def test_es_prefix(self):
         res = resolve_channel_timezone("ES: LALIGA+ PPV 3 - Real vs Barca")
         assert res.timezone == "Europe/Madrid"
