@@ -16,11 +16,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && \
-    python -c "from sportsipy.nba.teams import Teams; print('sportsipy ok')"
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application
 COPY . .
+
+RUN python -c "from services.sportsipy_service import SPORTSIPY_AVAILABLE; assert SPORTSIPY_AVAILABLE, 'sportsipy team imports failed'"
 
 # Create data directory and make entrypoint executable
 RUN mkdir -p /app/data && \

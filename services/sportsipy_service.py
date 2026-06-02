@@ -16,8 +16,8 @@ Team data is stored in the database (SportsTeam model) and can be refreshed
 from sportsipy on a schedule. This avoids hardcoding team lists and allows
 for automatic updates.
 
-Uses the maintained fork from: https://github.com/davidjkrause/sportsipy
-Install with: pip install git+https://github.com/davidjkrause/sportsipy@master
+Uses the maintained fork from: https://github.com/benklop/sportsipy
+Install with: pip install git+https://github.com/benklop/sportsipy@master
 
 IMPORTANT: Sports Reference rate limits requests (30 pages/minute).
 Team data refresh should be done sparingly with delays between requests.
@@ -36,26 +36,63 @@ logger = logging.getLogger(__name__)
 # Track whether sportsipy is available
 SPORTSIPY_AVAILABLE = False
 SPORTSIPY_IMPORT_ERROR: Optional[str] = None
-SPORTSIPY_INSTALL_INSTRUCTIONS = "pip install git+https://github.com/davidjkrause/sportsipy@master"
+SPORTSIPY_INSTALL_INSTRUCTIONS = (
+    "pip install git+https://github.com/davidjkrause/sportsipy@c88c0b63086e227139ffdd30fea45987eaafb83b"
+)
 
-try:
-    from sportsipy.fb.teams import Teams as FBTeams
-    from sportsipy.mlb.schedule import Schedule as MLBSchedule
-    from sportsipy.mlb.teams import Teams as MLBTeams
-    from sportsipy.nba.schedule import Schedule as NBASchedule
-    from sportsipy.nba.teams import Teams as NBATeams
-    from sportsipy.ncaab.teams import Teams as NCAABTeams
-    from sportsipy.ncaaf.teams import Teams as NCAAFTeams
-    from sportsipy.nfl.schedule import Schedule as NFLSchedule
-    from sportsipy.nfl.teams import Teams as NFLTeams
-    from sportsipy.nhl.schedule import Schedule as NHLSchedule
-    from sportsipy.nhl.teams import Teams as NHLTeams
+SPORTSIPY_TEAM_CLASSES: Dict[str, Any] = {}
+SPORTSIPY_SCHEDULE_CLASSES: Dict[str, Any] = {}
+_import_errors: list[str] = []
 
-    SPORTSIPY_AVAILABLE = True
-    logger.info("sportsipy library loaded successfully (davidjkrause fork)")
-except ImportError as e:
-    SPORTSIPY_IMPORT_ERROR = str(e)
-    logger.warning(f"sportsipy not available: {e}. Install with: {SPORTSIPY_INSTALL_INSTRUCTIONS}")
+
+def _import_sportsipy_attr(module: str, attr: str) -> Any:
+    try:
+        mod = __import__(module, fromlist=[attr])
+        return getattr(mod, attr)
+    except ImportError as exc:
+        _import_errors.append(f"{module}.{attr}: {exc}")
+        return None
+
+
+for _sport, _module in [
+    ("mlb", "sportsipy.mlb.teams"),
+    ("nba", "sportsipy.nba.teams"),
+    ("ncaab", "sportsipy.ncaab.teams"),
+    ("ncaaf", "sportsipy.ncaaf.teams"),
+    ("nfl", "sportsipy.nfl.teams"),
+    ("nhl", "sportsipy.nhl.teams"),
+]:
+    _teams_cls = _import_sportsipy_attr(_module, "Teams")
+    if _teams_cls is not None:
+        SPORTSIPY_TEAM_CLASSES[_sport] = _teams_cls
+
+_fb_teams = _import_sportsipy_attr("sportsipy.fb.teams", "Teams")
+if _fb_teams is not None:
+    SPORTSIPY_TEAM_CLASSES["fb"] = _fb_teams
+
+for _sport, _module in [
+    ("mlb", "sportsipy.mlb.schedule"),
+    ("nba", "sportsipy.nba.schedule"),
+    ("nfl", "sportsipy.nfl.schedule"),
+    ("nhl", "sportsipy.nhl.schedule"),
+]:
+    _schedule_cls = _import_sportsipy_attr(_module, "Schedule")
+    if _schedule_cls is not None:
+        SPORTSIPY_SCHEDULE_CLASSES[_sport] = _schedule_cls
+
+SPORTSIPY_AVAILABLE = bool(SPORTSIPY_TEAM_CLASSES)
+if SPORTSIPY_AVAILABLE:
+    logger.info(
+        "sportsipy loaded for sports: %s",
+        ", ".join(sorted(SPORTSIPY_TEAM_CLASSES)),
+    )
+else:
+    SPORTSIPY_IMPORT_ERROR = "; ".join(_import_errors) if _import_errors else "no team modules imported"
+    logger.warning(
+        "sportsipy not available: %s. Install with: %s",
+        SPORTSIPY_IMPORT_ERROR,
+        SPORTSIPY_INSTALL_INSTRUCTIONS,
+    )
 
 # Sport detection patterns - built dynamically from database
 # These are fallback patterns when no team data is in DB
@@ -279,12 +316,7 @@ class SportsipyService:
                 return cached_data
 
         try:
-            schedule_class = {
-                "nfl": NFLSchedule,
-                "nba": NBASchedule,
-                "nhl": NHLSchedule,
-                "mlb": MLBSchedule,
-            }.get(sport)
+            schedule_class = SPORTSIPY_SCHEDULE_CLASSES.get(sport)
 
             if not schedule_class:
                 logger.warning(f"No schedule class for sport: {sport}")
@@ -404,8 +436,7 @@ def refresh_teams_from_sportsipy(
     from models import SportsTeam, db
 
     if sports is None:
-        # Default to all available sports from sportsipy
-        sports = ["fb", "mlb", "nba", "ncaab", "ncaaf", "nfl", "nhl"]
+        sports = sorted(SPORTSIPY_TEAM_CLASSES.keys())
 
     stats: Dict[str, Any] = {
         "success": True,
@@ -415,15 +446,7 @@ def refresh_teams_from_sportsipy(
         "errors": [],
     }
 
-    sport_classes = {
-        "fb": FBTeams,
-        "mlb": MLBTeams,
-        "nba": NBATeams,
-        "ncaab": NCAABTeams,
-        "ncaaf": NCAAFTeams,
-        "nfl": NFLTeams,
-        "nhl": NHLTeams,
-    }
+    sport_classes = SPORTSIPY_TEAM_CLASSES
 
     for sport in sports:
         if sport not in sport_classes:
