@@ -347,25 +347,17 @@ class SyncScheduler:
                 self._set_last_sync_time(SYNC_KEY_LAST_PPV_PREFETCH)
                 self._touch_heartbeat()
 
-            # Check if PPV enrichment is needed (hourly normally; 15 min when backlog is high)
-            try:
-                from services.ppv.constants import PPV_ENRICHMENT_BACKLOG_THRESHOLD
-                from services.ppv.orchestrator import get_ppv_orchestrator
+            # Check if PPV enrichment is needed (hourly; each run drains the queue in a loop)
+            if self._needs_sync(SYNC_KEY_LAST_PPV_ENRICHMENT, DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS):
+                try:
+                    from services.ppv.orchestrator import get_ppv_orchestrator
 
-                _orchestrator = get_ppv_orchestrator(self.app)
-                _queue = _orchestrator.get_queue_stats()
-                _ppv_interval_hours = (
-                    DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS
-                    if _queue["queued_count"] <= PPV_ENRICHMENT_BACKLOG_THRESHOLD
-                    else 15 / 60  # 15 minutes expressed in hours
-                )
-            except Exception:
-                _ppv_interval_hours = DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS
-
-            if self._needs_sync(SYNC_KEY_LAST_PPV_ENRICHMENT, _ppv_interval_hours):
+                    _queue = get_ppv_orchestrator(self.app).get_queue_stats()
+                except Exception:
+                    _queue = {}
                 logger.info(
                     "PPV enrichment due (interval: %s min, backlog: %s)",
-                    int(_ppv_interval_hours * 60),
+                    int(DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS * 60),
                     _queue.get("queued_count", "?"),
                 )
                 self._enrich_ppv_events()
@@ -568,7 +560,8 @@ class SyncScheduler:
                 return
 
             logger.info(
-                "PPV enrichment complete: %s processed, %s matched, %s no_match",
+                "PPV enrichment complete: %s batches, %s processed, %s matched, %s no_match",
+                total_stats.get("batches_run", 1),
                 total_stats.get("channels_processed", 0),
                 total_stats.get("channels_matched", 0),
                 total_stats.get("channels_no_match", 0),

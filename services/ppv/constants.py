@@ -64,6 +64,8 @@ ENRICHMENT_BACKLOG_BATCH_SIZE = 500
 PPV_ENRICHMENT_HOT_BATCH_SIZE = 50
 PPV_ENRICHMENT_BACKLOG_THRESHOLD = 1000
 PPV_ENRICHMENT_HOT_WINDOW_HOURS = 24
+# Max enrich_pending_channels() loops per scheduler/API run (0 = drain until queue empty)
+PPV_ENRICHMENT_MAX_BATCHES_PER_RUN = 0
 
 # Sport-aware grace windows for live-game visibility (hours after scheduled_at)
 SPORT_GRACE_HOURS = {

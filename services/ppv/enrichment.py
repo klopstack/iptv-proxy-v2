@@ -28,7 +28,6 @@ Benefits:
 """
 
 import logging
-import random
 import threading
 import time
 from collections import defaultdict
@@ -56,22 +55,12 @@ from services.ppv.matching.validation import competitors_match_event
 from services.ppv.persistence import create_or_update_event, link_channel_to_event, sync_enrichment_status_from_links
 from services.reverse_event_matcher.orchestrator import ReverseEventMatcher
 from services.thesportsdb_calendar_scraper import CalendarEvent, get_calendar_scraper
-from services.thesportsdb_service import (
-    TheSportsDBService,
-    get_thesportsdb_api_request_interval,
-    get_thesportsdb_api_requests_per_minute,
-)
+from services.thesportsdb_service import TheSportsDBService, get_thesportsdb_api_request_interval
 
 logger = logging.getLogger(__name__)
 
 # Rate limiting for API (used only for event detail fetching; see get_thesportsdb_api_requests_per_minute)
 API_REQUESTS_PER_MINUTE = 30  # default for free tier; paid key uses 100/min via settings
-
-# Jitter for calendar requests (to avoid bot detection)
-CALENDAR_REQUEST_MIN_DELAY = 0.5
-CALENDAR_REQUEST_MAX_DELAY = 3.0
-CALENDAR_REQUEST_FAST_MIN_DELAY = 0.05
-CALENDAR_REQUEST_FAST_MAX_DELAY = 0.25
 
 # Processing configuration
 DETAIL_FETCH_BATCH_SIZE = 25
@@ -222,18 +211,12 @@ class PPVCalendarEnrichmentService:
             unique_dates = list(channels_by_date.keys())
             logger.info(f"Channels grouped into {len(unique_dates)} unique dates")
 
-            # Step 4: Fetch calendar data for each unique date (cached)
+            # Step 4: Load calendar data for each unique date (memory/disk cache; HTTP only on miss)
             calendar_data = {}
-            fast_calendar = len(channels) >= 50
-            cal_min = CALENDAR_REQUEST_FAST_MIN_DELAY if fast_calendar else CALENDAR_REQUEST_MIN_DELAY
-            cal_max = CALENDAR_REQUEST_FAST_MAX_DELAY if fast_calendar else CALENDAR_REQUEST_MAX_DELAY
             for date_str in unique_dates:
                 events = self.calendar_scraper.get_events_for_date(date_str)
                 calendar_data[date_str] = events
                 results["calendar_requests_made"] += 1
-
-                if date_str != unique_dates[-1]:
-                    time.sleep(random.uniform(cal_min, cal_max))
 
             logger.info(
                 f"Loaded calendar data for {len(unique_dates)} dates, "
