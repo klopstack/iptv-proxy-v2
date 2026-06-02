@@ -84,43 +84,82 @@ def process_enrichment():
     """
     Manually trigger PPV enrichment processing.
 
+    Empty POST is accepted (no JSON body required).
+
     Optional JSON body:
     {
-        "account_id": 1,        # Optional: only process channels from this account
-        "fetch_details": true   # Whether to fetch detailed event info (default: true)
+        "account_id": 1,              # Optional: only process channels from this account
+        "fetch_details": true,        # Whether to queue detail fetches (default: true)
+        "include_no_match": false     # If true, also re-process no_match channels (loads all into memory)
     }
 
+    By default runs the queued-channel drain loop (same as the scheduler job).
     Returns processing statistics.
     """
     try:
-        from models import Channel
-
-        service = get_calendar_enrichment_service(current_app._get_current_object())
-
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or {}
         account_id = data.get("account_id")
         fetch_details = data.get("fetch_details", True)
+        include_no_match = data.get("include_no_match", False)
 
-        # Load PPV channels to process
-        query = Channel.query.filter(
-            Channel.is_ppv.is_(True),
-            Channel.ppv_enrichment_status.in_([None, "queued", "retry_pending", "no_match"]),
-        )
+        if include_no_match:
+            from models import Channel
+
+            service = get_calendar_enrichment_service(current_app._get_current_object())
+            query = Channel.query.filter(
+                Channel.is_ppv.is_(True),
+                Channel.ppv_enrichment_status.in_([None, "queued", "retry_pending", "no_match"]),
+            )
+            if account_id:
+                query = query.filter_by(account_id=account_id)
+            channels = query.all()
+            if not channels:
+                return jsonify({"message": "No PPV channels need enrichment", "processed": 0}), 200
+            logger.info(
+                "Manual enrichment (include no_match) for %s channels%s",
+                len(channels),
+                f" from account {account_id}" if account_id else "",
+            )
+            results = service.enrich_channels(channels, fetch_details=fetch_details)
+            return jsonify(results), 200
+
+        from services.jobs.ppv_enrichment import run_ppv_enrichment
+        from services.ppv.orchestrator import get_ppv_orchestrator
+
+        app_obj = current_app._get_current_object()
         if account_id:
-            query = query.filter_by(account_id=account_id)
+            orchestrator = get_ppv_orchestrator(app_obj)
+            total_stats: dict = {
+                "accounts_processed": 0,
+                "channels_processed": 0,
+                "channels_matched": 0,
+                "channels_no_match": 0,
+                "errors": 0,
+                "batches_run": 0,
+            }
+            from services.jobs.ppv_enrichment import _merge_enrichment_stats
 
-        channels = query.all()
+            while True:
+                stats = orchestrator.enrich_pending_channels(account_id=account_id)
+                if stats.get("skipped"):
+                    if total_stats["batches_run"] == 0:
+                        return jsonify(stats), 200
+                    return jsonify(total_stats), 200
+                total_stats["batches_run"] += 1
+                _merge_enrichment_stats(total_stats, stats)
+                if stats.get("channels_processed", 0) == 0:
+                    break
+                if orchestrator.get_queue_stats().get("queued_count", 0) == 0:
+                    break
+            if fetch_details and total_stats["channels_matched"] > 0:
+                get_calendar_enrichment_service(app_obj).start_detail_fetcher()
+            if total_stats["channels_no_match"] > 0:
+                orchestrator.run_enhanced_fallback()
+            return jsonify(total_stats), 200
 
-        if not channels:
-            return jsonify({"message": "No PPV channels need enrichment", "processed": 0}), 200
-
-        logger.info(
-            f"Manual enrichment trigger for {len(channels)} channels"
-            f"{f' from account {account_id}' if account_id else ''}"
-        )
-
-        results = service.enrich_channels(channels, fetch_details=fetch_details)
-
+        results = run_ppv_enrichment(app_obj)
+        if not fetch_details:
+            results["detail_fetch_skipped"] = True
         return jsonify(results), 200
 
     except Exception as e:
@@ -146,7 +185,7 @@ def queue_channels_for_enrichment():
         from models import Channel, db
         from services.ppv.persistence import clear_event_links_for_channels
 
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or {}
         channel_ids = data.get("channel_ids", [])
         account_id = data.get("account_id")
 
