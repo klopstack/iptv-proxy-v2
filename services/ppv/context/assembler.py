@@ -134,19 +134,29 @@ def build_event_context(event: "Event") -> EventContext:
         missing_data.append(DataType.TEAM_FORM.value)
 
     # ------------------------------------------------------------------ fighter record (combat sports)
-    if sport.lower() in ("boxing", "mma", "wrestling", "combat sports"):
+    if sport.lower() in ("boxing", "mma", "wrestling", "combat sports", "fighting"):
         fighter_providers = registry.get_providers_for(sport, league, DataType.FIGHTER_RECORD)
         for provider in fighter_providers:
             try:
-                home_record = provider.get_team_form(team_name=home_name, sport=sport, team_id=home_id)
+                home_record = provider.get_fighter_record(home_name, sport, fighter_id=home_id)
+                if not home_record:
+                    home_form = provider.get_team_form(team_name=home_name, sport=sport, team_id=home_id)
+                    if home_form:
+                        home_record = home_form[0] if len(home_form) == 1 else ", ".join(home_form)
                 if home_record:
-                    home_ctx.extra = home_record[0] if len(home_record) == 1 else ", ".join(home_record)
+                    home_ctx.extra = home_record
                     data_sources.append(f"{provider.name}:fighter_record:home")
-                away_record = provider.get_team_form(team_name=away_name, sport=sport, team_id=away_id)
+
+                away_record = provider.get_fighter_record(away_name, sport, fighter_id=away_id)
+                if not away_record:
+                    away_form = provider.get_team_form(team_name=away_name, sport=sport, team_id=away_id)
+                    if away_form:
+                        away_record = away_form[0] if len(away_form) == 1 else ", ".join(away_form)
                 if away_record:
-                    away_ctx.extra = away_record[0] if len(away_record) == 1 else ", ".join(away_record)
+                    away_ctx.extra = away_record
                     data_sources.append(f"{provider.name}:fighter_record:away")
-                break
+                if home_ctx.extra or away_ctx.extra:
+                    break
             except Exception as exc:
                 logger.warning("Provider %s raised during get fighter_record: %s", provider.name, exc)
 

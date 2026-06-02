@@ -175,6 +175,13 @@ def _register_builtin_providers(registry: ProviderRegistry) -> None:
         logger.warning("Could not register TheSportsDB context provider: %s", exc)
 
     try:
+        from services.ppv.context.providers.mlb_stats import MlbStatsContextProvider
+
+        registry.register(MlbStatsContextProvider())
+    except Exception as exc:
+        logger.warning("Could not register MLB Stats context provider: %s", exc)
+
+    try:
         from services.ppv.context.providers.sportsipy import SportsipyContextProvider
 
         registry.register(SportsipyContextProvider())

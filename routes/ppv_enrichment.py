@@ -575,8 +575,7 @@ def refresh_sportsipy_teams():
 
         seed_result = seed_initial_team_data()
         result = refresh_teams_from_sportsipy(
-            sports=["fb", "mlb", "nba", "ncaab", "ncaaf", "nfl", "nhl"],
-            delay_seconds=3.0,
+            sports=["mlb", "nba", "ncaab", "ncaaf", "nfl", "nhl"],
         )
         return jsonify({"seed": seed_result, "refresh": result}), 200 if result.get("success") else 500
 

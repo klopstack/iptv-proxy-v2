@@ -1,0 +1,7 @@
+# Dependencies for scripts/build_team_locations.py (build-time only, not production)
+requests>=2.31.0
+timezonefinder>=6.2.0
+thesportsdb>=0.3.1
+
+# Premium TheSportsDB key: set THESPORTSDB_API_KEY or ppv_thesportsdb_api_key in app Settings.
+# Premium keys require V2 API (X-API-KEY header) for league team lists; free key "3" uses V1 SDK.

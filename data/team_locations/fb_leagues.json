@@ -1,0 +1,23 @@
+{
+  "_comment": "TheSportsDB league IDs for offline registry build (scripts/build_team_locations.py). Optional sport defaults to fb.",
+  "leagues": [
+    {"id": "4328", "name": "English Premier League"},
+    {"id": "4329", "name": "English League Championship"},
+    {"id": "4396", "name": "English League 1"},
+    {"id": "4397", "name": "English League 2"},
+    {"id": "4335", "name": "Spanish La Liga"},
+    {"id": "776", "name": "Spanish Segunda División"},
+    {"id": "4332", "name": "Italian Serie A"},
+    {"id": "4331", "name": "German Bundesliga"},
+    {"id": "781", "name": "German 2. Bundesliga"},
+    {"id": "4334", "name": "French Ligue 1"},
+    {"id": "4337", "name": "Dutch Eredivisie"},
+    {"id": "4330", "name": "Scottish Premiership"},
+    {"id": "4346", "name": "American Major League Soccer"},
+    {"id": "4350", "name": "Mexican Primera League"},
+    {"id": "4849", "name": "English Womens Super League"},
+    {"id": "4889", "name": "UEFA Womens Champions League"},
+    {"id": "4521", "name": "American NWSL"},
+    {"id": "4516", "name": "WNBA", "sport": "wnba"}
+  ]
+}

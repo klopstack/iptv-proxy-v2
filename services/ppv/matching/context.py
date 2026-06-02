@@ -13,10 +13,17 @@ from services.thesportsdb_calendar_scraper import CalendarEvent
 # Sport key -> regex patterns matching TheSportsDB league_name values
 SPORT_LEAGUE_PATTERNS: dict[str, tuple[str, ...]] = {
     "mlb": (r"\bMLB\b", r"\bBaseball\b", r"\bWorld Baseball Classic\b"),
-    "milb": (r"\bMiLB\b", r"\bMinor League Baseball\b", r"\bTriple-A\b", r"\bDouble-A\b"),
+    "milb": (
+        r"\bMiLB\b",
+        r"\bMinor League Baseball\b",
+        r"\bTriple-A\b",
+        r"\bDouble-A\b",
+        r"\bHigh-A\b",
+        r"\bSingle-A\b",
+    ),
     "nhl": (r"\bNHL\b", r"\bAHL\b", r"\bECHL\b", r"\bIce Hockey\b", r"\bHockey\b"),
     "nba": (r"\bNBA\b", r"\bBasketball\b"),
-    "wnba": (r"\bWNBA\b",),
+    "wnba": (r"\bWNBA\b", r"\bWomen's National Basketball\b"),
     "nfl": (r"\bNFL\b", r"\bUFL\b", r"\bAmerican Football\b"),
     "ncaaf": (r"\bNCAA Football\b", r"\bCollege Football\b", r"\bCFB\b", r"\bFBS\b", r"\bFCS\b"),
     "ncaab": (r"\bNCAA Basketball\b", r"\bCollege Basketball\b", r"\bMarch Madness\b", r"\bNCAAB\b"),
@@ -37,9 +44,30 @@ SPORT_LEAGUE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bDivision\b",
         r"\bSuperliga\b",
         r"\bEredivisie\b",
+        r"\bUWCL\b",
+        r"\bUEFA Women\b",
+    ),
+    "nwsl": (r"\bNWSL\b", r"\bNational Women's Soccer League\b"),
+    "wsl": (
+        r"\bWomen's Super League\b",
+        r"\bEnglish Womens Super League\b",
+        r"\bBarclays Women\b",
+        r"\bWSL\b",
     ),
     "ufc": (r"\bUFC\b", r"\bMMA\b", r"\bBellator\b", r"\bPFL\b", r"\bBoxing\b"),
-    "tennis": (r"\bTennis\b", r"\bATP\b", r"\bWTA\b", r"\bGrand Slam\b"),
+    "tennis": (
+        r"\bTennis\b",
+        r"\bATP\b",
+        r"\bWTA\b",
+        r"\bGrand Slam\b",
+        r"\bWimbledon\b",
+        r"\bRoland Garros\b",
+        r"\bFrench Open\b",
+        r"\bUS Open\b",
+        r"\bAustralian Open\b",
+        r"\bIndian Wells\b",
+        r"\bMiami Open\b",
+    ),
 }
 
 # Patterns to detect sport keys from channel name or category text
@@ -48,14 +76,23 @@ SPORT_HINT_PATTERNS: dict[str, tuple[str, ...]] = {
     "mlb": (r"\bMLB\b", r"\bBaseball\b"),
     "nhl": (r"\bNHL\b", r"\bHockey\b", r"\bflohockey\b"),
     "nba": (r"\bNBA\b", r"\bBasketball\b"),
-    "wnba": (r"\bWNBA\b",),
+    "wnba": (r"\bWNBA\b", r"\bWomen's National Basketball\b"),
+    "nwsl": (r"\bNWSL\b", r"\bNational Women's Soccer\b"),
+    "wsl": (r"\bWSL\b", r"\bWomen's Super League\b", r"\bBarclays Women\b"),
     "nfl": (r"\bNFL\b", r"\bAmerican Football\b"),
     "ncaaf": (r"\bNCAA Football\b", r"\bCollege Football\b", r"\bCFB\b"),
     "ncaab": (r"\bNCAA Basketball\b", r"\bCollege Basketball\b", r"\bMarch Madness\b"),
     "mls": (r"\bMLS\b", r"\bMajor League Soccer\b"),
     "soccer": (r"\bSoccer\b", r"\bSOCCER PPV\b", r"\bFootball PPV\b", r"\bPremier League\b", r"\bLa Liga\b"),
     "ufc": (r"\bUFC\b", r"\bMMA\b", r"\bBoxing\b", r"\bBellator\b"),
-    "tennis": (r"\bTennis\b", r"\bATP\b", r"\bWTA\b"),
+    "tennis": (
+        r"\bTennis\b",
+        r"\bATP\b",
+        r"\bWTA\b",
+        r"\bWimbledon\b",
+        r"\bRoland Garros\b",
+        r"\bGrand Slam\b",
+    ),
 }
 
 # Slot prefix patterns (e.g. "MLB 10 |") -> sport key
@@ -90,7 +127,22 @@ class SportLeagueContext:
         if not self.sport_keys:
             return None
         # Prefer more specific keys when multiple are present
-        priority = ("milb", "mlb", "nhl", "nba", "wnba", "nfl", "ncaaf", "ncaab", "mls", "ufc", "tennis", "soccer")
+        priority = (
+            "milb",
+            "mlb",
+            "nhl",
+            "nba",
+            "wnba",
+            "nfl",
+            "ncaaf",
+            "ncaab",
+            "mls",
+            "nwsl",
+            "wsl",
+            "ufc",
+            "tennis",
+            "soccer",
+        )
         for key in priority:
             if key in self.sport_keys:
                 return key

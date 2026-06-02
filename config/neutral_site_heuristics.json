@@ -19,7 +19,20 @@
     "neutral venue",
     "maui invitational",
     "battle 4 atlantis",
-    "battle4atlantis"
+    "battle4atlantis",
+    "ufc",
+    "octagon",
+    "main card",
+    "wimbledon",
+    "roland garros",
+    "french open",
+    "us open",
+    "australian open",
+    "the masters",
+    "pga championship",
+    "grand slam",
+    "indian wells",
+    "miami open"
   ],
   "tier1_regex": [
     "\\beuro\\s+20\\d{2}\\b",
@@ -84,6 +97,15 @@
     "olympics",
     "olympic football",
     "uefa european championship",
-    "european championship"
+    "european championship",
+    "ufc",
+    "wta",
+    "atp",
+    "wimbledon",
+    "australian open",
+    "french open",
+    "us open",
+    "the open championship",
+    "pga tour"
   ]
 }

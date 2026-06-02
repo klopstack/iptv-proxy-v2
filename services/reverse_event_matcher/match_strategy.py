@@ -231,8 +231,17 @@ class EventNameMatchStrategy(BaseMatchStrategy):
         """Find matches based on event names using token similarity."""
         matches: List[MatchResult] = []
 
-        # Skip if channel is too short (likely placeholder)
-        if len(normalized_channel) < 15:
+        # Skip if channel is too short (likely placeholder); allow UFC card numbers and slams
+        min_len = 15
+        if re.search(r"\bufc\s*\d+\b", normalized_channel, re.IGNORECASE):
+            min_len = 6
+        elif re.search(
+            r"\b(wimbledon|roland garros|french open|us open|australian open|atp|wta|grand slam)\b",
+            normalized_channel,
+            re.IGNORECASE,
+        ):
+            min_len = 10
+        if len(normalized_channel) < min_len:
             return matches
 
         channel_tokens = set(normalized_channel.split())

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import random
 import time
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, Optional, TypeVar, cast
 
 import requests
 
@@ -76,6 +76,7 @@ def call_thesportsdb_api(
 
     Retries when the SDK returns non-JSON (HTML rate-limit pages) or raises network errors.
     """
+    from services.thesportsdb_api import try_v2_sdk_call
     from services.thesportsdb_service import configure_thesportsdb_api_key
 
     configure_thesportsdb_api_key()
@@ -86,7 +87,11 @@ def call_thesportsdb_api(
         try:
             if before_attempt:
                 before_attempt()
-            result = fn(*args, **kwargs)
+            v2_result = try_v2_sdk_call(fn, *args, **kwargs)
+            if v2_result is None:
+                result: T = fn(*args, **kwargs)
+            else:
+                result = cast(T, v2_result)
             if is_retryable_thesportsdb_result(result):
                 last_result = result
                 if attempt >= max_retries:
@@ -111,7 +116,7 @@ def call_thesportsdb_api(
 
     if last_error is not None:
         raise last_error
-    return last_result
+    return cast(T, last_result)
 
 
 def fetch_url_with_retry(

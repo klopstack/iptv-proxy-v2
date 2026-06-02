@@ -36,6 +36,11 @@ _STANDINGS_SUPPORTED_LEAGUES: Set[str] = {
     "NBA",
     "MLB",
     "NHL",
+    "WNBA",
+    "English Womens Super League",
+    "UEFA Womens Champions League",
+    "American NWSL",
+    "NWSL",
 }
 
 
@@ -55,7 +60,7 @@ class TheSportsDBContextProvider(ContextDataProvider):
 
     def get_standings(self, sport: str, league: str, season: Optional[str] = None) -> Optional[dict]:
         try:
-            from thesportsdb import tables as tsdb_tables
+            from thesportsdb import leagues as tsdb_leagues
 
             from services.thesportsdb_retry import call_thesportsdb_api
             from services.thesportsdb_service import LEAGUE_ID_MAP
@@ -74,7 +79,7 @@ class TheSportsDBContextProvider(ContextDataProvider):
             return cached
 
         try:
-            result = call_thesportsdb_api(tsdb_tables.leagueTable, league_id)
+            result = call_thesportsdb_api(tsdb_leagues.leagueSeasonTable, league_id)
         except Exception as exc:
             logger.debug("TheSportsDB standings failed for %s: %s", league, exc)
             return None

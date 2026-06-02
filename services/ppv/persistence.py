@@ -40,9 +40,13 @@ def create_or_update_event(calendar_event: CalendarEvent) -> Optional[Event]:
                 )
                 return None
 
+        event_source = getattr(calendar_event, "source", None) or Event.SOURCE_THESPORTSDB
+        if event_source == "mlb_stats_api":
+            event_source = Event.SOURCE_MLB_STATS
+
         event = Event.query.filter_by(
             external_id=calendar_event.event_id,
-            source=Event.SOURCE_THESPORTSDB,
+            source=event_source,
         ).first()
 
         if event:
@@ -58,15 +62,22 @@ def create_or_update_event(calendar_event: CalendarEvent) -> Optional[Event]:
                 event.title = calendar_event.event_name
             if calendar_event.league_name:
                 event.league_name = calendar_event.league_name
+            if getattr(calendar_event, "home_team_id", None):
+                event.home_team_id = calendar_event.home_team_id
+            if getattr(calendar_event, "away_team_id", None):
+                event.away_team_id = calendar_event.away_team_id
+            if getattr(calendar_event, "sport", None):
+                event.sport = calendar_event.sport
             return event
 
         event = Event(
             external_id=calendar_event.event_id,
-            source=Event.SOURCE_THESPORTSDB,
+            source=event_source,
             title=calendar_event.event_name,
-            home_team_id="",
+            sport=getattr(calendar_event, "sport", None) or "MiLB",
+            home_team_id=getattr(calendar_event, "home_team_id", None) or "",
             home_team_name=calendar_event.home_team or "Unknown",
-            away_team_id="",
+            away_team_id=getattr(calendar_event, "away_team_id", None) or "",
             away_team_name=calendar_event.away_team or "Unknown",
             league_name=calendar_event.league_name,
             scheduled_at=to_naive_utc(calendar_event.scheduled_at)

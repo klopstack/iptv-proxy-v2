@@ -1,0 +1,14 @@
+{
+  "teams": [
+    {
+      "idTeam": "136010",
+      "strTeam": "Las Vegas Aces",
+      "strTeamAlternate": "Las Vegas Aces WNBA",
+      "strTeamShort": "LVA",
+      "strCountry": "United States",
+      "strStadium": "Michelob Ultra Arena",
+      "strLocation": "Paradise, Nevada, United States",
+      "strLeague": "WNBA"
+    }
+  ]
+}

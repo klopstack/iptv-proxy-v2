@@ -19,7 +19,14 @@ instance/pytest.db
 instance/pytest.db-*
 instance/test.db
 instance/test.db-*
-data/
+# Runtime data under data/ (not committed)
+data/*
+!data/team_locations/
+data/team_locations/raw/
+data/calendar_cache.json
+data/epg_cache/
+data/image_cache/
+data/xmltv_configs/
 .env
 .venv
 venv/

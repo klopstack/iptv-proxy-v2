@@ -52,7 +52,8 @@ class TestTimezoneResolution:
         assert res.source == "provider_viaplay_se"
 
     def test_telia_fi_suffix(self):
-        res = resolve_channel_timezone("UK: Match :Telia FI - HIFK vs JYP")
+        # No UK/ country prefix — title_token would match "uk" in "UK:" before provider suffix
+        res = resolve_channel_timezone("Match :Telia FI - HIFK vs JYP")
         assert res.timezone == "Europe/Helsinki"
 
     def test_sportsnet_plus_suffix(self):
@@ -86,6 +87,19 @@ class TestTimezoneResolution:
         mode = detect_venue_inference_mode("World Cup: Brazil vs Germany")
         assert mode.mode == "metadata_only"
 
+    def test_ufc_card_metadata_only(self):
+        mode = detect_venue_inference_mode("UFC 312: Jones vs Miocic")
+        assert mode.mode == "metadata_only"
+        res = resolve_channel_timezone(
+            "UFC 312: Jones vs Miocic",
+            competitors=("Jones", "Miocic"),
+        )
+        assert res.source.startswith("metadata_only")
+
+    def test_wimbledon_metadata_only(self):
+        mode = detect_venue_inference_mode("Wimbledon: Swiatek vs Sabalenka")
+        assert mode.mode == "metadata_only"
+
     def test_central_via_team_city(self):
         res = resolve_channel_timezone(
             "US: ROYALS x RANGERS | Sat 31 May 19:05",
@@ -94,6 +108,61 @@ class TestTimezoneResolution:
         assert res.timezone in ("America/Chicago", "America/New_York")
         if res.source == "home_venue_sports_team":
             assert res.timezone == "America/Chicago"
+
+
+class TestMilbTimezone:
+    def test_rochester_home_venue_via_registry(self, tmp_path, monkeypatch):
+        import json
+
+        from services.team_location_registry import clear_registry_cache
+
+        registry = {
+            "version": "test",
+            "entries": [
+                {
+                    "sport": "milb",
+                    "key": "534",
+                    "name": "Rochester Red Wings",
+                    "city": "Rochester",
+                    "state": "NY",
+                    "country": "US",
+                    "iana_timezone": "America/New_York",
+                    "aliases": ["rochester red wings"],
+                }
+            ],
+        }
+        reg_path = tmp_path / "registry.json"
+        reg_path.write_text(json.dumps(registry), encoding="utf-8")
+        monkeypatch.setattr(
+            "services.team_location_registry.DEFAULT_REGISTRY_PATH",
+            reg_path,
+        )
+        clear_registry_cache()
+
+        from services.ppv.extraction import MatchupInfo
+
+        matchup = MatchupInfo(
+            home_team="Rochester Red Wings",
+            away_team="Syracuse Mets",
+            separator="@",
+            ordering_rule="us_away_home",
+            ordering_confidence=0.9,
+        )
+        channel = "US (MiLB 009) | Syracuse Mets @ Rochester Red Wings (2026-05-31 13:05:10)"
+        res = resolve_channel_timezone(
+            channel,
+            sport="milb",
+            matchup=matchup,
+            home_team_id="534",
+        )
+        assert res.timezone == "America/New_York"
+        assert res.source == "home_venue_sports_team"
+        assert res.source != "iso_paren_utc"
+
+        naive = datetime(2026, 5, 31, 13, 5, 10)
+        utc = local_channel_datetime_to_utc(naive, res)
+        assert utc.hour == 17
+        assert utc.minute == 5
 
 
 class TestUtcConversion:

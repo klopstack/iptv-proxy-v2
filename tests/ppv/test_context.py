@@ -148,6 +148,21 @@ class TestContextDataProviderCovers:
 # ---------------------------------------------------------------------------
 
 
+class TestSportsipyMilbExclusion:
+    def test_sportsipy_does_not_cover_milb(self):
+        from services.ppv.context.providers.sportsipy import SportsipyContextProvider
+
+        p = SportsipyContextProvider()
+        assert not p.covers("MiLB", "Triple-A East", DataType.STANDINGS)
+        assert not p.covers_sport("MiLB")
+
+    def test_mlb_stats_covers_milb(self):
+        from services.ppv.context.providers.mlb_stats import MlbStatsContextProvider
+
+        p = MlbStatsContextProvider()
+        assert p.covers("MiLB", "MiLB Triple-A | International League", DataType.STANDINGS)
+
+
 class TestProviderRegistry:
     def _make_registry(self):
         reg = ProviderRegistry()

@@ -1,0 +1,15 @@
+{
+  "venues": [
+    {
+      "id": 2773,
+      "name": "Innovative Field",
+      "location": {
+        "city": "Rochester",
+        "state": "New York",
+        "stateAbbrev": "NY",
+        "country": "USA",
+        "defaultCoordinates": {"latitude": 43.158301, "longitude": -77.619748}
+      }
+    }
+  ]
+}

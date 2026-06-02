@@ -1,0 +1,31 @@
+{
+  "dates": [
+    {
+      "date": "2025-05-31",
+      "games": [
+        {
+          "gamePk": 780676,
+          "gameDate": "2025-05-31T22:45:00Z",
+          "officialDate": "2025-05-31",
+          "teams": {
+            "away": {"team": {"id": 445, "name": "Columbus Clippers"}},
+            "home": {"team": {"id": 534, "name": "Rochester Red Wings"}}
+          },
+          "venue": {"id": 2773, "name": "Innovative Field"},
+          "league": {"name": "International League"}
+        },
+        {
+          "gamePk": 781281,
+          "gameDate": "2025-05-31T23:08:00Z",
+          "officialDate": "2025-05-31",
+          "teams": {
+            "away": {"team": {"id": 552, "name": "Syracuse Mets"}},
+            "home": {"team": {"id": 451, "name": "Iowa Cubs"}}
+          },
+          "venue": {"id": 2844, "name": "Principal Park"},
+          "league": {"name": "International League"}
+        }
+      ]
+    }
+  ]
+}

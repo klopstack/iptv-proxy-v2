@@ -1,0 +1,28 @@
+{
+  "teams": [
+    {
+      "id": 552,
+      "name": "Syracuse Mets",
+      "link": "/api/v1/teams/552",
+      "venue": {"id": 2823, "name": "NBT Bank Stadium"},
+      "abbreviation": "SYR",
+      "teamName": "Mets",
+      "locationName": "Syracuse",
+      "clubName": "Mets",
+      "league": {"id": 117, "name": "International League"},
+      "sport": {"id": 11, "name": "Triple-A"}
+    },
+    {
+      "id": 534,
+      "name": "Rochester Red Wings",
+      "link": "/api/v1/teams/534",
+      "venue": {"id": 2773, "name": "Innovative Field"},
+      "abbreviation": "ROC",
+      "teamName": "Red Wings",
+      "locationName": "Rochester",
+      "clubName": "Red Wings",
+      "league": {"id": 117, "name": "International League"},
+      "sport": {"id": 11, "name": "Triple-A"}
+    }
+  ]
+}

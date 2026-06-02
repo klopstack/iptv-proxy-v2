@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # Common league IDs mapping (can be expanded)
 LEAGUE_ID_MAP = {
     # Premier League (various leagues)
-    "English Premier League": "133602",
+    "English Premier League": "4328",
     "English League 1": "4396",
     "English League 2": "4397",
     "Championship": "4399",
@@ -37,6 +37,13 @@ LEAGUE_ID_MAP = {
     "NBA": "4387",
     "MLB": "4424",
     "NHL": "4380",
+    "WNBA": "4516",
+    # Women's soccer
+    "English Womens Super League": "4849",
+    "UEFA Womens Champions League": "4889",
+    "American NWSL": "4521",
+    "NWSL": "4521",
+    "WSL": "4849",
 }
 
 
@@ -231,7 +238,7 @@ class TheSportsDBService:
 
         # If no league specified, try English Premier League as default
         if not league_id:
-            league_id = "133602"
+            league_id = "4328"
 
         events_list = self.get_next_league_events(league_id)
 
@@ -265,7 +272,7 @@ class TheSportsDBService:
             List of events scheduled for that date
         """
         if not league_id:
-            league_id = "133602"
+            league_id = "4328"
 
         events_list = self.get_next_league_events(league_id, max_events=100)
 

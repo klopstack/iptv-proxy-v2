@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from typing import Dict, List, Optional, Set, Tuple
+from urllib.parse import quote
 
 import requests
 
@@ -43,6 +44,10 @@ _ESPN_PATHS: Dict[str, Tuple[str, str]] = {
     "boxing": ("boxing", "boxing"),
     "mma": ("mma", "ufc"),
     "ufc": ("mma", "ufc"),
+    "fighting": ("mma", "ufc"),
+    "tennis": ("tennis", "atp"),
+    "atp": ("tennis", "atp"),
+    "wta": ("tennis", "wta"),
 }
 
 # League name overrides for ESPN soccer league paths
@@ -79,6 +84,10 @@ _SUPPORTED_SPORTS: Set[str] = {
     "Boxing",
     "MMA",
     "UFC",
+    "Fighting",
+    "Tennis",
+    "ATP",
+    "WTA",
 }
 
 
@@ -115,6 +124,7 @@ class ESPNProvider(ContextDataProvider):
         DataType.HEAD_TO_HEAD,
         DataType.TEAM_FORM,
         DataType.EVENT_NOTES,
+        DataType.FIGHTER_RECORD,
     }
     priority = 10  # highest priority
 
@@ -207,6 +217,34 @@ class ESPNProvider(ContextDataProvider):
     # ------------------------------------------------------------------
     # Team form
     # ------------------------------------------------------------------
+
+    def get_fighter_record(
+        self,
+        fighter_name: str,
+        sport: str,
+        fighter_id: Optional[str] = None,
+    ) -> Optional[str]:
+        sport_l = sport.lower()
+        if sport_l not in ("boxing", "mma", "ufc", "fighting", "wrestling"):
+            return None
+
+        cache = get_cache()
+        from services.ppv.context.cache import make_form_key
+
+        cache_key = make_form_key(self.name, sport, f"record:{fighter_name}")
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached if cached else None
+
+        paths = _espn_paths(sport, "ufc" if sport_l in ("mma", "ufc", "fighting") else sport)
+        if not paths:
+            return None
+        sport_path, league_path = paths
+
+        aid = fighter_id or _find_espn_athlete_id(sport_path, league_path, fighter_name)
+        record = _fetch_espn_fighter_record(sport_path, league_path, aid) if aid else None
+        cache.set(cache_key, record or "", DataType.FIGHTER_RECORD)
+        return record
 
     def get_team_form(
         self,
@@ -323,6 +361,69 @@ def _parse_entries_into(entries: list, result: Dict[str, dict]) -> None:
                 display_name = stat.get("abbreviation") or n
                 standing = f"{display_name}: {val}"
         result[name] = {"record": record, "standing": standing}
+
+
+def _find_espn_athlete_id(sport_path: str, league_path: str, athlete_name: str) -> Optional[str]:
+    """Search ESPN for an athlete ID by display name."""
+    try:
+        url = "https://site.web.api.espn.com/apis/common/v3/search" f"?query={quote(athlete_name)}&limit=8&type=player"
+        resp = requests.get(url, timeout=_REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+        search_lower = athlete_name.lower()
+        for item in data.get("items", []):
+            if item.get("type") != "player":
+                continue
+            display = (item.get("displayName") or "").lower()
+            if display == search_lower or search_lower in display or display in search_lower:
+                return str(item.get("id", ""))
+        for item in data.get("items", []):
+            if item.get("type") == "player" and item.get("id"):
+                return str(item["id"])
+    except Exception as exc:
+        logger.debug("ESPN athlete search failed for %r: %s", athlete_name, exc)
+    return None
+
+
+def _fetch_espn_fighter_record(sport_path: str, league_path: str, athlete_id: str) -> Optional[str]:
+    """Fetch W-L-D style record from ESPN athlete profile."""
+    if not athlete_id:
+        return None
+    try:
+        url = f"{_BASE}/{sport_path}/{league_path}/athletes/{athlete_id}"
+        resp = requests.get(url, timeout=_REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+        record = data.get("record") or {}
+        items = record.get("items") or []
+        for item in items:
+            if (item.get("type") or "").lower() in ("total", "overall"):
+                summary = item.get("summary") or item.get("displayValue")
+                if summary:
+                    return str(summary)
+        athlete = data.get("athlete") or data
+        for key in ("displayRecord", "recordSummary"):
+            if athlete.get(key):
+                return str(athlete[key])
+        stats = athlete.get("stats") or data.get("stats") or []
+        wins = losses = draws = None
+        for stat in stats:
+            name = (stat.get("name") or stat.get("abbreviation") or "").lower()
+            val = stat.get("displayValue") or stat.get("value")
+            if name in ("wins", "w"):
+                wins = val
+            elif name in ("losses", "l"):
+                losses = val
+            elif name in ("draws", "d"):
+                draws = val
+        if wins is not None and losses is not None:
+            rec = f"{wins}-{losses}"
+            if draws not in (None, "0", 0):
+                rec = f"{rec}-{draws}"
+            return rec
+    except Exception as exc:
+        logger.debug("ESPN fighter record fetch failed for %s: %s", athlete_id, exc)
+    return None
 
 
 def _find_espn_team_id(sport_path: str, league_path: str, team_name: str) -> Optional[str]:

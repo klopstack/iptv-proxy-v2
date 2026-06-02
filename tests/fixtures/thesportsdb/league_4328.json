@@ -1,0 +1,25 @@
+{
+  "teams": [
+    {
+      "idTeam": "133604",
+      "strTeam": "Arsenal",
+      "strTeamAlternate": "Arsenal Football Club, AFC, Arsenal FC",
+      "strTeamShort": "ARS",
+      "strKeywords": "Gunners, Gooners",
+      "strCountry": "England",
+      "strStadium": "Emirates Stadium",
+      "strLocation": "Holloway, London, England",
+      "strLeague": "English Premier League"
+    },
+    {
+      "idTeam": "133602",
+      "strTeam": "Liverpool",
+      "strTeamAlternate": "Liverpool FC",
+      "strTeamShort": "LIV",
+      "strCountry": "England",
+      "strStadium": "Anfield",
+      "strLocation": "Liverpool, England",
+      "strLeague": "English Premier League"
+    }
+  ]
+}

@@ -399,6 +399,11 @@ class PPVEventExtractor:
         """True when title contains (YYYY-MM-DD HH:MM[:SS]) — provider UTC wall clock."""
         return bool(re.search(PPVEventExtractor.ISO_PAREN_DATETIME_PATTERN, channel_name, re.IGNORECASE))
 
+    @staticmethod
+    def _is_milb_channel(channel_name: str) -> bool:
+        """True when channel/category text indicates MiLB (parenthetical times are local, not UTC)."""
+        return bool(re.search(r"\bMiLB\b|\bMILB\b|:Milb\s+\d", channel_name or "", re.IGNORECASE))
+
     def extract_date(self, channel_name: str) -> Optional[datetime]:
         """
         Extract date/time from channel name.
@@ -732,8 +737,11 @@ class PPVEventExtractor:
 
             result["date"] = full_date
             if re.search(self.ISO_PAREN_DATETIME_PATTERN, channel_name, re.IGNORECASE):
-                result["timezone"] = "UTC"
-                result["inferred_how"] = "iso_paren_utc"
+                if self._is_milb_channel(channel_name):
+                    result["inferred_how"] = "iso_paren_local"
+                else:
+                    result["timezone"] = "UTC"
+                    result["inferred_how"] = "iso_paren_utc"
             else:
                 result["inferred_how"] = "full_date"
             return result

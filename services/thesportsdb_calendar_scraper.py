@@ -54,6 +54,12 @@ API_SUPPLEMENT_SPORTS = (
     "American Football",
     "Basketball",
     "Ice Hockey",
+    "Fighting",
+    "Boxing",
+    "Cricket",
+    "Rugby",
+    "Tennis",
+    "Golf",
 )
 
 # eventsDay is only useful near-term; skip far-future channel dates to avoid API noise
@@ -77,6 +83,10 @@ class CalendarEvent:
         league_icon_url: Optional[str] = None,
         country_flag_url: Optional[str] = None,
         timezone: Optional[str] = None,
+        home_team_id: Optional[str] = None,
+        away_team_id: Optional[str] = None,
+        source: str = "thesportsdb",
+        sport: Optional[str] = None,
     ):
         self.event_id = event_id
         self.event_name = event_name
@@ -89,6 +99,10 @@ class CalendarEvent:
         self.league_icon_url = league_icon_url
         self.country_flag_url = country_flag_url
         self.timezone = timezone
+        self.home_team_id = home_team_id
+        self.away_team_id = away_team_id
+        self.source = source
+        self.sport = sport
         # Cache the scheduled_at value to avoid recomputing and logging multiple times
         self._scheduled_at_cached: Optional[datetime] = None
         self._scheduled_at_computed: bool = False
@@ -153,6 +167,10 @@ class CalendarEvent:
             "event_url": self.event_url,
             "league_icon_url": self.league_icon_url,
             "country_flag_url": self.country_flag_url,
+            "home_team_id": self.home_team_id,
+            "away_team_id": self.away_team_id,
+            "source": self.source,
+            "sport": self.sport,
             "scheduled_at": serialize_utc_iso(self.scheduled_at),
         }
 
@@ -439,7 +457,8 @@ class TheSportsDBCalendarScraper:
         try:
             html_events = self._fetch_calendar_page(date, sport)
             api_events = self._fetch_api_events_for_date(date, sport)
-            events = self._merge_calendar_events(html_events, api_events)
+            milb_events = self._fetch_milb_events_for_date(date, sport)
+            events = self._merge_calendar_events(html_events, api_events + milb_events)
             if events:
                 self._cache[cache_key] = (events, time.time())
                 self._save_persistent_cache()
@@ -546,6 +565,16 @@ class TheSportsDBCalendarScraper:
                 logger.warning(f"API eventsDay failed for {date} sport={sport_name}: {e}")
 
         return api_events
+
+    def _fetch_milb_events_for_date(self, date: str, sport: str = "") -> List[CalendarEvent]:
+        """Fetch MiLB schedule from MLB Stats API when sport filter allows."""
+        if sport:
+            sport_lower = sport.lower()
+            if "milb" not in sport_lower and sport_lower not in ("", "all"):
+                return []
+        from services.mlb_stats_calendar import fetch_milb_events_for_date
+
+        return fetch_milb_events_for_date(date)
 
     def _is_date_in_api_supplement_window(self, date: str) -> bool:
         """Return False for dates too far from today to query via eventsDay."""

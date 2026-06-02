@@ -14,6 +14,39 @@ For each linked PPV channel with a parseable title datetime:
 2. Backtest candidate IANA zones vs `Event.scheduled_at` (calendar UTC).
 3. Compare legacy `America/New_York` default vs resolver output vs best zone.
 
+## US home-team timezone source
+
+US `@home` PPV timezone resolution uses **`SportsTeam.iana_timezone`** populated from the bundled location registry at `data/team_locations/registry.json`. The registry is rebuilt offline:
+
+```bash
+pip install -r scripts/requirements-build.txt
+python scripts/build_team_locations.py --refresh
+```
+
+During sportsipy team refresh, locations are looked up by `(sport, abbreviation)` — **no city/name heuristics**. Teams without a registry entry keep `city` and `iana_timezone` null and appear in refresh stats as `location_misses`.
+
+Rebuild the registry after franchise moves or when adding manual entries in `data/team_locations/overrides.json`.
+
+### MiLB (affiliated minors)
+
+MiLB teams (`sport: milb`) use the **MLB Stats API** (`statsapi.mlb.com`, sportIds 11–14). Registry keys are MLB `team.id` strings (e.g. `534` for Rochester Red Wings). The build script fetches teams and venue coordinates; runtime schedule enrichment uses the same API for calendar matching.
+
+- Rebuild registry: `python scripts/build_team_locations.py` (MiLB section runs automatically).
+- DB refresh: `refresh_milb_teams_from_mlb_api()` (weekly scheduler after sportsipy refresh).
+- Parenthetical ISO datetimes `(YYYY-MM-DD HH:MM:SS)` are interpreted as **local wall clock at the home ballpark** (`home_venue_sports_team`), not UTC. WNBA/NBA feeds still use **UTC** via `iso_paren_utc`.
+
+### TheSportsDB-backed teams (soccer + WNBA)
+
+Soccer (`sport: fb`) and WNBA (`sport: wnba`) use a **separate refresh path** from sportsipy. Registry keys are TheSportsDB `idTeam` values (matching `Event.home_team_id` / `idHomeTeam` from enrichment). Run `refresh_tsdb_registry_teams(sports=("fb", "wnba"))` after rebuilding the registry; the weekly scheduler calls this after the sportsipy refresh.
+
+Women's soccer leagues (NWSL, WSL, UWCL) are stored as `sport: fb` with distinct `idTeam` keys. WNBA teams use `sport: wnba`.
+
+Legacy 3-letter FB seed abbreviations (`MUN`, `LIV`, etc.) are removed on FB refresh — use bundled registry aliases for name-based lookup instead.
+
+### Neutral-site / tournament titles
+
+UFC cards, Grand Slams, and similar events are detected via `config/neutral_site_heuristics.json` as **metadata_only** — home-team city timezone is not applied. WNBA feeds with parenthetical ISO datetimes in the title still use **UTC** via `iso_paren_utc`.
+
 ## Default country-prefix map (seed)
 
 | Prefix | Default IANA |

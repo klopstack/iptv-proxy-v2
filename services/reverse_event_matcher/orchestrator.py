@@ -83,14 +83,22 @@ class ReverseEventMatcher:
         self._event_index = event_index or EventIndex(self._text_processor)
         self._match_filter = match_filter or MatchFilter(default_timezone=default_timezone)
 
-        # Initialize match strategies (instantiate without arguments)
-        self._strategies = [
+        # Default strategy order (team sports)
+        self._default_strategies = [
             TeamMatchStrategy(),
             LastNameMatchStrategy(),
             EventNameMatchStrategy(),
             LeagueMatchStrategy(),
             WordMatchStrategy(),
         ]
+        self._individual_sport_strategies = [
+            EventNameMatchStrategy(),
+            LastNameMatchStrategy(),
+            LeagueMatchStrategy(),
+            TeamMatchStrategy(),
+            WordMatchStrategy(),
+        ]
+        self._strategies = self._default_strategies
 
         # Track whether events have been loaded
         self._events_loaded = False
@@ -235,9 +243,15 @@ class ReverseEventMatcher:
         normalized_channel = self._text_processor.normalize_text(channel_name)
         channel_words = self._text_processor.extract_significant_words(normalized_channel)
 
+        from services.ppv.matching.context import resolve_sport_league_context
+
+        sport_ctx = resolve_sport_league_context(channel_name)
+        pk = sport_ctx.primary_sport_key
+        strategies = self._individual_sport_strategies if pk in ("tennis", "ufc") else self._default_strategies
+
         # Run all matching strategies
         all_matches: List[MatchResult] = []
-        for strategy in self._strategies:
+        for strategy in strategies:
             matches = strategy.find_matches(
                 normalized_channel=normalized_channel,
                 channel_words=channel_words,

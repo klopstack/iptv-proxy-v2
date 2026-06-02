@@ -17,28 +17,40 @@ from sportsipy on a schedule. This avoids hardcoding team lists and allows
 for automatic updates.
 
 Uses the maintained fork from: https://github.com/benklop/sportsipy
-Install with: pip install git+https://github.com/benklop/sportsipy@master
+(includes HTTP rate limiting, NCAAF URL fixes, and NBA player stat updates).
+Install with: pip install git+https://github.com/benklop/sportsipy@ca69fc7
 
 IMPORTANT: Sports Reference rate limits requests (30 pages/minute).
-Team data refresh should be done sparingly with delays between requests.
+Team refresh uses sportsipy's built-in HTTP rate limiting (20 req/min, circuit breaker on blocks).
 """
 
 import logging
+import os
 import re
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from pathlib import Path
+from typing import IO, Any, Dict, List, Optional, Sequence, Tuple
 
 from services.datetime_utils import serialize_utc_iso
 
 logger = logging.getLogger(__name__)
 
+try:
+    import fcntl
+
+    _HAS_FCNTL = True
+except ImportError:
+    _HAS_FCNTL = False
+
+_REFRESH_LOCK_PATH = Path(os.getenv("SPORTSIPY_REFRESH_LOCK_PATH", "/app/data/sportsipy_refresh.lock"))
+_DEFAULT_REFRESH_SPORTS = ["mlb", "nba", "ncaab", "ncaaf", "nfl", "nhl"]
+
 # Track whether sportsipy is available
 SPORTSIPY_AVAILABLE = False
 SPORTSIPY_IMPORT_ERROR: Optional[str] = None
-SPORTSIPY_INSTALL_INSTRUCTIONS = (
-    "pip install git+https://github.com/davidjkrause/sportsipy@c88c0b63086e227139ffdd30fea45987eaafb83b"
-)
+SPORTSIPY_GIT_REF = "git+https://github.com/benklop/sportsipy@ca69fc7"
+SPORTSIPY_INSTALL_INSTRUCTIONS = f"pip install {SPORTSIPY_GIT_REF}"
 
 SPORTSIPY_TEAM_CLASSES: Dict[str, Any] = {}
 SPORTSIPY_SCHEDULE_CLASSES: Dict[str, Any] = {}
@@ -73,6 +85,8 @@ if _fb_teams is not None:
 for _sport, _module in [
     ("mlb", "sportsipy.mlb.schedule"),
     ("nba", "sportsipy.nba.schedule"),
+    ("ncaab", "sportsipy.ncaab.schedule"),
+    ("ncaaf", "sportsipy.ncaaf.schedule"),
     ("nfl", "sportsipy.nfl.schedule"),
     ("nhl", "sportsipy.nhl.schedule"),
 ]:
@@ -410,19 +424,56 @@ class SportsipyService:
         }
 
 
+def _try_acquire_refresh_lock() -> Optional[IO[str]]:
+    if not _HAS_FCNTL:
+        return None
+    _REFRESH_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(_REFRESH_LOCK_PATH, "w")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        return None
+    handle.seek(0)
+    handle.truncate()
+    handle.write(str(os.getpid()))
+    handle.flush()
+    return handle
+
+
+def _release_refresh_lock(handle: Optional[IO[str]]) -> None:
+    if handle is None:
+        return
+    try:
+        if _HAS_FCNTL:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        handle.close()
+
+
+def _sportsipy_http_stats() -> Dict[str, Any]:
+    try:
+        from sportsipy import http_client
+
+        return http_client.get_stats()
+    except Exception:
+        return {}
+
+
 def refresh_teams_from_sportsipy(
     sports: Optional[List[str]] = None,
-    delay_seconds: float = 3.0,
+    delay_seconds: float = 0.0,
 ) -> Dict[str, Any]:
     """
     Refresh team data from sportsipy and store in database.
 
-    IMPORTANT: Sports Reference rate limits to 30 requests/minute.
-    This function adds delays between requests to avoid rate limiting.
+    Uses sportsipy's shared HTTP rate limiter (default 20 req/min, 3s spacing).
+    Full team stats pages are fetched for accurate names, abbreviations, and cities.
 
     Args:
-        sports: List of sports to refresh (default: all supported sports)
-        delay_seconds: Delay between API calls (default: 3.0 seconds)
+        sports: List of sports to refresh (default: mlb, nba, ncaab, ncaaf, nfl, nhl)
+        delay_seconds: Optional pause between sports after each commit (http_client
+            handles per-request spacing)
 
     Returns: Dict with refresh statistics
     """
@@ -433,97 +484,194 @@ def refresh_teams_from_sportsipy(
             "import_error": SPORTSIPY_IMPORT_ERROR,
         }
 
+    lock_handle = _try_acquire_refresh_lock()
+    if _HAS_FCNTL and lock_handle is None:
+        return {
+            "success": False,
+            "error": "Another sportsipy refresh is already in progress",
+            "http_stats": _sportsipy_http_stats(),
+        }
+
     from models import SportsTeam, db
+    from services.team_location_registry import apply_location_to_sports_team, lookup
 
     if sports is None:
-        sports = sorted(SPORTSIPY_TEAM_CLASSES.keys())
+        sports = list(_DEFAULT_REFRESH_SPORTS)
 
     stats: Dict[str, Any] = {
         "success": True,
         "sports_processed": [],
         "teams_added": 0,
         "teams_updated": 0,
+        "location_misses": [],
         "errors": [],
     }
 
     sport_classes = SPORTSIPY_TEAM_CLASSES
 
-    for sport in sports:
-        if sport not in sport_classes:
-            stats["errors"].append(f"Unknown sport: {sport}")
-            continue
+    try:
+        for sport in sports:
+            if sport not in sport_classes:
+                stats["errors"].append(f"Unknown sport: {sport}")
+                continue
 
-        try:
-            logger.info(f"Refreshing {sport.upper()} teams from sportsipy...")
+            try:
+                logger.info("Refreshing %s teams from sportsipy...", sport.upper())
 
-            # Fetch teams from sportsipy
-            teams_class = sport_classes[sport]
-            teams = teams_class()
+                teams_class = sport_classes[sport]
+                teams = teams_class()
 
-            for team in teams:
-                try:
-                    # Check if team exists
-                    existing = SportsTeam.query.filter_by(
-                        sport=sport,
-                        abbreviation=team.abbreviation,
-                    ).first()
-
-                    if existing:
-                        # Update existing team
-                        existing.name = team.name
-                        city = getattr(team, "city", None) or getattr(team, "location", None)
-                        if city:
-                            existing.city = str(city)
-                            from services.ppv.city_timezone_map import iana_for_city
-
-                            tz = iana_for_city(str(city))
-                            if tz:
-                                existing.iana_timezone = tz
-                        existing.last_updated_at = datetime.now()
-                        stats["teams_updated"] += 1
-                    else:
-                        # Create new team
-                        city = getattr(team, "city", None) or getattr(team, "location", None)
-                        city_str = str(city) if city else None
-                        iana_tz = None
-                        if city_str:
-                            from services.ppv.city_timezone_map import iana_for_city
-
-                            iana_tz = iana_for_city(city_str)
-                        new_team = SportsTeam(
+                for team in teams:
+                    try:
+                        existing = SportsTeam.query.filter_by(
                             sport=sport,
                             abbreviation=team.abbreviation,
-                            name=team.name,
-                            city=city_str,
-                            iana_timezone=iana_tz,
-                            source="sportsipy",
-                        )
-                        # Generate default aliases
-                        aliases = _generate_team_aliases(team.name, team.abbreviation)
-                        new_team.set_aliases(aliases)
-                        db.session.add(new_team)
-                        stats["teams_added"] += 1
+                        ).first()
 
-                except Exception as e:
-                    logger.warning(f"Error processing team {team.name}: {e}")
-                    continue
+                        location = lookup(sport, team.abbreviation)
+                        source = "sportsipy"
 
-            db.session.commit()
-            stats["sports_processed"].append(sport)
-            logger.info(f"Completed {sport.upper()} team refresh")
+                        if existing:
+                            existing.name = team.name
+                            if location:
+                                apply_location_to_sports_team(existing, location)
+                                source = "sportsipy+location_registry"
+                                existing.source = source
+                            else:
+                                stats["location_misses"].append(
+                                    {"sport": sport, "abbreviation": team.abbreviation, "name": team.name}
+                                )
+                            existing.last_updated_at = datetime.now()
+                            stats["teams_updated"] += 1
+                        else:
+                            new_team = SportsTeam(
+                                sport=sport,
+                                abbreviation=team.abbreviation,
+                                name=team.name,
+                                source=source,
+                            )
+                            if location:
+                                apply_location_to_sports_team(new_team, location)
+                                new_team.source = "sportsipy+location_registry"
+                            else:
+                                stats["location_misses"].append(
+                                    {"sport": sport, "abbreviation": team.abbreviation, "name": team.name}
+                                )
+                            aliases = _generate_team_aliases(team.name, team.abbreviation)
+                            new_team.set_aliases(aliases)
+                            db.session.add(new_team)
+                            stats["teams_added"] += 1
 
-            # Rate limit delay
-            if delay_seconds > 0:
-                logger.debug(f"Waiting {delay_seconds}s before next sport...")
-                time.sleep(delay_seconds)
+                    except Exception as e:
+                        logger.warning("Error processing team %s: %s", team.name, e)
+                        continue
 
-        except Exception as e:
-            error_msg = f"Error refreshing {sport}: {e}"
-            logger.error(error_msg)
-            stats["errors"].append(error_msg)
-            db.session.rollback()
+                db.session.commit()
+                stats["sports_processed"].append(sport)
+                logger.info("Completed %s team refresh", sport.upper())
+
+                if delay_seconds > 0:
+                    time.sleep(delay_seconds)
+
+            except Exception as e:
+                error_msg = f"Error refreshing {sport}: {e}"
+                logger.error(error_msg)
+                stats["errors"].append(error_msg)
+                db.session.rollback()
+
+    finally:
+        stats["http_stats"] = _sportsipy_http_stats()
+        _release_refresh_lock(lock_handle)
+
+    if stats["errors"] and not stats["sports_processed"]:
+        stats["success"] = False
 
     return stats
+
+
+LEGACY_FB_SEED_ABBREVS = frozenset({"MUN", "LIV", "MCI", "ARS", "CHE", "TOT"})
+
+
+def refresh_tsdb_registry_teams(sports: Sequence[str] = ("fb", "wnba")) -> Dict[str, Any]:
+    """
+    Upsert teams from bundled location registry for TheSportsDB-backed sports.
+
+    Uses TheSportsDB idTeam as SportsTeam.abbreviation — separate from sportsipy refresh.
+    """
+    from models import SportsTeam, db
+    from services.team_location_registry import apply_location_to_sports_team, entries_for_sport
+
+    stats: Dict[str, Any] = {
+        "success": True,
+        "teams_added": 0,
+        "teams_updated": 0,
+        "teams_removed": 0,
+        "location_misses": [],
+        "errors": [],
+        "sports_processed": [],
+    }
+
+    try:
+        for sport in sports:
+            sport_l = sport.lower()
+            entries = entries_for_sport(sport_l)
+            if not entries:
+                stats["errors"].append(f"No {sport_l} entries in location registry")
+                continue
+
+            if sport_l == "fb":
+                removed = SportsTeam.query.filter(
+                    SportsTeam.sport == "fb",
+                    SportsTeam.abbreviation.in_(LEGACY_FB_SEED_ABBREVS),
+                ).delete(synchronize_session=False)
+                stats["teams_removed"] += removed
+
+            for location in entries:
+                if not location.iana_timezone and not location.city:
+                    stats["location_misses"].append(
+                        {"sport": sport_l, "abbreviation": location.key, "name": location.name}
+                    )
+
+                existing = SportsTeam.query.filter_by(sport=sport_l, abbreviation=location.key).first()
+                if existing:
+                    existing.name = location.name
+                    apply_location_to_sports_team(existing, location)
+                    existing.source = "thesportsdb+location_registry"
+                    if location.aliases:
+                        existing.set_aliases(list(location.aliases))
+                    existing.last_updated_at = datetime.now()
+                    stats["teams_updated"] += 1
+                else:
+                    team = SportsTeam(
+                        sport=sport_l,
+                        abbreviation=location.key,
+                        name=location.name,
+                        source="thesportsdb+location_registry",
+                    )
+                    apply_location_to_sports_team(team, location)
+                    if location.aliases:
+                        team.set_aliases(list(location.aliases))
+                    db.session.add(team)
+                    stats["teams_added"] += 1
+
+            stats["sports_processed"].append(sport_l)
+
+        if not stats["sports_processed"]:
+            stats["success"] = False
+        else:
+            db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        stats["success"] = False
+        stats["errors"].append(str(exc))
+        logger.error("TheSportsDB registry refresh failed: %s", exc)
+
+    return stats
+
+
+def refresh_fb_teams_from_registry() -> Dict[str, Any]:
+    """Upsert FB (soccer) teams from bundled location registry."""
+    return refresh_tsdb_registry_teams(sports=("fb",))
 
 
 def _generate_team_aliases(name: str, abbreviation: str) -> List[str]:
@@ -626,13 +774,6 @@ def seed_initial_team_data() -> Dict[str, Any]:
         ("mlb", "CHC", "Chicago Cubs", ["cubs", "chicago"]),
         ("mlb", "STL", "St. Louis Cardinals", ["cardinals", "cards", "st louis"]),
         ("mlb", "SFG", "San Francisco Giants", ["giants", "san francisco"]),
-        # FB (Football/Soccer) - Major teams
-        ("fb", "MUN", "Manchester United", ["manchester united", "man united", "united"]),
-        ("fb", "LIV", "Liverpool", ["liverpool", "reds"]),
-        ("fb", "MCI", "Manchester City", ["manchester city", "man city", "city"]),
-        ("fb", "ARS", "Arsenal", ["arsenal", "gunners"]),
-        ("fb", "CHE", "Chelsea", ["chelsea", "blues"]),
-        ("fb", "TOT", "Tottenham", ["tottenham", "spurs"]),
     ]
 
     teams_added = 0

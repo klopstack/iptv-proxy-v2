@@ -31,7 +31,6 @@ _SUPPORTED_SPORTS: Set[str] = {
     "MLB",
     "NCAAF",
     "NCAAB",
-    "MiLB",
 }
 
 # Map normalised sport name → sportsipy key used by SportsipyService
@@ -44,9 +43,8 @@ _SPORT_KEY: Dict[str, str] = {
     "nhl": "nhl",
     "baseball": "mlb",
     "mlb": "mlb",
-    "ncaaf": "nfl",  # best available in sportsipy
-    "ncaab": "nba",
-    "milb": "mlb",
+    "ncaaf": "ncaaf",
+    "ncaab": "ncaab",
 }
 
 

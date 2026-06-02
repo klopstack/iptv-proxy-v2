@@ -594,6 +594,7 @@ class SyncScheduler:
             from services.sportsipy_service import (
                 get_sportsipy_service,
                 refresh_teams_from_sportsipy,
+                refresh_tsdb_registry_teams,
                 seed_initial_team_data,
             )
 
@@ -606,8 +607,7 @@ class SyncScheduler:
 
             # Refresh from sportsipy with rate limiting delays
             result = refresh_teams_from_sportsipy(
-                sports=["fb", "mlb", "nba", "ncaab", "ncaaf", "nfl", "nhl"],
-                delay_seconds=3.0,  # 3 second delay between sports
+                sports=["mlb", "nba", "ncaab", "ncaaf", "nfl", "nhl"],
             )
 
             if result.get("success"):
@@ -617,6 +617,34 @@ class SyncScheduler:
                     f"{result.get('teams_updated', 0)} updated, "
                     f"sports: {result.get('sports_processed', [])}"
                 )
+
+                from services.milb_team_service import refresh_milb_teams_from_mlb_api
+
+                milb_result = refresh_milb_teams_from_mlb_api()
+                if milb_result.get("success"):
+                    logger.info(
+                        "MiLB team refresh complete: %s added, %s updated, total=%s",
+                        milb_result.get("teams_added", 0),
+                        milb_result.get("teams_updated", 0),
+                        milb_result.get("total_teams", 0),
+                    )
+                else:
+                    logger.warning("MiLB team refresh failed: %s", milb_result.get("error"))
+
+                tsdb_result = refresh_tsdb_registry_teams(sports=("fb", "wnba"))
+                if tsdb_result.get("success"):
+                    logger.info(
+                        "TheSportsDB registry refresh complete: %s added, %s updated, " "%s removed, sports=%s",
+                        tsdb_result.get("teams_added", 0),
+                        tsdb_result.get("teams_updated", 0),
+                        tsdb_result.get("teams_removed", 0),
+                        tsdb_result.get("sports_processed", []),
+                    )
+                else:
+                    logger.warning(
+                        "TheSportsDB registry refresh had issues: %s",
+                        tsdb_result.get("errors", []),
+                    )
 
                 # Reload team data in service
                 service = get_sportsipy_service()

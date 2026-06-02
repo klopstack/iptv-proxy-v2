@@ -1,0 +1,159 @@
+{
+  "_comment": "Manual entries that win over generated data. key = sportsipy abbreviation.",
+  "entries": [
+    {
+      "sport": "nba",
+      "key": "UTA",
+      "name": "Utah Jazz",
+      "city": "Salt Lake City",
+      "state": "UT",
+      "country": "US",
+      "iana_timezone": "America/Denver",
+      "source": "override"
+    },
+    {
+      "sport": "nba",
+      "key": "GSW",
+      "name": "Golden State Warriors",
+      "city": "San Francisco",
+      "state": "CA",
+      "country": "US",
+      "iana_timezone": "America/Los_Angeles",
+      "source": "override"
+    },
+    {
+      "sport": "nfl",
+      "key": "NWE",
+      "name": "New England Patriots",
+      "city": "Foxborough",
+      "state": "MA",
+      "country": "US",
+      "iana_timezone": "America/New_York",
+      "source": "override"
+    },
+    {
+      "sport": "nfl",
+      "key": "GNB",
+      "name": "Green Bay Packers",
+      "city": "Green Bay",
+      "state": "WI",
+      "country": "US",
+      "iana_timezone": "America/Chicago",
+      "source": "override"
+    },
+    {
+      "sport": "nfl",
+      "key": "LVR",
+      "name": "Las Vegas Raiders",
+      "city": "Las Vegas",
+      "state": "NV",
+      "country": "US",
+      "iana_timezone": "America/Los_Angeles",
+      "source": "override"
+    },
+    {
+      "sport": "nfl",
+      "key": "RAI",
+      "name": "Las Vegas Raiders",
+      "city": "Las Vegas",
+      "state": "NV",
+      "country": "US",
+      "iana_timezone": "America/Los_Angeles",
+      "source": "override"
+    },
+    {
+      "sport": "nfl",
+      "key": "LAC",
+      "name": "Los Angeles Chargers",
+      "city": "Inglewood",
+      "state": "CA",
+      "country": "US",
+      "venue_name": "SoFi Stadium",
+      "iana_timezone": "America/Los_Angeles",
+      "source": "override"
+    },
+    {
+      "sport": "nfl",
+      "key": "LAR",
+      "name": "Los Angeles Rams",
+      "city": "Inglewood",
+      "state": "CA",
+      "country": "US",
+      "venue_name": "SoFi Stadium",
+      "iana_timezone": "America/Los_Angeles",
+      "source": "override"
+    },
+    {
+      "sport": "nfl",
+      "key": "NYG",
+      "name": "New York Giants",
+      "city": "East Rutherford",
+      "state": "NJ",
+      "country": "US",
+      "venue_name": "MetLife Stadium",
+      "iana_timezone": "America/New_York",
+      "source": "override"
+    },
+    {
+      "sport": "nfl",
+      "key": "NYJ",
+      "name": "New York Jets",
+      "city": "East Rutherford",
+      "state": "NJ",
+      "country": "US",
+      "venue_name": "MetLife Stadium",
+      "iana_timezone": "America/New_York",
+      "source": "override"
+    },
+    {
+      "sport": "nfl",
+      "key": "ARI",
+      "name": "Arizona Cardinals",
+      "city": "Glendale",
+      "state": "AZ",
+      "country": "US",
+      "iana_timezone": "America/Phoenix",
+      "source": "override"
+    },
+    {
+      "sport": "nhl",
+      "key": "VGK",
+      "name": "Vegas Golden Knights",
+      "city": "Las Vegas",
+      "state": "NV",
+      "country": "US",
+      "iana_timezone": "America/Los_Angeles",
+      "source": "override"
+    },
+    {
+      "sport": "nhl",
+      "key": "UTA",
+      "name": "Utah Hockey Club",
+      "city": "Salt Lake City",
+      "state": "UT",
+      "country": "US",
+      "iana_timezone": "America/Denver",
+      "source": "override"
+    },
+    {
+      "sport": "ncaab",
+      "key": "LOYOLA-IL",
+      "name": "Loyola (IL)",
+      "city": "Chicago",
+      "state": "IL",
+      "country": "US",
+      "iana_timezone": "America/Chicago",
+      "source": "override"
+    },
+    {
+      "sport": "ncaab",
+      "key": "PURDUE",
+      "name": "Purdue",
+      "city": "West Lafayette",
+      "state": "IN",
+      "country": "US",
+      "iana_timezone": "America/Indiana/Indianapolis",
+      "source": "override"
+    }
+  ]
+}

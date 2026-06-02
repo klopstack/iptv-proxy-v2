@@ -5,6 +5,7 @@ Tests the sportsipy library integration for PPV channel matching.
 Uses database-backed team data with test fixtures.
 """
 
+import json
 from datetime import datetime
 
 import pytest
@@ -15,6 +16,7 @@ from services.sportsipy_service import (
     SportsipyService,
     _generate_team_aliases,
     get_sportsipy_service,
+    refresh_teams_from_sportsipy,
     seed_initial_team_data,
 )
 
@@ -348,3 +350,132 @@ class TestSingletonInstance:
         # Should return same instance
         assert service1 is service2
         assert isinstance(service1, SportsipyService)
+
+
+class TestRefreshTeamLocations:
+    def test_refresh_applies_registry_location(self, app, monkeypatch, tmp_path):
+        registry = tmp_path / "registry.json"
+        registry.write_text(
+            json.dumps(
+                {
+                    "version": "test",
+                    "entries": [
+                        {
+                            "sport": "nba",
+                            "key": "UTA",
+                            "name": "Utah Jazz",
+                            "city": "Salt Lake City",
+                            "iana_timezone": "America/Denver",
+                            "source": "test",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        class _Team:
+            abbreviation = "UTA"
+            name = "Utah Jazz"
+            city = None
+
+        class _Teams:
+            def __iter__(self):
+                return iter([_Team()])
+
+        monkeypatch.setattr("services.sportsipy_service._HAS_FCNTL", False)
+        monkeypatch.setattr(
+            "services.sportsipy_service.SPORTSIPY_AVAILABLE",
+            True,
+        )
+        monkeypatch.setattr(
+            "services.sportsipy_service.SPORTSIPY_TEAM_CLASSES",
+            {"nba": _Teams},
+        )
+        monkeypatch.setattr(
+            "services.team_location_registry.DEFAULT_REGISTRY_PATH",
+            registry,
+        )
+        from services.team_location_registry import clear_registry_cache
+
+        clear_registry_cache()
+
+        with app.app_context():
+            from models import SportsTeam, db
+
+            db.session.query(SportsTeam).delete()
+            db.session.commit()
+
+            result = refresh_teams_from_sportsipy(sports=["nba"])
+            assert result["success"] is True
+            assert result["location_misses"] == []
+
+            team = SportsTeam.query.filter_by(sport="nba", abbreviation="UTA").one()
+            assert team.city == "Salt Lake City"
+            assert team.iana_timezone == "America/Denver"
+            assert team.source == "sportsipy+location_registry"
+
+    def test_refresh_leaves_city_null_on_miss(self, app, monkeypatch, tmp_path):
+        registry = tmp_path / "registry.json"
+        registry.write_text(json.dumps({"version": "test", "entries": []}), encoding="utf-8")
+
+        class _Team:
+            abbreviation = "ZZZ"
+            name = "Unknown Team"
+            city = "Fake City"
+
+        class _Teams:
+            def __iter__(self):
+                return iter([_Team()])
+
+        monkeypatch.setattr("services.sportsipy_service.SPORTSIPY_AVAILABLE", True)
+        monkeypatch.setattr("services.sportsipy_service._HAS_FCNTL", False)
+        monkeypatch.setattr(
+            "services.sportsipy_service.SPORTSIPY_TEAM_CLASSES",
+            {"nba": _Teams},
+        )
+        monkeypatch.setattr(
+            "services.team_location_registry.DEFAULT_REGISTRY_PATH",
+            registry,
+        )
+        from services.team_location_registry import clear_registry_cache
+
+        clear_registry_cache()
+
+        with app.app_context():
+            from models import SportsTeam, db
+
+            db.session.query(SportsTeam).delete()
+            db.session.commit()
+
+            result = refresh_teams_from_sportsipy(sports=["nba"])
+            team = SportsTeam.query.filter_by(sport="nba", abbreviation="ZZZ").one()
+            assert team.city is None
+            assert team.iana_timezone is None
+            assert len(result["location_misses"]) == 1
+
+
+class TestHomeTimezoneForTeam:
+    def test_db_team_uses_stored_iana(self, app, seeded_teams):
+        with app.app_context():
+            from models import SportsTeam, db
+
+            team = SportsTeam.query.filter_by(sport="nfl").first()
+            team.iana_timezone = "America/Chicago"
+            team.city = "Green Bay"
+            db.session.commit()
+
+            tz = SportsTeam.home_timezone_for_team(team.name, sport="nfl")
+            assert tz == "America/Chicago"
+
+    def test_db_team_without_tz_does_not_parse_name(self, app, seeded_teams):
+        with app.app_context():
+            from models import SportsTeam, db
+
+            team = SportsTeam.query.filter_by(sport="nfl").first()
+            team.iana_timezone = None
+            team.city = None
+            db.session.commit()
+
+            tz = SportsTeam.home_timezone_for_team(team.name, sport="nfl")
+            assert tz is None

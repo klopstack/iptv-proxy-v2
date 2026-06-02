@@ -49,6 +49,7 @@ def resolve_channel_timezone(
     league_name: Optional[str] = None,
     competitors: Optional[tuple[str, str]] = None,
     matchup: Optional[MatchupInfo] = None,
+    home_team_id: Optional[str] = None,
 ) -> ChannelTimezoneResolution:
     """Resolve IANA timezone for pre-match channel title datetime conversion."""
     extractor = PPVEventExtractor()
@@ -68,8 +69,10 @@ def resolve_channel_timezone(
     if token_tz:
         return ChannelTimezoneResolution(token_tz, 0.95, "title_token", venue_mode)
 
-    # Parenthetical ISO datetime — provider-supplied UTC (WNBA/NBA feeds)
-    if PPVEventExtractor.has_iso_paren_utc_datetime(channel_name):
+    sport_key = _resolve_sport_key_for_channel(channel_name, sport, category_name)
+
+    # Parenthetical ISO datetime — UTC on WNBA/NBA feeds; MiLB uses local home-ballpark time
+    if PPVEventExtractor.has_iso_paren_utc_datetime(channel_name) and sport_key != "milb":
         return ChannelTimezoneResolution("UTC", 0.95, "iso_paren_utc", venue_mode)
 
     # Provider suffix (e.g. ":Viaplay SE", ":Telia FI") before generic fallbacks
@@ -92,9 +95,9 @@ def resolve_channel_timezone(
                     return ChannelTimezoneResolution(COUNTRY_PREFIX_TZ[code], 0.35, "metadata_only_tag", venue_mode)
         return ChannelTimezoneResolution("UTC", 0.2, "metadata_only_fallback", venue_mode)
 
-    # Home venue via SportsTeam (US multi-zone)
+    # Home venue via SportsTeam (US multi-zone / FB via TheSportsDB idTeam)
     if matchup and matchup.home_team and venue_mode.mode == "team_home":
-        home_tz = _home_team_timezone(matchup.home_team, sport)
+        home_tz = _home_team_timezone(matchup.home_team, sport, home_team_id=home_team_id)
         if home_tz:
             conf = min(0.9, venue_mode.confidence + 0.05)
             return ChannelTimezoneResolution(home_tz, conf, "home_venue_sports_team", venue_mode)
@@ -132,18 +135,67 @@ def _provider_suffix_timezone(channel_name: str) -> Optional[ChannelTimezoneReso
     return None
 
 
-def _home_team_timezone(home_team: str, sport: Optional[str]) -> Optional[str]:
+def _home_team_timezone(
+    home_team: str,
+    sport: Optional[str],
+    *,
+    home_team_id: Optional[str] = None,
+) -> Optional[str]:
     try:
         from models.ppv import SportsTeam
 
         sport_key = _sport_to_team_key(sport)
+        if sport_key in ("fb", "wnba", "milb") and home_team_id:
+            from services.team_location_registry import lookup
+
+            entry = lookup(sport_key, home_team_id)
+            if entry and entry.iana_timezone:
+                return entry.iana_timezone
+            team = SportsTeam.query.filter_by(sport=sport_key, abbreviation=str(home_team_id)).first()
+            if team and team.iana_timezone:
+                return team.iana_timezone
+
+        if sport_key == "milb" and home_team:
+            from services.team_location_registry import lookup_by_alias, lookup_by_name
+
+            entry = lookup_by_name("milb", home_team) or lookup_by_alias("milb", home_team)
+            if entry and entry.iana_timezone:
+                return entry.iana_timezone
+
         if sport_key:
             tz = SportsTeam.home_timezone_for_team(home_team, sport_key)
             if tz:
                 return tz
+
+        if sport_key in ("fb", "wnba", "milb"):
+            if sport_key == "milb":
+                from services.team_location_registry import lookup_by_alias, lookup_by_name
+
+                entry = lookup_by_name("milb", home_team) or lookup_by_alias("milb", home_team)
+                if entry and entry.iana_timezone:
+                    return entry.iana_timezone
+            return None
         return iana_for_team_city(home_team)
     except Exception:
+        sk = _sport_to_team_key(sport)
+        if sk in ("fb", "wnba", "milb"):
+            return None
         return iana_for_team_city(home_team)
+
+
+def _resolve_sport_key_for_channel(
+    channel_name: str,
+    sport: Optional[str],
+    category_name: Optional[str] = None,
+) -> Optional[str]:
+    """Sport key for timezone rules, from explicit sport or channel/category hints."""
+    key = _sport_to_team_key(sport)
+    if key:
+        return key
+    from services.ppv.matching.context import resolve_sport_league_context
+
+    ctx = resolve_sport_league_context(channel_name, category_name)
+    return ctx.primary_sport_key
 
 
 def _sport_to_team_key(sport: Optional[str]) -> Optional[str]:
@@ -153,8 +205,11 @@ def _sport_to_team_key(sport: Optional[str]) -> Optional[str]:
     mapping = {
         "baseball": "mlb",
         "mlb": "mlb",
+        "milb": "milb",
+        "minor league baseball": "milb",
         "basketball": "nba",
         "nba": "nba",
+        "wnba": "wnba",
         "ice hockey": "nhl",
         "hockey": "nhl",
         "nhl": "nhl",
@@ -180,6 +235,7 @@ def resolve_channel_datetime_utc(
     sport: Optional[str] = None,
     league_name: Optional[str] = None,
     extraction: Optional[dict] = None,
+    home_team_id: Optional[str] = None,
 ) -> tuple[datetime, ChannelTimezoneResolution]:
     """Convert extracted naive channel datetime to UTC for matching."""
     ext = extraction or PPVEventExtractor().extract_all(channel_name)
@@ -193,6 +249,7 @@ def resolve_channel_datetime_utc(
         league_name=league_name,
         competitors=competitors,
         matchup=matchup,
+        home_team_id=home_team_id,
     )
     return local_channel_datetime_to_utc(naive_dt, resolution), resolution
 

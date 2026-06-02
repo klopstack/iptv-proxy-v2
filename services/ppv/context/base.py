@@ -174,6 +174,19 @@ class ContextDataProvider(ABC):
         """
         return None  # pragma: no cover
 
+    def get_fighter_record(
+        self,
+        fighter_name: str,
+        sport: str,
+        fighter_id: Optional[str] = None,
+    ) -> Optional[str]:
+        """
+        Return a combat-sport record string, e.g. ``27-1 (15 KO)``.
+
+        Used for MMA, boxing, and similar individual matchups.
+        """
+        return None  # pragma: no cover
+
     # ------------------------------------------------------------------
     # Plugin settings API
     # ------------------------------------------------------------------

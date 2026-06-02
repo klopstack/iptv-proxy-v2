@@ -19,10 +19,11 @@ class Event(db.Model):  # type: ignore[name-defined]
 
     # Event sources
     SOURCE_THESPORTSDB = "thesportsdb"
+    SOURCE_MLB_STATS = "mlb_stats_api"
     SOURCE_MANUAL = "manual"
     SOURCE_IMPORT = "import"
 
-    SOURCE_TYPES = [SOURCE_THESPORTSDB, SOURCE_MANUAL, SOURCE_IMPORT]
+    SOURCE_TYPES = [SOURCE_THESPORTSDB, SOURCE_MLB_STATS, SOURCE_MANUAL, SOURCE_IMPORT]
 
     # Event status
     STATUS_SCHEDULED = "scheduled"
@@ -189,8 +190,18 @@ class SportsTeam(db.Model):  # type: ignore[name-defined]
     SPORT_NCAAF = "ncaaf"
     SPORT_NFL = "nfl"
     SPORT_NHL = "nhl"
+    SPORT_MILB = "milb"
 
-    SPORTS = [SPORT_FB, SPORT_MLB, SPORT_NBA, SPORT_NCAAB, SPORT_NCAAF, SPORT_NFL, SPORT_NHL]
+    SPORTS = [
+        SPORT_FB,
+        SPORT_MLB,
+        SPORT_MILB,
+        SPORT_NBA,
+        SPORT_NCAAB,
+        SPORT_NCAAF,
+        SPORT_NFL,
+        SPORT_NHL,
+    ]
 
     id = db.Column(db.Integer, primary_key=True)
 
@@ -205,7 +216,13 @@ class SportsTeam(db.Model):  # type: ignore[name-defined]
 
     # Team metadata
     city = db.Column(db.String(100))
+    state = db.Column(db.String(10))
+    country = db.Column(db.String(10))
+    venue_name = db.Column(db.String(200))
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
     iana_timezone = db.Column(db.String(50))
+    location_source = db.Column(db.String(100))
     conference = db.Column(db.String(100))
     division = db.Column(db.String(100))
 
@@ -306,12 +323,29 @@ class SportsTeam(db.Model):  # type: ignore[name-defined]
     def home_timezone_for_team(cls, name_or_alias: str, sport: Optional[str] = None) -> Optional[str]:
         """Return IANA timezone for a team's home city."""
         team = cls.resolve_team(name_or_alias, sport)
-        if team and team.iana_timezone:
-            return team.iana_timezone
-        if team and team.city:
-            from services.ppv.city_timezone_map import iana_for_city
+        if team:
+            if team.iana_timezone:
+                return team.iana_timezone
+            if team.city:
+                from services.ppv.city_timezone_map import iana_for_city
 
-            return iana_for_city(team.city)
+                return iana_for_city(team.city)
+            return None
+
+        sport_l = sport.lower() if sport else None
+        if sport_l in ("fb", "wnba", "milb"):
+            from services.team_location_registry import lookup, lookup_by_alias, lookup_by_name
+
+            key = name_or_alias.strip()
+            if key.isdigit():
+                entry = lookup(sport_l, key)
+                if entry and entry.iana_timezone:
+                    return entry.iana_timezone
+            entry = lookup_by_name(sport_l, name_or_alias) or lookup_by_alias(sport_l, name_or_alias)
+            if entry and entry.iana_timezone:
+                return entry.iana_timezone
+            return None
+
         from services.ppv.city_timezone_map import iana_for_team_city
 
         return iana_for_team_city(name_or_alias)

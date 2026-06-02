@@ -719,9 +719,9 @@ class PPVCalendarEnrichmentService:
 
             # Update venue info
             event.venue_id = api_data.get("idVenue") or event.venue_id
-            event.venue_name = api_data.get("strVenue")
-            event.city = api_data.get("strCity")
-            event.country = api_data.get("strCountry")
+            event.venue_name = api_data.get("strVenue") or event.venue_name
+            event.city = api_data.get("strCity") or api_data.get("strVenueLocation") or event.city
+            event.country = api_data.get("strCountry") or event.country
 
             # Update poster/thumbnail
             event.event_image = api_data.get("strPoster") or api_data.get("strThumb")

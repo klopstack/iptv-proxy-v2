@@ -1,0 +1,50 @@
+{
+  "built_at": "2026-06-02",
+  "entry_count": 5541,
+  "coverage_by_sport": {
+    "fb": 344,
+    "milb": 120,
+    "mlb": 30,
+    "nba": 30,
+    "ncaab": 4698,
+    "ncaaf": 253,
+    "nfl": 33,
+    "nhl": 33
+  },
+  "sources": [
+    "https://raw.githubusercontent.com/greerreNFL/Stadiums/main/data/stadiums.csv",
+    "https://raw.githubusercontent.com/nflverse/nfldata/master/data/teams.csv",
+    "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv",
+    "https://raw.githubusercontent.com/gboeing/data-visualization/main/ncaa-football-stadiums/data/stadiums-geocoded.csv",
+    "https://nces.ed.gov/programs/edge/data/EDGE_GEOCODE_POSTSECSCH_2324.zip",
+    "https://query.wikidata.org/sparql",
+    "thesportsdb",
+    "mlb_stats_api"
+  ],
+  "tsdb_coverage": {
+    "fb": {
+      "total": 344,
+      "with_city": 335,
+      "with_iana_timezone": 192,
+      "by_league": {
+        "English Premier League": 20,
+        "English League Championship": 24,
+        "English League 1": 24,
+        "English League 2": 24,
+        "Spanish La Liga": 20,
+        "Italian Serie A": 20,
+        "German Bundesliga": 18,
+        "French Ligue 1": 18,
+        "Dutch Eredivisie": 18,
+        "Scottish Premiership": 12,
+        "American Major League Soccer": 30,
+        "Mexican Primera League": 18,
+        "English Womens Super League": 12,
+        "UEFA Womens Champions League": 70,
+        "American NWSL": 16
+      },
+      "city_pct": 97.4,
+      "tz_pct": 55.8
+    }
+  }
+}

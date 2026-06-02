@@ -217,6 +217,25 @@ class TestTheSportsDBCalendarScraper:
         mock_fetch_url.assert_called_once()
         assert mock_fetch_url.call_args.kwargs["before_attempt"] == scraper._before_calendar_fetch
 
+    def test_api_supplement_sports_includes_combat_and_racket(self):
+        from services.thesportsdb_calendar_scraper import API_SUPPLEMENT_SPORTS
+
+        assert "Fighting" in API_SUPPLEMENT_SPORTS
+        assert "Tennis" in API_SUPPLEMENT_SPORTS
+        assert "Cricket" in API_SUPPLEMENT_SPORTS
+
+    @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._rate_limit")
+    @patch("services.thesportsdb_retry.call_thesportsdb_api")
+    def test_fetch_api_events_supplements_multiple_sports(self, mock_call_api, mock_rate_limit, scraper):
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        mock_call_api.return_value = {"events": []}
+
+        scraper._fetch_api_events_for_date(today)
+
+        sports_called = {call.kwargs.get("s") for call in mock_call_api.call_args_list}
+        assert "Fighting" in sports_called
+        assert "Tennis" in sports_called
+
     def test_is_date_in_api_supplement_window(self, scraper):
         today = datetime.now(timezone.utc).date()
         near = (today + timedelta(days=7)).strftime("%Y-%m-%d")

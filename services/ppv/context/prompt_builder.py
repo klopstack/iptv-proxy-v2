@@ -168,8 +168,18 @@ def build_mechanical_description(context: EventContext) -> str:
         parts.append(f"League: {context.league}")
     if context.home_team.standing:
         parts.append(f"{context.home_team.name}: {context.home_team.standing}")
+    elif context.home_team.record:
+        parts.append(f"{context.home_team.name}: {context.home_team.record}")
+    elif context.home_team.extra:
+        parts.append(f"{context.home_team.name}: {context.home_team.extra}")
     if context.away_team.standing:
         parts.append(f"{context.away_team.name}: {context.away_team.standing}")
+    elif context.away_team.record:
+        parts.append(f"{context.away_team.name}: {context.away_team.record}")
+    elif context.away_team.extra:
+        parts.append(f"{context.away_team.name}: {context.away_team.extra}")
     if context.head_to_head:
         parts.append(f"Recent H2H: {context.head_to_head[0]}")
+    if context.event_notes:
+        parts.append(context.event_notes)
     return "\n".join(parts) if parts else "Pay-Per-View Sports Event"

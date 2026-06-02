@@ -1,0 +1,57 @@
+{
+  "_comment": "Maps Sports Reference abbreviation (key) to alternate Wikidata/normalized names for matching",
+  "nba": {
+    "GSW": ["Golden State Warriors"],
+    "NYK": ["New York Knicks"],
+    "BKN": ["Brooklyn Nets", "New Jersey Nets"],
+    "BRK": ["Brooklyn Nets"],
+    "LAC": ["Los Angeles Clippers", "LA Clippers"],
+    "LAL": ["Los Angeles Lakers", "LA Lakers"],
+    "UTA": ["Utah Jazz"],
+    "PHO": ["Phoenix Suns"],
+    "PHX": ["Phoenix Suns"],
+    "CHO": ["Charlotte Hornets", "Charlotte Bobcats"],
+    "CHA": ["Charlotte Hornets"],
+    "NOP": ["New Orleans Pelicans", "New Orleans Hornets"],
+    "NOH": ["New Orleans Hornets"],
+    "OKC": ["Oklahoma City Thunder"],
+    "SAS": ["San Antonio Spurs"],
+    "WAS": ["Washington Wizards", "Washington Bullets"]
+  },
+  "nfl": {
+    "NWE": ["New England Patriots"],
+    "GNB": ["Green Bay Packers"],
+    "KAN": ["Kansas City Chiefs"],
+    "LVR": ["Las Vegas Raiders", "Oakland Raiders", "LA Raiders"],
+    "RAI": ["Las Vegas Raiders", "Oakland Raiders"],
+    "LAC": ["Los Angeles Chargers", "San Diego Chargers"],
+    "LAR": ["Los Angeles Rams", "St. Louis Rams"],
+    "NOR": ["New Orleans Saints"],
+    "TAM": ["Tampa Bay Buccaneers"],
+    "SFO": ["San Francisco 49ers"],
+    "ARI": ["Arizona Cardinals", "Phoenix Cardinals"]
+  },
+  "mlb": {
+    "ARI": ["Arizona Diamondbacks"],
+    "TBR": ["Tampa Bay Rays"],
+    "KCR": ["Kansas City Royals"],
+    "SDP": ["San Diego Padres"],
+    "SFG": ["San Francisco Giants"],
+    "LAA": ["Los Angeles Angels", "Anaheim Angels"],
+    "LAD": ["Los Angeles Dodgers"],
+    "NYM": ["New York Mets"],
+    "NYY": ["New York Yankees"],
+    "OAK": ["Oakland Athletics", "Athletics"],
+    "ATH": ["Oakland Athletics", "Athletics"]
+  },
+  "nhl": {
+    "VGK": ["Vegas Golden Knights"],
+    "LAK": ["Los Angeles Kings", "LA Kings"],
+    "NYR": ["New York Rangers"],
+    "NYI": ["New York Islanders"],
+    "NJD": ["New Jersey Devils"],
+    "TBL": ["Tampa Bay Lightning"],
+    "SJS": ["San Jose Sharks"],
+    "UTA": ["Utah Hockey Club", "Arizona Coyotes"]
+  }
+}

@@ -128,6 +128,15 @@ class TestPPVEventExtractor:
         assert result["date"] == datetime(2026, 5, 31, 12, 0)
         assert result["is_placeholder"] is False
 
+    def test_extract_all_milb_iso_paren_is_local_not_utc(self):
+        ref = datetime(2026, 5, 31, 15, 0)
+        extractor = PPVEventExtractor(current_date=ref)
+        channel = "US (MiLB 009) | Syracuse Mets @ Rochester Red Wings (2026-05-31 13:05:10)"
+        result = extractor.extract_all(channel)
+        assert result["date"] == datetime(2026, 5, 31, 13, 5, 10)
+        assert result["inferred_how"] == "iso_paren_local"
+        assert result.get("timezone") != "UTC"
+
     # ========================================================================
     # Multi-word Team Names
     # ========================================================================
