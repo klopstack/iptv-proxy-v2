@@ -565,9 +565,14 @@ class TestGenerateEpgFromDatabaseForMappings:
             # Get mappings
             channel_ids = [ch.id for ch in sample_channels]
             mappings = get_channel_epg_mappings(channel_ids)
+            from services.channel_query_service import ChannelQueryService
+
+            output_ids = ChannelQueryService.epg_channel_ids_for_channels(sample_channels)
 
             # Generate from database
-            channel_elems, prog_elems, processed = generate_epg_from_database_for_mappings(sample_channels, mappings)
+            channel_elems, prog_elems, processed = generate_epg_from_database_for_mappings(
+                sample_channels, mappings, output_ids
+            )
 
             assert len(processed) >= 1
             assert len(channel_elems) >= 1
@@ -578,7 +583,7 @@ class TestGenerateEpgFromDatabaseForMappings:
         with app.app_context():
             from services.epg.generation import generate_epg_from_database_for_mappings
 
-            channel_elems, prog_elems, processed = generate_epg_from_database_for_mappings([], {})
+            channel_elems, prog_elems, processed = generate_epg_from_database_for_mappings([], {}, {})
 
             assert channel_elems == []
             assert prog_elems == []
@@ -591,8 +596,13 @@ class TestGenerateEpgFromDatabaseForMappings:
 
             channel_ids = [ch.id for ch in sample_channels]
             mappings = get_channel_epg_mappings(channel_ids)
+            from services.channel_query_service import ChannelQueryService
 
-            channel_elems, prog_elems, processed = generate_epg_from_database_for_mappings(sample_channels, mappings)
+            output_ids = ChannelQueryService.epg_channel_ids_for_channels(sample_channels)
+
+            channel_elems, prog_elems, processed = generate_epg_from_database_for_mappings(
+                sample_channels, mappings, output_ids
+            )
 
             # No channels should be processed since there are no programs
             assert processed == set()
@@ -631,9 +641,12 @@ class TestGenerateEpgFromDatabaseForMappings:
             db.session.commit()
 
             mappings = {sample_channels[0].id: mapping}
+            from services.channel_query_service import ChannelQueryService
+
+            output_ids = ChannelQueryService.epg_channel_ids_for_channels([sample_channels[0]])
 
             channel_elems, prog_elems, processed = generate_epg_from_database_for_mappings(
-                [sample_channels[0]], mappings
+                [sample_channels[0]], mappings, output_ids
             )
 
             assert len(processed) == 1
@@ -714,3 +727,66 @@ class TestGenerateEpgForChannelsWithDatabase:
                 generate_epg_for_channels(sample_channels)
                 # Database generation should always be called
                 mock_db.assert_called_once()
+
+
+class TestGenerateEpgForPpvEvents:
+    """PPV channels with linked events get event-{id} XMLTV and programmes."""
+
+    def test_ppv_event_epg_without_epg_program(self, app, db):
+        import xml.etree.ElementTree as ET
+        from datetime import datetime, timedelta, timezone
+
+        from models import Account, Category, Channel, Event, EventChannelLink
+
+        with app.app_context():
+            from services.epg.generation import generate_epg_for_channels
+
+            account = Account(name="PPV EPG", server="http://test.com", username="u", password="p")
+            db.session.add(account)
+            db.session.flush()
+
+            category = Category(account_id=account.id, category_id="ppv", category_name="UK| DAZN PPV")
+            db.session.add(category)
+            db.session.flush()
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            event = Event(
+                external_id="epg-test-1",
+                home_team_id="1",
+                home_team_name="Arsenal",
+                away_team_id="2",
+                away_team_name="Chelsea",
+                scheduled_at=now + timedelta(hours=3),
+                status=Event.STATUS_SCHEDULED,
+                league_name="Premier League",
+                is_ppv=True,
+            )
+            db.session.add(event)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="ppv99",
+                name="UK: DAZN PPV 1 - Arsenal vs Chelsea",
+                category_id=category.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+                ppv_enrichment_status="matched",
+            )
+            db.session.add(channel)
+            db.session.flush()
+            db.session.add(EventChannelLink(channel_id=channel.id, event_id=event.id))
+            db.session.commit()
+
+            result = generate_epg_for_channels([channel])
+            root = ET.fromstring(result)
+
+            expected_id = f"event-{event.id}"
+            channel_ids = [ch.get("id") for ch in root.findall("channel")]
+            assert expected_id in channel_ids
+
+            programmes = [p for p in root.findall("programme") if p.get("channel") == expected_id]
+            assert len(programmes) == 1
+            assert programmes[0].find("title").text == "Arsenal vs Chelsea"
+            assert programmes[0].find("sub-title").text == "Premier League"

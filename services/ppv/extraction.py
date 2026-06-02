@@ -12,10 +12,25 @@ Strategies:
 
 import logging
 import re
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple
 
+from services.datetime_utils import parse_title_timezone
+from services.ppv.constants import COUNTRY_PREFIX_TZ, US_STYLE_REGION_CODES
+
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class MatchupInfo:
+    away_team: Optional[str]
+    home_team: Optional[str]
+    separator: str
+    ordering_rule: str  # us_away_home | eu_home_away | metadata_only | unknown
+    ordering_confidence: float
+    first_team: Optional[str] = None
+    second_team: Optional[str] = None
 
 
 class PPVEventExtractor:
@@ -229,6 +244,94 @@ class PPVEventExtractor:
             result = PPVEventExtractor._PROVIDER_SLOT_RE.sub("", result).strip()
             result = PPVEventExtractor._BARE_PPV_SLOT_RE.sub("", result).strip()
         return result
+
+    @staticmethod
+    def extract_country_prefix(name: str) -> Optional[str]:
+        """Return XX country code from a leading 'XX:' prefix, if present."""
+        if not name:
+            return None
+        m = PPVEventExtractor._COUNTRY_PREFIX_RE.match(name.strip())
+        if not m:
+            return None
+        raw = name.strip()[: m.end()].rstrip(": ").upper()
+        return raw.rstrip(":")
+
+    def _detect_separator(self, cleaned_name: str) -> Optional[str]:
+        """Detect matchup separator token in cleaned channel name."""
+        if re.search(r"\s+vs\.?\s+", cleaned_name, re.IGNORECASE):
+            return "vs"
+        if re.search(r"\s+x\s+", cleaned_name, re.IGNORECASE):
+            return "x"
+        if re.search(r"\s+(?:at|@|versus)\.?\s+", cleaned_name, re.IGNORECASE):
+            return "@"
+        if re.search(r"[A-Z][A-Za-z\s&\'\-]+?\s+-\s+[A-Z][A-Za-z\s&\'\-]+", cleaned_name):
+            return "-"
+        return None
+
+    def _feed_region_code(
+        self,
+        channel_name: str,
+        category_name: Optional[str] = None,
+    ) -> Optional[str]:
+        prefix = self.extract_country_prefix(channel_name)
+        if prefix:
+            return prefix.upper()
+        if category_name:
+            cat = self.extract_country_prefix(category_name)
+            if cat:
+                return cat.upper()
+        return None
+
+    def extract_matchup(
+        self,
+        channel_name: str,
+        *,
+        category_name: Optional[str] = None,
+    ) -> Optional[MatchupInfo]:
+        """Extract structured home/away info using regional ordering conventions."""
+        from services.ppv.venue_inference import detect_venue_inference_mode
+
+        competitors = self.extract_competitors(channel_name)
+        if not competitors:
+            return None
+
+        comp1, comp2 = competitors
+        _, cleaned = self.extract_sport(channel_name)
+        cleaned = self._strip_provider_prefix(cleaned)
+        cleaned = self._clean_tournament_structure(cleaned)
+        separator = self._detect_separator(cleaned) or "vs"
+
+        region = self._feed_region_code(channel_name, category_name)
+        us_style = region in US_STYLE_REGION_CODES if region else False
+
+        draft = MatchupInfo(
+            away_team=comp1 if us_style else comp2,
+            home_team=comp2 if us_style else comp1,
+            separator=separator,
+            ordering_rule="us_away_home" if us_style else "eu_home_away",
+            ordering_confidence=0.85 if separator in ("@", "at", "versus") else 0.8,
+            first_team=comp1,
+            second_team=comp2,
+        )
+
+        if not region:
+            # Default EU-style when no feed region (conservative)
+            draft = MatchupInfo(
+                away_team=comp2,
+                home_team=comp1,
+                separator=separator,
+                ordering_rule="eu_home_away",
+                ordering_confidence=0.65,
+                first_team=comp1,
+                second_team=comp2,
+            )
+
+        venue_mode = detect_venue_inference_mode(channel_name, matchup=draft)
+        if venue_mode.mode == "metadata_only":
+            draft.ordering_rule = "metadata_only"
+            draft.ordering_confidence = venue_mode.confidence
+
+        return draft
 
     def extract_competitors(self, channel_name: str) -> Optional[Tuple[str, str]]:
         """
@@ -550,14 +653,18 @@ class PPVEventExtractor:
         Returns dict with keys: competitors, date, weekday, sport, is_placeholder, inferred_how, is_inactive
         """
         inline_sport, _ = self.extract_sport(channel_name)
+        country_prefix = self.extract_country_prefix(channel_name)
         result: Dict = {
             "is_placeholder": self.is_placeholder(channel_name),
             "is_inactive": self.is_inactive_channel(channel_name),
             "competitors": self.extract_competitors(channel_name),
             "sport": inline_sport,
+            "country_prefix": country_prefix,
             "date": None,
             "weekday": None,
             "time_only": None,
+            "timezone": None,
+            "matchup": None,
             "raw_name": channel_name,
             "inferred_how": None,  # How date was inferred
         }
@@ -565,6 +672,10 @@ class PPVEventExtractor:
         # Skip placeholders and inactive channels early
         if result["is_placeholder"] or result["is_inactive"]:
             return result
+
+        channel_tz = parse_title_timezone(channel_name)
+        result["timezone"] = channel_tz
+        result["matchup"] = self.extract_matchup(channel_name)
 
         # Check for far-future placeholder dates (2098-12-31, 2099-01-01) BEFORE date extraction
         # These are common provider placeholders that need special handling

@@ -37,6 +37,8 @@ SYNC_KEY_LAST_PPV_ENRICHMENT = "last_ppv_enrichment"
 SYNC_KEY_LAST_PPV_PREFETCH = "last_ppv_prefetch"
 DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS = 1  # Run hourly to respect rate limits
 DEFAULT_PPV_PREFETCH_INTERVAL_HOURS = 6  # Pre-fetch event data every 6 hours
+SYNC_KEY_LAST_PPV_TIME_REFRESH = "last_ppv_time_refresh"
+DEFAULT_PPV_TIME_REFRESH_INTERVAL_HOURS = 1  # Refresh near-term matched event times hourly
 
 # Sportsipy team data refresh settings
 SYNC_KEY_LAST_SPORTSIPY_REFRESH = "last_sportsipy_refresh"
@@ -370,6 +372,12 @@ class SyncScheduler:
                 self._set_last_sync_time(SYNC_KEY_LAST_PPV_ENRICHMENT)
                 self._touch_heartbeat()
 
+            if self._needs_sync(SYNC_KEY_LAST_PPV_TIME_REFRESH, DEFAULT_PPV_TIME_REFRESH_INTERVAL_HOURS):
+                logger.info("PPV near-term event time refresh due (hourly schedule)")
+                self._refresh_ppv_event_times()
+                self._set_last_sync_time(SYNC_KEY_LAST_PPV_TIME_REFRESH)
+                self._touch_heartbeat()
+
             # Check if sportsipy team data refresh is needed (weekly)
             if self._needs_sync(SYNC_KEY_LAST_SPORTSIPY_REFRESH, DEFAULT_SPORTSIPY_REFRESH_INTERVAL_HOURS):
                 logger.info("Sportsipy team data refresh due (weekly schedule)")
@@ -568,6 +576,18 @@ class SyncScheduler:
 
         except Exception as e:
             logger.error(f"Error enriching PPV events: {e}", exc_info=True)
+
+    def _refresh_ppv_event_times(self):
+        """Refresh TheSportsDB times/status for matched events starting within 48 hours."""
+        try:
+            from services.ppv.enrichment import get_calendar_enrichment_service
+
+            logger.info("Starting PPV near-term event time refresh")
+            service = get_calendar_enrichment_service(self.app)
+            stats = service.refresh_upcoming_event_times()
+            logger.info("PPV time refresh queued %s events", stats.get("queued", 0))
+        except Exception as e:
+            logger.error(f"Error refreshing PPV event times: {e}", exc_info=True)
 
     def _refresh_sportsipy_teams(self):
         """

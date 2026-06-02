@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import func, or_
 
 from models import Account, Channel, Event, EventChannelLink, db
+from services.ppv.channel_matching import infer_unmatched_timezone_debug
 from services.ppv.serializers import serialize_linked_event_summary, serialize_utc_iso
 
 
@@ -79,19 +80,20 @@ def list_ppv_enrichment_channels(
             event, link = linked
             linked_event = serialize_linked_event_summary(event, link)
 
-        results.append(
-            {
-                "channel_id": channel.id,
-                "channel_name": channel.name,
-                "account_id": channel.account_id,
-                "account_name": account.name if account else None,
-                "ppv_enrichment_status": channel.ppv_enrichment_status,
-                "ppv_enrichment_attempts": channel.ppv_enrichment_attempts or 0,
-                "ppv_enrichment_error": channel.ppv_enrichment_error,
-                "ppv_enrichment_last_attempt": serialize_utc_iso(channel.ppv_enrichment_last_attempt),
-                "linked_event": linked_event,
-            }
-        )
+        row = {
+            "channel_id": channel.id,
+            "channel_name": channel.name,
+            "account_id": channel.account_id,
+            "account_name": account.name if account else None,
+            "ppv_enrichment_status": channel.ppv_enrichment_status,
+            "ppv_enrichment_attempts": channel.ppv_enrichment_attempts or 0,
+            "ppv_enrichment_error": channel.ppv_enrichment_error,
+            "ppv_enrichment_last_attempt": serialize_utc_iso(channel.ppv_enrichment_last_attempt),
+            "linked_event": linked_event,
+        }
+        if channel.ppv_enrichment_status == "no_match":
+            row.update(infer_unmatched_timezone_debug(channel))
+        results.append(row)
 
     return {
         "channels": results,

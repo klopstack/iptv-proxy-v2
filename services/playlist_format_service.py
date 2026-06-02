@@ -2,11 +2,11 @@
 M3U playlist text formatting from resolved channel lists.
 """
 import re
-from datetime import timezone
 from typing import Any, Dict, List, Optional
 
 from models import Account, Channel
 from services.channel_query_service import ChannelQueryService
+from services.datetime_utils import resolve_ppv_rename_timezone, to_display_timezone
 from services.image_cache_service import ImageCacheService
 from services.ppv.visibility import PPVVisibilityService
 
@@ -28,15 +28,18 @@ def sanitize_m3u_value(text: str) -> str:
     return text.strip()
 
 
-def _apply_ppv_rename_format(channel: Channel, fmt: str, event: Any) -> str:
+def _apply_ppv_rename_format(
+    channel: Channel,
+    fmt: str,
+    event: Any,
+    *,
+    timezone_name: Optional[str] = None,
+) -> str:
     """Apply PPV rename format template to produce a channel display name.
 
     Supported tokens: {league}, {sport}, {home_team}, {away_team}, {start_time}, {date}
     """
-    scheduled = event.scheduled_at
-    if scheduled and scheduled.tzinfo is None:
-        # Treat naive datetimes stored as UTC
-        scheduled = scheduled.replace(tzinfo=timezone.utc)
+    scheduled = to_display_timezone(event.scheduled_at, timezone_name)
 
     tokens = {
         "league": event.league_name or "",
@@ -76,18 +79,28 @@ def _channel_display_fields(
     event: Any = None,
     fcc_facility: Any = None,
     account: Optional[Account] = None,
+    ppv_rename_timezone: Optional[str] = None,
 ) -> tuple[str, str, str]:
     """Return (display_name, category_name, tvg_id) for a channel.
 
     If the account has a ppv_rename_format and a matched PPV event is supplied,
     the display name is generated from the format template.  Likewise for
     fcc_rename_format when a matched FCC facility is supplied.
+
+    ppv_rename_timezone overrides account.ppv_rename_timezone when provided
+    (e.g. from an Xtream credential).
     """
     # --- Display name ---
     display_name: str = sanitize_m3u_value(channel.cleaned_name or channel.name)
 
     if account and event and account.ppv_rename_format:
-        formatted = _apply_ppv_rename_format(channel, account.ppv_rename_format, event)
+        timezone_name = ppv_rename_timezone if ppv_rename_timezone is not None else account.ppv_rename_timezone
+        formatted = _apply_ppv_rename_format(
+            channel,
+            account.ppv_rename_format,
+            event,
+            timezone_name=timezone_name,
+        )
         if formatted:
             display_name = sanitize_m3u_value(formatted)
     elif account and fcc_facility and account.fcc_rename_format:
@@ -100,6 +113,69 @@ def _channel_display_fields(
     )
     tvg_id = ChannelQueryService.epg_channel_id_for_channel(channel)
     return display_name, category_name, tvg_id
+
+
+def build_channel_display_maps(
+    channels: List[Channel],
+    accounts_by_id: Dict[int, Account],
+) -> tuple[Dict[int, Any], Dict[int, Any]]:
+    """Build channel.id -> Event and channel.id -> FccFacility maps for display naming."""
+    event_map: Dict[int, Any] = {}
+    fcc_map: Dict[int, Any] = {}
+
+    channels_by_account: Dict[int, List[Channel]] = {}
+    for channel in channels:
+        channels_by_account.setdefault(channel.account_id, []).append(channel)
+
+    for account_id, account_channels in channels_by_account.items():
+        account = accounts_by_id.get(account_id)
+        if not account:
+            continue
+        if account.ppv_rename_format or account.ppv_visibility == PPVVisibilityService.GROUP_LIVE_REPLAY:
+            event_map.update(_build_channel_event_map(account_channels))
+        if account.fcc_rename_format:
+            fcc_map.update(_build_channel_fcc_map(account_channels))
+
+    return event_map, fcc_map
+
+
+def channel_display_name(
+    channel: Channel,
+    *,
+    account: Account,
+    event: Any = None,
+    fcc_facility: Any = None,
+    ppv_rename_timezone_override: Optional[str] = None,
+) -> str:
+    """Return the client-facing display name for a channel."""
+    tz = resolve_ppv_rename_timezone(
+        credential_tz=ppv_rename_timezone_override,
+        account_tz=account.ppv_rename_timezone,
+    )
+    display_name, _, _ = _channel_display_fields(
+        channel,
+        event=event,
+        fcc_facility=fcc_facility,
+        account=account,
+        ppv_rename_timezone=tz,
+    )
+    return display_name
+
+
+def load_accounts_for_channels(
+    channels: List[Channel],
+    *,
+    account: Optional[Account] = None,
+) -> Dict[int, Account]:
+    """Load Account objects keyed by id for the accounts referenced by channels."""
+    if account:
+        return {account.id: account}
+
+    account_ids = {ch.account_id for ch in channels}
+    if not account_ids:
+        return {}
+
+    return {a.id: a for a in Account.query.filter(Account.id.in_(account_ids)).all()}
 
 
 def _build_channel_event_map(channels: List[Channel]) -> Dict[int, Any]:

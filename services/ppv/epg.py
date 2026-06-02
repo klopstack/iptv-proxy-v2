@@ -588,6 +588,37 @@ class PPVEpgService:
         logger.info(f"Synced PPV events to EPG channels: {created} created, {updated} updated")
         return (created, updated)
 
+    @staticmethod
+    def sync_ppv_event_to_epg_channels(event: Event) -> bool:
+        """Update a single ppv_events EPG channel when event timing or status changes."""
+        from models import EpgChannel, EpgSource
+
+        source = EpgSource.query.filter_by(source_type="ppv_events", enabled=True).first()
+        if not source:
+            return False
+
+        channel_id = f"ppv-event-{event.external_id}"
+        epg_channel = EpgChannel.query.filter_by(source_id=source.id, channel_id=channel_id).first()
+        if not epg_channel:
+            return False
+
+        display_name = f"{event.home_team_name} vs {event.away_team_name}"
+        display_names = [display_name, event.home_team_name, event.away_team_name]
+        if event.league_name:
+            display_names.append(event.league_name)
+
+        epg_channel.display_name = display_name
+        epg_channel.display_names_json = json.dumps(display_names)
+        epg_channel.icon_url = event.event_image or event.home_team_badge or event.away_team_badge
+        epg_channel.program_count = 1
+        epg_channel.first_program = event.scheduled_at
+        epg_channel.last_program = event.end_at or event.scheduled_at
+        epg_channel.last_seen = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        db.session.commit()
+        logger.debug("Updated ppv_events EPG channel for event %s", event.external_id)
+        return True
+
 
 def get_ppv_epg_service() -> PPVEpgService:
     """Get singleton instance of PPV EPG service"""

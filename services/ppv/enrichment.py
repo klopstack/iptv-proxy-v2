@@ -38,7 +38,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from flask import Flask
 
-from models import Channel, Event, SyncMetadata, db
+from models import Channel, Event, EventChannelLink, SyncMetadata, db
+from services.datetime_utils import parse_thesportsdb_scheduled_at, to_naive_utc
 from services.ppv.cleanup import prune_orphan_ppv_events, sync_ppv_epg_after_enrichment
 from services.ppv.constants import (
     HIGH_CONFIDENCE_THRESHOLD,
@@ -120,6 +121,7 @@ class PPVCalendarEnrichmentService:
 
         # Queue for events needing detail fetch (secondary thread)
         self._detail_queue: Queue[str] = Queue()  # Queue of event_ids
+        self._refresh_queue: Queue[str] = Queue()  # Force-refresh event_ids (bypass completeness skip)
         self._detail_thread: Optional[threading.Thread] = None
         self._stop_detail_thread = threading.Event()
 
@@ -339,7 +341,7 @@ class PPVCalendarEnrichmentService:
 
     def _group_by_date(self, channel_extractions: List[Tuple[Channel, Dict]]) -> Dict[str, List[Tuple[Channel, Dict]]]:
         """
-        Group channels by their inferred event date.
+        Group channels by their inferred event date (UTC calendar day when title time known).
 
         Args:
             channel_extractions: List of (channel, extraction_result) tuples
@@ -347,11 +349,14 @@ class PPVCalendarEnrichmentService:
         Returns:
             Dict mapping date strings (YYYY-MM-DD) to lists of (channel, extraction)
         """
+        from services.ppv.channel_matching import build_channel_matching_context
+
         by_date = defaultdict(list)
 
         for channel, extraction in channel_extractions:
-            # Get the inferred date
-            date_str = self._get_event_date(extraction)
+            ctx = build_channel_matching_context(channel, extraction)
+            date_str = ctx.get("calendar_date") or self._get_event_date(extraction)
+            extraction["_matching_context"] = ctx
             by_date[date_str].append((channel, extraction))
 
         return dict(by_date)
@@ -428,15 +433,17 @@ class PPVCalendarEnrichmentService:
             days_back=0,
         )
 
-        # Use ReverseEventMatcher's find_matches method with date validation
-        # IMPORTANT: use_channel_date=True enables extraction and validation of
-        # the date from the channel name against event dates. This helps reject
-        # mismatches like old replays (2025 events) being matched to new events.
+        # Use ReverseEventMatcher's find_matches with resolved UTC date/timezone
+        match_ctx = extraction.get("_matching_context") or {}
+        channel_date_for_match = match_ctx.get("channel_date_for_match")
         match_results = self.reverse_matcher.find_matches(
             channel_name=channel.name,
             max_results=5,
             min_confidence=MIN_MATCH_CONFIDENCE,
-            use_channel_date=True,  # Enable date extraction and validation
+            use_channel_date=channel_date_for_match is None,
+            channel_date=channel_date_for_match,
+            channel_timezone="UTC" if channel_date_for_match is not None else None,
+            date_tolerance_hours=match_ctx.get("date_tolerance_hours"),
         )
 
         if not match_results:
@@ -597,21 +604,27 @@ class PPVCalendarEnrichmentService:
 
         try:
             while not self._stop_detail_thread.is_set():
+                force_refresh = False
                 try:
-                    # Get next event ID from queue (with timeout)
-                    event_id = self._detail_queue.get(timeout=5.0)
+                    event_id = self._refresh_queue.get_nowait()
+                    force_refresh = True
+                except Empty:
+                    try:
+                        event_id = self._detail_queue.get(timeout=5.0)
+                    except Empty:
+                        continue
 
-                    # Fetch details from API
-                    self._fetch_event_details(event_id)
+                try:
+                    self._fetch_event_details(event_id, force_refresh=force_refresh)
 
                     # Rate limit: wait between requests
                     time.sleep(API_REQUEST_INTERVAL)
 
-                    self._detail_queue.task_done()
+                    if force_refresh:
+                        self._refresh_queue.task_done()
+                    else:
+                        self._detail_queue.task_done()
 
-                except Empty:
-                    # Queue empty, just continue waiting
-                    continue
                 except Exception as e:
                     logger.error(f"Error in detail fetch loop: {e}", exc_info=True)
                     time.sleep(1)  # Brief pause on error
@@ -620,7 +633,7 @@ class PPVCalendarEnrichmentService:
 
         logger.info("Detail fetch loop stopped")
 
-    def _fetch_event_details(self, event_id: str) -> None:
+    def _fetch_event_details(self, event_id: str, force_refresh: bool = False) -> None:
         """
         Fetch full event details from TheSportsDB API.
 
@@ -628,6 +641,7 @@ class PPVCalendarEnrichmentService:
 
         Args:
             event_id: TheSportsDB event ID
+            force_refresh: Re-fetch even when data_completeness is full/enriched
         """
         try:
             # Find the event in our database
@@ -640,8 +654,8 @@ class PPVCalendarEnrichmentService:
                 logger.warning(f"Event {event_id} not found in database")
                 return
 
-            # Skip if already has full details
-            if event.data_completeness in ("full", "enriched"):
+            # Skip if already has full details (unless periodic refresh)
+            if not force_refresh and event.data_completeness in ("full", "enriched"):
                 logger.debug(f"Event {event_id} already has full details")
                 return
 
@@ -653,7 +667,9 @@ class PPVCalendarEnrichmentService:
                 return
 
             # Update event with full details
-            self._update_event_from_api(event, api_data)
+            changed = self._update_event_from_api(event, api_data)
+            if changed:
+                self._sync_epg_for_event(event)
 
             logger.info(f"Fetched full details for event {event_id}")
             self._stats["api_requests"] += 1
@@ -685,15 +701,21 @@ class PPVCalendarEnrichmentService:
             except Exception:
                 pass  # Ignore rollback errors
 
-    def _update_event_from_api(self, event: Event, api_data: Dict) -> None:
+    def _update_event_from_api(self, event: Event, api_data: Dict) -> bool:
         """
         Update an Event record with full API data.
 
         Args:
             event: Event model to update
             api_data: Data from TheSportsDB API
+
+        Returns:
+            True if scheduled_at or status changed.
         """
         try:
+            old_scheduled = to_naive_utc(event.scheduled_at) if event.scheduled_at else None
+            old_status = event.status
+
             # Update basic info
             event.sport = api_data.get("strSport", event.sport)
             event.league_name = api_data.get("strLeague", event.league_name)
@@ -705,18 +727,15 @@ class PPVCalendarEnrichmentService:
             event.away_team_name = api_data.get("strAwayTeam", event.away_team_name)
             event.away_team_id = api_data.get("idAwayTeam")
 
-            # Update scheduling
-            scheduled_str = api_data.get("strTimestamp") or api_data.get("dateEvent")
-            if scheduled_str:
-                try:
-                    if "T" in scheduled_str:
-                        event.scheduled_at = datetime.fromisoformat(scheduled_str.replace("Z", "+00:00"))
-                    else:
-                        event.scheduled_at = datetime.strptime(scheduled_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-                except (ValueError, TypeError):
-                    pass
+            # Update scheduling from canonical parser
+            scheduled, event_tz = parse_thesportsdb_scheduled_at(api_data)
+            if scheduled is not None:
+                event.scheduled_at = scheduled
+            if event_tz:
+                event.timezone = event_tz
 
             # Update venue info
+            event.venue_id = api_data.get("idVenue") or event.venue_id
             event.venue_name = api_data.get("strVenue")
             event.city = api_data.get("strCity")
             event.country = api_data.get("strCountry")
@@ -739,9 +758,50 @@ class PPVCalendarEnrichmentService:
 
             db.session.commit()
 
+            new_scheduled = to_naive_utc(event.scheduled_at) if event.scheduled_at else None
+            return new_scheduled != old_scheduled or event.status != old_status
+
         except Exception as e:
             logger.error(f"Error updating event {event.id} from API: {e}")
             db.session.rollback()
+            return False
+
+    def _sync_epg_for_event(self, event: Event) -> None:
+        """Update ppv_events EPG source row for a single event when timing/status changes."""
+        try:
+            from services.ppv.epg import PPVEpgService
+
+            PPVEpgService.sync_ppv_event_to_epg_channels(event)
+        except Exception as e:
+            logger.warning(f"Failed to sync EPG for event {event.external_id}: {e}")
+
+    def refresh_upcoming_event_times(self, hours_ahead: int = 48) -> Dict[str, Any]:
+        """Queue API refresh for matched events starting within the near-term window."""
+        with self.app.app_context():
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            window_start = now - timedelta(hours=3)
+            window_end = now + timedelta(hours=hours_ahead)
+
+            events = (
+                Event.query.join(EventChannelLink, Event.id == EventChannelLink.event_id)
+                .filter(
+                    Event.source == Event.SOURCE_THESPORTSDB,
+                    Event.scheduled_at >= window_start,
+                    Event.scheduled_at <= window_end,
+                    Event.status.notin_([Event.STATUS_FINISHED, Event.STATUS_CANCELLED]),
+                )
+                .distinct()
+                .all()
+            )
+
+            for event in events:
+                self._refresh_queue.put(event.external_id)
+
+            if events and (not self._detail_thread or not self._detail_thread.is_alive()):
+                self.start_detail_fetcher()
+
+            logger.info("Queued %s events for near-term time/status refresh", len(events))
+            return {"queued": len(events), "hours_ahead": hours_ahead}
 
     def _update_stats(self, results: Dict) -> None:
         """Update persistent statistics."""
@@ -761,6 +821,7 @@ class PPVCalendarEnrichmentService:
         """Get current enrichment service status."""
         return {
             "detail_queue_size": self._detail_queue.qsize(),
+            "refresh_queue_size": self._refresh_queue.qsize(),
             "detail_thread_running": (self._detail_thread.is_alive() if self._detail_thread else False),
             "calendar_cache_stats": self.calendar_scraper.get_cache_stats(),
             "cumulative_stats": {
@@ -770,6 +831,14 @@ class PPVCalendarEnrichmentService:
             },
             "session_stats": self._stats.copy(),
         }
+
+    def queue_event_detail(self, event_id: str) -> None:
+        """Queue a matched event for TheSportsDB detail fetch."""
+        if not event_id:
+            return
+        self._detail_queue.put(str(event_id))
+        if not self._detail_thread or not self._detail_thread.is_alive():
+            self.start_detail_fetcher()
 
 
 # =========================================================================

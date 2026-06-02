@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Iterable, Optional, Tuple
 
 from models import Channel, Event, EventChannelLink, db
+from services.datetime_utils import to_naive_utc
 from services.ppv.constants import MAX_EVENT_AGE_DAYS, MAX_EVENT_FUTURE_DAYS
 from services.thesportsdb_calendar_scraper import CalendarEvent
 
@@ -46,7 +47,9 @@ def create_or_update_event(calendar_event: CalendarEvent) -> Optional[Event]:
 
         if event:
             if calendar_event.scheduled_at:
-                event.scheduled_at = calendar_event.scheduled_at
+                event.scheduled_at = to_naive_utc(calendar_event.scheduled_at)
+            if calendar_event.timezone:
+                event.timezone = calendar_event.timezone
             if calendar_event.home_team:
                 event.home_team_name = calendar_event.home_team
             if calendar_event.away_team:
@@ -66,7 +69,10 @@ def create_or_update_event(calendar_event: CalendarEvent) -> Optional[Event]:
             away_team_id="",
             away_team_name=calendar_event.away_team or "Unknown",
             league_name=calendar_event.league_name,
-            scheduled_at=calendar_event.scheduled_at or datetime.now(timezone.utc),
+            scheduled_at=to_naive_utc(calendar_event.scheduled_at)
+            if calendar_event.scheduled_at
+            else datetime.now(timezone.utc).replace(tzinfo=None),
+            timezone=calendar_event.timezone,
             is_ppv=True,
             data_completeness="basic",
             status=Event.STATUS_SCHEDULED,

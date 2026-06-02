@@ -76,6 +76,7 @@ class CalendarEvent:
         event_url: Optional[str] = None,
         league_icon_url: Optional[str] = None,
         country_flag_url: Optional[str] = None,
+        timezone: Optional[str] = None,
     ):
         self.event_id = event_id
         self.event_name = event_name
@@ -87,6 +88,7 @@ class CalendarEvent:
         self.event_url = event_url
         self.league_icon_url = league_icon_url
         self.country_flag_url = country_flag_url
+        self.timezone = timezone
         # Cache the scheduled_at value to avoid recomputing and logging multiple times
         self._scheduled_at_cached: Optional[datetime] = None
         self._scheduled_at_computed: bool = False
@@ -156,6 +158,42 @@ class CalendarEvent:
 
     def __repr__(self) -> str:
         return f"CalendarEvent({self.event_id}: {self.event_name} @ {self.time_utc})"
+
+    @classmethod
+    def from_thesportsdb_api(cls, raw: Dict[str, Any], date: Optional[str] = None) -> Optional["CalendarEvent"]:
+        """Build a CalendarEvent from TheSportsDB API event dict with canonical time parsing."""
+        from services.datetime_utils import parse_thesportsdb_scheduled_at
+
+        event_id = str(raw.get("idEvent") or "")
+        if not event_id:
+            return None
+
+        event_name = raw.get("strEvent") or ""
+        home_team = raw.get("strHomeTeam")
+        away_team = raw.get("strAwayTeam")
+
+        scheduled, event_tz = parse_thesportsdb_scheduled_at(raw)
+        event_date = date or raw.get("dateEvent") or ""
+        if scheduled:
+            time_utc = scheduled.strftime("%H:%M")
+        else:
+            time_raw = raw.get("strTime") or ""
+            time_utc = time_raw[:5] if len(time_raw) >= 5 else time_raw
+
+        event = cls(
+            event_id=event_id,
+            event_name=event_name,
+            league_name=raw.get("strLeague") or "",
+            time_utc=time_utc,
+            date=event_date,
+            home_team=home_team,
+            away_team=away_team,
+            timezone=event_tz,
+        )
+        if scheduled:
+            event._scheduled_at_cached = scheduled.replace(tzinfo=timezone.utc)
+            event._scheduled_at_computed = True
+        return event
 
 
 class TheSportsDBCalendarScraper:
@@ -522,28 +560,7 @@ class TheSportsDBCalendarScraper:
 
     def _api_event_to_calendar_event(self, raw: Dict[str, Any], date: str) -> Optional[CalendarEvent]:
         """Convert a TheSportsDB API event dict to CalendarEvent."""
-        event_id = str(raw.get("idEvent") or "")
-        if not event_id:
-            return None
-
-        event_name = raw.get("strEvent") or ""
-        home_team = raw.get("strHomeTeam")
-        away_team = raw.get("strAwayTeam")
-        if not home_team or not away_team:
-            home_team, away_team = self._parse_teams_from_event_name(event_name)
-
-        time_raw = raw.get("strTime") or ""
-        time_utc = time_raw[:5] if len(time_raw) >= 5 else time_raw
-
-        return CalendarEvent(
-            event_id=event_id,
-            event_name=event_name,
-            league_name=raw.get("strLeague") or "",
-            time_utc=time_utc,
-            date=date,
-            home_team=home_team,
-            away_team=away_team,
-        )
+        return CalendarEvent.from_thesportsdb_api(raw, date=date)
 
     def _merge_calendar_events(
         self,

@@ -14,7 +14,9 @@ This proxy exposes a **live-only** Xtream Codes API (`routes/xtream.py`).
 
 ## EPG channel IDs
 
-Live streams use `epg_channel_id` = `ch-{account_id}-{stream_id}`. PPV channels with matched events may use `event-{event_id}` in M3U `tvg-id`.
+Live streams use `epg_channel_id` = `ch-{account_id}-{stream_id}`. PPV channels with matched events use `event-{event_id}` in M3U `tvg-id`, XMLTV `<channel id>`, and `<programme channel>`.
+
+Playlist and Xtream XMLTV EPG (`/epg/*.xml`, `/xmltv.php`) include PPV programme entries from linked `Event` records when traditional `EpgProgram` data is not present.
 
 ## M3U stream URLs
 

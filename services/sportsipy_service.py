@@ -445,14 +445,31 @@ def refresh_teams_from_sportsipy(
                     if existing:
                         # Update existing team
                         existing.name = team.name
+                        city = getattr(team, "city", None) or getattr(team, "location", None)
+                        if city:
+                            existing.city = str(city)
+                            from services.ppv.city_timezone_map import iana_for_city
+
+                            tz = iana_for_city(str(city))
+                            if tz:
+                                existing.iana_timezone = tz
                         existing.last_updated_at = datetime.now()
                         stats["teams_updated"] += 1
                     else:
                         # Create new team
+                        city = getattr(team, "city", None) or getattr(team, "location", None)
+                        city_str = str(city) if city else None
+                        iana_tz = None
+                        if city_str:
+                            from services.ppv.city_timezone_map import iana_for_city
+
+                            iana_tz = iana_for_city(city_str)
                         new_team = SportsTeam(
                             sport=sport,
                             abbreviation=team.abbreviation,
                             name=team.name,
+                            city=city_str,
+                            iana_timezone=iana_tz,
                             source="sportsipy",
                         )
                         # Generate default aliases

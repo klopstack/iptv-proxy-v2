@@ -202,6 +202,7 @@ def export_config_bundle():
                 "enabled": account.enabled,
                 "ppv_visibility": account.ppv_visibility,
                 "ppv_rename_format": account.ppv_rename_format,
+                "ppv_rename_timezone": account.ppv_rename_timezone,
                 "fcc_rename_format": account.fcc_rename_format,
             }
             for account in accounts
@@ -368,6 +369,7 @@ def _resolve_account(
         enabled=payload.get("enabled", True),
         ppv_visibility=payload.get("ppv_visibility", "hide_inactive"),
         ppv_rename_format=payload.get("ppv_rename_format"),
+        ppv_rename_timezone=payload.get("ppv_rename_timezone"),
         fcc_rename_format=payload.get("fcc_rename_format"),
     )
     db.session.add(account)
@@ -444,6 +446,7 @@ def import_config_bundle():
             account.enabled = account_data.get("enabled", account.enabled)
             account.ppv_visibility = account_data.get("ppv_visibility", account.ppv_visibility)
             account.ppv_rename_format = account_data.get("ppv_rename_format", account.ppv_rename_format)
+            account.ppv_rename_timezone = account_data.get("ppv_rename_timezone", account.ppv_rename_timezone)
             account.fcc_rename_format = account_data.get("fcc_rename_format", account.fcc_rename_format)
             stats["accounts"]["updated"] += 1
             continue
@@ -457,6 +460,7 @@ def import_config_bundle():
                 enabled=account_data.get("enabled", True),
                 ppv_visibility=account_data.get("ppv_visibility", "hide_inactive"),
                 ppv_rename_format=account_data.get("ppv_rename_format"),
+                ppv_rename_timezone=account_data.get("ppv_rename_timezone"),
                 fcc_rename_format=account_data.get("fcc_rename_format"),
             )
         )

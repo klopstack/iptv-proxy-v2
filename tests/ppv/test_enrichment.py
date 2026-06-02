@@ -198,9 +198,18 @@ class TestGroupByDate:
         with app.app_context():
             service = PPVCalendarEnrichmentService(app)
 
-            channel1 = Mock(name="Event Jan 5")
-            channel2 = Mock(name="Event Jan 6")
-            channel3 = Mock(name="Another Jan 5")
+            channel1 = Mock()
+            channel1.name = "Event Jan 5"
+            channel1.account_id = 1
+            channel1.stream_id = "s1"
+            channel2 = Mock()
+            channel2.name = "Event Jan 6"
+            channel2.account_id = 1
+            channel2.stream_id = "s2"
+            channel3 = Mock()
+            channel3.name = "Another Jan 5"
+            channel3.account_id = 1
+            channel3.stream_id = "s3"
 
             extractions = [
                 (channel1, {"date": "2026-01-05", "competitors": ("A", "B")}),
@@ -686,6 +695,8 @@ class TestUpdateEventFromApi:
                 "strAwayTeam": "Hill",
                 "idAwayTeam": "456",
                 "strTimestamp": "2026-01-05T22:00:00Z",
+                "dateEvent": "2026-01-05",
+                "strTime": "22:00:00",
                 "strVenue": "T-Mobile Arena",
                 "strCity": "Las Vegas",
                 "strCountry": "USA",
@@ -693,14 +704,17 @@ class TestUpdateEventFromApi:
                 "strStatus": "Not Started",
             }
 
-            service._update_event_from_api(event, api_data)
+            changed = service._update_event_from_api(event, api_data)
 
+            assert changed is True
             assert event.sport == "MMA"
             assert event.league_name == "UFC"
             assert event.home_team_name == "Pereira"
             assert event.away_team_name == "Hill"
             assert event.venue_name == "T-Mobile Arena"
             assert event.city == "Las Vegas"
+            assert event.scheduled_at == datetime(2026, 1, 5, 22, 0)
+            assert event.scheduled_at.tzinfo is None
             assert event.data_completeness == "full"
 
     def test_updates_status_finished(self, app, db):
@@ -919,3 +933,115 @@ class TestFarFutureEnrichmentFilter:
                 result = service.enrich_channels([ch], fetch_details=False)
 
             assert result["no_extraction"] == 0
+
+
+class TestRefreshUpcomingEventTimes:
+    def test_queues_matched_near_term_events(self, app, db):
+        from models import Account, Category, Channel, Event, EventChannelLink
+
+        with app.app_context():
+            account = Account(name="Test", server="test.com")
+            db.session.add(account)
+            db.session.flush()
+
+            category = Category(account_id=account.id, category_id="1", category_name="PPV")
+            db.session.add(category)
+            db.session.flush()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id=100,
+                name="Test PPV Channel",
+                category_id=category.id,
+                is_ppv=True,
+            )
+            db.session.add(channel)
+            db.session.flush()
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            event = Event(
+                external_id="refresh-1",
+                source=Event.SOURCE_THESPORTSDB,
+                home_team_id="1",
+                home_team_name="Home",
+                away_team_id="2",
+                away_team_name="Away",
+                scheduled_at=now + timedelta(hours=6),
+                status=Event.STATUS_SCHEDULED,
+                data_completeness="full",
+                is_ppv=True,
+            )
+            db.session.add(event)
+            db.session.flush()
+            link = EventChannelLink(
+                event_id=event.id,
+                channel_id=channel.id,
+                match_confidence=0.9,
+                match_method="test",
+            )
+            db.session.add(link)
+            db.session.commit()
+
+            service = PPVCalendarEnrichmentService(app)
+            stats = service.refresh_upcoming_event_times(hours_ahead=48)
+
+            assert stats["queued"] == 1
+
+    def test_force_refresh_bypasses_completeness_skip(self, app, db):
+        from models import Event
+
+        with app.app_context():
+            event = Event(
+                external_id="99999",
+                source=Event.SOURCE_THESPORTSDB,
+                home_team_id="1",
+                home_team_name="Home",
+                away_team_id="2",
+                away_team_name="Away",
+                scheduled_at=datetime(2026, 1, 5, 22, 0),
+                status=Event.STATUS_SCHEDULED,
+                data_completeness="full",
+            )
+            db.session.add(event)
+            db.session.commit()
+
+            service = PPVCalendarEnrichmentService(app)
+            with patch.object(service.thesportsdb, "get_event_by_id") as mock_api:
+                mock_api.return_value = {
+                    "strHomeTeam": "Home",
+                    "strAwayTeam": "Away",
+                    "idHomeTeam": "1",
+                    "idAwayTeam": "2",
+                    "strTimestamp": "2026-01-05T22:00:00Z",
+                    "dateEvent": "2026-01-05",
+                    "strTime": "22:00:00",
+                    "strStatus": "In Progress",
+                }
+                service._fetch_event_details("99999", force_refresh=True)
+
+            db.session.refresh(event)
+            assert event.status == Event.STATUS_LIVE
+
+
+class TestMetadataUtcRenameDisplay:
+    def test_us_kickoff_metadata_utc_renames_to_eastern(self, app):
+        from models import Channel, Event
+        from services.playlist_format_service import _apply_ppv_rename_format
+
+        with app.app_context():
+            channel = Channel(id=1, name="PPV", cleaned_name="PPV")
+            event = Event(
+                home_team_id="1",
+                away_team_id="2",
+                home_team_name="Chiefs",
+                away_team_name="Eagles",
+                external_id="kickoff-1",
+                scheduled_at=datetime(2026, 1, 6, 0, 0),
+            )
+            name = _apply_ppv_rename_format(
+                channel,
+                "{home_team} vs {away_team} - {start_time} {date}",
+                event,
+                timezone_name="America/New_York",
+            )
+            assert name == "Chiefs vs Eagles - 7:00 PM Jan 5"

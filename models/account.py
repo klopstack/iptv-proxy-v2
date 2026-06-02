@@ -31,6 +31,8 @@ class Account(db.Model):  # type: ignore[name-defined]
     # Channel rename format templates (None = use original cleaned_name)
     # PPV template tokens: {league}, {sport}, {home_team}, {away_team}, {start_time}, {date}
     ppv_rename_format = db.Column(db.Text, nullable=True)
+    # IANA timezone for {start_time} and {date} tokens (None = America/New_York)
+    ppv_rename_timezone = db.Column(db.String(50), nullable=True)
     # FCC template tokens: {network}, {callsign}, {broadcast_channel}, {market}
     fcc_rename_format = db.Column(db.Text, nullable=True)
 
@@ -189,6 +191,9 @@ class XtreamCredential(db.Model):  # type: ignore[name-defined]
     # Optional: Apply same filters as web UI
     use_filters = db.Column(db.Boolean, default=True)
     collapse_duplicates = db.Column(db.Boolean, default=False)
+
+    # IANA timezone override for PPV rename {start_time}/{date} tokens (None = use account default)
+    ppv_rename_timezone = db.Column(db.String(50), nullable=True)
 
     # Metadata
     enabled = db.Column(db.Boolean, default=True)

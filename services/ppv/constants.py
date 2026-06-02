@@ -88,6 +88,37 @@ SPORT_GRACE_HOURS = {
 }
 DEFAULT_SPORT_GRACE_HOURS = 6
 
+# Feed region → default IANA for single-zone countries (PPV title timezone inference)
+COUNTRY_PREFIX_TZ: dict[str, str] = {
+    "UK": "Europe/London",
+    "GB": "Europe/London",
+    "IE": "Europe/Dublin",
+    "NL": "Europe/Amsterdam",
+    "BE": "Europe/Brussels",
+    "DE": "Europe/Berlin",
+    "FR": "Europe/Paris",
+    "ES": "Europe/Madrid",
+    "IT": "Europe/Rome",
+    "PT": "Europe/Lisbon",
+    "SE": "Europe/Stockholm",
+    "NO": "Europe/Oslo",
+    "DK": "Europe/Copenhagen",
+    "FI": "Europe/Helsinki",
+    "PL": "Europe/Warsaw",
+    "AT": "Europe/Vienna",
+    "CH": "Europe/Zurich",
+    "GR": "Europe/Athens",
+    "TR": "Europe/Istanbul",
+    "RU": "Europe/Moscow",
+    "JP": "Asia/Tokyo",
+    "AU": "Australia/Sydney",
+    "NZ": "Pacific/Auckland",
+    "MX": "America/Mexico_City",
+    "BR": "America/Sao_Paulo",
+}
+
+US_STYLE_REGION_CODES = frozenset({"US", "CA", "JP"})
+
 
 def get_sport_grace_hours(sport_name: Optional[str]) -> int:
     """Return hours after scheduled_at to keep a linked event visible in the playlist."""

@@ -351,7 +351,10 @@ class EnhancedPPVMatcher:
 
         # Step 4: If we have a date, try calendar search for that specific date
         if info["date"]:
-            date_str = info["date"].strftime("%Y-%m-%d")
+            from services.ppv.channel_matching import build_matching_context_from_name
+
+            ctx = build_matching_context_from_name(channel_name, self._extractor.extract_all(channel_name))
+            date_str = ctx.get("calendar_date") or info["date"].strftime("%Y-%m-%d")
             result = self._try_calendar_search(
                 channel_name=channel_name,
                 date_str=date_str,
@@ -395,10 +398,19 @@ class EnhancedPPVMatcher:
     def _try_reverse_match(self, channel_name: str, min_confidence: float):
         """Try to match using the reverse event matcher."""
         try:
+            extraction = self._extractor.extract_all(channel_name)
+            from services.ppv.channel_matching import build_matching_context_from_name
+
+            ctx = build_matching_context_from_name(channel_name, extraction)
+            channel_date_for_match = ctx.get("channel_date_for_match")
             matches = self.reverse_matcher.find_matches(
                 channel_name=channel_name,
                 max_results=1,
                 min_confidence=min_confidence,
+                use_channel_date=channel_date_for_match is None,
+                channel_date=channel_date_for_match,
+                channel_timezone="UTC" if channel_date_for_match is not None else None,
+                date_tolerance_hours=ctx.get("date_tolerance_hours"),
             )
             if matches:
                 return matches[0]
@@ -459,23 +471,7 @@ class EnhancedPPVMatcher:
 
     def _api_result_to_calendar_event(self, api_result: Dict[str, Any]) -> Optional[CalendarEvent]:
         """Convert TheSportsDB API result to CalendarEvent format."""
-        try:
-            event_id = api_result.get("idEvent", "")
-            if not event_id:
-                return None
-
-            return CalendarEvent(
-                event_id=str(event_id),
-                event_name=api_result.get("strEvent", ""),
-                league_name=api_result.get("strLeague", ""),
-                time_utc=api_result.get("strTime", ""),
-                date=api_result.get("dateEvent", ""),
-                home_team=api_result.get("strHomeTeam"),
-                away_team=api_result.get("strAwayTeam"),
-            )
-        except Exception as e:
-            logger.warning(f"Error converting API result: {e}")
-            return None
+        return CalendarEvent.from_thesportsdb_api(api_result)
 
     def batch_find_matches(
         self,

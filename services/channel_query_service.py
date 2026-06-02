@@ -28,13 +28,40 @@ class ChannelQueryService:
     """Single source of truth for which channels appear in client outputs."""
 
     @staticmethod
-    def epg_channel_id_for_channel(channel: Channel) -> str:
-        """EPG/tvg-id used consistently across M3U, Xtream, and XMLTV outputs."""
-        if channel.is_ppv:
+    def _epg_channel_id_for_channel(channel: Channel, event_id_by_channel_id: Optional[dict] = None) -> str:
+        """Resolve EPG/tvg-id for one channel (optional preloaded event link map)."""
+        if channel.is_ppv and event_id_by_channel_id is not None:
+            event_id = event_id_by_channel_id.get(channel.id)
+            if event_id is not None:
+                return f"event-{event_id}"
+        elif channel.is_ppv:
             link = EventChannelLink.query.filter_by(channel_id=channel.id).first()
             if link:
                 return f"event-{link.event_id}"
         return f"ch-{channel.account_id}-{channel.stream_id}"
+
+    @staticmethod
+    def epg_channel_id_for_channel(channel: Channel) -> str:
+        """EPG/tvg-id used consistently across M3U, Xtream, and XMLTV outputs."""
+        return ChannelQueryService._epg_channel_id_for_channel(channel)
+
+    @staticmethod
+    def epg_channel_ids_for_channels(channels: List[Channel]) -> Dict[int, str]:
+        """Batch-resolve output XMLTV/tvg-id per channel (avoids N+1)."""
+        if not channels:
+            return {}
+
+        ppv_channel_ids = [ch.id for ch in channels if ch.is_ppv]
+        event_id_by_channel_id: Dict[int, int] = {}
+        if ppv_channel_ids:
+            rows = (
+                db.session.query(EventChannelLink.channel_id, EventChannelLink.event_id)
+                .filter(EventChannelLink.channel_id.in_(ppv_channel_ids))
+                .all()
+            )
+            event_id_by_channel_id = {channel_id: event_id for channel_id, event_id in rows}
+
+        return {ch.id: ChannelQueryService._epg_channel_id_for_channel(ch, event_id_by_channel_id) for ch in channels}
 
     @staticmethod
     def _load_tag_ids_for_channels(channels: List[Channel]) -> dict:

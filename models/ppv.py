@@ -205,6 +205,7 @@ class SportsTeam(db.Model):  # type: ignore[name-defined]
 
     # Team metadata
     city = db.Column(db.String(100))
+    iana_timezone = db.Column(db.String(50))
     conference = db.Column(db.String(100))
     division = db.Column(db.String(100))
 
@@ -281,3 +282,36 @@ class SportsTeam(db.Model):  # type: ignore[name-defined]
 
     def __repr__(self):
         return f"<SportsTeam {self.sport.upper()}: {self.name} ({self.abbreviation})>"
+
+    @classmethod
+    def resolve_team(cls, name_or_alias: str, sport: Optional[str] = None) -> Optional["SportsTeam"]:
+        """Find a team by full name or alias."""
+        if not name_or_alias or not name_or_alias.strip():
+            return None
+        key = name_or_alias.strip().lower()
+        query = cls.query
+        if sport:
+            query = query.filter_by(sport=sport.lower())
+        teams = query.all()
+        for team in teams:
+            if team.name.lower() == key:
+                return team
+            if key in team.get_aliases():
+                return team
+            if key in team.name.lower() or team.name.lower() in key:
+                return team
+        return None
+
+    @classmethod
+    def home_timezone_for_team(cls, name_or_alias: str, sport: Optional[str] = None) -> Optional[str]:
+        """Return IANA timezone for a team's home city."""
+        team = cls.resolve_team(name_or_alias, sport)
+        if team and team.iana_timezone:
+            return team.iana_timezone
+        if team and team.city:
+            from services.ppv.city_timezone_map import iana_for_city
+
+            return iana_for_city(team.city)
+        from services.ppv.city_timezone_map import iana_for_team_city
+
+        return iana_for_team_city(name_or_alias)

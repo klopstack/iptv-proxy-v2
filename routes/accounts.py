@@ -18,7 +18,7 @@ from services.account_epg_source_service import (
 from services.cache_service import CacheService
 from services.channel_query_service import ChannelQueryService
 from services.connection_manager import ConnectionManager
-from services.datetime_utils import serialize_utc_iso
+from services.datetime_utils import DEFAULT_DISPLAY_TIMEZONE, serialize_utc_iso
 from services.iptv_service import IPTVService, get_iptv_service_for_account
 from services.tag_service import TagService
 
@@ -80,6 +80,7 @@ def get_accounts():
             "enabled": a.enabled,
             "ppv_visibility": a.ppv_visibility,
             "ppv_rename_format": a.ppv_rename_format,
+            "ppv_rename_timezone": a.ppv_rename_timezone,
             "fcc_rename_format": a.fcc_rename_format,
             "credentials": [credential_to_dict(c) for c in a.credentials],
             "total_max_connections": a.get_total_max_connections(),
@@ -242,21 +243,44 @@ def update_ppv_rename_format(account_id):
 
     Request body:
     {
-        "ppv_rename_format": "{league} {sport}: {home_team} vs {away_team} - {start_time} {date}"
+        "ppv_rename_format": "{league} {sport}: {home_team} vs {away_team} - {start_time} {date}",
+        "ppv_rename_timezone": "America/New_York"
     }
 
-    Set to null or empty string to disable.
+    Set format to null or empty string to disable.
     Supported tokens: {league}, {sport}, {home_team}, {away_team}, {start_time}, {date}
+    {start_time} and {date} are rendered in ppv_rename_timezone (default: America/New_York).
     """
-    account = Account.query.get_or_404(account_id)
-    data = request.get_json()
+    from zoneinfo import ZoneInfo
 
-    fmt = data.get("ppv_rename_format")
-    account.ppv_rename_format = fmt if fmt else None
+    account = Account.query.get_or_404(account_id)
+    data = request.get_json() or {}
+
+    if "ppv_rename_format" in data:
+        fmt = data.get("ppv_rename_format")
+        account.ppv_rename_format = fmt if fmt else None
+
+    if "ppv_rename_timezone" in data:
+        tz = (data.get("ppv_rename_timezone") or "").strip()
+        if tz:
+            try:
+                ZoneInfo(tz)
+            except Exception:
+                return jsonify({"error": f"Invalid timezone: {tz}"}), 400
+            account.ppv_rename_timezone = tz
+        else:
+            account.ppv_rename_timezone = None
+
     db.session.commit()
     cache_service.clear_account_cache(account_id)
 
-    return jsonify({"id": account.id, "ppv_rename_format": account.ppv_rename_format})
+    return jsonify(
+        {
+            "id": account.id,
+            "ppv_rename_format": account.ppv_rename_format,
+            "ppv_rename_timezone": account.ppv_rename_timezone or DEFAULT_DISPLAY_TIMEZONE,
+        }
+    )
 
 
 @accounts_bp.route("/api/accounts/<int:account_id>/fcc-rename-format", methods=["PUT"])

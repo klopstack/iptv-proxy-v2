@@ -12,8 +12,10 @@ This replaces the original 1148-line monolithic ReverseEventMatcher class.
 """
 
 import logging
+from datetime import datetime
 from typing import List, Optional
 
+from services.datetime_utils import parse_title_timezone
 from services.reverse_event_matcher.date_extractor import DateExtractor
 from services.reverse_event_matcher.event_index import EventIndex
 from services.reverse_event_matcher.match_filter import DateFilter, MatchFilter
@@ -185,6 +187,10 @@ class ReverseEventMatcher:
         min_confidence: float = LOW_CONFIDENCE,
         date_filter: DateFilter = DateFilter.RECENT_AND_UPCOMING,
         use_channel_date: bool = True,
+        *,
+        channel_date: Optional[datetime] = None,
+        channel_timezone: Optional[str] = None,
+        date_tolerance_hours: Optional[int] = None,
     ) -> List[MatchResult]:
         """
         Find events that match the given channel name.
@@ -211,12 +217,13 @@ class ReverseEventMatcher:
             logger.debug(f"Skipping generic channel: {channel_name[:50]}")
             return []
 
-        # Extract date from channel name if enabled
-        channel_date = None
-        if use_channel_date:
-            channel_date = self._date_extractor.extract_date(channel_name)
-            if channel_date:
-                logger.debug(f"Extracted date from channel: {channel_date}")
+        # Extract date from channel name if enabled (unless pre-resolved UTC date passed)
+        resolved_date = channel_date
+        resolved_tz = channel_timezone or parse_title_timezone(channel_name)
+        if use_channel_date and resolved_date is None:
+            resolved_date = self._date_extractor.extract_date(channel_name)
+            if resolved_date:
+                logger.debug(f"Extracted date from channel: {resolved_date}")
 
         # Normalize channel name and extract significant words
         normalized_channel = self._text_processor.normalize_text(channel_name)
@@ -239,10 +246,12 @@ class ReverseEventMatcher:
         # Filter, boost, deduplicate, and sort results
         filtered_matches = self._match_filter.filter_matches(
             matches=all_matches,
-            channel_date=channel_date,
+            channel_date=resolved_date,
             date_filter=date_filter,
             min_confidence=min_confidence,
             max_results=max_results,
+            channel_timezone=resolved_tz,
+            date_tolerance_hours=date_tolerance_hours,
         )
 
         if filtered_matches:

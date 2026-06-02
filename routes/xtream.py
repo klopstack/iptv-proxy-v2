@@ -14,6 +14,11 @@ from services.channel_query_service import ChannelQueryService
 from services.datetime_utils import serialize_utc_iso
 from services.epg.ppv import is_ppv_category
 from services.image_cache_service import ImageCacheService
+from services.playlist_format_service import (
+    build_channel_display_maps,
+    channel_display_name,
+    load_accounts_for_channels,
+)
 from services.ppv.visibility import PPVVisibilityService
 from services.url_service import get_proxy_base_url
 
@@ -40,6 +45,44 @@ def _utc_xmltv_datetime(dt):
     """Format datetime in XMLTV-compatible UTC format."""
     aware = _as_utc_aware(dt)
     return aware.strftime("%Y%m%d%H%M%S %z") if aware else ""
+
+
+def _build_xtream_display_context(xtream_cred, account, channels):
+    """Build account/event/FCC lookup data for Xtream channel display names."""
+    accounts_by_id = load_accounts_for_channels(channels, account=account)
+    event_map, fcc_map = build_channel_display_maps(channels, accounts_by_id)
+    return accounts_by_id, event_map, fcc_map
+
+
+def _xtream_channel_name(channel, *, xtream_cred, accounts_by_id, event_map, fcc_map):
+    """Resolve formatted channel name for Xtream output."""
+    channel_account = accounts_by_id.get(channel.account_id)
+    if not channel_account:
+        return channel.cleaned_name or channel.name
+
+    return channel_display_name(
+        channel,
+        account=channel_account,
+        event=event_map.get(channel.id),
+        fcc_facility=fcc_map.get(channel.id),
+        ppv_rename_timezone_override=xtream_cred.ppv_rename_timezone,
+    )
+
+
+def _validate_ppv_rename_timezone(tz):
+    """Validate IANA timezone name. Returns stripped tz or None. Raises ValueError if invalid."""
+    from zoneinfo import ZoneInfo
+
+    if tz is None:
+        return None
+    tz = tz.strip()
+    if not tz:
+        return None
+    try:
+        ZoneInfo(tz)
+    except Exception as exc:
+        raise ValueError(f"Invalid timezone: {tz}") from exc
+    return tz
 
 
 def _utc_unix_timestamp(dt):
@@ -347,6 +390,8 @@ def get_live_streams(xtream_cred, account, playlist_config):
     # Initialize image cache for icon proxying
     image_cache = ImageCacheService.get_instance()
 
+    accounts_by_id, event_map, fcc_map = _build_xtream_display_context(xtream_cred, account, channels)
+
     # Build streams list
     streams = []
     for ch in channels:
@@ -360,7 +405,13 @@ def get_live_streams(xtream_cred, account, playlist_config):
 
         stream_data = {
             "num": int(ch.stream_id),
-            "name": ch.cleaned_name or ch.name,
+            "name": _xtream_channel_name(
+                ch,
+                xtream_cred=xtream_cred,
+                accounts_by_id=accounts_by_id,
+                event_map=event_map,
+                fcc_map=fcc_map,
+            ),
             "stream_type": "live",
             "stream_id": int(ch.stream_id),
             "stream_icon": icon_url,
@@ -436,20 +487,23 @@ def get_short_epg(xtream_cred, account, playlist_config):
         if link:
             event = db.session.get(Event, link.event_id)
             if event and event.scheduled_at:
+                from services.epg.ppv_generation import build_event_description, event_end_time, event_programme_title
+
                 start = event.scheduled_at
                 if start.tzinfo is None:
                     start = start.replace(tzinfo=timezone.utc)
-                end = start + timedelta(hours=4)
-                title = event.title or f"{event.home_team_name} vs {event.away_team_name}"
+                end = event_end_time(event)
+                if end.tzinfo is None:
+                    end = end.replace(tzinfo=timezone.utc)
                 listings.append(
                     {
                         "id": str(event.id),
                         "epg_id": epg_channel_id,
-                        "title": title,
+                        "title": event_programme_title(event),
                         "lang": "en",
                         "start": _utc_xmltv_datetime(start),
                         "end": _utc_xmltv_datetime(end),
-                        "description": event.league_name or "",
+                        "description": build_event_description(event, link),
                         "channel_id": stream_id,
                         "start_timestamp": _utc_unix_timestamp(start),
                         "stop_timestamp": _utc_unix_timestamp(end),
@@ -482,9 +536,17 @@ def get_simple_data_table(xtream_cred, account, playlist_config):
     image_cache = ImageCacheService.get_instance()
     icon_url = image_cache.get_proxy_url(channel.stream_icon, proxy_base) if channel.stream_icon else ""
 
+    accounts_by_id, event_map, fcc_map = _build_xtream_display_context(xtream_cred, account, [channel])
+
     info = {
         "num": int(channel.stream_id),
-        "name": channel.cleaned_name or channel.name,
+        "name": _xtream_channel_name(
+            channel,
+            xtream_cred=xtream_cred,
+            accounts_by_id=accounts_by_id,
+            event_map=event_map,
+            fcc_map=fcc_map,
+        ),
         "stream_type": "live",
         "stream_id": int(channel.stream_id),
         "stream_icon": icon_url,
@@ -678,6 +740,7 @@ def list_xtream_credentials():
                 "playlist_config_id": c.playlist_config_id,
                 "use_filters": c.use_filters,
                 "collapse_duplicates": c.collapse_duplicates,
+                "ppv_rename_timezone": c.ppv_rename_timezone,
                 "enabled": c.enabled,
                 "description": c.description,
                 "created_at": serialize_utc_iso(c.created_at),
@@ -707,6 +770,11 @@ def create_xtream_credential():
         return jsonify({"error": "Username already exists"}), 409
 
     # Create credential
+    try:
+        ppv_rename_timezone = _validate_ppv_rename_timezone(data.get("ppv_rename_timezone"))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
     credential = XtreamCredential(
         username=data["username"],
         password=data["password"],
@@ -714,6 +782,7 @@ def create_xtream_credential():
         playlist_config_id=data.get("playlist_config_id"),
         use_filters=data.get("use_filters", True),
         collapse_duplicates=data.get("collapse_duplicates", False),
+        ppv_rename_timezone=ppv_rename_timezone,
         enabled=data.get("enabled", True),
         description=data.get("description", ""),
     )
@@ -732,6 +801,7 @@ def create_xtream_credential():
                 "playlist_config_id": credential.playlist_config_id,
                 "use_filters": credential.use_filters,
                 "collapse_duplicates": credential.collapse_duplicates,
+                "ppv_rename_timezone": credential.ppv_rename_timezone,
                 "enabled": credential.enabled,
                 "description": credential.description,
             }
@@ -762,6 +832,11 @@ def update_xtream_credential(credential_id):
         credential.enabled = data["enabled"]
     if "description" in data:
         credential.description = data["description"]
+    if "ppv_rename_timezone" in data:
+        try:
+            credential.ppv_rename_timezone = _validate_ppv_rename_timezone(data.get("ppv_rename_timezone"))
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
 
     db.session.commit()
 
@@ -773,6 +848,7 @@ def update_xtream_credential(credential_id):
             "playlist_config_id": credential.playlist_config_id,
             "use_filters": credential.use_filters,
             "collapse_duplicates": credential.collapse_duplicates,
+            "ppv_rename_timezone": credential.ppv_rename_timezone,
             "enabled": credential.enabled,
             "description": credential.description,
         }

@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from models import Account, Category, Channel, ChannelTag, PlaylistConfig, Tag, db
+from models import Account, Category, Channel, ChannelTag, Event, EventChannelLink, PlaylistConfig, Tag, db
 from services.channel_query_service import ChannelQueryService
 
 
@@ -710,3 +710,67 @@ class TestEPGProxy:
         epg_content = epg_response.data.decode("utf-8")
         assert f'<channel id="{ppv_tvg_id}"' not in epg_content
         assert f'id="{ppv_tvg_id}"' not in epg_content
+
+    def test_epg_includes_matched_ppv_programme(self, app, client):
+        """Visible PPV channel with linked event gets XMLTV programme on account EPG."""
+        import xml.etree.ElementTree as ET
+        from datetime import datetime, timedelta, timezone
+
+        with app.app_context():
+            account = Account(
+                name="PPV EPG Route",
+                username="ppv_epg_user",
+                password="ppv_epg_pass",
+                server="example.com",
+                enabled=True,
+                ppv_visibility="hide_inactive",
+            )
+            db.session.add(account)
+            db.session.flush()
+
+            category = Category(
+                account_id=account.id,
+                category_id="ppv",
+                category_name="UK| ESPN+ PPV",
+            )
+            db.session.add(category)
+            db.session.flush()
+
+            upcoming = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=4)
+            event = Event(
+                external_id="route-ppv-1",
+                home_team_id="1",
+                home_team_name="Bulls",
+                away_team_id="2",
+                away_team_name="Knicks",
+                scheduled_at=upcoming,
+                status=Event.STATUS_SCHEDULED,
+                is_ppv=True,
+            )
+            db.session.add(event)
+            db.session.flush()
+
+            ppv = Channel(
+                account_id=account.id,
+                stream_id="ppv_route",
+                name="US: ESPN+ PPV - Bulls vs Knicks",
+                category_id=category.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+                ppv_enrichment_status="matched",
+            )
+            db.session.add(ppv)
+            db.session.flush()
+            db.session.add(EventChannelLink(channel_id=ppv.id, event_id=event.id))
+            db.session.commit()
+            account_id = account.id
+            ppv_tvg_id = ChannelQueryService.epg_channel_id_for_channel(ppv)
+
+        epg_response = client.get(f"/epg/{account_id}.xml")
+        assert epg_response.status_code == 200
+        root = ET.fromstring(epg_response.data)
+        assert any(ch.get("id") == ppv_tvg_id for ch in root.findall("channel"))
+        programmes = [p for p in root.findall("programme") if p.get("channel") == ppv_tvg_id]
+        assert len(programmes) == 1
+        assert programmes[0].find("title").text == "Bulls vs Knicks"

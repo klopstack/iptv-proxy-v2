@@ -120,15 +120,30 @@ class TestDateMatching:
         assert boost == 0.0
 
     def test_timezone_naive_dates(self, match_filter):
-        """Test that timezone-naive dates are handled correctly."""
-        # Both dates naive - should be treated as UTC
-        channel_date = datetime(2026, 1, 4, 14, 0)  # No timezone
-        event_date = datetime(2026, 1, 4, 16, 0)  # No timezone, 2 hours later
+        """Naive channel dates use Eastern; naive metadata event dates use UTC."""
+        channel_date = datetime(2026, 1, 4, 14, 0)  # 2 PM Eastern
+        event_date = datetime(2026, 1, 4, 19, 0)  # 7 PM UTC (same instant)
 
         matches, boost = match_filter._check_date_match(channel_date, event_date)
 
         assert matches is True
-        assert boost == 0.15  # Within close match threshold
+        assert boost == 0.15
+
+    def test_channel_utc_title_timezone(self, match_filter):
+        """Channel dates with UTC title hint compare against metadata UTC times."""
+        from zoneinfo import ZoneInfo
+
+        channel_date = datetime(2026, 1, 4, 19, 0)
+        event_date = datetime(2026, 1, 4, 19, 0)
+
+        matches, boost = match_filter._check_date_match(
+            channel_date,
+            event_date,
+            channel_tz=ZoneInfo("UTC"),
+        )
+
+        assert matches is True
+        assert boost == 0.15
 
 
 class TestConfidenceFiltering:

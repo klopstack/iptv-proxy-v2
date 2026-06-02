@@ -171,7 +171,29 @@
                         <textarea class="form-control" id="credential-description" rows="2"></textarea>
                         <div class="form-text">Optional notes about this credential</div>
                     </div>
+
+                    <div class="mb-3">
+                        <label for="credential-ppv-rename-timezone" class="form-label">PPV Rename Timezone</label>
+                        <input type="text" class="form-control" id="credential-ppv-rename-timezone"
+                               list="xtream-timezone-options"
+                               placeholder="Leave blank to use account default">
+                        <div class="form-text">
+                            Override timezone for PPV channel <code>{start_time}</code> and <code>{date}</code> tokens.
+                        </div>
+                    </div>
                 </form>
+                <datalist id="xtream-timezone-options">
+                    <option value="America/New_York"></option>
+                    <option value="America/Chicago"></option>
+                    <option value="America/Denver"></option>
+                    <option value="America/Los_Angeles"></option>
+                    <option value="America/Phoenix"></option>
+                    <option value="Europe/London"></option>
+                    <option value="Europe/Paris"></option>
+                    <option value="Europe/Berlin"></option>
+                    <option value="Australia/Sydney"></option>
+                    <option value="UTC"></option>
+                </datalist>
                 <div id="form-error" class="alert alert-danger mt-3" style="display: none;"></div>
             </div>
             <div class="modal-footer">
@@ -350,6 +372,7 @@ function saveCredential() {
     const collapseDuplicates = document.getElementById('credential-collapse-duplicates').checked;
     const enabled = document.getElementById('credential-enabled').checked;
     const description = document.getElementById('credential-description').value.trim();
+    const ppvRenameTimezone = document.getElementById('credential-ppv-rename-timezone').value.trim();
     
     // Validation
     if (!username) {
@@ -375,7 +398,8 @@ function saveCredential() {
         use_filters: useFilters,
         collapse_duplicates: collapseDuplicates,
         enabled,
-        description
+        description,
+        ppv_rename_timezone: ppvRenameTimezone || null,
     };
     
     // Only include password if it was provided
@@ -425,6 +449,7 @@ function editCredential(id) {
             document.getElementById('credential-collapse-duplicates').checked = cred.collapse_duplicates;
             document.getElementById('credential-enabled').checked = cred.enabled;
             document.getElementById('credential-description').value = cred.description || '';
+            document.getElementById('credential-ppv-rename-timezone').value = cred.ppv_rename_timezone || '';
             
             // Set source type
             if (cred.account_id) {

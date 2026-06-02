@@ -63,6 +63,7 @@
                     <div class="card-body">
                         <p class="text-muted small mb-3">
                             Rename PPV channels in playlists using event data. Leave blank to use the original channel name.
+                            Set the timezone for <code>{start_time}</code> and <code>{date}</code> per account.
                         </p>
 
                         <div id="ppv-rename-list" class="mb-3">
@@ -83,6 +84,9 @@
                             <code>{league} {sport}: {home_team} vs {away_team} - {start_time} {date}</code>
                             <br>
                             produces: <em>NFL Football: Chiefs vs Eagles - 8:20 PM Jan 5</em>
+                            <br>
+                            <strong>Timezone:</strong> <code>{start_time}</code> and <code>{date}</code> use the
+                            configured IANA timezone (default: America/New_York).
                         </div>
                     </div>
                 </div>
@@ -633,8 +637,17 @@ function renderChannelsPreviewTable(channels) {
     let rows = '';
     channels.forEach((channel) => {
         const linked = channel.linked_event;
-        const linkedLabel = linked
-            ? `${escapeHtml(linked.home_team)} vs ${escapeHtml(linked.away_team)}<br><small class="text-muted">${formatDateTime(linked.scheduled_at)}</small>`
+        const isNoMatch = channel.ppv_enrichment_status === 'no_match';
+        let linkedLabel = '—';
+        if (linked) {
+            const venue = linked.venue ? `<br><small class="text-muted">${escapeHtml(linked.venue)}</small>` : '';
+            const tz = linked.timezone ? `<br><small class="text-muted">${escapeHtml(linked.timezone)}</small>` : '';
+            const completeness = linked.data_completeness && linked.data_completeness !== 'full'
+                ? `<br><small class="text-warning">${escapeHtml(linked.data_completeness)}</small>` : '';
+            linkedLabel = `${escapeHtml(linked.home_team)} vs ${escapeHtml(linked.away_team)}<br><small class="text-muted">${formatDateTime(linked.scheduled_at)}</small>${venue}${tz}${completeness}`;
+        }
+        const inferredLabel = isNoMatch && channel.inferred_timezone
+            ? `<small class="text-muted">${escapeHtml(channel.inferred_timezone)} → ${formatDateTime(channel.inferred_utc)} (${Math.round((channel.timezone_confidence || 0) * 100)}%)</small>`
             : '—';
         const visible = isChannelVisibleUnderMode(channel, mode);
         const rowClass = visible === false ? 'table-secondary text-muted' : '';
@@ -649,7 +662,7 @@ function renderChannelsPreviewTable(channels) {
                 <td>${escapeHtml(channel.account_name || '—')}</td>
                 <td>${statusBadge(channel.ppv_enrichment_status, 'enrichment')}</td>
                 <td>${linkedLabel}</td>
-                <td>${linked ? `${Math.round((linked.match_confidence || 0) * 100)}%` : '—'}</td>
+                <td>${isNoMatch ? inferredLabel : (linked ? `${Math.round((linked.match_confidence || 0) * 100)}%` : '—')}</td>
                 <td>${formatDateTime(channel.ppv_enrichment_last_attempt)}</td>
                 <td><small>${errorText}</small></td>
             </tr>
@@ -665,7 +678,7 @@ function renderChannelsPreviewTable(channels) {
                     <th>Account</th>
                     <th>Status</th>
                     <th>Linked Event</th>
-                    <th>Conf.</th>
+                    <th>Conf. / Inferred TZ</th>
                     <th>Last Attempt</th>
                     <th>Error</th>
                 </tr>
@@ -940,17 +953,25 @@ async function loadPpvRenameFormats() {
         let html = '<div class="list-group">';
         for (const account of accounts) {
             const fmt = account.ppv_rename_format || '';
+            const tz = account.ppv_rename_timezone || 'America/New_York';
             html += `
                 <div class="list-group-item">
                     <div class="row align-items-center g-2">
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <h6 class="mb-0">${escapeHtml(account.name)}</h6>
                         </div>
-                        <div class="col-md-7">
+                        <div class="col-md-6">
                             <input type="text" class="form-control form-control-sm ppv-rename-input"
                                    data-account-id="${account.id}"
                                    value="${escapeHtml(fmt)}"
                                    placeholder="e.g. {league} {sport}: {home_team} vs {away_team} - {start_time} {date}">
+                        </div>
+                        <div class="col-md-2">
+                            <input type="text" class="form-control form-control-sm ppv-rename-timezone-input"
+                                   data-account-id="${account.id}"
+                                   value="${escapeHtml(tz)}"
+                                   list="ppv-timezone-options"
+                                   placeholder="America/New_York">
                         </div>
                         <div class="col-md-2">
                             <button class="btn btn-sm btn-outline-primary w-100 ppv-rename-save-btn"
@@ -963,6 +984,20 @@ async function loadPpvRenameFormats() {
                 </div>
             `;
         }
+        html += `
+            <datalist id="ppv-timezone-options">
+                <option value="America/New_York"></option>
+                <option value="America/Chicago"></option>
+                <option value="America/Denver"></option>
+                <option value="America/Los_Angeles"></option>
+                <option value="America/Phoenix"></option>
+                <option value="Europe/London"></option>
+                <option value="Europe/Paris"></option>
+                <option value="Europe/Berlin"></option>
+                <option value="Australia/Sydney"></option>
+                <option value="UTC"></option>
+            </datalist>
+        `;
         html += '</div>';
         container.innerHTML = html;
 
@@ -970,14 +1005,19 @@ async function loadPpvRenameFormats() {
             btn.addEventListener('click', async () => {
                 const accountId = btn.dataset.accountId;
                 const input = document.querySelector(`.ppv-rename-input[data-account-id="${accountId}"]`);
+                const timezoneInput = document.querySelector(`.ppv-rename-timezone-input[data-account-id="${accountId}"]`);
                 const statusEl = document.querySelector(`.ppv-rename-status-${accountId}`);
                 const fmt = input ? input.value.trim() : '';
+                const timezone = timezoneInput ? timezoneInput.value.trim() : '';
                 btn.disabled = true;
                 try {
                     const resp = await fetch(`/api/accounts/${accountId}/ppv-rename-format`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ppv_rename_format: fmt || null }),
+                        body: JSON.stringify({
+                            ppv_rename_format: fmt || null,
+                            ppv_rename_timezone: timezone || null,
+                        }),
                     });
                     if (!resp.ok) throw new Error(await resp.text());
                     statusEl.innerHTML = '<i class="bi bi-check-circle text-success"></i>';

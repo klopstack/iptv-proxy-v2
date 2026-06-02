@@ -103,9 +103,9 @@ class MatchFilter:
         if now is None:
             now = datetime.now(timezone.utc)
 
-        # Ensure both are timezone-aware
+        # Metadata event times are stored/parsed as UTC; channel title times default Eastern.
         if event_date.tzinfo is None:
-            event_date = event_date.replace(tzinfo=self.default_timezone)
+            event_date = event_date.replace(tzinfo=timezone.utc)
         if now.tzinfo is None:
             now = now.replace(tzinfo=timezone.utc)
 
@@ -136,6 +136,8 @@ class MatchFilter:
         min_confidence: float = 0.45,
         max_results: int = 5,
         current_time: Optional[datetime] = None,
+        channel_timezone: Optional[str] = None,
+        date_tolerance_hours: Optional[int] = None,
     ) -> List[MatchResult]:
         """
         Filter and post-process match results.
@@ -147,6 +149,8 @@ class MatchFilter:
             min_confidence: Minimum confidence threshold
             max_results: Maximum number of results to return
             current_time: Current time for date comparisons (defaults to now)
+            channel_timezone: IANA timezone for naive channel dates from title
+            date_tolerance_hours: Override default date tolerance (e.g. metadata_only widening)
 
         Returns:
             Filtered, deduplicated, and sorted list of matches
@@ -155,6 +159,7 @@ class MatchFilter:
             return []
 
         now = current_time or datetime.now(timezone.utc)
+        tolerance_hours = date_tolerance_hours if date_tolerance_hours is not None else self.date_tolerance_hours
 
         # Calculate date filter boundaries
         min_event_date, max_event_date = self._get_date_boundaries(date_filter, now)
@@ -162,6 +167,8 @@ class MatchFilter:
         # Filter and boost matches
         filtered_matches: List[MatchResult] = []
         seen_event_ids: Set[str] = set()
+
+        channel_tz = self._resolve_channel_timezone(channel_timezone)
 
         for match in matches:
             # Skip duplicates
@@ -175,6 +182,8 @@ class MatchFilter:
                 min_event_date,
                 max_event_date,
                 now,
+                channel_tz,
+                tolerance_hours,
             )
 
             if filtered_match is not None:
@@ -221,6 +230,14 @@ class MatchFilter:
 
         return min_date, max_date
 
+    def _resolve_channel_timezone(self, channel_timezone: Optional[str]) -> ZoneInfo:
+        if channel_timezone:
+            try:
+                return ZoneInfo(channel_timezone)
+            except Exception:
+                pass
+        return self.default_timezone
+
     def _apply_filters(
         self,
         match: MatchResult,
@@ -228,6 +245,8 @@ class MatchFilter:
         min_event_date: Optional[datetime],
         max_event_date: Optional[datetime],
         now: datetime,
+        channel_tz: ZoneInfo,
+        date_tolerance_hours: Optional[int] = None,
     ) -> Optional[MatchResult]:
         """
         Apply date filtering and boosting to a single match.
@@ -248,12 +267,13 @@ class MatchFilter:
 
         # Second, check channel date match if present
         if channel_date is not None and event_date is not None:
-            date_matches, date_boost = self._check_date_match(channel_date, event_date)
+            tol = date_tolerance_hours if date_tolerance_hours is not None else self.date_tolerance_hours
+            date_matches, date_boost = self._check_date_match(channel_date, event_date, channel_tz, tolerance_hours=tol)
             if not date_matches:
                 # Channel has a date that doesn't match this event
                 logger.debug(
                     f"Rejecting match due to date mismatch: channel={channel_date}, "
-                    f"event={event_date}, diff > {self.date_tolerance_hours}h"
+                    f"event={event_date}, diff > {tol}h"
                 )
                 return None
             if date_boost > 0:
@@ -268,7 +288,9 @@ class MatchFilter:
             # Normalize timezone for comparison
             event_date_utc = event_date
             if event_date.tzinfo is None:
-                event_date_utc = event_date.replace(tzinfo=self.default_timezone)
+                event_date_utc = event_date.replace(tzinfo=timezone.utc)
+            elif event_date.tzinfo != timezone.utc:
+                event_date_utc = event_date.astimezone(timezone.utc)
 
             if min_event_date is not None and event_date_utc < min_event_date:
                 return None  # Event too old for requested filter
@@ -281,30 +303,36 @@ class MatchFilter:
         self,
         channel_date: datetime,
         event_date: datetime,
+        channel_tz: Optional[ZoneInfo] = None,
+        tolerance_hours: Optional[int] = None,
     ) -> tuple[bool, float]:
         """
         Check if a channel date matches an event date.
 
         Args:
             channel_date: Date extracted from channel name
-            event_date: Event's scheduled date
+            event_date: Event's scheduled date (metadata; naive values are UTC)
+            channel_tz: Timezone for naive channel dates (defaults to Eastern)
 
         Returns:
             Tuple of (matches, confidence_boost)
         """
-        # Ensure both dates are timezone-aware for comparison
+        tz = channel_tz or self.default_timezone
+        tol = tolerance_hours if tolerance_hours is not None else self.date_tolerance_hours
         if channel_date.tzinfo is None:
-            channel_date = channel_date.replace(tzinfo=self.default_timezone)
+            channel_date = channel_date.replace(tzinfo=tz)
         if event_date.tzinfo is None:
-            event_date = event_date.replace(tzinfo=self.default_timezone)
+            event_date = event_date.replace(tzinfo=timezone.utc)
 
         # Calculate time difference in hours
-        diff_hours = abs((channel_date - event_date).total_seconds() / 3600)
+        diff_hours = abs(
+            (channel_date.astimezone(timezone.utc) - event_date.astimezone(timezone.utc)).total_seconds() / 3600
+        )
 
         if diff_hours <= self.close_match_hours:
             # Very close match - strong boost
             return (True, self.close_match_boost)
-        elif diff_hours <= self.date_tolerance_hours:
+        elif diff_hours <= tol:
             # Within tolerance - moderate boost
             return (True, self.tolerance_match_boost)
         else:

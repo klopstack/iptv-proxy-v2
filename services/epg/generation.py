@@ -11,7 +11,8 @@ reliability compared to fetching from external sources during generation.
 EPG RESOLUTION ORDER:
 1. ChannelEpgMapping → EpgProgram records (database)
 2. ChannelLink → inherit programs from source channel (database)
-3. Synthetic channel elements (no programmes)
+3. PPV EventChannelLink → programme from Event records (when DB programmes absent)
+4. Synthetic channel elements (no programmes)
 
 No external API calls are made during EPG generation. All data comes from the database.
 
@@ -19,6 +20,7 @@ KEY FUNCTIONS:
 - generate_epg_for_channels(): Main entry point for EPG generation
 - generate_epg_from_database_for_mappings(): Core DB-to-XMLTV conversion
 - _generate_epg_from_channel_links(): Handle channel link inheritance
+- _generate_epg_from_ppv_events(): Build XMLTV from linked PPV Event records
 """
 import logging
 import xml.etree.ElementTree as ET
@@ -91,6 +93,7 @@ def group_channels_by_epg_source(
 def generate_epg_from_database_for_mappings(
     channels: List[Channel],
     mappings: Dict[int, ChannelEpgMapping],
+    output_channel_ids: Dict[int, str],
 ) -> Tuple[List[ET.Element], List[ET.Element], Set[int]]:
     """
     Generate EPG elements from database program records for mapped channels.
@@ -101,6 +104,7 @@ def generate_epg_from_database_for_mappings(
     Args:
         channels: List of channels to generate EPG for
         mappings: Dict of channel_id -> ChannelEpgMapping
+        output_channel_ids: Client-facing XMLTV channel id per channel db id
 
     Returns:
         Tuple of (channel_elements, programme_elements, processed_channel_ids)
@@ -154,12 +158,12 @@ def generate_epg_from_database_for_mappings(
         if not epg_channel:
             continue
 
-        standardized_id = f"ch-{ch.account_id}-{ch.stream_id}"
+        output_id = output_channel_ids.get(ch.id, f"ch-{ch.account_id}-{ch.stream_id}")
         time_offset = mapping.time_offset_hours or 0
 
         # Create channel element
         channel_elem = ET.Element("channel")
-        channel_elem.set("id", standardized_id)
+        channel_elem.set("id", output_id)
 
         display_name = ET.SubElement(channel_elem, "display-name")
         display_name.text = ch.cleaned_name or ch.name
@@ -171,7 +175,7 @@ def generate_epg_from_database_for_mappings(
 
         # Create programme elements
         for program in programs_by_channel[epg_channel_id]:
-            prog_elem = program_to_xmltv_element(program, standardized_id, time_offset)
+            prog_elem = program_to_xmltv_element(program, output_id, time_offset)
             programme_elements.append(prog_elem)
 
         processed_channel_ids.add(ch.id)
@@ -477,7 +481,8 @@ def generate_epg_for_channels(
     The EPG resolution for each channel is:
     1. Database - EpgProgram records via ChannelEpgMapping
     2. ChannelLink - inherit EPG from linked source channel (also from DB)
-    3. Synthetic - create minimal channel entry with no programmes
+    3. PPV Event - programme from linked Event when DB programmes are absent
+    4. Synthetic - create minimal channel entry with no programmes
 
     Args:
         channels: List of Channel objects to generate EPG for
@@ -496,6 +501,11 @@ def generate_epg_for_channels(
 
     channel_ids = [ch.id for ch in channels]
 
+    # Resolve client-facing XMLTV channel ids (matches M3U tvg-id)
+    from services.channel_query_service import ChannelQueryService
+
+    output_channel_ids = ChannelQueryService.epg_channel_ids_for_channels(channels)
+
     # Get EPG mappings for all channels
     mappings = get_channel_epg_mappings(channel_ids)
 
@@ -508,7 +518,9 @@ def generate_epg_for_channels(
     processed_channel_ids: Set[int] = set()
 
     # Step 1: Generate EPG from database for channels with mappings
-    db_channel_elems, db_prog_elems, db_processed = generate_epg_from_database_for_mappings(channels, mappings)
+    db_channel_elems, db_prog_elems, db_processed = generate_epg_from_database_for_mappings(
+        channels, mappings, output_channel_ids
+    )
     all_channel_elements.extend(db_channel_elems)
     all_programme_elements.extend(db_prog_elems)
     processed_channel_ids.update(db_processed)
@@ -520,7 +532,7 @@ def generate_epg_for_channels(
     if use_channel_links:
         remaining_channels = [ch for ch in channels if ch.id not in processed_channel_ids]
         link_channel_elems, link_prog_elems, link_processed = _generate_epg_from_channel_links(
-            remaining_channels, mappings, processed_channel_ids
+            remaining_channels, mappings, processed_channel_ids, output_channel_ids
         )
         all_channel_elements.extend(link_channel_elems)
         all_programme_elements.extend(link_prog_elems)
@@ -532,10 +544,24 @@ def generate_epg_for_channels(
                 f"({len(link_prog_elems)} programmes)"
             )
 
-    # Step 3: Add synthetic channel elements for channels without any EPG data
+    # Step 3: PPV events for channels with EventChannelLink but no DB programmes
+    remaining_ppv = [ch for ch in channels if ch.id not in processed_channel_ids]
+    ppv_channel_elems, ppv_prog_elems, ppv_processed = _generate_epg_from_ppv_events(
+        remaining_ppv, processed_channel_ids, output_channel_ids
+    )
+    all_channel_elements.extend(ppv_channel_elems)
+    all_programme_elements.extend(ppv_prog_elems)
+    processed_channel_ids.update(ppv_processed)
+
+    if ppv_processed:
+        logger.info(
+            f"Generated EPG from PPV events for {len(ppv_processed)} channels " f"({len(ppv_prog_elems)} programmes)"
+        )
+
+    # Step 4: Add synthetic channel elements for channels without any EPG data
     for ch in channels:
         if ch.id not in processed_channel_ids:
-            fallback_id = f"ch-{ch.account_id}-{ch.stream_id}"
+            fallback_id = output_channel_ids.get(ch.id, f"ch-{ch.account_id}-{ch.stream_id}")
             channel_elem = ET.Element("channel", id=fallback_id)
 
             display_name_elem = ET.SubElement(channel_elem, "display-name")
@@ -556,10 +582,63 @@ def generate_epg_for_channels(
     return ET.tostring(root, encoding="unicode", xml_declaration=True).encode("utf-8")
 
 
+def _generate_epg_from_ppv_events(
+    channels: List[Channel],
+    already_processed: Set[int],
+    output_channel_ids: Dict[int, str],
+) -> Tuple[List[ET.Element], List[ET.Element], Set[int]]:
+    """
+    Generate XMLTV elements for PPV channels from linked Event records.
+
+    Used when EpgProgram rows are absent (PPV source sync does not populate them).
+    """
+    from models import Event, EventChannelLink
+    from services.epg.ppv_generation import build_event_epg_elements
+
+    channel_elements: List[ET.Element] = []
+    programme_elements: List[ET.Element] = []
+    processed_channel_ids: Set[int] = set()
+
+    remaining = [ch for ch in channels if ch.id not in already_processed and ch.is_ppv]
+    if not remaining:
+        return channel_elements, programme_elements, processed_channel_ids
+
+    channel_ids = [ch.id for ch in remaining]
+    rows = (
+        db.session.query(Channel, EventChannelLink, Event)
+        .join(EventChannelLink, Channel.id == EventChannelLink.channel_id)
+        .join(Event, EventChannelLink.event_id == Event.id)
+        .filter(Channel.id.in_(channel_ids))
+        .order_by(Event.scheduled_at.desc())
+        .all()
+    )
+
+    seen_channel_ids: Set[int] = set()
+    for channel, link, event in rows:
+        if channel.id in seen_channel_ids:
+            continue
+        if not event.scheduled_at:
+            continue
+
+        output_id = output_channel_ids.get(channel.id)
+        if not output_id:
+            continue
+
+        seen_channel_ids.add(channel.id)
+        channel_elem, programme_elem = build_event_epg_elements(channel, event, output_id, link=link)
+        channel_elements.append(channel_elem)
+        programme_elements.append(programme_elem)
+        processed_channel_ids.add(channel.id)
+        logger.debug(f"PPV event EPG: {channel.name} ({output_id}) from event {event.external_id}")
+
+    return channel_elements, programme_elements, processed_channel_ids
+
+
 def _generate_epg_from_channel_links(
     channels: List[Channel],
     mappings: Dict[int, ChannelEpgMapping],
     already_processed: Set[int],
+    output_channel_ids: Dict[int, str],
 ) -> Tuple[List[ET.Element], List[ET.Element], Set[int]]:
     """
     Generate EPG elements for channels via ChannelLink relationships.
@@ -639,11 +718,11 @@ def _generate_epg_from_channel_links(
         if not programs:
             continue
 
-        standardized_id = f"ch-{ch.account_id}-{ch.stream_id}"
+        output_id = output_channel_ids.get(ch.id, f"ch-{ch.account_id}-{ch.stream_id}")
 
         # Create channel element
         channel_elem = ET.Element("channel")
-        channel_elem.set("id", standardized_id)
+        channel_elem.set("id", output_id)
 
         display_name = ET.SubElement(channel_elem, "display-name")
         display_name.text = ch.cleaned_name or ch.name
@@ -655,12 +734,12 @@ def _generate_epg_from_channel_links(
 
         # Create programme elements with time offset
         for program in programs:
-            prog_elem = program_to_xmltv_element(program, standardized_id, total_offset)
+            prog_elem = program_to_xmltv_element(program, output_id, total_offset)
             programme_elements.append(prog_elem)
 
         processed_channel_ids.add(ch.id)
         logger.debug(
-            f"Channel link EPG: {ch.name} ({standardized_id}) inherits from "
+            f"Channel link EPG: {ch.name} ({output_id}) inherits from "
             f"{source_channel.name} with offset {total_offset}h"
         )
 
