@@ -729,11 +729,25 @@ class TestIntegration:
         return TheSportsDBCalendarScraper(cache_dir=str(tmp_path))
 
     @patch(
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_tennis_events_for_date",
+        return_value=[],
+    )
+    @patch(
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_espn_tennis_events_for_date",
+        return_value=[],
+    )
+    @patch(
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_milb_events_for_date",
+        return_value=[],
+    )
+    @patch(
         "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_api_events_for_date",
         return_value=[],
     )
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_calendar_page")
-    def test_get_events_for_date_uses_cache(self, mock_fetch, mock_api_fetch, scraper):
+    def test_get_events_for_date_uses_cache(
+        self, mock_fetch, mock_api_fetch, mock_milb_fetch, mock_espn_fetch, mock_sofascore_fetch, scraper
+    ):
         """Test that subsequent calls use cache."""
         mock_events = [
             CalendarEvent(
@@ -757,11 +771,25 @@ class TestIntegration:
         assert len(events2) == 1
 
     @patch(
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_tennis_events_for_date",
+        return_value=[],
+    )
+    @patch(
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_espn_tennis_events_for_date",
+        return_value=[],
+    )
+    @patch(
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_milb_events_for_date",
+        return_value=[],
+    )
+    @patch(
         "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_api_events_for_date",
         return_value=[],
     )
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_calendar_page")
-    def test_force_refresh_bypasses_cache(self, mock_fetch, mock_api_fetch, scraper):
+    def test_force_refresh_bypasses_cache(
+        self, mock_fetch, mock_api_fetch, mock_milb_fetch, mock_espn_fetch, mock_sofascore_fetch, scraper
+    ):
         """Test that force_refresh bypasses cache."""
         mock_events = [
             CalendarEvent(
@@ -783,6 +811,10 @@ class TestIntegration:
         assert mock_fetch.call_count == 2
 
     @patch(
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_tennis_events_for_date",
+        return_value=[],
+    )
+    @patch(
         "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_espn_tennis_events_for_date",
         return_value=[],
     )
@@ -790,7 +822,7 @@ class TestIntegration:
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_api_events_for_date")
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_calendar_page")
     def test_get_events_merges_html_and_api(
-        self, mock_fetch, mock_api_fetch, mock_milb_fetch, mock_espn_tennis_fetch, scraper
+        self, mock_fetch, mock_api_fetch, mock_milb_fetch, mock_espn_tennis_fetch, mock_sofascore_fetch, scraper
     ):
         """API supplement events are merged with HTML calendar events."""
         mock_milb_fetch.return_value = []
@@ -841,11 +873,32 @@ class TestPersistentCache:
         assert scraper_with_temp_cache._cache_file == expected_path
 
     @patch(
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_tennis_events_for_date",
+        return_value=[],
+    )
+    @patch(
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_espn_tennis_events_for_date",
+        return_value=[],
+    )
+    @patch(
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_milb_events_for_date",
+        return_value=[],
+    )
+    @patch(
         "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_api_events_for_date",
         return_value=[],
     )
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_calendar_page")
-    def test_save_persistent_cache(self, mock_fetch, mock_api_fetch, scraper_with_temp_cache, temp_cache_dir):
+    def test_save_persistent_cache(
+        self,
+        mock_fetch,
+        mock_api_fetch,
+        mock_milb_fetch,
+        mock_espn_fetch,
+        mock_sofascore_fetch,
+        scraper_with_temp_cache,
+        temp_cache_dir,
+    ):
         """Test that cache is saved to disk."""
         import json
         import os

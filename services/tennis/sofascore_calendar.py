@@ -1,5 +1,5 @@
 """
-SofaScore tennis schedule → CalendarEvent mapping (slice 1 — not wired to enrichment).
+SofaScore tennis schedule → CalendarEvent mapping.
 
 Public endpoint (no API key):
   https://api.sofascore.com/api/v1/sport/tennis/scheduled-events/{YYYY-MM-DD}
@@ -14,7 +14,7 @@ import logging
 import random
 import time
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
@@ -214,3 +214,12 @@ def fetch_tennis_events_for_date(
 
 def clear_sofascore_tennis_calendar_cache() -> None:
     _sofascore_cache.clear()
+
+
+def get_sofascore_calendar_stats() -> Dict[str, Any]:
+    """Expose SofaScore calendar cache stats for enrichment status API."""
+    return {
+        "enabled": _sofascore_calendar_enabled(),
+        "cache_entries": len(_sofascore_cache),
+        "cached_events": sum(len(events) for events, _ in _sofascore_cache.values()),
+    }
