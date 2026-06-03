@@ -1,7 +1,8 @@
 # MLB team abbreviation resolution for Peacock PPV feeds
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P1  
+**PR:** (pending)
 **Audit:** Production matching analysis, June 2026 (`docker.klopnet.com`)
 
 ## Problem
@@ -64,13 +65,13 @@ Active production impact: **27 Peacock `no_match` channels** (more in upcoming d
 
 ## Acceptance criteria
 
-- [ ] Production Peacock fixtures match at confidence ≥ 0.7:
+- [x] Production Peacock fixtures match at confidence ≥ 0.7:
   - `BAL at BOS` → `Boston Red Sox vs Baltimore Orioles`
   - `MIN at DET`, `NYY at TOR`, `STL at NYM`, `ATL at NYM`
-- [ ] Full-name Peacock channels still match at confidence 1.0 (no regression).
-- [ ] Non-MLB channels with accidental 3-letter tokens are not false-matched (parametrized negative cases).
+- [x] Full-name Peacock channels still match at confidence 1.0 (no regression).
+- [x] Non-MLB channels with accidental 3-letter tokens are not false-matched (parametrized negative cases).
 - [ ] Production Peacock `no_match` count → 0 for current-day MLB games present in calendar after requeue (TODO 124).
-- [ ] Matcher and validation agree on all MLB abbrev fixtures.
+- [x] Matcher and validation agree on all MLB abbrev fixtures.
 
 ## Test plan
 
@@ -122,3 +123,7 @@ Baseline: **27** Peacock `no_match`. Target: **0** for dates where calendar has 
 ## Recommended order
 
 **121 after 120** (or in parallel if date parsing unchanged for ISO Peacock titles). Quick win for ~27+ channels per active MLB day.
+
+## Completion
+
+Implemented `resolve_mlb_abbrev()` with SportsTeam DB lookup and static 30-team fallback (`services/ppv/matching/mlb_teams.py`). Reverse matcher expands MLB codes in channel text before team matching; validation accepts three-letter codes when `sport_key="mlb"`. Tests cover all 30 teams and Peacock production fixtures.
