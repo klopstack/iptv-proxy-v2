@@ -6,6 +6,7 @@ Provides Flask app, database, and client fixtures for testing.
 import os
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -142,3 +143,19 @@ def test_account_with_channels(app, test_account, test_category):
             _db.session.add(channel)
         _db.session.commit()
         yield test_account
+
+
+@pytest.fixture(autouse=True)
+def _no_live_thesportsdb_v2_in_unit_tests(request):
+    """
+    TheSportsDB unit tests must not hit the live V2 API when THESPORTSDB_API_KEY is set.
+
+    Service tests patch call_thesportsdb_api; this guards retry/api modules that still
+    invoke try_v2_sdk_call before the V1 SDK path.
+    """
+    node_path = Path(str(getattr(request.node, "path", request.node.fspath)))
+    if node_path.name.startswith("test_thesportsdb"):
+        with patch("services.thesportsdb_api.try_v2_sdk_call", return_value=None):
+            yield
+    else:
+        yield

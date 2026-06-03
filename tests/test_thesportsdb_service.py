@@ -9,8 +9,12 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
+from thesportsdb import events, leagues, teams
 
 from services.thesportsdb_service import LEAGUE_ID_MAP, TheSportsDBService, get_thesportsdb_service
+
+# Patch where the service imports call_thesportsdb_api (avoids live HTTP + retry sleeps).
+_CALL_API = "services.thesportsdb_service.call_thesportsdb_api"
 
 
 class TestLeagueIdMap:
@@ -36,12 +40,12 @@ class TestLeagueIdMap:
             ("NHL", "4380", "Ice Hockey"),
         ],
     )
-    @patch("services.thesportsdb_service.events.nextLeagueEvents")
+    @patch(_CALL_API)
     def test_get_next_league_events_returns_sport_appropriate_events(
-        self, mock_events, league, expected_id, expected_sport
+        self, mock_call_api, league, expected_id, expected_sport
     ):
         """League event lookups should return events for the correct sport"""
-        mock_events.return_value = {
+        mock_call_api.return_value = {
             "events": [
                 {
                     "idEvent": "1",
@@ -57,7 +61,7 @@ class TestLeagueIdMap:
         events_list = service.get_next_league_events(LEAGUE_ID_MAP[league])
 
         assert LEAGUE_ID_MAP[league] == expected_id
-        mock_events.assert_called_once_with(expected_id)
+        mock_call_api.assert_called_once_with(events.nextLeagueEvents, expected_id)
         assert len(events_list) == 1
         assert events_list[0]["strSport"] == expected_sport
 
@@ -89,10 +93,10 @@ class TestTheSportsDBServiceInitialization:
 class TestNextLeagueEvents:
     """Test get_next_league_events method"""
 
-    @patch("services.thesportsdb_service.events.nextLeagueEvents")
-    def test_get_next_league_events_success(self, mock_events):
+    @patch(_CALL_API)
+    def test_get_next_league_events_success(self, mock_call_api):
         """Test successful retrieval of next league events"""
-        mock_events.return_value = {
+        mock_call_api.return_value = {
             "events": [
                 {
                     "idEvent": "2274922",
@@ -117,10 +121,10 @@ class TestNextLeagueEvents:
         assert events_list[0]["strEvent"] == "Team A vs Team B"
         assert events_list[0]["strHomeTeam"] == "Team A"
 
-    @patch("services.thesportsdb_service.events.nextLeagueEvents")
-    def test_get_next_league_events_filters_postponed(self, mock_events):
+    @patch(_CALL_API)
+    def test_get_next_league_events_filters_postponed(self, mock_call_api):
         """Test that postponed events are filtered out"""
-        mock_events.return_value = {
+        mock_call_api.return_value = {
             "events": [
                 {
                     "idEvent": "1",
@@ -149,10 +153,10 @@ class TestNextLeagueEvents:
         assert len(events_list) == 2
         assert all(e["strPostponed"] != "yes" for e in events_list)
 
-    @patch("services.thesportsdb_service.events.nextLeagueEvents")
-    def test_get_next_league_events_respects_max_events(self, mock_events):
+    @patch(_CALL_API)
+    def test_get_next_league_events_respects_max_events(self, mock_call_api):
         """Test that max_events limit is respected"""
-        mock_events.return_value = {
+        mock_call_api.return_value = {
             "events": [
                 {
                     "idEvent": str(i),
@@ -168,30 +172,30 @@ class TestNextLeagueEvents:
 
         assert len(events_list) == 5
 
-    @patch("services.thesportsdb_service.events.nextLeagueEvents")
-    def test_get_next_league_events_empty_response(self, mock_events):
+    @patch(_CALL_API)
+    def test_get_next_league_events_empty_response(self, mock_call_api):
         """Test handling of empty events response"""
-        mock_events.return_value = {"events": []}
+        mock_call_api.return_value = {"events": []}
 
         service = TheSportsDBService()
         events_list = service.get_next_league_events("133602")
 
         assert events_list == []
 
-    @patch("services.thesportsdb_service.events.nextLeagueEvents")
-    def test_get_next_league_events_api_error(self, mock_events):
+    @patch(_CALL_API)
+    def test_get_next_league_events_api_error(self, mock_call_api):
         """Test graceful handling of API errors"""
-        mock_events.side_effect = Exception("API Error")
+        mock_call_api.side_effect = Exception("API Error")
 
         service = TheSportsDBService()
         events_list = service.get_next_league_events("133602")
 
         assert events_list == []
 
-    @patch("services.thesportsdb_service.events.nextLeagueEvents")
-    def test_get_next_league_events_invalid_response_type(self, mock_events):
+    @patch(_CALL_API)
+    def test_get_next_league_events_invalid_response_type(self, mock_call_api):
         """Test handling of invalid response type"""
-        mock_events.return_value = None
+        mock_call_api.return_value = None
 
         service = TheSportsDBService()
         events_list = service.get_next_league_events("133602")
@@ -202,10 +206,10 @@ class TestNextLeagueEvents:
 class TestGetLeagueSeasonEvents:
     """Test get_league_season_events method"""
 
-    @patch("services.thesportsdb_service.events.leagueSeasonEvents")
-    def test_get_league_season_events_success(self, mock_events):
+    @patch(_CALL_API)
+    def test_get_league_season_events_success(self, mock_call_api):
         """Test successful retrieval of season events"""
-        mock_events.return_value = {
+        mock_call_api.return_value = {
             "results": [
                 {
                     "idEvent": "1",
@@ -226,20 +230,20 @@ class TestGetLeagueSeasonEvents:
         assert len(events_list) == 2
         assert events_list[0]["strEvent"] == "Event 1"
 
-    @patch("services.thesportsdb_service.events.leagueSeasonEvents")
-    def test_get_league_season_events_empty(self, mock_events):
+    @patch(_CALL_API)
+    def test_get_league_season_events_empty(self, mock_call_api):
         """Test handling of empty season events"""
-        mock_events.return_value = {"results": []}
+        mock_call_api.return_value = {"results": []}
 
         service = TheSportsDBService()
         events_list = service.get_league_season_events("133602", "2025-2026")
 
         assert events_list == []
 
-    @patch("services.thesportsdb_service.events.leagueSeasonEvents")
-    def test_get_league_season_events_error(self, mock_events):
+    @patch(_CALL_API)
+    def test_get_league_season_events_error(self, mock_call_api):
         """Test error handling"""
-        mock_events.side_effect = Exception("API Error")
+        mock_call_api.side_effect = Exception("API Error")
 
         service = TheSportsDBService()
         events_list = service.get_league_season_events("133602", "2025-2026")
@@ -250,10 +254,10 @@ class TestGetLeagueSeasonEvents:
 class TestGetLeagueInfo:
     """Test get_league_info method"""
 
-    @patch("services.thesportsdb_service.leagues.leagueInfo")
-    def test_get_league_info_success(self, mock_league_info):
+    @patch(_CALL_API)
+    def test_get_league_info_success(self, mock_call_api):
         """Test successful retrieval of league info"""
-        mock_league_info.return_value = {
+        mock_call_api.return_value = {
             "results": [
                 {
                     "idLeague": "133602",
@@ -272,20 +276,20 @@ class TestGetLeagueInfo:
         assert league_info["strLeague"] == "English Premier League"
         assert league_info["strCountry"] == "England"
 
-    @patch("services.thesportsdb_service.leagues.leagueInfo")
-    def test_get_league_info_not_found(self, mock_league_info):
+    @patch(_CALL_API)
+    def test_get_league_info_not_found(self, mock_call_api):
         """Test handling of league not found"""
-        mock_league_info.return_value = {"results": []}
+        mock_call_api.return_value = {"results": []}
 
         service = TheSportsDBService()
         league_info = service.get_league_info("999999")
 
         assert league_info is None
 
-    @patch("services.thesportsdb_service.leagues.leagueInfo")
-    def test_get_league_info_error(self, mock_league_info):
+    @patch(_CALL_API)
+    def test_get_league_info_error(self, mock_call_api):
         """Test error handling"""
-        mock_league_info.side_effect = Exception("API Error")
+        mock_call_api.side_effect = Exception("API Error")
 
         service = TheSportsDBService()
         league_info = service.get_league_info("133602")
@@ -296,10 +300,10 @@ class TestGetLeagueInfo:
 class TestGetLeagueTeams:
     """Test get_league_teams method"""
 
-    @patch("services.thesportsdb_service.teams.leagueTeams")
-    def test_get_league_teams_success(self, mock_list_teams):
+    @patch(_CALL_API)
+    def test_get_league_teams_success(self, mock_call_api):
         """Test successful retrieval of league teams"""
-        mock_list_teams.return_value = {
+        mock_call_api.return_value = {
             "results": [
                 {
                     "idTeam": "133600",
@@ -322,20 +326,20 @@ class TestGetLeagueTeams:
         assert len(teams_list) == 2
         assert teams_list[0]["strTeam"] == "Arsenal"
 
-    @patch("services.thesportsdb_service.teams.leagueTeams")
-    def test_get_league_teams_empty(self, mock_list_teams):
+    @patch(_CALL_API)
+    def test_get_league_teams_empty(self, mock_call_api):
         """Test handling of no teams found"""
-        mock_list_teams.return_value = {"results": []}
+        mock_call_api.return_value = {"results": []}
 
         service = TheSportsDBService()
         teams_list = service.get_league_teams("999999")
 
         assert teams_list == []
 
-    @patch("services.thesportsdb_service.teams.leagueTeams")
-    def test_get_league_teams_respects_max(self, mock_list_teams):
+    @patch(_CALL_API)
+    def test_get_league_teams_respects_max(self, mock_call_api):
         """Test that max_teams limit is respected"""
-        mock_list_teams.return_value = {"results": [{"idTeam": str(i), "strTeam": f"Team {i}"} for i in range(50)]}
+        mock_call_api.return_value = {"results": [{"idTeam": str(i), "strTeam": f"Team {i}"} for i in range(50)]}
 
         service = TheSportsDBService()
         teams_list = service.get_league_teams("133602", max_teams=20)
@@ -471,10 +475,10 @@ class TestFindEventsForDate:
 class TestGetEventById:
     """Test get_event_by_id method"""
 
-    @patch("services.thesportsdb_service.events.eventInfo")
-    def test_get_event_by_id_success(self, mock_event_info):
+    @patch(_CALL_API)
+    def test_get_event_by_id_success(self, mock_call_api):
         """Test successful retrieval of event by ID"""
-        mock_event_info.return_value = {
+        mock_call_api.return_value = {
             "events": [
                 {
                     "idEvent": "2274922",
@@ -490,20 +494,20 @@ class TestGetEventById:
         assert event is not None
         assert event["strEvent"] == "Arsenal vs Chelsea"
 
-    @patch("services.thesportsdb_service.events.eventInfo")
-    def test_get_event_by_id_not_found(self, mock_event_info):
+    @patch(_CALL_API)
+    def test_get_event_by_id_not_found(self, mock_call_api):
         """Test handling of event not found"""
-        mock_event_info.return_value = {"events": []}
+        mock_call_api.return_value = {"events": []}
 
         service = TheSportsDBService()
         event = service.get_event_by_id("999999")
 
         assert event is None
 
-    @patch("services.thesportsdb_service.events.eventInfo")
-    def test_get_event_by_id_error(self, mock_event_info):
+    @patch(_CALL_API)
+    def test_get_event_by_id_error(self, mock_call_api):
         """Test error handling"""
-        mock_event_info.side_effect = Exception("API Error")
+        mock_call_api.side_effect = Exception("API Error")
 
         service = TheSportsDBService()
         event = service.get_event_by_id("2274922")
@@ -622,10 +626,10 @@ class TestIsEventUpcoming:
 class TestIntegrationWithPPVChannels:
     """Integration tests with PPV channel matching"""
 
-    @patch("services.thesportsdb_service.events.nextLeagueEvents")
-    def test_ppv_channel_matching_workflow(self, mock_events):
+    @patch(_CALL_API)
+    def test_ppv_channel_matching_workflow(self, mock_call_api):
         """Test complete workflow of matching PPV channels to events"""
-        mock_events.return_value = {
+        mock_call_api.return_value = {
             "events": [
                 {
                     "idEvent": "2274922",
@@ -660,10 +664,10 @@ class TestIntegrationWithPPVChannels:
         assert match["strAwayTeam"] == "Chelsea"
         assert match["strLeague"] == "English Premier League"
 
-    @patch("services.thesportsdb_service.events.nextLeagueEvents")
-    def test_ppv_schedule_generation(self, mock_events):
+    @patch(_CALL_API)
+    def test_ppv_schedule_generation(self, mock_call_api):
         """Test generating PPV schedule from matched events"""
-        mock_events.return_value = {
+        mock_call_api.return_value = {
             "events": [
                 {
                     "idEvent": str(i),
@@ -690,11 +694,11 @@ class TestIntegrationWithPPVChannels:
 class TestGetEventByIdRealAPIStructure:
     """Test get_event_by_id with realistic API response structure"""
 
-    @patch("services.thesportsdb_service.events.eventInfo")
-    def test_get_event_by_id_with_full_api_response(self, mock_event_info):
+    @patch(_CALL_API)
+    def test_get_event_by_id_with_full_api_response(self, mock_call_api):
         """Test with complete API response structure matching real TheSportsDB response"""
         # This is based on actual API response from TheSportsDB
-        mock_event_info.return_value = {
+        mock_call_api.return_value = {
             "events": [
                 {
                     "idEvent": "441613",
@@ -760,12 +764,12 @@ class TestGetEventByIdRealAPIStructure:
         assert event["strTimestamp"] == "2014-12-29T20:00:00"
         assert event["dateEvent"] == "2014-12-29"
 
-    @patch("services.thesportsdb_service.events.eventInfo")
-    def test_get_event_by_id_verifies_events_key_not_results(self, mock_event_info):
+    @patch(_CALL_API)
+    def test_get_event_by_id_verifies_events_key_not_results(self, mock_call_api):
         """Regression test: ensure we use 'events' key, not 'results' key"""
         # This test explicitly verifies the bug fix where we were looking for "results"
         # instead of "events" in the API response
-        mock_event_info.return_value = {
+        mock_call_api.return_value = {
             "events": [
                 {
                     "idEvent": "2357845",
@@ -783,11 +787,11 @@ class TestGetEventByIdRealAPIStructure:
         assert event is not None
         assert event["idEvent"] == "2357845"
 
-    @patch("services.thesportsdb_service.events.eventInfo")
-    def test_get_event_by_id_old_wrong_key_returns_none(self, mock_event_info):
+    @patch(_CALL_API)
+    def test_get_event_by_id_old_wrong_key_returns_none(self, mock_call_api):
         """Verify that if API returns unexpected 'results' key, we handle it gracefully"""
         # If for some reason the API returned "results" instead of "events"
-        mock_event_info.return_value = {
+        mock_call_api.return_value = {
             "results": [  # Wrong key - should be "events"
                 {
                     "idEvent": "999999",
@@ -802,11 +806,11 @@ class TestGetEventByIdRealAPIStructure:
         # Should return None because "events" key is missing
         assert event is None
 
-    @patch("services.thesportsdb_service.events.eventInfo")
-    def test_get_event_by_id_with_none_status(self, mock_event_info):
+    @patch(_CALL_API)
+    def test_get_event_by_id_with_none_status(self, mock_call_api):
         """Test handling of None status field in API response"""
         # Some events in the API return None for strStatus instead of a string
-        mock_event_info.return_value = {
+        mock_call_api.return_value = {
             "events": [
                 {
                     "idEvent": "123456",
