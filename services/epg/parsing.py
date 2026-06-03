@@ -232,7 +232,7 @@ def sync_epg_source(source: EpgSource, xml_content: bytes) -> Dict[str, int]:
             # Update existing channel from database
             ec = existing[channel_id]
             ec.display_name = channel_data["display_name"]
-            ec.display_names_json = json.dumps(channel_data["display_names"])
+            ec.display_names_json = channel_data["display_names"]
             ec.icon_url = channel_data.get("icon_url")
             ec.url = channel_data.get("url")
             ec.program_count = program_count
@@ -247,7 +247,7 @@ def sync_epg_source(source: EpgSource, xml_content: bytes) -> Dict[str, int]:
                 source_id=source.id,
                 channel_id=channel_id,
                 display_name=channel_data["display_name"],
-                display_names_json=json.dumps(channel_data["display_names"]),
+                display_names_json=channel_data["display_names"],
                 icon_url=channel_data.get("icon_url"),
                 url=channel_data.get("url"),
                 program_count=program_count,

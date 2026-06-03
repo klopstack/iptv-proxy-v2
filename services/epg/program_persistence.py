@@ -1,6 +1,5 @@
 """Shared EpgProgram create/update for XMLTV and Schedules Direct sync paths."""
 
-import json
 from datetime import datetime, timezone
 from typing import Any, Dict
 
@@ -22,7 +21,7 @@ def create_epg_program(epg_channel_id: int, data: Dict[str, Any]) -> EpgProgram:
         title=data["title"],
         sub_title=data.get("sub_title"),
         description=data.get("description"),
-        categories=json.dumps(data["categories"]) if data.get("categories") else None,
+        categories=data.get("categories") or None,
         season=data.get("season"),
         episode=data.get("episode"),
         episode_id=data.get("episode_id"),
@@ -49,7 +48,7 @@ def update_epg_program(prog: EpgProgram, data: Dict[str, Any]) -> bool:
         True if any field was modified, False if unchanged.
     """
     changed = False
-    new_categories = json.dumps(data["categories"]) if data.get("categories") else None
+    new_categories = data.get("categories") or None
 
     field_updates = (
         ("stop_time", data["stop_time"]),

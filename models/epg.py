@@ -30,7 +30,8 @@ class EpgSource(db.Model):  # type: ignore[name-defined]
     xmltv_config_name = db.Column(db.String(100))  # Configuration name
     xmltv_days = db.Column(db.Integer, default=7)  # Days of EPG data to fetch
     xmltv_offset = db.Column(db.Integer, default=0)  # Day offset to start from
-    xmltv_extra_args = db.Column(db.Text)  # JSON array of extra arguments
+    # Typed JSON columns (db.JSON maps to TEXT on SQLite; JSONB promotion in TODO 117).
+    xmltv_extra_args = db.Column(db.JSON, nullable=True)  # Extra grabber CLI arguments
 
     # Source priority (lower = higher priority, used when merging EPG data)
     priority = db.Column(db.Integer, default=100)
@@ -44,7 +45,7 @@ class EpgSource(db.Model):  # type: ignore[name-defined]
     # Live sync progress (scheduler / manual parallel sync)
     sync_in_progress = db.Column(db.Boolean, default=False)
     sync_phase = db.Column(db.String(50))  # queued, fetching, channels, programs, complete, error, ...
-    sync_progress = db.Column(db.Text)  # JSON counters and status message
+    sync_progress = db.Column(db.JSON, nullable=True)  # Sync counters and status message
     sync_started_at = db.Column(db.DateTime)
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
@@ -73,7 +74,7 @@ class EpgChannel(db.Model):  # type: ignore[name-defined]
 
     # Display names (XMLTV can have multiple)
     display_name = db.Column(db.String(200))  # Primary display name
-    display_names_json = db.Column(db.Text)  # JSON array of all display names
+    display_names_json = db.Column(db.JSON, nullable=True)  # All display names
 
     # Optional metadata from XMLTV
     icon_url = db.Column(db.String(500))
@@ -81,7 +82,7 @@ class EpgChannel(db.Model):  # type: ignore[name-defined]
 
     # For matching to our channels
     # Stores JSON of potential matches: [{"channel_id": 123, "confidence": 0.95, "match_type": "exact_id"}, ...]
-    matched_channels_json = db.Column(db.Text)
+    matched_channels_json = db.Column(db.JSON, nullable=True)
 
     # Stats
     program_count = db.Column(db.Integer, default=0)  # Number of programs in EPG
@@ -148,7 +149,7 @@ class EpgProgram(db.Model):  # type: ignore[name-defined]
     description = db.Column(db.Text)
 
     # Category/genre information (JSON array of category strings)
-    categories = db.Column(db.Text)  # e.g., ["Sports", "Basketball", "College"]
+    categories = db.Column(db.JSON, nullable=True)  # e.g. ["Sports", "Basketball", "College"]
 
     # Episode info
     season = db.Column(db.Integer)
@@ -198,20 +199,15 @@ class EpgProgram(db.Model):  # type: ignore[name-defined]
 
     def get_categories_list(self) -> list:
         """Get categories as a list."""
-        import json
-
         if not self.categories:
             return []
-        try:
-            return json.loads(self.categories)
-        except (json.JSONDecodeError, TypeError):
-            return []
+        if isinstance(self.categories, list):
+            return self.categories
+        return []
 
     def set_categories_list(self, categories: list):
         """Set categories from a list."""
-        import json
-
-        self.categories = json.dumps(categories) if categories else None
+        self.categories = categories if categories else None
 
     @property
     def duration_minutes(self) -> int:
@@ -357,7 +353,7 @@ class SdStation(db.Model):  # type: ignore[name-defined]
     callsign = db.Column(db.String(50))
     name = db.Column(db.String(200))
     affiliate = db.Column(db.String(100))
-    broadcast_language = db.Column(db.String(100))  # JSON array as string
+    broadcast_language = db.Column(db.JSON, nullable=True)  # SD broadcastLanguage array
     logo_url = db.Column(db.String(500))
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))

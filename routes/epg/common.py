@@ -77,7 +77,7 @@ def sync_sd_lineup_impl(source: EpgSource, lineup: SdLineup, *, progress_callbac
         station = SdStation.query.filter_by(lineup_id=lineup.id, station_id=ch["stationID"]).first()
 
         logo_url = ch.get("logo", {}).get("url") if ch.get("logo") else None
-        broadcast_lang = json.dumps(ch.get("broadcastLanguage", []))
+        broadcast_lang = ch.get("broadcastLanguage", []) or None
 
         if station:
             # Update existing

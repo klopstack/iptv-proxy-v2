@@ -7,7 +7,6 @@ Handles syncing from different EPG sources: providers, URLs, Schedules Direct, X
 When syncing EPG sources, the raw XMLTV XML is cached to filesystem for use
 during EPG generation (avoiding re-fetches from external sources).
 """
-import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional, Tuple
@@ -274,12 +273,7 @@ class EpgSyncService:
 
         try:
             # Parse extra args if provided
-            extra_args = None
-            if source.xmltv_extra_args:
-                try:
-                    extra_args = json.loads(source.xmltv_extra_args)
-                except json.JSONDecodeError:
-                    logger.warning(f"Invalid xmltv_extra_args for source {source.id}")
+            extra_args = source.xmltv_extra_args
 
             if progress:
                 progress(PHASE_FETCHING, message=f"Running grabber {source.xmltv_grabber}")

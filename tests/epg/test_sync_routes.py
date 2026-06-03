@@ -188,7 +188,7 @@ class TestEpgSourceSync:
             refreshed = db.session.get(EpgSource, source_id)
             assert refreshed.sync_phase == PHASE_COMPLETE
             assert refreshed.sync_in_progress is False
-            progress = json.loads(refreshed.sync_progress)
+            progress = refreshed.sync_progress
             assert progress.get("message") == "ok"
 
     @patch("services.epg_sync_orchestrator.EpgSyncService.sync_source")
