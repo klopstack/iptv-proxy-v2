@@ -30,6 +30,12 @@ from models import (
 from services.cache_service import cache_service
 from services.datetime_utils import serialize_utc_iso
 from services.epg.match_rules import clear_fcc_pattern_cache
+from services.serializers.fcc import (
+    serialize_fcc_channel_pattern,
+    serialize_fcc_location_pattern,
+    serialize_fcc_network,
+    serialize_fcc_strategy,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,71 +70,6 @@ def _clear_pattern_cache():
     clear_fcc_pattern_cache()
 
 
-def _serialize_network(network: FccMatchNetwork) -> dict:
-    """Serialize a network pattern to JSON-compatible dict"""
-    return {
-        "id": network.id,
-        "name": network.name,
-        "display_name": network.display_name,
-        "description": network.description,
-        "fcc_affiliation_pattern": network.fcc_affiliation_pattern,
-        "tag_patterns": json.loads(network.tag_patterns) if network.tag_patterns else [],
-        "enabled": network.enabled,
-        "priority": network.priority,
-    }
-
-
-def _serialize_channel_pattern(pattern: FccMatchChannelPattern) -> dict:
-    """Serialize a channel number pattern to JSON-compatible dict"""
-    return {
-        "id": pattern.id,
-        "name": pattern.name,
-        "description": pattern.description,
-        "pattern": pattern.pattern,
-        "pattern_type": pattern.pattern_type,
-        "capture_group": pattern.capture_group,
-        "networks": json.loads(pattern.networks) if pattern.networks else None,
-        "enabled": pattern.enabled,
-        "priority": pattern.priority,
-    }
-
-
-def _serialize_location_pattern(pattern: FccMatchLocationPattern) -> dict:
-    """Serialize a location pattern to JSON-compatible dict"""
-    return {
-        "id": pattern.id,
-        "name": pattern.name,
-        "description": pattern.description,
-        "pattern": pattern.pattern,
-        "pattern_type": pattern.pattern_type,
-        "extract_city": pattern.extract_city,
-        "extract_state": pattern.extract_state,
-        "city_group": pattern.city_group,
-        "state_group": pattern.state_group,
-        "enabled": pattern.enabled,
-        "priority": pattern.priority,
-    }
-
-
-def _serialize_strategy(strategy: FccMatchStrategy) -> dict:
-    """Serialize a match strategy to JSON-compatible dict"""
-    return {
-        "id": strategy.id,
-        "name": strategy.name,
-        "description": strategy.description,
-        "strategy_type": strategy.strategy_type,
-        "require_network": strategy.require_network,
-        "require_channel_number": strategy.require_channel_number,
-        "require_state": strategy.require_state,
-        "require_city": strategy.require_city,
-        "match_nielsen_dma": strategy.match_nielsen_dma,
-        "match_community_city": strategy.match_community_city,
-        "match_community_state": strategy.match_community_state,
-        "enabled": strategy.enabled,
-        "priority": strategy.priority,
-    }
-
-
 # ============================================================================
 # API Routes - Networks
 # ============================================================================
@@ -138,7 +79,7 @@ def _serialize_strategy(strategy: FccMatchStrategy) -> dict:
 def get_networks():
     """Get all network patterns"""
     networks = FccMatchNetwork.query.order_by(FccMatchNetwork.priority, FccMatchNetwork.name).all()
-    return jsonify([_serialize_network(n) for n in networks])
+    return jsonify([serialize_fcc_network(n) for n in networks])
 
 
 @fcc_match_patterns_bp.route("/api/fcc-match-patterns/networks", methods=["POST"])
@@ -171,14 +112,14 @@ def create_network():
     cache_service.clear_all()
     _clear_pattern_cache()
 
-    return jsonify(_serialize_network(network)), 201
+    return jsonify(serialize_fcc_network(network)), 201
 
 
 @fcc_match_patterns_bp.route("/api/fcc-match-patterns/networks/<int:network_id>", methods=["GET"])
 def get_network(network_id):
     """Get a specific network pattern"""
     network = FccMatchNetwork.query.get_or_404(network_id)
-    return jsonify(_serialize_network(network))
+    return jsonify(serialize_fcc_network(network))
 
 
 @fcc_match_patterns_bp.route("/api/fcc-match-patterns/networks/<int:network_id>", methods=["PUT"])
@@ -200,7 +141,7 @@ def update_network(network_id):
     cache_service.clear_all()
     _clear_pattern_cache()
 
-    return jsonify(_serialize_network(network))
+    return jsonify(serialize_fcc_network(network))
 
 
 @fcc_match_patterns_bp.route("/api/fcc-match-patterns/networks/<int:network_id>", methods=["DELETE"])
@@ -223,7 +164,7 @@ def delete_network(network_id):
 def get_channel_patterns():
     """Get all channel number extraction patterns"""
     patterns = FccMatchChannelPattern.query.order_by(FccMatchChannelPattern.priority, FccMatchChannelPattern.name).all()
-    return jsonify([_serialize_channel_pattern(p) for p in patterns])
+    return jsonify([serialize_fcc_channel_pattern(p) for p in patterns])
 
 
 @fcc_match_patterns_bp.route("/api/fcc-match-patterns/channel-patterns", methods=["POST"])
@@ -252,14 +193,14 @@ def create_channel_pattern():
     cache_service.clear_all()
     _clear_pattern_cache()
 
-    return jsonify(_serialize_channel_pattern(pattern)), 201
+    return jsonify(serialize_fcc_channel_pattern(pattern)), 201
 
 
 @fcc_match_patterns_bp.route("/api/fcc-match-patterns/channel-patterns/<int:pattern_id>", methods=["GET"])
 def get_channel_pattern(pattern_id):
     """Get a specific channel number extraction pattern"""
     pattern = FccMatchChannelPattern.query.get_or_404(pattern_id)
-    return jsonify(_serialize_channel_pattern(pattern))
+    return jsonify(serialize_fcc_channel_pattern(pattern))
 
 
 @fcc_match_patterns_bp.route("/api/fcc-match-patterns/channel-patterns/<int:pattern_id>", methods=["PUT"])
@@ -282,7 +223,7 @@ def update_channel_pattern(pattern_id):
     cache_service.clear_all()
     _clear_pattern_cache()
 
-    return jsonify(_serialize_channel_pattern(pattern))
+    return jsonify(serialize_fcc_channel_pattern(pattern))
 
 
 @fcc_match_patterns_bp.route("/api/fcc-match-patterns/channel-patterns/<int:pattern_id>", methods=["DELETE"])
@@ -307,7 +248,7 @@ def get_location_patterns():
     patterns = FccMatchLocationPattern.query.order_by(
         FccMatchLocationPattern.priority, FccMatchLocationPattern.name
     ).all()
-    return jsonify([_serialize_location_pattern(p) for p in patterns])
+    return jsonify([serialize_fcc_location_pattern(p) for p in patterns])
 
 
 @fcc_match_patterns_bp.route("/api/fcc-match-patterns/location-patterns", methods=["POST"])
@@ -338,14 +279,14 @@ def create_location_pattern():
     cache_service.clear_all()
     _clear_pattern_cache()
 
-    return jsonify(_serialize_location_pattern(pattern)), 201
+    return jsonify(serialize_fcc_location_pattern(pattern)), 201
 
 
 @fcc_match_patterns_bp.route("/api/fcc-match-patterns/location-patterns/<int:pattern_id>", methods=["GET"])
 def get_location_pattern(pattern_id):
     """Get a specific location parsing pattern"""
     pattern = FccMatchLocationPattern.query.get_or_404(pattern_id)
-    return jsonify(_serialize_location_pattern(pattern))
+    return jsonify(serialize_fcc_location_pattern(pattern))
 
 
 @fcc_match_patterns_bp.route("/api/fcc-match-patterns/location-patterns/<int:pattern_id>", methods=["PUT"])
@@ -369,7 +310,7 @@ def update_location_pattern(pattern_id):
     cache_service.clear_all()
     _clear_pattern_cache()
 
-    return jsonify(_serialize_location_pattern(pattern))
+    return jsonify(serialize_fcc_location_pattern(pattern))
 
 
 @fcc_match_patterns_bp.route("/api/fcc-match-patterns/location-patterns/<int:pattern_id>", methods=["DELETE"])
@@ -392,7 +333,7 @@ def delete_location_pattern(pattern_id):
 def get_strategies():
     """Get all match strategies"""
     strategies = FccMatchStrategy.query.order_by(FccMatchStrategy.priority, FccMatchStrategy.name).all()
-    return jsonify([_serialize_strategy(s) for s in strategies])
+    return jsonify([serialize_fcc_strategy(s) for s in strategies])
 
 
 @fcc_match_patterns_bp.route("/api/fcc-match-patterns/strategies", methods=["POST"])
@@ -425,14 +366,14 @@ def create_strategy():
     cache_service.clear_all()
     _clear_pattern_cache()
 
-    return jsonify(_serialize_strategy(strategy)), 201
+    return jsonify(serialize_fcc_strategy(strategy)), 201
 
 
 @fcc_match_patterns_bp.route("/api/fcc-match-patterns/strategies/<int:strategy_id>", methods=["GET"])
 def get_strategy(strategy_id):
     """Get a specific match strategy"""
     strategy = FccMatchStrategy.query.get_or_404(strategy_id)
-    return jsonify(_serialize_strategy(strategy))
+    return jsonify(serialize_fcc_strategy(strategy))
 
 
 @fcc_match_patterns_bp.route("/api/fcc-match-patterns/strategies/<int:strategy_id>", methods=["PUT"])
@@ -458,7 +399,7 @@ def update_strategy(strategy_id):
     cache_service.clear_all()
     _clear_pattern_cache()
 
-    return jsonify(_serialize_strategy(strategy))
+    return jsonify(serialize_fcc_strategy(strategy))
 
 
 @fcc_match_patterns_bp.route("/api/fcc-match-patterns/strategies/<int:strategy_id>", methods=["DELETE"])

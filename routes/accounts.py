@@ -9,7 +9,13 @@ from sqlalchemy import or_
 from api_responses import data_response, success_response
 from error_handling import handle_errors
 from models import Account, Category, Channel, ChannelTag, Credential, EpgSource, Filter, Tag, db
-from schemas import AccountCreateSchema, AccountUpdateSchema, validate_request_data
+from schemas import (
+    AccountCreateSchema,
+    AccountUpdateSchema,
+    CredentialCreateSchema,
+    CredentialUpdateSchema,
+    validate_request_data,
+)
 from services.account_epg_source_service import (
     find_account_xmltv_epg_source,
     normalize_account_server,
@@ -21,25 +27,13 @@ from services.channel_query_service import ChannelQueryService
 from services.connection_manager import ConnectionManager
 from services.datetime_utils import DEFAULT_DISPLAY_TIMEZONE, serialize_utc_iso
 from services.iptv_service import IPTVService, get_iptv_service_for_account
+from services.serializers.credentials import serialize_credential
 from services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
 
 # Create blueprint
 accounts_bp = Blueprint("accounts", __name__)
-
-
-def credential_to_dict(cred):
-    """Convert a Credential to a dictionary."""
-    return {
-        "id": cred.id,
-        "username": cred.username,
-        "max_connections": cred.max_connections or 1,
-        "active_connections": cred.active_connections or 0,
-        "status": cred.status,
-        "exp_date": cred.exp_date,
-        "enabled": cred.enabled,
-    }
 
 
 # ============================================================================
@@ -80,7 +74,7 @@ def get_accounts():
             "ppv_rename_format": a.ppv_rename_format,
             "ppv_rename_timezone": a.ppv_rename_timezone,
             "fcc_rename_format": a.fcc_rename_format,
-            "credentials": [credential_to_dict(c) for c in a.credentials],
+            "credentials": [serialize_credential(c) for c in a.credentials],
             "total_max_connections": a.get_total_max_connections(),
             "channel_count": channel_count_map.get(a.id, 0),
             "xmltv_epg_source": serialize_account_xmltv_epg_source(xmltv_sources.get(a.id)),
@@ -137,7 +131,7 @@ def create_account():
             "username": credential.username,
             "user_agent": account.user_agent,
             "enabled": account.enabled,
-            "credentials": [credential_to_dict(credential)],
+            "credentials": [serialize_credential(credential)],
             "total_max_connections": account.get_total_max_connections(),
             "xmltv_epg_source": xmltv_epg_source,
         },
@@ -1205,17 +1199,15 @@ def cleanup_orphan_tags():
 def get_credentials(account_id):
     """Get all credentials for an account"""
     account = Account.query.get_or_404(account_id)
-    return jsonify([credential_to_dict(c) for c in account.credentials])
+    return jsonify([serialize_credential(c) for c in account.credentials])
 
 
 @accounts_bp.route("/api/accounts/<int:account_id>/credentials", methods=["POST"])
+@validate_request_data(CredentialCreateSchema)
 def add_credential(account_id):
     """Add a new credential to an account"""
     account = Account.query.get_or_404(account_id)
-    data = request.json
-
-    if not data.get("username") or not data.get("password"):
-        return jsonify({"error": "Username and password are required"}), 400
+    data = request.validated_data
 
     # Check for duplicate username
     existing = Credential.query.filter_by(account_id=account_id, username=data["username"]).first()
@@ -1247,16 +1239,17 @@ def add_credential(account_id):
     except Exception as e:
         logger.warning(f"Could not verify new credential: {e}")
 
-    return jsonify(credential_to_dict(credential)), 201
+    return jsonify(serialize_credential(credential)), 201
 
 
 @accounts_bp.route("/api/accounts/<int:account_id>/credentials/<int:cred_id>", methods=["PUT"])
+@validate_request_data(CredentialUpdateSchema, partial=True)
 def update_credential(account_id, cred_id):
     """Update a credential"""
     Account.query.get_or_404(account_id)  # Validate account exists
     credential = Credential.query.filter_by(id=cred_id, account_id=account_id).first_or_404()
 
-    data = request.json
+    data = request.validated_data
 
     if "username" in data:
         credential.username = data["username"]
@@ -1279,7 +1272,7 @@ def update_credential(account_id, cred_id):
         except ValueError as e:
             logger.warning("Could not refresh XMLTV EPG URL for account %s: %s", account_id, e)
 
-    return jsonify(credential_to_dict(credential))
+    return jsonify(serialize_credential(credential))
 
 
 @accounts_bp.route("/api/accounts/<int:account_id>/credentials/<int:cred_id>", methods=["DELETE"])
@@ -1320,7 +1313,7 @@ def test_credential(account_id, cred_id):
         return jsonify(
             {
                 "success": True,
-                "credential": credential_to_dict(credential),
+                "credential": serialize_credential(credential),
                 "user_info": {
                     "username": user_info.get("username", ""),
                     "status": credential.status,

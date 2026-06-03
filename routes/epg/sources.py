@@ -6,38 +6,15 @@ import logging
 from flask import Blueprint, jsonify, request
 
 from api_responses import data_response, no_content, success_response
-from error_handling import ValidationError, handle_errors
+from error_handling import handle_errors
 from models import Account, ChannelEpgMapping, EpgChannel, EpgProgram, EpgSource, SdLineup, SdStation, db
-from services.datetime_utils import serialize_utc_iso
+from schemas import EpgSourceCreateSchema, EpgSourceUpdateSchema, validate_request_data
 from services.epg.coverage import get_category_epg_coverage, get_epg_coverage_stats
+from services.serializers.epg_sources import serialize_epg_source
 
 logger = logging.getLogger(__name__)
 
 epg_sources_bp = Blueprint("epg_sources", __name__, url_prefix="/api/epg")
-
-
-def _serialize_epg_source(source, *, mapping_count=0):
-    """Serialize an EpgSource for JSON responses."""
-    return {
-        "id": source.id,
-        "name": source.name,
-        "source_type": source.source_type,
-        "account_id": source.account_id,
-        "account_name": source.account.name if source.account else None,
-        "url": source.url,
-        "priority": source.priority,
-        "enabled": source.enabled,
-        "last_sync": serialize_utc_iso(source.last_sync),
-        "last_sync_status": source.last_sync_status,
-        "last_sync_message": source.last_sync_message,
-        "channel_count": source.channel_count,
-        "used_mapping_count": mapping_count,
-        "xmltv_grabber": source.xmltv_grabber,
-        "xmltv_config_name": source.xmltv_config_name,
-        "xmltv_days": source.xmltv_days,
-        "xmltv_offset": source.xmltv_offset,
-        "xmltv_extra_args": source.xmltv_extra_args,
-    }
 
 
 @epg_sources_bp.route("/sources", methods=["GET"])
@@ -54,28 +31,14 @@ def get_epg_sources():
     )
     mapping_count_map = {row.id: row.mapping_count for row in mapping_counts}
 
-    return data_response([_serialize_epg_source(s, mapping_count=mapping_count_map.get(s.id, 0)) for s in sources])
+    return data_response([serialize_epg_source(s, mapping_count=mapping_count_map.get(s.id, 0)) for s in sources])
 
 
 @epg_sources_bp.route("/sources", methods=["POST"])
+@validate_request_data(EpgSourceCreateSchema)
 def create_epg_source():
     """Create a new EPG source"""
-    data = request.json or {}
-
-    if not data.get("name"):
-        raise ValidationError("Name is required", details={"name": "Required"})
-    if not data.get("source_type"):
-        raise ValidationError("Source type is required", details={"source_type": "Required"})
-
-    valid_types = ["schedules_direct", "xmltv_url", "xmltv_grabber", "ppv_events"]
-    if data["source_type"] not in valid_types:
-        raise ValidationError(
-            f"Invalid source type. Must be one of: {valid_types}",
-            details={"source_type": f"Must be one of: {valid_types}"},
-        )
-
-    if data["source_type"] == "xmltv_grabber" and not data.get("xmltv_grabber"):
-        raise ValidationError("XMLTV grabber name is required", details={"xmltv_grabber": "Required"})
+    data = request.validated_data
 
     source = EpgSource(
         name=data["name"],
@@ -108,10 +71,11 @@ def create_epg_source():
 
 
 @epg_sources_bp.route("/sources/<int:source_id>", methods=["PUT"])
+@validate_request_data(EpgSourceUpdateSchema, partial=True)
 def update_epg_source(source_id):
     """Update an EPG source"""
     source = EpgSource.query.get_or_404(source_id)
-    data = request.json
+    data = request.validated_data
 
     if "name" in data:
         source.name = data["name"]
