@@ -9,13 +9,13 @@ This document groups open TODOs into execution **waves** and suggested **PR batc
 
 | Track | Range | Open | Notes |
 |-------|-------|------|-------|
-| P5 — PPV | 52–67 | **0** (optional **102**) | Waves 2–3 + 7 ✅; phase 1 of **65** ✅ |
+| P5 — PPV | 52–67, **102** | **0** | Waves 2–3 + 7 ✅; **65** phases 1–3 ✅ |
 | P6 — App-wide | 68–95 | **0** (parent stubs **78**, **85**, **92**, **95**) | Waves 1–8 phase 1 ✅ |
 | **Wave 9** | 96–100 | **5** | Route splits, frontend ESM, parallel pytest |
 | **Wave 10** | 101 | **1** | Final doc review (after Wave 9) |
-| Optional | 102 | **1** | PPV `epg.py` / `extraction.py` splits |
+| **Wave 9 (cont.)** | 102 | **0** | PPV `epg/` / `extraction/` package splits (PR **AA**) |
 
-**Total open (required):** 6 (TODOs 96–101). **With optional 102:** 7.
+**Total open (required):** 6 (TODOs 96–101). **102** complete in Wave 9 batch **AA**.
 
 Waves **1–7** ✅. Wave **8** phase 1 ✅ (PRs #35–38: TODOs 65, 66, 78 phase 1, 79). Remaining structural work is **Wave 9** → **Wave 10**.
 
@@ -236,7 +236,7 @@ Update [README.md](./README.md) status columns as work lands. Mark PR IDs in eac
 | [78](./78-split-fat-route-modules.md) phase 1 | #36 | `AccountAdminService`; `accounts.py` −32% |
 | [79](./79-extract-shared-route-serializers.md) | #38 | Shared serializers + schema validation |
 
-**Remaining from Wave 8 parents:** continued in **Wave 9** (96–98, 99, optional 102). See parent TODOs 78, 85, 65.
+**Remaining from Wave 8 parents:** continued in **Wave 9** (96–98, 99, 102). See parent TODOs 78, 85, 65.
 
 ---
 
@@ -251,7 +251,7 @@ W: 96 → 97
 X: 98 (after W recommended)
 Y: 99 (parallel with W/X if separate contributor)
 Z: 100 (last — stable suite before xdist CI)
-AA: 102 (optional, anytime)
+AA: 102 (PPV module splits — 65 phases 2–3)
 ```
 
 | Order | TODO | Parent | Summary |
@@ -261,7 +261,7 @@ AA: 102 (optional, anytime)
 | 9c | [98](./98-fcc-patterns-split-and-cdn-sri.md) | 78 phase 4 + 92 | FCC routes + CDN SRI |
 | 9d | [99](./99-esm-tab-migration-and-eslint.md) | 85 phases 2–3 | ESM tabs + ESLint |
 | 9e | [100](./100-parallelize-pytest-xdist.md) | 95 | pytest-xdist per-worker DB |
-| 9f (opt) | [102](./102-optional-ppv-module-splits.md) | 65 phases 2–3 | Split `epg.py`, `extraction.py` |
+| 9f | [102](./102-optional-ppv-module-splits.md) | 65 phases 2–3 | Split `epg.py`, `extraction.py` |
 
 ### PR batches — Wave 9
 
@@ -271,7 +271,7 @@ AA: 102 (optional, anytime)
 | **X** | 98 | FCC patterns split + CDN SRI | M |
 | **Y** | 99 | ESM tab migration + ESLint | M–L (multi-PR OK) |
 | **Z** | 100 | Parallel pytest (pytest-xdist) | M |
-| **AA** | 102 | Optional PPV module splits | L (optional) |
+| **AA** | 102 | PPV module splits (`epg/`, `extraction/`) | L |
 
 **Suggested merge order:** **W** (96 → 97) → **X** → **Y** (can overlap **W**/**X**) → **Z** → **AA** if scheduled → then Wave 10.
 
@@ -326,7 +326,7 @@ Quick reference for all suggested pull requests (A–AA + Wave 8 singles).
 | **X** | 9 | 98 | M | 🟡 PR open |
 | **Y** | 9 | 99 | M–L | ⬜ |
 | **Z** | 9 | 100 | M | ⬜ |
-| **AA** | 9 | 102 (opt) | L | ⬜ optional |
+| **AA** | 9 | 102 | L | ✅ |
 | — | 10 | 101 | S | ⬜ after Wave 9 |
 
 **Size legend:** S = small (1–2 days), M = medium (3–5 days), L = large (1+ week, migration or major refactor).
@@ -381,7 +381,7 @@ If resuming after Waves 1–8:
 4. **[99](./99-esm-tab-migration-and-eslint.md)** — ESM tabs + ESLint (PR **Y**; can parallelize with W/X)  
 5. **[100](./100-parallelize-pytest-xdist.md)** — pytest-xdist (PR **Z**; after suite stable)  
 
-Then **[101](./101-final-documentation-review.md)** (Wave 10). Optional: **[102](./102-optional-ppv-module-splits.md)** (PR **AA**).
+Then **[101](./101-final-documentation-review.md)** (Wave 10). **[102](./102-optional-ppv-module-splits.md)** (PR **AA**) complete — PPV `epg/` and `extraction/` package splits.
 
 ---
 
@@ -404,7 +404,7 @@ These closed items underpin the open work:
 
 | TODO | Defer until |
 |------|-------------|
-| 102 | Wave 9 **W–Z** if capacity limited; no product blocker |
+| 102 | ✅ Complete (Wave 9 batch **AA**) |
 | 101 | All Wave 9 implementation PRs merged |
 | Parent 92, 95 | Use focused TODOs 98, 100 instead |
 

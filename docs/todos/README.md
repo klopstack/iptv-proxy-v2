@@ -198,7 +198,7 @@ Full-stack review of PPV handling: enrichment pipeline, multi-source events (MiL
 | 62 | [62-add-milb-ppv-integration-test.md](./62-add-milb-ppv-integration-test.md) | ✅ | End-to-end MiLB channel → Event with `mlb_stats_api` source |
 | 63 | [63-expand-ppv-test-coverage.md](./63-expand-ppv-test-coverage.md) | ✅ | Orchestrator, cleanup, football-data provider, integration ([PR #21](https://github.com/klopstack/iptv-proxy-v2/pull/21)) |
 | 64 | [64-consolidate-ppv-detection-tests.md](./64-consolidate-ppv-detection-tests.md) | ✅ | Deduplicate overlapping detection test modules ([PR #21](https://github.com/klopstack/iptv-proxy-v2/pull/21)) |
-| 65 | [65-refactor-enrichment-god-class.md](./65-refactor-enrichment-god-class.md) | 🟡 | Phase 1 ✅ ([PR #35](https://github.com/klopstack/iptv-proxy-v2/pull/35)); optional phases 2–3 → [102](./102-optional-ppv-module-splits.md) |
+| 65 | [65-refactor-enrichment-god-class.md](./65-refactor-enrichment-god-class.md) | ✅ | Phases 1–3 ✅ ([PR #35](https://github.com/klopstack/iptv-proxy-v2/pull/35), batch **AA** → [102](./102-optional-ppv-module-splits.md)) |
 | 66 | [66-detail-thread-and-epg-side-effect-decoupling.md](./66-detail-thread-and-epg-side-effect-decoupling.md) | ✅ | Replace daemon detail thread; optional EPG hooks |
 | 67 | [67-ppv-misc-cleanup.md](./67-ppv-misc-cleanup.md) | ✅ | Constants, heuristics validation, provider health, docstrings |
 
@@ -285,7 +285,7 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 
 | Track | Total | Open | Notes |
 |-------|-------|------|-------|
-| P5 (52–67) | 16 | **0** | All required items ✅; **65** phase 1 ✅; optional **102** |
+| P5 (52–67, 102) | 17 | **0** | All required items ✅; **65** phases 1–3 ✅ |
 | P6 (68–95) | 27 | **0** | Waves 1–8 ✅; parent stubs **78**, **85**, **92**, **95** point to Wave 9 |
 | Wave 9 (96–100) | 5 | **5** | See [ROADMAP](./ROADMAP.md) batches **W–Z** |
 | Wave 10 (101) | 1 | **1** | Final doc review after Wave 9 |
@@ -294,7 +294,7 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 
 ## Wave 9 — Completion and follow-ups (June 2026)
 
-Phased remainders from TODOs 78, 85, 92, 95; optional PPV splits from TODO 65. Specs in each file; order in [ROADMAP.md](./ROADMAP.md).
+Phased remainders from TODOs 78, 85, 92, 95; PPV module splits from TODO 65 (102). Specs in each file; order in [ROADMAP.md](./ROADMAP.md).
 
 | # | Document | Status | Summary |
 |---|----------|--------|---------|
@@ -303,7 +303,7 @@ Phased remainders from TODOs 78, 85, 92, 95; optional PPV splits from TODO 65. S
 | 98 | [98-fcc-patterns-split-and-cdn-sri.md](./98-fcc-patterns-split-and-cdn-sri.md) | ⬜ | TODO 78 phase 4 + 92: FCC routes + CDN SRI (PR **X**) |
 | 99 | [99-esm-tab-migration-and-eslint.md](./99-esm-tab-migration-and-eslint.md) | ⬜ | TODO 85 phases 2–3: ESM tabs + ESLint (PR **Y**) |
 | 100 | [100-parallelize-pytest-xdist.md](./100-parallelize-pytest-xdist.md) | 🟡 | TODO 95: pytest-xdist per-worker DB (PR **Z**, in PR) |
-| 102 | [102-optional-ppv-module-splits.md](./102-optional-ppv-module-splits.md) | ⬜ | Optional TODO 65 phases 2–3: `epg.py`, `extraction.py` (PR **AA**) |
+| 102 | [102-optional-ppv-module-splits.md](./102-optional-ppv-module-splits.md) | ✅ | TODO 65 phases 2–3: `epg/`, `extraction/` packages (PR **AA**) |
 
 ### Wave 10 — Final documentation review
 
