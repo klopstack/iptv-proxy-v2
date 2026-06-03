@@ -14,6 +14,8 @@ from services.ppv.extraction import PPVEventExtractor
 PPV_SECTION_HEADER_PATTERN = re.compile(r"^#+\s*.+\s*#+\s*$", re.IGNORECASE)
 # ESPN Play / archive feeds: "| 11-09-2023" or "| 01-18-2024" (US month-day-year)
 US_ARCHIVE_DATE_PATTERN = re.compile(r"(?:\||\s)(\d{1,2})-(\d{1,2})-(\d{4})\b")
+# Boxing PPV slot prefix, e.g. "Boxing 1 : Usyk vs Verhoeven"
+BOXING_CHANNEL_PATTERN = re.compile(r"\bBoxing\b", re.IGNORECASE)
 
 _extractor = PPVEventExtractor()
 
@@ -63,7 +65,7 @@ def classify_ppv_enrichment(
 
     Reasons align with enrichment filter keys: generic_name, placeholder_name,
     section_header, placeholder, inactive, no_competitors, date_but_no_competitors,
-    far_future, stale_archive.
+    far_future, stale_archive, no_event_date.
 
     When ``extraction`` is provided (e.g. from a prior ``extract_all`` call), it is
     used for competitor/date checks instead of re-extracting from the channel name.
@@ -106,6 +108,9 @@ def classify_ppv_enrichment(
         if extraction.get("date") or extraction.get("time_only"):
             return "date_but_no_competitors"
         return "no_competitors"
+
+    if not extraction.get("date") and not extraction.get("time_only") and BOXING_CHANNEL_PATTERN.search(channel_name):
+        return "no_event_date"
 
     event_date = extraction.get("date")
     if isinstance(event_date, datetime):
