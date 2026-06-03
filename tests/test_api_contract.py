@@ -112,3 +112,12 @@ class TestApiContractCategoriesAndStats:
         stats = api_data(response)
         assert "accounts" in stats
         assert "channels" in stats
+
+    def test_dashboard_summary_data_envelope(self, client):
+        response = client.get("/api/dashboard/summary")
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert "data" in payload
+        assert "channel_health" in payload["data"]
+        assert "streams" in payload["data"]
+        assert "ppv" in payload["data"]
