@@ -12,13 +12,13 @@ from error_handling import handle_errors, handle_xml_errors
 from models import Account, PlaylistConfig, XtreamCredential, db
 from services.channel_query_service import ChannelQueryService
 from services.datetime_utils import serialize_utc_iso
-from services.epg.ppv import is_ppv_category
 from services.image_cache_service import ImageCacheService
 from services.playlist_format_service import (
     build_channel_display_maps,
     channel_display_name,
     load_accounts_for_channels,
 )
+from services.ppv.detection import is_ppv_category
 from services.ppv.visibility import PPVVisibilityService
 from services.url_service import get_proxy_base_url
 

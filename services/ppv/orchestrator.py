@@ -153,7 +153,7 @@ class PPVEnrichmentOrchestrator:
             if scanned > max_scan:
                 break
 
-            reason = classify_ppv_enrichment(channel.name)
+            reason = classify_ppv_enrichment(channel.name, cheap_only=True)
             if reason is not None:
                 channel.ppv_enrichment_status = "skipped"
                 channel.ppv_enrichment_error = skip_error_message(reason)

@@ -28,7 +28,7 @@ Usage:
     from services.epg.match_rules import EpgMatchRulesService
     from services.epg.parsing import parse_xmltv
     from services.epg.fcc import preview_fcc_epg_matches
-    from services.epg.ppv import is_ppv_channel
+    from services.ppv.detection import is_ppv_channel
     from services.epg.cache import load_from_cache, save_to_cache
     from services.epg.programs import get_current_program, search_programs_by_title
 

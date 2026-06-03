@@ -8,9 +8,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from models import Event, EventChannelLink, db
-from services.epg.ppv import is_ppv_placeholder_name
 from services.ppv.constants import get_sport_grace_hours
-from services.ppv.detection import is_generic_channel_name
+from services.ppv.detection import is_generic_channel_name, is_ppv_placeholder_name
 from services.ppv.extraction import PPVEventExtractor
 
 logger = logging.getLogger(__name__)

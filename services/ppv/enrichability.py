@@ -6,8 +6,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from services.epg.ppv import is_ppv_placeholder_name
-from services.ppv.detection import is_generic_channel_name
+from services.ppv.detection import is_generic_channel_name, is_ppv_placeholder_name
 from services.ppv.extraction import PPVEventExtractor
 
 # Section headers / category dividers in IPTV feeds (e.g. "##### DAZN PPV #####")
@@ -27,6 +26,8 @@ def is_ppv_section_header(name: str) -> bool:
 def classify_ppv_enrichment(
     channel_name: str,
     extraction: Optional[dict] = None,
+    *,
+    cheap_only: bool = False,
 ) -> Optional[str]:
     """
     Return a skip reason if the channel cannot be calendar-enriched, else None.
@@ -37,6 +38,9 @@ def classify_ppv_enrichment(
 
     When ``extraction`` is provided (e.g. from a prior ``extract_all`` call), it is
     used for competitor/date checks instead of re-extracting from the channel name.
+
+    With ``cheap_only=True``, only name-pattern checks run (no ``extract_all``).
+    Use in orchestrator batch selection; enrichment runs the full classify pass.
     """
     if not channel_name or not channel_name.strip():
         return "inactive"
@@ -55,6 +59,9 @@ def classify_ppv_enrichment(
 
     if _extractor.is_inactive_channel(channel_name):
         return "inactive"
+
+    if cheap_only:
+        return None
 
     if extraction is None:
         extraction = _extractor.extract_all(channel_name)

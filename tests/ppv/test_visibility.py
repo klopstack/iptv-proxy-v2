@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 from models import Account, Channel, Event, EventChannelLink, db
 from services.epg.constants import PPV_PLACEHOLDER_PATTERNS
-from services.epg.ppv import get_ppv_event_title, is_ppv_placeholder_name
+from services.ppv.detection import get_ppv_event_title, is_ppv_placeholder_name
 from services.ppv.visibility import PPVVisibilityService
 
 
