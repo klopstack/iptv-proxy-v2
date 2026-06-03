@@ -1,7 +1,8 @@
 # SofaScore tennis calendar — slice 1 (client + parser)
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P2  
+**PR:** https://github.com/klopstack/iptv-proxy-v2/pull/58
 **Roadmap:** [ROADMAP-active.md](./ROADMAP-active.md) — Wave 12 batch **AH** (after ESPN tennis, [122](./122-tennis-calendar-event-source.md))  
 **Audit:** [tennis-ppv-production-audit.md](../architecture/tennis-ppv-production-audit.md), June 2026
 
@@ -128,4 +129,5 @@ curl -s 'https://api.sofascore.com/api/v1/sport/tennis/scheduled-events/2026-06-
 
 ## Completion
 
-*(Add PR link and date when merged.)*
+- **PR:** https://github.com/klopstack/iptv-proxy-v2/pull/58
+- **Deliverables:** `services/tennis/sofascore_calendar.py`; `Event.SOURCE_SOFASCORE`; recorded fixtures in `tests/ppv/fixtures/sofascore/`; unit tests without network.

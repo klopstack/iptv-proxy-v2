@@ -1,6 +1,6 @@
 # Extended calendar coverage: college, obscure leagues, boxing
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done (tracks A/B in PR review)  
 **Priority:** P2  
 **Audit:** Production matching analysis, June 2026 (`docker.klopnet.com`)
 
@@ -47,8 +47,9 @@ This TODO is intentionally **multi-track**. Each track has independent acceptanc
 
 **Acceptance:**
 
-- [ ] WCWS production example (`Texas Tech vs Texas`, Jun 4 2026) matches when game exists in source.
-- [ ] BTN+ channels for games in source match; out-of-source remain documented `no_match`.
+- [x] WCWS/BTN+ channels skip with `unsupported_sport` (no calendar source); ranking prefix strips correctly — PR [#63](https://github.com/klopstack/iptv-proxy-v2/pull/63)
+- [ ] WCWS production example matches when game exists in source — **deferred** (no NCAA softball API)
+- [x] BTN+ channels skip instead of inflating `no_match` — PR [#63](https://github.com/klopstack/iptv-proxy-v2/pull/63)
 
 ### Track B — Lower-tier / regional football
 
@@ -60,8 +61,8 @@ This TODO is intentionally **multi-track**. Each track has independent acceptanc
 
 **Acceptance:**
 
-- [ ] Charlton/Leicester fixture matches on correct date if source added, OR documented as unsupported with enrichability skip.
-- [ ] DAZN obscure league channels no longer inflate `no_match` metrics (moved to `skipped` with visible reason in API).
+- [x] Charlton/Leicester documented: TSDB league 4399 configured; fixture absent — remains enrichable — PR [#62](https://github.com/klopstack/iptv-proxy-v2/pull/62)
+- [x] DAZN obscure league channels no longer inflate `no_match` metrics — PR [#62](https://github.com/klopstack/iptv-proxy-v2/pull/62)
 
 ### Track C — Boxing / combat sports
 
@@ -73,8 +74,8 @@ This TODO is intentionally **multi-track**. Each track has independent acceptanc
 
 **Acceptance:**
 
-- [ ] Usyk vs Verhoeven-style channels: `extract_date` → `None`; enrichability → `skipped` (not wrong-day search).
-- [ ] If boxing source added: ≥ 50% of dated boxing PPV channels match on event day.
+- [x] Usyk vs Verhoeven-style channels: `extract_date` → `None`; enrichability → `skipped` (not wrong-day search) — PR [#61](https://github.com/klopstack/iptv-proxy-v2/pull/61)
+- [ ] If boxing source added: ≥ 50% of dated boxing PPV channels match on event day — **deferred**
 
 ### Track D — Stale archive channels
 
@@ -86,8 +87,8 @@ This TODO is intentionally **multi-track**. Each track has independent acceptanc
 
 **Acceptance:**
 
-- [ ] ESPN Play 2023/2024 examples move from `no_match` to `skipped`.
-- [ ] `/api/ppv-enrichment/channels?status=skipped` summary includes stale archive count or filter.
+- [x] ESPN Play 2023/2024 examples move from `no_match` to `skipped` — PR [#59](https://github.com/klopstack/iptv-proxy-v2/pull/59)
+- [x] `/api/ppv-enrichment/channels?status=skipped` summary includes stale archive count or filter — PR [#59](https://github.com/klopstack/iptv-proxy-v2/pull/59)
 
 ## Proposed solution
 
@@ -102,8 +103,8 @@ This TODO is intentionally **multi-track**. Each track has independent acceptanc
 
 | Track | Fixture file | Assert |
 |-------|--------------|--------|
-| A | `tests/ppv/fixtures/wcws_channels.json` | Match or explicit skip |
-| B | `tests/ppv/fixtures/championship_playoff.json` | Charlton/Leicester |
+| A | `tests/ppv/fixtures/wcws_channels.json` | Skip or explicit deferral |
+| B | `tests/ppv/fixtures/championship_playoff.json` | Charlton/Leicester + obscure leagues |
 | C | `tests/ppv/fixtures/boxing_channels.json` | No date → skip |
 | D | `tests/ppv/fixtures/stale_espn_play.json` | stale → skip |
 
@@ -122,16 +123,27 @@ Track progress by **`no_match_count`** vs **`skipped`** with documented reasons 
 
 ## Dependencies
 
-- [120](./120-fix-ppv-date-extraction-parsing-bugs.md) — prerequisite for all tracks.
-- [122](./122-tennis-calendar-event-source.md) — tennis (ESPN + SofaScore [125](./125-sofascore-tennis-calendar-slice1.md)–[126](./126-sofascore-calendar-multi-sport-and-enrichment.md)); do not bundle here.
+- [120](./120-fix-ppv-date-extraction-parsing-bugs.md) — prerequisite for all tracks ✅
+- [122](./122-tennis-calendar-event-source.md) — tennis (ESPN + SofaScore [125](./125-sofascore-tennis-calendar-slice1.md)–[126](./126-sofascore-calendar-multi-sport-and-enrichment.md)); do not bundle here ✅
 - [57](./57-centralize-sport-key-mappings.md) — sport context for college vs pro.
-- [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) — re-evaluate channels after changes.
+- [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) — re-evaluate channels after changes ✅
 
 ## Recommended order
 
-**123 after 120**; tracks A–D can be parallelized by priority:
+**123 after 120** ✅; tracks completed:
 
-1. **Track D** (stale archive) — quick enrichability win, clears metric noise.
-2. **Track A** (WCWS) — high-visibility live events.
-3. **Track B** (Charlton/Leicester) — investigate TSDB config first (may be quick fix).
-4. **Track C** (boxing) — lower volume unless provider adds more fights.
+1. **Track D** (stale archive) — PR [#59](https://github.com/klopstack/iptv-proxy-v2/pull/59)
+2. **Track C** (boxing) — PR [#61](https://github.com/klopstack/iptv-proxy-v2/pull/61)
+3. **Track B** (obscure leagues) — PR [#62](https://github.com/klopstack/iptv-proxy-v2/pull/62)
+4. **Track A** (WCWS/BTN+ skip) — PR [#63](https://github.com/klopstack/iptv-proxy-v2/pull/63)
+
+## Completion
+
+| Track | PR | Deliverables |
+|-------|-----|--------------|
+| D | [#59](https://github.com/klopstack/iptv-proxy-v2/pull/59) | `stale_archive` enrichability; `stale_espn_play.json` fixtures |
+| C | [#61](https://github.com/klopstack/iptv-proxy-v2/pull/61) | `no_event_date` for undated boxing; `boxing_channels.json` fixtures |
+| B | [#62](https://github.com/klopstack/iptv-proxy-v2/pull/62) | `unsupported_league` for obscure DAZN; TSDB Championship investigation doc |
+| A | [#63](https://github.com/klopstack/iptv-proxy-v2/pull/63) | `unsupported_sport` for WCWS/BTN+; WCWS calendar deferred; `wcws_channels.json` fixtures |
+
+**Deferred:** NCAA softball/baseball calendar provider (WCWS full matching).

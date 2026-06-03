@@ -256,22 +256,22 @@ Identified from live analysis on `docker.klopnet.com` (18,625 active PPV channel
 | # | Document | Status | Summary |
 |---|----------|--------|---------|
 | 120 | [120-fix-ppv-date-extraction-parsing-bugs.md](./120-fix-ppv-date-extraction-parsing-bugs.md) | ✅ | Wrong calendar day from `Jun 4`, `@ Jun 3`, time-only titles; align both date extractors |
-| 121 | [121-mlb-team-abbreviation-resolution.md](./121-mlb-team-abbreviation-resolution.md) | ⬜ | Peacock `BAL at BOS` abbreviations fail; full names match |
-| 122 | [122-tennis-calendar-event-source.md](./122-tennis-calendar-event-source.md) | 🔄 | ESPN primary tennis (PR #56); spike ✅ |
-| 123 | [123-extended-calendar-coverage-college-obscure-sports.md](./123-extended-calendar-coverage-college-obscure-sports.md) | ⬜ | WCWS, Championship playoffs, DAZN obscure leagues, boxing, stale ESPN Play |
-| 124 | [124-ppv-enrichment-attempt-tracking-and-requeue.md](./124-ppv-enrichment-attempt-tracking-and-requeue.md) | 🔄 | `ppv_enrichment_attempts` always 0; requeue workflow after matching fixes |
-| 125 | [125-sofascore-tennis-calendar-slice1.md](./125-sofascore-tennis-calendar-slice1.md) | ⬜ | SofaScore client + tennis parser + fixtures; `SOURCE_SOFASCORE`; not wired |
-| 126 | [126-sofascore-calendar-multi-sport-and-enrichment.md](./126-sofascore-calendar-multi-sport-and-enrichment.md) | ⬜ | Merge after ESPN; sport slugs; MMA/table tennis; fallback gaps |
+| 121 | [121-mlb-team-abbreviation-resolution.md](./121-mlb-team-abbreviation-resolution.md) | ✅ | Peacock `BAL at BOS` abbreviations — PR [#54](https://github.com/klopstack/iptv-proxy-v2/pull/54) |
+| 122 | [122-tennis-calendar-event-source.md](./122-tennis-calendar-event-source.md) | ✅ | ESPN primary tennis — PRs [#55](https://github.com/klopstack/iptv-proxy-v2/pull/55), [#56](https://github.com/klopstack/iptv-proxy-v2/pull/56) |
+| 123 | [123-extended-calendar-coverage-college-obscure-sports.md](./123-extended-calendar-coverage-college-obscure-sports.md) | ✅ | Tracks D/C merged; A/B in [#62](https://github.com/klopstack/iptv-proxy-v2/pull/62)/[#63](https://github.com/klopstack/iptv-proxy-v2/pull/63); WCWS calendar deferred |
+| 124 | [124-ppv-enrichment-attempt-tracking-and-requeue.md](./124-ppv-enrichment-attempt-tracking-and-requeue.md) | ✅ | Attempt tracking + requeue — PR [#53](https://github.com/klopstack/iptv-proxy-v2/pull/53) |
+| 125 | [125-sofascore-tennis-calendar-slice1.md](./125-sofascore-tennis-calendar-slice1.md) | ✅ | SofaScore client + parser — PR [#58](https://github.com/klopstack/iptv-proxy-v2/pull/58) |
+| 126 | [126-sofascore-calendar-multi-sport-and-enrichment.md](./126-sofascore-calendar-multi-sport-and-enrichment.md) | ✅ | SofaScore merge + doc — PR [#60](https://github.com/klopstack/iptv-proxy-v2/pull/60) |
 
 ```
-124-attempt-tracking (parallel with 121+)
-120-date-extraction ✅ ──► 121-mlb-abbrevs
-120 ──► 122 ESPN tennis (PR #56) ──► 125 SofaScore slice 1 ──► 126 wire + fallback
-120 ──► 123-extended-coverage (tracks D stale → A WCWS → B playoffs → C boxing)
-124-requeue ──► verify all tracks on production
+124-attempt-tracking ✅ (#53)
+120-date-extraction ✅ (#52) ──► 121-mlb-abbrevs ✅ (#54)
+120 ──► 122 ESPN tennis ✅ (#55 spike, #56) ──► 125 SofaScore slice 1 ✅ (#58) ──► 126 wire ✅ (#60)
+120 ──► 123-extended-coverage ✅ (D #59, C #61, B #62, A #63)
+124-requeue ──► run on production after deploy
 ```
 
-**Highest impact first:** 124 (tracking + requeue) → 121 (MLB) → 122 ESPN → 125/126 SofaScore (secondary) → 123 by volume.
+**Highest impact ops:** Requeue `no_match` per [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) after Wave 12 deploy.
 
 ---
 

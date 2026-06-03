@@ -7,7 +7,7 @@ This file is the **index** for roadmap planning. Detailed wave specs are split s
 
 | Document | Contents |
 |----------|----------|
-| **[ROADMAP-active.md](./ROADMAP-active.md)** | Open work: dashboard 107–110, Wave 11 (PostgreSQL), Wave 12 (PPV matching + SofaScore 125–126), next five |
+| **[ROADMAP-active.md](./ROADMAP-active.md)** | Open work: Wave 11 (PostgreSQL); Wave 12 ✅ archived in active file |
 | **[archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-waves-1-10.md)** | Completed waves 1–10, PR batches A–AA, parallel workstreams, historical dependency rules |
 
 Implement from each **TODO file** linked in the active roadmap — not from summaries alone.
@@ -24,11 +24,11 @@ Implement from each **TODO file** linked in the active roadmap — not from summ
 | **Wave 10** | 101 | **0** | Final doc review ✅ |
 | **Dashboard follow-ups** | 107–110 | **0** | 107–109 ✅; [110](./110-dashboard-optional-ux-follow-ups.md) won't do |
 | **Wave 11 — DB migration** | 111–119 | **9** | SQLite → PostgreSQL; Series A + Series B |
-| **Wave 12 — PPV matching** | 121–126 | **6** | 120 ✅; 124 🟡; ESPN [122](./122-tennis-calendar-event-source.md); SofaScore [125](./125-sofascore-tennis-calendar-slice1.md)–[126](./126-sofascore-calendar-multi-sport-and-enrichment.md) |
+| **Wave 12 — PPV matching** | 120–126, 123 | **0** | ✅ June 2026 — PRs [#52](https://github.com/klopstack/iptv-proxy-v2/pull/52)–[#63](https://github.com/klopstack/iptv-proxy-v2/pull/63); 123 A/B in review |
 
-**Total open (required):** 15 (111–119, 121–126) — see [ROADMAP-active.md](./ROADMAP-active.md).
+**Total open (required):** 9 (111–119) — see [ROADMAP-active.md](./ROADMAP-active.md).
 
-Waves **1–10** ✅ (PRs #10–51). **Next:** Wave 12 (PPV) and/or Wave 11 (PostgreSQL), in parallel if desired.
+Waves **1–10** ✅ (PRs #10–51). **Wave 12** ✅ (PRs #52–63). **Next:** Wave 11 (PostgreSQL).
 
 Update [README.md](./README.md) status columns as work lands. Mark PR IDs in each TODO’s **Completion** section.
 
