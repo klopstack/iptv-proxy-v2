@@ -6,12 +6,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from models import Channel, Event, db
-from services.ppv.enrichability import classify_ppv_enrichment, skip_error_message
-from services.ppv.enrichment.types import DetailQueueItem, EnrichmentResult, calendar_event_source
-from services.ppv.extraction import PPVEventExtractor
-from services.ppv.matching.context import context_for_event, resolve_sport_league_context
-from services.ppv.matching.validation import competitors_match_event
-from services.ppv.persistence import persist_match
 from services.ppv.constants import (
     HIGH_CONFIDENCE_THRESHOLD,
     MATCH_AMBIGUITY_GAP_LOW,
@@ -20,6 +14,12 @@ from services.ppv.constants import (
     MEDIUM_CONFIDENCE_THRESHOLD,
     MIN_MATCH_CONFIDENCE,
 )
+from services.ppv.enrichability import classify_ppv_enrichment, skip_error_message
+from services.ppv.enrichment.types import DetailQueueItem, EnrichmentResult, calendar_event_source
+from services.ppv.extraction import PPVEventExtractor
+from services.ppv.matching.context import context_for_event, resolve_sport_league_context
+from services.ppv.matching.validation import competitors_match_event
+from services.ppv.persistence import persist_match
 from services.reverse_event_matcher.orchestrator import ReverseEventMatcher
 from services.thesportsdb_calendar_scraper import CalendarEvent, get_calendar_scraper
 

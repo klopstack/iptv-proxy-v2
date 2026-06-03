@@ -11,14 +11,9 @@ from flask import Flask
 from models import Event, EventChannelLink, SyncMetadata, db
 from services.datetime_utils import parse_thesportsdb_scheduled_at, to_naive_utc
 from services.ppv.constants import METADATA_KEY_DETAILS_FETCHED
-from services.ppv.enrichment.types import (
-    DETAIL_QUEUE_IDLE_TIMEOUT_SECONDS,
-    DETAIL_QUEUE_STOP,
-    DetailQueueItem,
-)
-from services.thesportsdb_service import TheSportsDBService, get_thesportsdb_api_request_interval
-
 from services.ppv.enrichment.log_proxy import logger
+from services.ppv.enrichment.types import DETAIL_QUEUE_IDLE_TIMEOUT_SECONDS, DETAIL_QUEUE_STOP, DetailQueueItem
+from services.thesportsdb_service import TheSportsDBService, get_thesportsdb_api_request_interval
 
 
 class DetailFetchWorker:
