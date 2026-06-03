@@ -1,6 +1,6 @@
 # Refactor PPV enrichment service (phased god-class split)
 
-**Status:** 🟡 Phase 1 complete (PR #35); optional phases 2–3 → [102](./102-optional-ppv-module-splits.md)  
+**Status:** ✅ Complete (phases 1–3)  
 **Priority:** P3  
 **Audit:** PPV audit, June 2026
 
@@ -26,8 +26,8 @@ Related: `services/ppv/epg.py` (~620 lines) and `services/ppv/extraction.py` (~8
 ## Affected files
 
 - `services/ppv/enrichment/` (package; replaces monolithic `enrichment.py`)
-- `services/ppv/epg.py` (optional phase 2)
-- `services/ppv/extraction.py` (optional phase 3)
+- `services/ppv/epg/` (package; replaces monolithic `epg.py`)
+- `services/ppv/extraction/` (package; replaces monolithic `extraction.py`)
 - All enrichment/orchestrator tests
 
 ## Proposed solution
@@ -48,6 +48,7 @@ Do **not** big-bang rewrite — each phase must keep tests green.
 - [x] `enrichment.py` coordinator < 300 lines after phase 1 (`service.py` ~170 lines).
 - [x] No behavior change in enrichment test suite.
 - [x] Detail fetch and match pipeline independently instantiable in tests.
+- [x] `epg.py` and `extraction.py` split into packages with coordinator < 300 lines (phases 2–3 → [102](./102-optional-ppv-module-splits.md)).
 
 ## Implementation notes (phase 1)
 
@@ -69,10 +70,7 @@ Do **not** big-bang rewrite — each phase must keep tests green.
 ## Completion
 
 - **Phase 1 — PR #35:** `enrichment/` package (`match_pipeline`, `detail_fetch`, `side_effects`, `service` coordinator)
-
-## Wave 9 continuation (optional)
-
-Phases 2–3 (`epg.py`, `extraction.py` splits): [102-optional-ppv-module-splits.md](./102-optional-ppv-module-splits.md) — PR batch **AA**
+- **Phases 2–3 — PR batch AA:** [102-optional-ppv-module-splits.md](./102-optional-ppv-module-splits.md) — `epg/` and `extraction/` packages
 
 ## Dependencies
 
