@@ -195,6 +195,11 @@ class Channel(db.Model):  # type: ignore[name-defined]
     ppv_enrichment_error = db.Column(db.Text, nullable=True)  # Error message from last attempt
     ppv_enrichment_last_attempt = db.Column(db.DateTime, nullable=True)  # Timestamp of last enrichment attempt
 
+    # Broadcast language (ISO 639-1, e.g. en, es, or und for undetermined)
+    broadcast_language = db.Column(db.String(10), nullable=True)
+    language_source = db.Column(db.String(30), nullable=True)  # explicit_name, network_default, manual, etc.
+    language_confidence = db.Column(db.Float, nullable=True)
+
     # Relationships
     category = db.relationship("Category", backref="channels")
     fcc_facility = db.relationship("FccFacility", foreign_keys=[fcc_facility_id], lazy="select")

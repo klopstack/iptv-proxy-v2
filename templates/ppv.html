@@ -652,6 +652,9 @@ function renderChannelsPreviewTable(channels) {
             : '—';
         const visible = isChannelVisibleUnderMode(channel, mode);
         const rowClass = visible === false ? 'table-secondary text-muted' : '';
+        const langBadge = channel.broadcast_language
+            ? `<span class="badge bg-secondary ms-1">${escapeHtml(channel.broadcast_language)}</span>`
+            : '';
         const errorText = channel.ppv_enrichment_error
             ? escapeHtml(channel.ppv_enrichment_error.substring(0, 60)) + (channel.ppv_enrichment_error.length > 60 ? '…' : '')
             : '—';
@@ -659,7 +662,7 @@ function renderChannelsPreviewTable(channels) {
         rows += `
             <tr class="${rowClass}">
                 <td>${visibilityIndicator(visible)}</td>
-                <td>${escapeHtml(channel.channel_name)}</td>
+                <td>${escapeHtml(channel.channel_name)}${langBadge}</td>
                 <td>${escapeHtml(channel.account_name || '—')}</td>
                 <td>${statusBadge(channel.ppv_enrichment_status, 'enrichment')}</td>
                 <td>${linkedLabel}</td>
@@ -708,9 +711,12 @@ async function toggleEventDetail(eventId, btn) {
         const data = await window.PpvApi.fetchPpvEventDetail(eventId);
         const event = data.event;
         const channels = data.channels || [];
-        const channelList = channels.map((ch) =>
-            `<li>${escapeHtml(ch.channel_name)} (${Math.round((ch.match_confidence || 0) * 100)}%, ${escapeHtml(ch.match_method || '')})</li>`
-        ).join('');
+        const channelList = channels.map((ch) => {
+            const langBadge = ch.broadcast_language
+                ? `<span class="badge bg-secondary ms-1">${escapeHtml(ch.broadcast_language)}</span>`
+                : '';
+            return `<li>${escapeHtml(ch.channel_name)}${langBadge} (${Math.round((ch.match_confidence || 0) * 100)}%, ${escapeHtml(ch.match_method || '')})</li>`;
+        }).join('');
 
         contentEl.innerHTML = `
             <div class="row">

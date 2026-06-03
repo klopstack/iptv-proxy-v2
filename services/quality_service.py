@@ -128,12 +128,17 @@ class QualityService:
         epg_groups: Dict[Optional[int], List[Dict[str, Any]]] = {}
 
         for channel in channels:
-            # Primary grouping by cleaned_name
+            # Primary grouping by cleaned_name + broadcast_language
             key = channel.get(key_field) or channel.get("name", "")
             if not key:
                 key = channel.get("name", "unknown")
 
-            key_normalized = key.strip().lower()
+            lang = channel.get("broadcast_language")
+            if lang is None and channel.get("channel") is not None:
+                lang = getattr(channel.get("channel"), "broadcast_language", None)
+            lang_part = (lang or "und").strip().lower()
+
+            key_normalized = f"{key.strip().lower()}|{lang_part}"
             if key_normalized not in groups:
                 groups[key_normalized] = []
             groups[key_normalized].append(channel)

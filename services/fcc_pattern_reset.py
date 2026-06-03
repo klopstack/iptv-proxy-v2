@@ -48,6 +48,12 @@ def reset_fcc_patterns_to_defaults(db_path: str) -> tuple[bool, str]:
         FccMatchStrategy.query.delete()
         db.session.commit()
 
+        # Release pooled SQLAlchemy connections before raw sqlite DROP/migrate.
+        # Otherwise DROP can fail silently under WAL locks and the seed migration
+        # may skip with "tables already exist", leaving empty FCC pattern tables.
+        db.session.remove()
+        db.engine.dispose()
+
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute("DROP TABLE IF EXISTS fcc_match_networks")
@@ -74,8 +80,11 @@ def reset_fcc_patterns_to_defaults(db_path: str) -> tuple[bool, str]:
         success, message = module.migrate(db_path)
         if not success:
             return False, message
+        if "skipping" in message.lower():
+            return False, f"Migration did not reseed defaults: {message}"
 
         db.session.remove()
+        db.engine.dispose()
         cache_service.clear_all()
         clear_fcc_pattern_cache()
         logger.info("FCC match patterns reset to defaults")

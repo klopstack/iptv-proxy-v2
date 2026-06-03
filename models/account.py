@@ -151,6 +151,10 @@ class PlaylistConfig(db.Model):  # type: ignore[name-defined]
     # Combination mode: "all" (must have all include_tags) or "any" (must have at least one)
     tag_match_mode = db.Column(db.String(10), default="any")  # all, any
 
+    # Ordered ISO 639-1 language codes for PPV feed disambiguation (JSON array text)
+    preferred_languages = db.Column(db.Text, default='["en"]')
+    language_fallback = db.Column(db.String(20), default="unknown")  # unknown, hide, show_all
+
     enabled = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at = db.Column(
@@ -196,6 +200,10 @@ class XtreamCredential(db.Model):  # type: ignore[name-defined]
 
     # IANA timezone override for PPV rename {start_time}/{date} tokens (None = use account default)
     ppv_rename_timezone = db.Column(db.String(50), nullable=True)
+
+    # Ordered ISO 639-1 language codes for PPV feed disambiguation (JSON array text)
+    preferred_languages = db.Column(db.Text, default='["en"]')
+    language_fallback = db.Column(db.String(20), default="unknown")  # unknown, hide, show_all
 
     # Metadata
     enabled = db.Column(db.Boolean, default=True)

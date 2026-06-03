@@ -275,6 +275,7 @@ class ChannelQueryService:
                 "channel": ch,
                 "stream_id": ch.stream_id,
                 "cleaned_name": ch.cleaned_name or ch.name,
+                "broadcast_language": ch.broadcast_language,
                 "tags": ChannelQueryService._tags_for_collapse(ch, tags_map, account_id),
             }
             if include_health or include_epg_mappings:
@@ -433,6 +434,20 @@ class ChannelQueryService:
         return visible
 
     @staticmethod
+    def _apply_language_preference_if_configured(
+        channels: List[Channel],
+        *,
+        preferred_languages: Optional[Union[str, List[str]]] = None,
+        language_fallback: str = "unknown",
+    ) -> List[Channel]:
+        if not channels or preferred_languages is None:
+            return channels
+
+        from services.language_preference_service import apply_language_preference
+
+        return apply_language_preference(channels, preferred_languages, language_fallback)
+
+    @staticmethod
     def _exclude_health_auto_disabled(channels: List[Channel]) -> List[Channel]:
         """Drop channels auto-disabled by the health monitor."""
         if not channels:
@@ -489,12 +504,19 @@ class ChannelQueryService:
         apply_filters: bool = True,
         apply_ppv_visibility: bool = True,
         exclude_linked_backups: bool = False,
+        preferred_languages: Optional[Union[str, List[str]]] = None,
+        language_fallback: str = "unknown",
     ) -> List[Channel]:
         """Apply account selection rules to an already-narrowed channel list."""
         if apply_filters:
             candidates = FilterService.apply_filters_to_channels(candidates, account_id)
         if apply_ppv_visibility:
             candidates = ChannelQueryService.apply_ppv_visibility_to_channels(candidates)
+        candidates = ChannelQueryService._apply_language_preference_if_configured(
+            candidates,
+            preferred_languages=preferred_languages,
+            language_fallback=language_fallback,
+        )
         candidates = ChannelQueryService._exclude_health_auto_disabled(candidates)
         if exclude_linked_backups:
             candidates = ChannelQueryService.exclude_linked_backup_targets(candidates)
@@ -507,6 +529,8 @@ class ChannelQueryService:
         apply_filters: bool = True,
         apply_ppv_visibility: bool = True,
         exclude_linked_backups: bool = False,
+        preferred_languages: Optional[Union[str, List[str]]] = None,
+        language_fallback: str = "unknown",
     ) -> List[Channel]:
         """Apply per-account selection rules to a multi-account candidate list."""
         if not candidates:
@@ -525,11 +549,19 @@ class ChannelQueryService:
                     apply_filters=apply_filters,
                     apply_ppv_visibility=False,
                     exclude_linked_backups=exclude_linked_backups,
+                    preferred_languages=preferred_languages,
+                    language_fallback=language_fallback,
                 )
             )
 
         if apply_ppv_visibility:
             filtered = ChannelQueryService.apply_ppv_visibility_to_channels(filtered)
+
+        filtered = ChannelQueryService._apply_language_preference_if_configured(
+            filtered,
+            preferred_languages=preferred_languages,
+            language_fallback=language_fallback,
+        )
 
         if exclude_linked_backups:
             filtered = ChannelQueryService.exclude_linked_backup_targets(filtered)
@@ -645,6 +677,8 @@ class ChannelQueryService:
         *,
         apply_filters: bool = True,
         apply_ppv_visibility: bool = True,
+        preferred_languages: Optional[Union[str, List[str]]] = None,
+        language_fallback: str = "unknown",
     ) -> List[Channel]:
         """Active channels for one account with optional filters and PPV rules."""
         account = db.session.get(Account, account_id)
@@ -665,6 +699,8 @@ class ChannelQueryService:
             apply_filters=apply_filters,
             apply_ppv_visibility=apply_ppv_visibility,
             exclude_linked_backups=True,
+            preferred_languages=preferred_languages,
+            language_fallback=language_fallback,
         )
 
     @staticmethod
@@ -673,6 +709,8 @@ class ChannelQueryService:
         *,
         apply_filters: bool = True,
         apply_ppv_visibility: bool = True,
+        preferred_languages: Optional[Union[str, List[str]]] = None,
+        language_fallback: Optional[str] = None,
     ) -> List[Channel]:
         """Merge channels from multiple accounts per playlist config rules."""
         include_accounts = json.loads(playlist_config.include_accounts) if playlist_config.include_accounts else []
@@ -732,6 +770,19 @@ class ChannelQueryService:
         if apply_ppv_visibility:
             channels = ChannelQueryService.apply_ppv_visibility_to_channels(channels)
 
+        lang_prefs = preferred_languages
+        if lang_prefs is None:
+            lang_prefs = playlist_config.preferred_languages
+        lang_fallback = language_fallback
+        if lang_fallback is None:
+            lang_fallback = playlist_config.language_fallback or "unknown"
+
+        channels = ChannelQueryService._apply_language_preference_if_configured(
+            channels,
+            preferred_languages=lang_prefs,
+            language_fallback=lang_fallback,
+        )
+
         channels = ChannelQueryService.exclude_linked_backup_targets(channels)
 
         return channels
@@ -745,11 +796,16 @@ class ChannelQueryService:
         collapse_duplicates_fn=None,
     ) -> List[Channel]:
         """Channels for Xtream credential (single account or multi-account playlist)."""
+        preferred_languages = xtream_cred.preferred_languages
+        language_fallback = xtream_cred.language_fallback or "unknown"
+
         if account:
             channels = ChannelQueryService.channels_for_account(
                 account.id,
                 apply_filters=xtream_cred.use_filters,
                 apply_ppv_visibility=True,
+                preferred_languages=preferred_languages,
+                language_fallback=language_fallback,
             )
             if xtream_cred.collapse_duplicates and collapse_duplicates_fn:
                 channels = collapse_duplicates_fn(channels, account.id)
@@ -758,6 +814,8 @@ class ChannelQueryService:
                 playlist_config,
                 apply_filters=True,
                 apply_ppv_visibility=True,
+                preferred_languages=preferred_languages,
+                language_fallback=language_fallback,
             )
             if xtream_cred.collapse_duplicates and collapse_duplicates_fn:
                 channels = collapse_duplicates_fn(channels)

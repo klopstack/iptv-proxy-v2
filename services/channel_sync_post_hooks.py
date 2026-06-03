@@ -70,6 +70,12 @@ def _detect_backup_pairs(account_id: int, stats: Dict[str, Any]) -> None:
     stats["backup_pair_detection"] = detect_backup_pairs(account_id)
 
 
+def _detect_channel_languages(account_id: int, stats: Dict[str, Any]) -> None:
+    from services.language_detection_service import detect_languages_for_account
+
+    stats["language_detection"] = detect_languages_for_account(account_id)
+
+
 def _prefetch_icons(account_id: int, stats: Dict[str, Any]) -> None:
     from services.icon_prefetch import prefetch_account_channel_icons
 
@@ -80,6 +86,7 @@ def default_post_sync_hooks() -> ChannelSyncPostHooks:
     hooks = ChannelSyncPostHooks()
     hooks.register(_compute_filter_visibility)
     hooks.register(_ppv_reenrichment)
+    hooks.register(_detect_channel_languages)
     hooks.register(_detect_backup_pairs)
     hooks.register(_prefetch_icons)
     return hooks
