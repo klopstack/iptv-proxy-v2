@@ -890,7 +890,14 @@ class TestPersistentCache:
     )
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_calendar_page")
     def test_save_persistent_cache(
-        self, mock_fetch, mock_api_fetch, mock_milb_fetch, mock_espn_fetch, mock_sofascore_fetch, scraper_with_temp_cache, temp_cache_dir
+        self,
+        mock_fetch,
+        mock_api_fetch,
+        mock_milb_fetch,
+        mock_espn_fetch,
+        mock_sofascore_fetch,
+        scraper_with_temp_cache,
+        temp_cache_dir,
     ):
         """Test that cache is saved to disk."""
         import json
