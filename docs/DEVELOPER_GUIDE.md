@@ -57,6 +57,8 @@ docker exec -it iptv-proxy-v2 pytest tests/
 
 ## Testing
 
+Post-merge operator smoke checks (Waves 1–9): [SMOKE_TEST_POST_MERGE.md](./SMOKE_TEST_POST_MERGE.md).
+
 ### Test Requirements
 - **Minimum 75% code coverage** (enforced in CI)
 - All tests must pass before merging
