@@ -247,7 +247,7 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 | # | Document | Status | Summary |
 |---|----------|--------|---------|
 | 68 | [68-document-proxy-authentication-model.md](./68-document-proxy-authentication-model.md) | ✅ | Document Traefik + Authentik auth (klopstack); remove fictitious `/login` |
-| 69 | [69-lock-down-destructive-admin-endpoints.md](./69-lock-down-destructive-admin-endpoints.md) | ⬜ | App-level hardening: FCC reset CLI-only, SSRF, import validation (not Flask auth) |
+| 69 | [69-lock-down-destructive-admin-endpoints.md](./69-lock-down-destructive-admin-endpoints.md) | ✅ | App-level hardening: FCC reset CLI-only, SSRF, import validation (not Flask auth) |
 | 70 | [70-fix-is-visible-epg-matching-bug.md](./70-fix-is-visible-epg-matching-bug.md) | ✅ | EPG matching uses stale `is_visible` instead of live filters |
 | 71 | [71-fix-scheduler-sync-status-semantics.md](./71-fix-scheduler-sync-status-semantics.md) | ✅ | Account sync always "success"; job timestamps advance on failure |
 | 91 | [91-scheduler-status-api-failure-metadata.md](./91-scheduler-status-api-failure-metadata.md) | ⬜ | Status API + SyncMetadata for per-job scheduler failures (deferred from 71) |
@@ -290,7 +290,7 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 
 **Architecture review:** [admin-auth-and-deployment-security.md](../architecture/admin-auth-and-deployment-security.md), [api-contract-errors-and-responses.md](../architecture/api-contract-errors-and-responses.md), [channel-visibility-is-visible.md](../architecture/channel-visibility-is-visible.md), [scheduler-and-sync-orchestration.md](../architecture/scheduler-and-sync-orchestration.md), [epg-service-architecture.md](../architecture/epg-service-architecture.md), [frontend-architecture-debt.md](../architecture/frontend-architecture-debt.md), [schema-lifecycle-and-test-parity.md](../architecture/schema-lifecycle-and-test-parity.md), [api-layer-and-fat-routes.md](../architecture/api-layer-and-fat-routes.md)
 
-**Highest impact first (open work):** see [ROADMAP.md](./ROADMAP.md) — Wave 2 PPV (52–55) → 91. Wave 1 complete (69, 84, 75, 74). Auth docs: ✅ 68 + [DEPLOYMENT.md](../DEPLOYMENT.md). Scheduler semantics: ✅ 71.
+**Highest impact first (open work):** see [ROADMAP.md](./ROADMAP.md) — Wave 2 PPV (52–55) → 91. Wave 1 ✅ (69, 84, 75, 74). Auth docs: ✅ 68 + [DEPLOYMENT.md](../DEPLOYMENT.md). Scheduler semantics: ✅ 71.
 
 ### P6 findings summary
 
@@ -301,7 +301,7 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 
 **Security:**
 - Admin auth via Traefik + Authentik — documented in [DEPLOYMENT.md](../DEPLOYMENT.md) (TODO 68 ✅)
-- Destructive HTTP endpoints including DROP TABLE — harden in 69 even behind proxy
+- Destructive HTTP endpoints — ✅ 69 (FCC reset CLI-only, config import validation, operator runbook)
 - XSS in legacy frontend (83)
 - Docker secrets/build context (84)
 

@@ -15,7 +15,7 @@ Business logic lives in route handlers instead of services. Several modules exce
 | `accounts.py` | ~1358 | Accounts, credentials, categories, channels, sync triggers |
 | `config_transfer.py` | ~1075 | Export/import entire configuration |
 | `epg/channels.py` | ~1025 | EPG channel mapping, matching UI backend |
-| `fcc_match_patterns.py` | ~930 | 8 entity CRUD + reset-defaults hack |
+| `fcc_match_patterns.py` | ~860 | 8 entity CRUD (FCC reset is CLI-only) |
 | `xtream.py` | ~869 | Client API + admin credential CRUD mixed |
 | `streams.py` | ~758 | Stream proxy admin |
 | `api.py` | ~696 | Sync triggers, scheduler, misc |
@@ -61,4 +61,4 @@ Priority order:
 ## Related TODOs
 
 - **72**, **73**, **74**, **75**, **78**, **79**
-- **68** — document proxy auth; **69** — destructive endpoint hardening
+- **68** — document proxy auth; **69** ✅ — destructive endpoint hardening
