@@ -64,18 +64,27 @@ docker exec -it iptv-proxy-v2 pytest tests/
 
 ### Test Commands
 
+Tests use **pytest-xdist** (`-n auto`) by default so each worker gets its own SQLite file (`instance/pytest_gw0.db`, …). Serial runs still use `instance/pytest.db`.
+
 ```bash
-# Run all tests with coverage
+# Run all tests with coverage (parallel; matches CI)
 make test
 
-# Run tests without coverage (faster)
+# Run tests without coverage (parallel, fastest local loop)
 make test-fast
 
+# Serial run (debugging flakes or comparing pass counts)
+make test-clean
+venv/bin/pytest tests/ -q --no-cov
+
+# Explicit parallel without Make
+venv/bin/pytest tests/ -q --no-cov -n auto
+
 # Run specific test file
-pytest tests/test_tag_service.py -v
+pytest tests/test_tag_service.py -v --no-cov
 
 # Run specific test
-pytest tests/test_app.py::test_playlist_generation -v
+pytest tests/test_app.py::test_playlist_generation -v --no-cov
 
 # Generate HTML coverage report
 make test  # Creates htmlcov/ directory
@@ -161,8 +170,8 @@ Individual targets:
 
 ```bash
 make lint      # Python + JavaScript linters (same as pre-commit)
-make test-fast # pytest without coverage (quick local loop)
-make test      # pytest with coverage (matches CI test job)
+make test-fast # parallel pytest without coverage (quick local loop)
+make test      # parallel pytest with coverage (matches CI test job)
 make vulture   # dead-code scan (CI vulture job, warn-only)
 make docker-build  # local image build (CI docker-build-smoke on PRs)
 ```
@@ -760,7 +769,9 @@ make test-clean
 pytest tests/ -v
 ```
 
-If you see `malformed database schema`, leftover SQLite files (including `-wal`/`-shm` sidecars) from a prior run are the usual cause. `make test-clean` removes them.
+If you see `malformed database schema`, leftover SQLite files (including `-wal`/`-shm` sidecars) from a prior run are the usual cause. `make test-clean` removes serial (`pytest.db`) and xdist worker files (`pytest_gw*.db`).
+
+**Parallel vs serial:** Default `make test` / `make test-fast` use `-n auto`. For a serial baseline or bisecting a flake, run `venv/bin/pytest tests/ -q --no-cov` after `make test-clean`.
 
 **Import errors in tests**:
 ```bash

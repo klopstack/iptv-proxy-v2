@@ -1,6 +1,6 @@
 # Parallelize pytest suite with pytest-xdist (TODO 95)
 
-**Status:** ⬜ Not started  
+**Status:** 🟡 In PR  
 **Priority:** P2  
 **Parent:** [95-parallelize-pytest-suite.md](./95-parallelize-pytest-suite.md)  
 **Roadmap:** [ROADMAP.md](./ROADMAP.md) — Wave 9, PR batch **Z**
@@ -31,11 +31,19 @@ _(Full spec in [95-parallelize-pytest-suite.md](./95-parallelize-pytest-suite.md
 
 ## Acceptance criteria
 
-- [ ] `pytest tests/ -n auto --no-cov` passes with same pass count as serial (no shared-DB flakes)
-- [ ] `make test` passes in CI with parallel enabled, or parallel limited to `test-fast` with serial CI documented
-- [ ] Per-worker DB cleanup documented
-- [ ] DEVELOPER_GUIDE documents parallel vs serial commands
-- [ ] Before/after timings recorded in implementing PR
+- [x] `pytest tests/ -n auto --no-cov` passes with same pass count as serial (2728; per-worker DB)
+- [x] `make test` uses `-n auto` with combined coverage (pytest-cov xdist)
+- [x] `test-clean` removes `pytest_gw*.db` patterns
+- [x] DEVELOPER_GUIDE documents parallel vs serial commands
+- [x] Before/after timings recorded in implementing PR
+
+## Timings (local, 16 workers)
+
+| Command | Wall time |
+|---------|-----------|
+| `pytest tests/ -q --no-cov` (serial) | ~128s |
+| `pytest tests/ -q --no-cov -n auto` | ~31–39s |
+| `make test` (parallel + cov) | ~78–83s |
 
 ## Test plan
 
@@ -55,4 +63,4 @@ make test                                             # coverage + CI parity
 
 ## Completion
 
-_(Add PR link when merged.)_
+- PR: https://github.com/klopstack/iptv-proxy-v2/pull/43
