@@ -1,6 +1,8 @@
 """Tests for EPG coverage and matching endpoints."""
 from unittest.mock import patch
 
+from tests.conftest import api_data
+
 
 class TestEpgCoverage:
     """Tests for EPG coverage endpoints"""
@@ -12,7 +14,7 @@ class TestEpgCoverage:
 
         response = client.get("/api/epg/coverage")
         assert response.status_code == 200
-        assert "total_channels" in response.json
+        assert "total_channels" in api_data(response)
 
     @patch("routes.epg.sources.get_epg_coverage_stats")
     def test_get_epg_coverage_with_account(self, mock_coverage, app, client, test_account):

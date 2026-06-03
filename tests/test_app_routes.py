@@ -6,25 +6,9 @@ Uses shared fixtures from conftest.py for proper test isolation.
 
 from unittest.mock import Mock, patch
 
-import pytest
+from tests.conftest import api_data
 
-# client fixture is provided by conftest.py
-
-
-@pytest.fixture
-def sample_account(client):
-    """Create a sample account"""
-    response = client.post(
-        "/api/accounts",
-        json={
-            "name": "Test Account",
-            "server": "test.server.com",
-            "username": "testuser",
-            "password": "testpass",
-            "enabled": True,
-        },
-    )
-    return response.json
+# client and sample_account fixtures are provided by conftest.py
 
 
 class TestAccountRoutes:
@@ -85,7 +69,7 @@ class TestAccountRoutes:
         response = client.get(f"/api/accounts/{sample_account['id']}/categories")
 
         assert response.status_code == 200
-        data = response.json
+        data = api_data(response)
         assert len(data) == 2
         assert data[0]["category_name"] == "Sports"
         mock_get_service.assert_not_called()
@@ -179,8 +163,7 @@ class TestAccountFiltersRoute:
         response = client.get(f"/api/accounts/{sample_account['id']}/filters")
 
         assert response.status_code == 200
-        data = response.json
-        assert isinstance(data, list)
+        assert isinstance(api_data(response), list)
 
     def test_get_account_filters_with_filters(self, client, sample_account):
         """Test getting filters for account with filters"""
@@ -200,7 +183,7 @@ class TestAccountFiltersRoute:
         response = client.get(f"/api/accounts/{sample_account['id']}/filters")
 
         assert response.status_code == 200
-        data = response.json
+        data = api_data(response)
         assert len(data) >= 1
         assert data[0]["name"] == "Test Filter"
 
@@ -211,7 +194,7 @@ class TestAccountFiltersRoute:
         # Account doesn't exist, so filters endpoint returns empty list
         # (doesn't validate account exists first)
         assert response.status_code == 200
-        assert response.json == []
+        assert api_data(response) == []
 
 
 class TestProcessTagsHelper:

@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 
 from models import Category, Channel, ChannelEpgMapping, EpgChannel, EpgSource, db
+from tests.conftest import api_data, api_mutation_data
 
 
 class TestEpgSources:
@@ -12,13 +13,13 @@ class TestEpgSources:
         """Test getting EPG sources when none exist"""
         response = client.get("/api/epg/sources")
         assert response.status_code == 200
-        assert response.json == []
+        assert api_data(response) == []
 
     def test_get_epg_sources(self, app, client, test_epg_source):
         """Test getting EPG sources"""
         response = client.get("/api/epg/sources")
         assert response.status_code == 200
-        sources = response.json
+        sources = api_data(response)
         assert len(sources) == 1
         assert sources[0]["name"] == "Test EPG Source"
         assert sources[0]["source_type"] == "xmltv_url"
@@ -38,7 +39,7 @@ class TestEpgSources:
 
         response = client.get("/api/epg/sources")
         assert response.status_code == 200
-        payload = next(s for s in response.json if s["id"] == source_id)
+        payload = next(s for s in api_data(response) if s["id"] == source_id)
         assert payload["last_sync"].endswith("Z")
 
     def test_create_epg_source_missing_name(self, app, client):
@@ -85,8 +86,9 @@ class TestEpgSources:
             content_type="application/json",
         )
         assert response.status_code == 201
-        assert "id" in response.json
-        assert response.json["source_type"] == "xmltv_url"
+        data = api_mutation_data(response)
+        assert "id" in data
+        assert data["source_type"] == "xmltv_url"
 
     def test_create_epg_source_xmltv_url(self, app, client):
         """Test creating XMLTV URL source"""
@@ -149,8 +151,7 @@ class TestEpgSources:
     def test_delete_epg_source_success(self, app, client, test_epg_source):
         """Test successful EPG source deletion"""
         response = client.delete(f"/api/epg/sources/{test_epg_source}")
-        assert response.status_code == 200
-        assert response.json["success"] is True
+        assert response.status_code == 204
 
     def test_delete_sd_epg_source_deletes_lineups_and_stations(self, app, client, test_account):
         """Schedules Direct source deletion should remove sd_lineups/sd_stations rows."""
@@ -189,8 +190,7 @@ class TestEpgSources:
             station_id = station.id
 
         resp = client.delete(f"/api/epg/sources/{source_id}")
-        assert resp.status_code == 200
-        assert resp.json["success"] is True
+        assert resp.status_code == 204
 
         with app.app_context():
             assert db.session.get(EpgSource, source_id) is None
@@ -206,8 +206,7 @@ class TestEpgSources:
             assert EpgChannel.query.filter_by(source_id=test_epg_source).count() == 1
 
         response = client.delete(f"/api/epg/sources/{test_epg_source}")
-        assert response.status_code == 200
-        assert response.json["success"] is True
+        assert response.status_code == 204
 
         with app.app_context():
             assert db.session.get(EpgSource, test_epg_source) is None
@@ -270,7 +269,7 @@ class TestEpgSources:
         # Test the endpoint
         response = client.get("/api/epg/sources")
         assert response.status_code == 200
-        sources = response.json
+        sources = api_data(response)
         source_data = next((s for s in sources if s["id"] == source_id), None)
         assert source_data is not None
         assert "used_mapping_count" in source_data

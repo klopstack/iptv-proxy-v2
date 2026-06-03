@@ -10,6 +10,7 @@ import pytest
 
 from models import Account, Category, Channel, ChannelTag, Filter, Tag, db
 from services.filter_service import FilterService
+from tests.conftest import api_mutation_data
 
 
 @pytest.fixture
@@ -610,7 +611,7 @@ def test_playlist_reflects_filter_change_without_manual_recompute(app, client, f
         assert "HBO Movies" not in filtered_playlist
         assert "Showtime Cinema" not in filtered_playlist
 
-        filter_id = create_response.get_json()["id"]
+        filter_id = api_mutation_data(create_response)["id"]
         delete_response = client.delete(f"/api/filters/{filter_id}")
         assert delete_response.status_code == 204
 

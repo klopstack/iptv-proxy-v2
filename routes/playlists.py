@@ -7,11 +7,12 @@ import logging
 from flask import Blueprint, Response, jsonify, request
 from marshmallow import ValidationError
 
-from error_handling import ServiceUnavailableError, handle_errors, handle_xml_errors
+from error_handling import ServiceUnavailableError, error_response, handle_errors, handle_xml_errors
 from models import Account, Channel, PlaylistConfig, db
 from schemas import (
     PlaylistConfigCreateSchema,
     PlaylistConfigUpdateSchema,
+    _normalize_validation_details,
     check_playlist_filter_overlap,
     validate_request_data,
 )
@@ -130,7 +131,12 @@ def update_playlist_config(config_id):
             merged["exclude_tags"],
         )
     except ValidationError as err:
-        return jsonify({"error": "Validation failed", "validation_errors": err.messages}), 400
+        return error_response(
+            "Validation failed",
+            400,
+            details=_normalize_validation_details(err.messages),
+            code="VALIDATION_ERROR",
+        )
 
     if "name" in data:
         config.name = data["name"]
