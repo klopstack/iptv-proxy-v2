@@ -1,6 +1,6 @@
 # Extract config transfer routes (TODO 78 phase 3)
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done (Wave 9 PR **W**)  
 **Priority:** P2  
 **Parent:** [78-split-fat-route-modules.md](./78-split-fat-route-modules.md) (phase 1 ✅ PR #36)  
 **Roadmap:** [ROADMAP.md](./ROADMAP.md) — Wave 9, PR batch **W**
@@ -28,9 +28,9 @@ Config transfer routes duplicate entity serialization already partially unified 
 
 ## Acceptance criteria
 
-- [ ] `routes/config_transfer.py` reduced by ≥30% without behavior change
-- [ ] Export and import paths share service methods used by tests independent of Flask
-- [ ] Existing config transfer tests pass unchanged
+- [x] `routes/config_transfer.py` reduced by ≥30% without behavior change
+- [x] Export and import paths share service methods used by tests independent of Flask
+- [x] Existing config transfer tests pass unchanged
 
 ## Test plan
 
@@ -48,4 +48,8 @@ make test-fast
 
 ## Completion
 
-_(Add PR link when merged.)_
+**June 2026** — Wave 9 PR W ([PR #39](https://github.com/klopstack/iptv-proxy-v2/pull/39)).
+
+- Added `services/config_transfer_service.py` with `ConfigTransferService.export_bundle()` and `.import_bundle()`
+- `routes/config_transfer.py` 954 → 71 lines (−93%); routes delegate to service
+- Added `tests/test_config_transfer_service.py` (4 tests); existing API tests unchanged (7 total with `-k config_transfer`)
