@@ -63,4 +63,4 @@ make test                                             # coverage + CI parity
 
 ## Completion
 
-- PR: _(add link after push)_
+- PR: https://github.com/klopstack/iptv-proxy-v2/pull/43
