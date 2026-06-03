@@ -9,6 +9,7 @@ Calendar-based matching with optional API detail fetch. Phase 1 split:
 """
 
 from services.ppv.cleanup import prune_orphan_ppv_events, sync_ppv_epg_after_enrichment
+from services.ppv.enrichment.attempt_tracking import _record_enrichment_attempt
 from services.ppv.enrichment.detail_fetch import DetailFetchWorker
 from services.ppv.enrichment.log import logger  # noqa: F401 — patch target for tests
 from services.ppv.enrichment.match_pipeline import CalendarMatchPipeline
@@ -34,6 +35,7 @@ __all__ = [
     "enrich_ppv_channels_batch",
     "get_calendar_enrichment_service",
     "prune_orphan_ppv_events",
+    "_record_enrichment_attempt",
     "sync_enrichment_status_from_links",
     "sync_ppv_epg_after_enrichment",
 ]

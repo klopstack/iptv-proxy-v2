@@ -9,6 +9,7 @@ from typing import Any, Iterable, Optional, Tuple
 from models import Channel, Event, EventChannelLink, db
 from services.datetime_utils import to_naive_utc
 from services.ppv.constants import MAX_EVENT_AGE_DAYS, MAX_EVENT_FUTURE_DAYS
+from services.ppv.enrichment.attempt_tracking import _record_enrichment_attempt
 from services.thesportsdb_calendar_scraper import CalendarEvent
 
 logger = logging.getLogger(__name__)
@@ -180,6 +181,7 @@ def persist_match(
     """
     event, was_created = create_or_update_event(calendar_event)
     if not event:
+        _record_enrichment_attempt(channel)
         channel.ppv_enrichment_status = "no_match"
         channel.ppv_enrichment_error = None
         return None, False
@@ -187,6 +189,7 @@ def persist_match(
     try:
         db.session.flush()
         link_channel_to_event(channel, event, confidence, match_method)
+        _record_enrichment_attempt(channel)
         channel.ppv_enrichment_status = "matched"
         channel.ppv_enrichment_error = None
         return event, was_created
@@ -198,6 +201,7 @@ def persist_match(
             e,
         )
         db.session.rollback()
+        _record_enrichment_attempt(channel)
         channel.ppv_enrichment_status = "retry_pending"
         channel.ppv_enrichment_error = str(e)
         return None, False

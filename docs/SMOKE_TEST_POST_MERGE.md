@@ -193,6 +193,28 @@ Main page: **EPG Management** (`/epg`). After Wave 9, tabs 1–6 run as ESM modu
 
 - [ ] PPV preview shows linked events/channels coherently
 
+### Post-deploy requeue (TODO 124)
+
+After merging PPV matching fixes (TODOs 120–123), re-run enrichment on stale `no_match` channels:
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | Optional: set deploy timestamp | `Settings.set('ppv_last_deploy_at', '<ISO UTC>')` or use full requeue |
+| 2 | Re-queue no_match channels | `POST /api/ppv-enrichment/queue/no-match` with `{}`, or UI **Re-queue no_match** on `/ppv` |
+| 3 | Process queue | `POST /api/ppv-enrichment/process` with `{}` |
+| 4 | Check dashboard | `recently_enriched_24h` > 0; `no_match_count` may drop; channels show `ppv_enrichment_attempts >= 1` |
+
+Script alternative (dry run first):
+
+```bash
+python scripts/rerun_matching.py --status no_match
+python scripts/rerun_matching.py --status no_match --execute
+curl -X POST http://127.0.0.1:8000/api/ppv-enrichment/process
+```
+
+- [ ] Requeue does not delete EventChannelLink rows
+- [ ] Attempt counters populate after process run
+
 ---
 
 ## 5. Match rules, FCC patterns, and stations

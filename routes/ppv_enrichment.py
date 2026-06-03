@@ -106,7 +106,8 @@ def process_enrichment():
     orchestrator = get_ppv_orchestrator(app_obj)
 
     if include_no_match:
-        requeued = orchestrator.requeue_no_match_channels(account_id=account_id)
+        requeue_result = orchestrator.requeue_no_match_channels(account_id=account_id)
+        requeued = requeue_result["queued"]
         if requeued == 0:
             return jsonify({"message": "No PPV channels need enrichment", "processed": 0}), 200
         logger.info(
@@ -209,6 +210,40 @@ def queue_channels_for_enrichment():
     logger.info(f"Queued {queued} channels for enrichment" f"{f' from account {account_id}' if account_id else ''}")
 
     return jsonify({"queued": queued, "total_requested": len(channel_ids), "links_cleared": links_cleared}), 200
+
+
+@ppv_enrichment_bp.route("/queue/no-match", methods=["POST"])
+@cross_origin()
+@handle_errors(return_json=True, default_message="Error queuing no_match PPV channels")
+def queue_no_match_channels():
+    """
+    Re-queue PPV channels with no_match status for enrichment.
+
+    Optional JSON body:
+    {
+        "account_id": 1,       # Optional: filter by account
+        "prefix": "Tennis:",   # Optional: channel name prefix (case-insensitive)
+        "dry_run": false       # If true, return count without DB changes
+    }
+
+    Does not clear existing EventChannelLink rows.
+    """
+    from services.ppv.requeue import requeue_ppv_channels
+
+    data = request.get_json(silent=True) or {}
+    result = requeue_ppv_channels(
+        account_id=data.get("account_id"),
+        prefix=data.get("prefix"),
+        dry_run=bool(data.get("dry_run", False)),
+    )
+    logger.info(
+        "Re-queue no_match PPV channels: queued=%s dry_run=%s account_id=%s prefix=%s",
+        result["queued"],
+        result["dry_run"],
+        data.get("account_id"),
+        data.get("prefix"),
+    )
+    return jsonify(result), 200
 
 
 @ppv_enrichment_bp.route("/queue/all-ppv", methods=["POST"])

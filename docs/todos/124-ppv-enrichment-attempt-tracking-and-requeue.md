@@ -1,6 +1,6 @@
 # PPV enrichment attempt tracking and no_match requeue workflow
 
-**Status:** ⬜ Not started  
+**Status:** 🟡 In review  
 **Priority:** P1  
 **Audit:** Production matching analysis, June 2026 (`docker.klopnet.com`)
 
@@ -83,8 +83,8 @@ After implementing TODOs 120–123, production will **not** pick up fixes unless
 - [ ] Dashboard `recently_enriched_24h` > 0 within 24h of production process run.
 - [ ] Bulk requeue of `no_match` channels sets `queued_count` > 0 and process drains queue.
 - [ ] Post TODO 120 deploy + requeue: measurable drop in `no_match_count` on production (tracked in deploy notes).
-- [ ] Unit test fails if enrichment code path sets status without calling attempt recorder (mock/spy).
-- [ ] `--dry-run` reports count without DB mutation.
+- [x] Unit test fails if enrichment code path sets status without calling attempt recorder (mock/spy).
+- [x] `--dry-run` reports count without DB mutation.
 
 ## Test plan
 
@@ -136,3 +136,8 @@ with app.app_context():
 ## Recommended order
 
 **124 in parallel with 120** (attempt tracking fix can ship first as a small PR). **Requeue runbook** required before measuring any matching fix on production.
+
+## Completion
+
+- **PR:** https://github.com/klopstack/iptv-proxy-v2/pull/53
+- **Deliverables:** `_record_enrichment_attempt` helper; batch commit in `enrich_channels`; `POST /api/ppv-enrichment/queue/no-match`; `services/ppv/requeue.py`; extended `scripts/rerun_matching.py`; dashboard query fix; PPV UI button; runbook in `docs/SMOKE_TEST_POST_MERGE.md`; unit/route tests.

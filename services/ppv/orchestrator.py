@@ -20,6 +20,8 @@ from services.ppv.constants import (
     SETTING_PPV_ENRICHMENT_ENABLED,
 )
 from services.ppv.enrichability import classify_ppv_enrichment, skip_error_message
+from services.ppv.enrichment.attempt_tracking import _record_enrichment_attempt
+from services.ppv.requeue import requeue_ppv_channels
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +174,7 @@ class PPVEnrichmentOrchestrator:
         # Apply skip marks and commit in batches now that the cursor is closed.
         for i in range(0, len(skip_channels), skip_commit_batch):
             for channel, error_msg in skip_channels[i : i + skip_commit_batch]:
+                _record_enrichment_attempt(channel)
                 channel.ppv_enrichment_status = "skipped"
                 channel.ppv_enrichment_error = error_msg
             db.session.commit()
@@ -200,25 +203,22 @@ class PPVEnrichmentOrchestrator:
         db.session.commit()
         return True
 
-    def requeue_no_match_channels(self, account_id: Optional[int] = None) -> int:
+    def requeue_no_match_channels(
+        self,
+        account_id: Optional[int] = None,
+        prefix: Optional[str] = None,
+        dry_run: bool = False,
+        since_last_deploy: bool = False,
+        include_skipped: bool = False,
+    ) -> Dict[str, Any]:
         """Mark no_match PPV channels as queued via bulk update (no ORM load)."""
-        query = Channel.query.filter(
-            Channel.is_ppv.is_(True),
-            Channel.ppv_enrichment_status == "no_match",
+        return requeue_ppv_channels(
+            account_id=account_id,
+            prefix=prefix,
+            dry_run=dry_run,
+            since_last_deploy=since_last_deploy,
+            include_skipped=include_skipped,
         )
-        if account_id is not None:
-            query = query.filter_by(account_id=account_id)
-        count = query.update(
-            {
-                Channel.ppv_enrichment_status: "queued",
-                Channel.ppv_enrichment_attempts: 0,
-                Channel.ppv_enrichment_error: None,
-            },
-            synchronize_session=False,
-        )
-        if count:
-            db.session.commit()
-        return count
 
     def queue_all_ppv(self, account_id: int) -> int:
         """Queue all PPV channels on an account for enrichment."""

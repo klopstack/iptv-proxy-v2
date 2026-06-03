@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from flask import Flask
 
 import services.ppv.enrichment as ppv_enrichment
-from models import Channel, Event, SyncMetadata
+from models import Channel, Event, SyncMetadata, db
 from services.ppv.constants import (
     METADATA_KEY_CALENDAR_MATCHED,
     METADATA_KEY_CALENDAR_PROCESSED,
@@ -132,6 +132,12 @@ class PPVCalendarEnrichmentService:
             self._update_stats(results)
             ppv_enrichment.sync_enrichment_status_from_links(ch.id for ch in channels)
             get_enrichment_post_hooks().run(results)
+            try:
+                db.session.commit()
+            except Exception as e:
+                logger.error("Error committing enrichment batch: %s", e, exc_info=True)
+                db.session.rollback()
+                raise
             return results
 
     def start_detail_fetcher(self) -> None:

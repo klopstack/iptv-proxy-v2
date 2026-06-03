@@ -53,7 +53,7 @@ def build_dashboard_ppv_stats() -> Dict[str, Any]:
     recently_enriched = Channel.query.filter(
         Channel.is_active.is_(True),
         Channel.is_ppv.is_(True),
-        Channel.ppv_enrichment_status.in_(["matched", "enriched"]),
+        Channel.ppv_enrichment_status.in_(["matched", "enriched", "no_match", "skipped"]),
         Channel.ppv_enrichment_last_attempt >= enriched_since,
     ).count()
 

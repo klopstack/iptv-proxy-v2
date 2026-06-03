@@ -15,6 +15,7 @@ from services.ppv.constants import (
     MIN_MATCH_CONFIDENCE,
 )
 from services.ppv.enrichability import classify_ppv_enrichment, skip_error_message
+from services.ppv.enrichment.attempt_tracking import _record_enrichment_attempt
 from services.ppv.enrichment.types import DetailQueueItem, EnrichmentResult, calendar_event_source
 from services.ppv.extraction import PPVEventExtractor
 from services.ppv.matching.context import context_for_event, resolve_sport_league_context
@@ -83,6 +84,7 @@ class CalendarMatchPipeline:
             if skip_reason is not None:
                 filter_reasons[skip_reason] += 1
                 if ch.ppv_enrichment_status in (None, "queued", "retry_pending"):
+                    _record_enrichment_attempt(ch)
                     ch.ppv_enrichment_status = "skipped"
                     ch.ppv_enrichment_error = skip_error_message(skip_reason)
                     results["channels_skipped"] += 1
@@ -166,6 +168,7 @@ class CalendarMatchPipeline:
                         elif channel.ppv_enrichment_status == "retry_pending":
                             results["errors"] += 1
                     else:
+                        _record_enrichment_attempt(channel)
                         channel.ppv_enrichment_status = "no_match"
                 else:
                     results["no_match"] += 1
@@ -182,6 +185,7 @@ class CalendarMatchPipeline:
                             f"calendar_events_count={len(calendar_events)}"
                         )
 
+                    _record_enrichment_attempt(channel)
                     channel.ppv_enrichment_status = "no_match"
 
             try:
