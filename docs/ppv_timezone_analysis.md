@@ -19,9 +19,11 @@ For each linked PPV channel with a parseable title datetime:
 US `@home` PPV timezone resolution uses **`SportsTeam.iana_timezone`** populated from the bundled location registry at `data/team_locations/registry.json`. The registry is rebuilt offline:
 
 ```bash
-pip install -r scripts/requirements-build.txt
+pip install -r requirements.txt   # or scripts/requirements-build.txt for cached/offline sections
 python scripts/build_team_locations.py --refresh
 ```
+
+**CI:** `.github/workflows/build-team-locations.yml` runs weekly (Sunday 06:00 UTC) and on `workflow_dispatch`. Set repository secret `THESPORTSDB_API_KEY` to a premium V2 key so soccer (`fb`) and WNBA entries are included in the committed registry.
 
 During sportsipy team refresh, locations are looked up by `(sport, abbreviation)` — **no city/name heuristics**. Teams without a registry entry keep `city` and `iana_timezone` null and appear in refresh stats as `location_misses`.
 

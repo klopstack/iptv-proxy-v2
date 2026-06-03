@@ -17,6 +17,36 @@ env:
   IMAGE_NAME: klopstack/iptv-proxy-v2
 
 jobs:
+  validate-workflows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate GitHub Actions workflow YAML
+        run: |
+          pip install pyyaml
+          python - <<'PY'
+          import pathlib
+          import sys
+          import yaml
+
+          errors = []
+          for path in sorted(pathlib.Path(".github/workflows").glob("*.yml")):
+              try:
+                  yaml.safe_load(path.read_text(encoding="utf-8"))
+              except yaml.YAMLError as exc:
+                  errors.append(f"{path}: {exc}")
+          if errors:
+              print("\n".join(errors), file=sys.stderr)
+              sys.exit(1)
+          print("All workflow files parsed successfully.")
+          PY
+
   lint-py:
     runs-on: ubuntu-latest
     steps:
@@ -96,7 +126,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    needs: [lint-py, lint-js, test-js, test]
+    needs: [validate-workflows, lint-py, lint-js, test-js, test]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
