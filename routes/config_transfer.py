@@ -43,6 +43,7 @@ from models import (
     db,
 )
 from services.cache_service import cache_service
+from services.config_bundle_validation import validate_config_import_bundle
 from services.epg.match_rules import clear_fcc_pattern_cache
 from services.tag_service import TagService
 
@@ -396,8 +397,9 @@ def import_config_bundle():
     if not data:
         return jsonify({"error": "No JSON body provided"}), 400
 
-    if data.get("type") != "iptv-proxy-config-bundle":
-        return jsonify({"error": "Invalid bundle type"}), 400
+    validation_error = validate_config_import_bundle(data)
+    if validation_error:
+        return jsonify({"error": validation_error}), 400
 
     options = data.get("options") or {}
     overwrite = bool(options.get("overwrite", False))

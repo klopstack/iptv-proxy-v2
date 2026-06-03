@@ -9,9 +9,6 @@
         <a href="{{ url_for('fcc_match_patterns.configurable_patterns') }}" class="btn btn-sm btn-outline-primary me-2">
             <i class="bi bi-gear"></i> Configurable Patterns
         </a>
-        <button class="btn btn-sm btn-warning me-2" id="reset-defaults-btn" title="Reset all patterns to defaults">
-            <i class="bi bi-arrow-counterclockwise"></i> Reset Defaults
-        </button>
         <button class="btn btn-sm btn-success" id="test-patterns-btn">
             <i class="bi bi-bug"></i> Test Patterns
         </button>
@@ -23,6 +20,7 @@
     <i class="bi bi-info-circle"></i>
     <strong>FCC Match Patterns</strong> configure how the FCC database lookup works during EPG matching.
     These patterns control network detection, channel number extraction, location parsing, and matching strategies.
+    To restore factory defaults, run <code>flask reset-fcc-patterns</code> on the server (not available via HTTP).
     Patterns are processed in priority order (lower numbers first).
 </div>
 
@@ -1136,26 +1134,6 @@ document.getElementById('run-test-btn').addEventListener('click', async () => {
         document.getElementById('test-results').style.display = 'block';
     } catch (error) {
         alert('Test failed: ' + error.message);
-    }
-});
-
-document.getElementById('reset-defaults-btn').addEventListener('click', async () => {
-    if (!confirm('This will delete all custom FCC match patterns and restore defaults. Continue?')) return;
-
-    try {
-        const response = await fetch(`${API_BASE}/reset-defaults`, {method: 'POST'});
-        if (response.ok) {
-            alert('Defaults restored successfully');
-            loadNetworks();
-            loadChannelPatterns();
-            loadLocationPatterns();
-            loadStrategies();
-        } else {
-            const error = await response.json();
-            alert('Error: ' + error.error);
-        }
-    } catch (error) {
-        alert('Error: ' + error.message);
     }
 });
 

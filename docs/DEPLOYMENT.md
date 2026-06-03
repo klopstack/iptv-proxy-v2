@@ -166,6 +166,27 @@ Traefik static config (`traefik-static.yaml` in klopstack):
 
 **Note:** This app does not use Flask session cookies or `SECRET_KEY`. Admin auth is Traefik + Authentik only (see [architecture/admin-auth-and-deployment-security.md](architecture/admin-auth-and-deployment-security.md)).
 
+## High-privilege admin APIs
+
+These routes are behind Traefik + Authentik but can still cause outages or data loss if misused. Restrict Authentik application access to trusted operators.
+
+| Endpoint | Risk | Notes |
+|----------|------|-------|
+| `POST /api/config/import` | Overwrites rules, filters, FCC patterns, accounts | Validates bundle schema before apply; use `overwrite` carefully |
+| `GET /api/config/export` | Full configuration exfiltration | Includes account server URLs when `include_accounts=true` |
+| `POST /api/scheduler/stop` | Stops background sync | Pair with `start`/`restart` |
+| `POST /api/scheduler/restart` | Brief sync outage | Restarts APScheduler |
+| `POST /api/cache/clear` | Clears in-memory IPTV caches | Forces upstream refetch on next sync |
+| `POST /api/fcc/facilities/sync` | Long-running FCC download | Canonical FCC facility sync path |
+
+**Not available over HTTP:**
+
+| Operation | How to run |
+|-----------|------------|
+| Reset FCC match patterns to factory defaults | `flask reset-fcc-patterns` (or `python scripts/reset_fcc_match_patterns.py`) |
+
+**Removed for security:** `POST /api/fcc-match-patterns/reset-defaults` (DROP TABLE), `POST /icon/fetch` (SSRF). Icons are prefetched during provider/EPG sync only.
+
 ## Related documentation
 
 - [architecture/admin-auth-and-deployment-security.md](architecture/admin-auth-and-deployment-security.md)

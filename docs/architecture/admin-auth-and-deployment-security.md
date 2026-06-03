@@ -67,8 +67,10 @@ The `8889:8000` mapping on the **gluetun** service is a host port forward into G
 | Traefik labels + path split | [DEPLOYMENT.md](../DEPLOYMENT.md) |
 | `.dockerignore`, non-root container | TODO 84 ✅ |
 | No Flask `SECRET_KEY` (sessions disabled) | TODO 84 ✅ — proxy auth only |
-| FCC reset over HTTP → CLI only | TODO 69 |
-| `/icon/` whitelist-only (sync prefetch) | TODO 69 |
+| FCC reset CLI only (`flask reset-fcc-patterns`) | TODO 69 ✅ |
+| `/icon/<hash>` serve-only; no `/icon/fetch` SSRF | TODO 69 ✅ |
+| Config import schema validation | TODO 69 ✅ |
+| High-privilege API runbook | [DEPLOYMENT.md](../DEPLOYMENT.md#high-privilege-admin-apis) |
 
 ## Related TODOs
 

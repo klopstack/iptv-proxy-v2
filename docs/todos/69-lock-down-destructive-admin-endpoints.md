@@ -1,6 +1,6 @@
 # Harden destructive admin endpoints (app-level)
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Complete  
 **Priority:** P2  
 **Audit:** Application-wide audit, June 2026  
 **Clarification:** June 2026 — admin routes are protected by **Traefik + Authentik** (see [DEPLOYMENT.md](../DEPLOYMENT.md)). This TODO is **not** about adding Flask auth.
@@ -40,11 +40,11 @@ Several admin endpoints are unusually dangerous **even for authenticated operato
 
 ## Acceptance criteria
 
-- [ ] No HTTP endpoint performs DROP TABLE or dynamic migration import
-- [ ] FCC reset available only via CLI/script
-- [ ] `/icon/fetch` SSRF surface reduced (allowlist or documented operator-only use)
-- [ ] Config export uses `@handle_errors`
-- [ ] Operator docs list destructive APIs and Authentik access expectations
+- [x] No HTTP endpoint performs DROP TABLE or dynamic migration import
+- [x] FCC reset available only via CLI/script
+- [x] `/icon/fetch` SSRF surface reduced (endpoint removed; sync prefetch only)
+- [x] Config export uses `@handle_errors`
+- [x] Operator docs list destructive APIs and Authentik access expectations
 
 ## Test plan
 
@@ -56,3 +56,10 @@ Several admin endpoints are unusually dangerous **even for authenticated operato
 
 - TODO 68 ✅ — [DEPLOYMENT.md](../DEPLOYMENT.md)
 - Independent of in-app auth implementation
+
+## Completion
+
+- Removed `POST /api/fcc-match-patterns/reset-defaults`; added `flask reset-fcc-patterns` and `scripts/reset_fcc_match_patterns.py`
+- `services/fcc_pattern_reset.py` — shared CLI reset logic
+- `services/config_bundle_validation.py` — import bundle schema checks
+- [DEPLOYMENT.md](../DEPLOYMENT.md#high-privilege-admin-apis) — operator runbook for destructive APIs
