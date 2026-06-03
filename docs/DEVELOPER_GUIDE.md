@@ -214,6 +214,21 @@ Copy all three files when the app is running with WAL mode:
 - `iptv_proxy.db-wal`
 - `iptv_proxy.db-shm`
 
+### Scheduled data retention
+
+The background scheduler (`services/scheduler.py`) prunes stale rows on interval:
+
+| Data | Default retention | Schedule | Module |
+|------|-------------------|----------|--------|
+| EPG programs | 7 days | Daily | `services/epg/programs` |
+| Health check history | 30 days | Weekly | `services/channel_health_service` |
+| Finished events | 90 days (`EVENT_RETENTION_DAYS`) | Weekly | `services/event_retention` |
+| Cached images (past `expires_at`) | Per-entry TTL | Daily | `services/image_cache_service` |
+
+Manual event cleanup: `python scripts/cleanup_old_events.py --execute`. Image cache cleanup API: `POST /api/image-cache/cleanup`.
+
+PPV orphan event pruning remains inline during enrichment (not scheduled).
+
 ### Adding a schema change
 
 1. Update SQLAlchemy models in `models/`
