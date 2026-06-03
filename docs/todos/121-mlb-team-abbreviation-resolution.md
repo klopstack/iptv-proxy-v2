@@ -2,7 +2,7 @@
 
 **Status:** ✅ Done  
 **Priority:** P1  
-**PR:** (pending)
+**PR:** https://github.com/klopstack/iptv-proxy-v2/pull/54
 **Audit:** Production matching analysis, June 2026 (`docker.klopnet.com`)
 
 ## Problem
@@ -126,4 +126,4 @@ Baseline: **27** Peacock `no_match`. Target: **0** for dates where calendar has 
 
 ## Completion
 
-Implemented `resolve_mlb_abbrev()` with SportsTeam DB lookup and static 30-team fallback (`services/ppv/matching/mlb_teams.py`). Reverse matcher expands MLB codes in channel text before team matching; validation accepts three-letter codes when `sport_key="mlb"`. Tests cover all 30 teams and Peacock production fixtures.
+Implemented `resolve_mlb_abbrev()` with SportsTeam DB lookup and static 30-team fallback (`services/ppv/matching/mlb_teams.py`). Reverse matcher expands MLB codes in channel text before team matching; validation accepts three-letter codes when `sport_key="mlb"`. Tests cover all 30 teams and Peacock production fixtures. PR: https://github.com/klopstack/iptv-proxy-v2/pull/54
