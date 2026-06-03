@@ -120,3 +120,4 @@ class TestApiContractCategoriesAndStats:
         assert "data" in payload
         assert "channel_health" in payload["data"]
         assert "streams" in payload["data"]
+        assert "ppv" in payload["data"]

@@ -59,6 +59,83 @@ function renderSyncAlerts(overview) {
     `;
 }
 
+function renderPpvCard(ppv) {
+    if (!ppv) {
+        return '';
+    }
+
+    const events = ppv.events || {};
+    const enrichment = ppv.enrichment || {};
+    const upcoming24 = (events.upcoming_24h || 0).toLocaleString();
+    const upcoming48 = (events.upcoming_48h || 0).toLocaleString();
+    const withoutChannels = events.without_channels || 0;
+    const channelLinks = (ppv.channel_links || 0).toLocaleString();
+    const ppvChannels = (ppv.ppv_channels || 0).toLocaleString();
+    const queued = enrichment.queued_count || 0;
+    const noMatch = enrichment.no_match_count || 0;
+    const recentlyEnriched = enrichment.recently_enriched_24h || 0;
+    const hasIssues = Boolean(ppv.has_issues);
+    const enrichmentOff = enrichment.enabled === false;
+
+    let issueBadges = '';
+    if (withoutChannels > 0) {
+        issueBadges += `<span class="badge bg-warning text-dark me-1">${withoutChannels} unlinked (48h)</span>`;
+    }
+    if (noMatch > 0) {
+        issueBadges += `<span class="badge bg-danger me-1">${noMatch} no match</span>`;
+    }
+    if (queued > 0) {
+        issueBadges += `<span class="badge bg-info text-dark me-1">${queued.toLocaleString()} queued</span>`;
+    }
+    if (enrichmentOff && queued > 0) {
+        issueBadges += `<span class="badge bg-secondary me-1">enrichment off</span>`;
+    }
+
+    return `
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card h-100 ${hasIssues ? 'border-warning' : ''}">
+                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <h6 class="mb-0"><i class="bi bi-calendar-event"></i> Pay-Per-View</h6>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            ${issueBadges}
+                            <a href="/ppv" class="btn btn-sm btn-outline-primary">Manage PPV</a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center g-3">
+                            <div class="col-6 col-md-2">
+                                <div class="h5 mb-0">${upcoming24}</div>
+                                <small class="text-muted">Upcoming 24h</small>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <div class="h5 mb-0">${upcoming48}</div>
+                                <small class="text-muted">Upcoming 48h</small>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <div class="h5 mb-0 ${withoutChannels > 0 ? 'text-warning' : ''}">${withoutChannels.toLocaleString()}</div>
+                                <small class="text-muted">Unlinked events</small>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <div class="h5 mb-0">${channelLinks}</div>
+                                <small class="text-muted">Channel links</small>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <div class="h5 mb-0">${ppvChannels}</div>
+                                <small class="text-muted">PPV channels</small>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <div class="h5 mb-0">${recentlyEnriched.toLocaleString()}</div>
+                                <small class="text-muted">Enriched 24h</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 function renderTier1(summary) {
     const health = summary.channel_health || {};
     const byStatus = health.by_status || {};
@@ -142,6 +219,7 @@ function renderTier1(summary) {
                 </div>
             </div>
         </div>
+        ${renderPpvCard(summary.ppv)}
     `;
 }
 
@@ -376,6 +454,9 @@ function renderQuickActions() {
                     </a>
                     <a href="/channel-health" class="list-group-item list-group-item-action">
                         <i class="bi bi-heart-pulse"></i> Channel Health
+                    </a>
+                    <a href="/ppv" class="list-group-item list-group-item-action">
+                        <i class="bi bi-calendar-event"></i> PPV Management
                     </a>
                     <a href="/filters" class="list-group-item list-group-item-action">
                         <i class="bi bi-funnel-fill"></i> Manage Filters

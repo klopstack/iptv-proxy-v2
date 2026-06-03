@@ -449,6 +449,7 @@ Response envelope: `{ "data": { ... } }`.
 | `streams.backend` | `ffmpeg` or `mediaflow` from `STREAM_BACKEND` |
 | `overview.accounts` | Slim account counts + `failed_sync_accounts` for alerts |
 | `overview.scheduler` | Running flag, intervals, `has_sync_issues`, `failed_jobs` |
+| `ppv` | PPV at-a-glance: upcoming event counts (24h/48h), unlinked upcoming events, channel link total, enrichment queue/no-match/recent counts, `has_issues` |
 | `generated_at` | UTC ISO timestamp |
 
 ### Overview Stats (sync failures)

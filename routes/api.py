@@ -645,10 +645,13 @@ def get_dashboard_summary():
 
     health_report = ChannelHealthService.get_health_summary()
 
+    from services.ppv.dashboard_stats import build_dashboard_ppv_stats
+
     payload = {
         "channel_health": health_report["summary"],
         "streams": _build_dashboard_stream_stats(),
         "overview": _build_dashboard_overview_slim(),
+        "ppv": build_dashboard_ppv_stats(),
         "generated_at": serialize_utc_iso(datetime.now(timezone.utc)),
     }
     return data_response(payload)
