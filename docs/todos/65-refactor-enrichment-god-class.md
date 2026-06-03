@@ -1,6 +1,6 @@
 # Refactor PPV enrichment service (phased god-class split)
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Ready for review (Wave 8 / PR phase 1)  
 **Priority:** P3  
 **Audit:** PPV audit, June 2026
 
@@ -25,7 +25,7 @@ Related: `services/ppv/epg.py` (~620 lines) and `services/ppv/extraction.py` (~8
 
 ## Affected files
 
-- `services/ppv/enrichment.py`
+- `services/ppv/enrichment/` (package; replaces monolithic `enrichment.py`)
 - `services/ppv/epg.py` (optional phase 2)
 - `services/ppv/extraction.py` (optional phase 3)
 - All enrichment/orchestrator tests
@@ -45,14 +45,26 @@ Do **not** big-bang rewrite — each phase must keep tests green.
 
 ## Acceptance criteria
 
-- [ ] `enrichment.py` coordinator < 300 lines after phase 1.
-- [ ] No behavior change in enrichment test suite.
-- [ ] Detail fetch and match pipeline independently instantiable in tests.
+- [x] `enrichment.py` coordinator < 300 lines after phase 1 (`service.py` ~170 lines).
+- [x] No behavior change in enrichment test suite.
+- [x] Detail fetch and match pipeline independently instantiable in tests.
+
+## Implementation notes (phase 1)
+
+| Module | Role |
+|--------|------|
+| `enrichment/match_pipeline.py` | `CalendarMatchPipeline` |
+| `enrichment/detail_fetch.py` | `DetailFetchWorker` |
+| `enrichment/side_effects.py` | `EnrichmentSideEffects` |
+| `enrichment/service.py` | `PPVCalendarEnrichmentService` coordinator |
+| `enrichment/__init__.py` | Public API + patch targets (`sync_ppv_epg_after_enrichment`, etc.) |
 
 ## Test plan
 
 - Full `tests/ppv/test_enrichment*.py` suite after each phase.
 - No reduction in assertion count.
+
+**Phase 1 run:** `venv/bin/pytest tests/ppv/test_enrichment*.py --no-cov` — 83 passed.
 
 ## Dependencies
 
