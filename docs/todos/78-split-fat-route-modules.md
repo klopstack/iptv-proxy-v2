@@ -1,8 +1,9 @@
 # Split fat route modules (phased extraction)
 
-**Status:** ⬜ Not started  
+**Status:** 🔄 In progress (phase 1 — accounts.py)  
 **Priority:** P2  
-**Audit:** Application-wide audit, June 2026
+**Audit:** Application-wide audit, June 2026  
+**Branch:** `wave8/pr-78-split-fat-routes`
 
 ## Problem
 
@@ -29,7 +30,7 @@ Listed above; target services in `services/`.
 
 Phased extraction — one module per PR:
 
-1. **accounts.py** — credential CRUD, category sync, channel stats → `AccountAdminService`
+1. **accounts.py** — credential CRUD, category sync, channel stats → `AccountAdminService` ✅ (PR phase 1)
 2. **epg/match_rules.py** — preview/rematch orchestration → existing match_rules services
 3. **config_transfer.py** — export/import serialization → `ConfigTransferService` (may already exist partially)
 4. **fcc_match_patterns.py** — shared serializers with config export
@@ -38,9 +39,10 @@ Routes become: parse request → call service → serialize response.
 
 ## Acceptance criteria
 
-- [ ] Each phase reduces target route file by ≥30% without behavior change
-- [ ] Extracted logic has unit tests independent of Flask request context
-- [ ] No regression in existing route test suites
+- [x] Phase 1 (`accounts.py`): reduced 1,381 → 932 lines (−32%) via `AccountAdminService`
+- [ ] Each remaining phase reduces target route file by ≥30% without behavior change
+- [x] Extracted logic has unit tests independent of Flask request context (`tests/test_account_admin_service.py`)
+- [x] No regression in existing route test suites (`tests/test_accounts_routes.py`)
 
 ## Test plan
 
@@ -49,5 +51,5 @@ Routes become: parse request → call service → serialize response.
 
 ## Dependencies
 
-- TODO 78 (shared serializers) helps FCC/config phases
+- TODO 79 (shared serializers) helps FCC/config phases — phase 1 avoids serializer overlap; rebase after 79 merges for credential schema validation
 - See `docs/architecture/api-layer-and-fat-routes.md`

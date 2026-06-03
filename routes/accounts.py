@@ -4,11 +4,10 @@ Account management routes
 import logging
 
 from flask import Blueprint, jsonify, request
-from sqlalchemy import or_
 
 from api_responses import data_response, success_response
 from error_handling import handle_errors
-from models import Account, Category, Channel, ChannelTag, Credential, EpgSource, Filter, Tag, db
+from models import Account, Channel, ChannelTag, Credential, Filter, Tag, db
 from schemas import (
     AccountCreateSchema,
     AccountUpdateSchema,
@@ -16,6 +15,7 @@ from schemas import (
     CredentialUpdateSchema,
     validate_request_data,
 )
+from services.account_admin_service import AccountAdminService
 from services.account_epg_source_service import (
     find_account_xmltv_epg_source,
     normalize_account_server,
@@ -26,7 +26,6 @@ from services.cache_service import cache_service
 from services.channel_query_service import ChannelQueryService
 from services.connection_manager import ConnectionManager
 from services.datetime_utils import DEFAULT_DISPLAY_TIMEZONE, serialize_utc_iso
-from services.iptv_service import IPTVService, get_iptv_service_for_account
 from services.serializers.credentials import serialize_credential
 from services.tag_service import TagService
 
@@ -44,44 +43,7 @@ accounts_bp = Blueprint("accounts", __name__)
 @accounts_bp.route("/api/accounts", methods=["GET"])
 def get_accounts():
     """Get all accounts with credential info"""
-    accounts = Account.query.all()
-
-    # Get channel counts for all accounts in one query
-    channel_counts = (
-        db.session.query(Channel.account_id, db.func.count(Channel.id))
-        .filter(Channel.is_active == True)  # noqa: E712
-        .group_by(Channel.account_id)
-        .all()
-    )
-    channel_count_map = {account_id: count for account_id, count in channel_counts}
-
-    xmltv_sources = {
-        row.account_id: row
-        for row in EpgSource.query.filter(
-            EpgSource.account_id.isnot(None),
-            EpgSource.source_type == "xmltv_url",
-        ).all()
-    }
-
-    result = []
-    for a in accounts:
-        account_data = {
-            "id": a.id,
-            "name": a.name,
-            "server": a.server,
-            "enabled": a.enabled,
-            "ppv_visibility": a.ppv_visibility,
-            "ppv_rename_format": a.ppv_rename_format,
-            "ppv_rename_timezone": a.ppv_rename_timezone,
-            "fcc_rename_format": a.fcc_rename_format,
-            "credentials": [serialize_credential(c) for c in a.credentials],
-            "total_max_connections": a.get_total_max_connections(),
-            "channel_count": channel_count_map.get(a.id, 0),
-            "xmltv_epg_source": serialize_account_xmltv_epg_source(xmltv_sources.get(a.id)),
-        }
-        account_data["username"] = a.credentials[0].username if a.credentials else None
-        result.append(account_data)
-    return data_response(result)
+    return data_response(AccountAdminService.list_accounts_data())
 
 
 @accounts_bp.route("/api/accounts", methods=["POST"])
@@ -316,107 +278,10 @@ def delete_account(account_id):
 def test_account(account_id):
     """Test account connection - tests all credentials and updates their info"""
     account = Account.query.get_or_404(account_id)
-
-    # Get credentials to test
-    credentials = account.credentials if account.credentials else []
-
-    if not credentials:
-        return jsonify({"success": False, "error": "No credentials configured"}), 400
-
-    # Test each credential
-    credential_results = []
-    total_channels = 0
-    total_categories = 0
-    first_error = None
-
-    for cred in credentials:
-        try:
-            service = IPTVService(account.server, cred.username, cred.password, account.user_agent or "okhttp/3.14.9")
-            auth_info = service.authenticate()
-
-            # Get channel/category counts only from first credential (they're the same)
-            if not total_channels:
-                streams = service.get_live_streams()
-                categories = service.get_live_categories()
-                total_channels = len(streams)
-                total_categories = len(categories)
-
-            # Update credential with info from auth response
-            user_info = auth_info.get("user_info", {})
-            cred.max_connections = int(user_info.get("max_connections", 1) or 1)
-            cred.status = user_info.get("status", "Unknown")
-            cred.exp_date = user_info.get("exp_date", "")
-            db.session.commit()
-
-            credential_results.append(
-                {
-                    "id": cred.id,
-                    "username": cred.username,
-                    "success": True,
-                    "status": cred.status,
-                    "exp_date": cred.exp_date,
-                    "max_connections": cred.max_connections,
-                }
-            )
-        except Exception as e:
-            logger.error(f"Error testing credential {cred.id} for account {account_id}: {e}")
-            if not first_error:
-                first_error = str(e)
-            credential_results.append(
-                {
-                    "id": cred.id,
-                    "username": cred.username,
-                    "success": False,
-                    "error": str(e),
-                }
-            )
-
-    # Calculate totals
-    total_max_connections = sum(c.get("max_connections", 1) for c in credential_results if c.get("success"))
-
-    # If all credentials failed, return error
-    if all(not c.get("success") for c in credential_results):
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "error": first_error or "All credentials failed",
-                    "credentials": credential_results,
-                }
-            ),
-            400,
-        )
-
-    return jsonify(
-        {
-            "success": True,
-            "channels": total_channels,
-            "categories": total_categories,
-            "total_max_connections": total_max_connections,
-            "credentials": credential_results,
-            "connection_status": ConnectionManager.get_connection_status(account_id),
-        }
-    )
-
-
-def _account_categories_payload(account_id):
-    """Categories from in-memory cache or DB — no upstream IPTV call."""
-    cached = cache_service.get_cached_categories(account_id)
-    if cached is not None:
-        return cached
-
-    rows = Category.query.filter_by(account_id=account_id, is_active=True).order_by(Category.category_name).all()
-    if rows:
-        return [
-            {
-                "category_id": row.category_id,
-                "category_name": row.category_name,
-                **({"cleaned_name": row.cleaned_name} if row.cleaned_name else {}),
-            }
-            for row in rows
-        ]
-
-    return []
+    payload, error, status = AccountAdminService.test_account_connection(account)
+    if error:
+        return jsonify({"success": False, "error": error}), status
+    return jsonify(payload), status
 
 
 @accounts_bp.route("/api/accounts/<int:account_id>/categories", methods=["GET"])
@@ -429,7 +294,7 @@ def get_account_categories(account_id):
     GET /api/channel-health/categories (health filter dropdown).
     """
     Account.query.get_or_404(account_id)
-    return jsonify(_account_categories_payload(account_id))
+    return jsonify(AccountAdminService.get_categories_payload(account_id))
 
 
 @accounts_bp.route("/api/accounts/<int:account_id>/categories/sync", methods=["POST"])
@@ -437,75 +302,7 @@ def get_account_categories(account_id):
 def sync_account_categories(account_id):
     """Fetch categories from upstream IPTV, update cache, and process extraction tags."""
     account = Account.query.get_or_404(account_id)
-
-    service = get_iptv_service_for_account(account)
-    categories = service.get_live_categories()
-    cache_service.cache_categories(account_id, categories)
-
-    streams = cache_service.get_cached_streams(account_id)
-    if streams:
-        try:
-            _process_tags_for_account(account_id, streams, categories)
-        except Exception as tag_error:
-            logger.warning(f"Error auto-processing tags for account {account_id}: {tag_error}")
-
-    return jsonify({"success": True, "categories": categories, "count": len(categories)})
-
-
-def _process_tags_for_account(account_id, streams, categories):
-    """Helper function to process tags for an account (internal use)"""
-    account = db.session.get(Account, account_id)
-    if not account:
-        return
-
-    # Build category map
-    category_map = {str(c["category_id"]): c["category_name"] for c in categories}
-
-    # Get tag rules for this account
-    tag_rules = TagService.get_rules_for_account(account)
-
-    # Clear only extraction-sourced tags for this account (preserve enrichment, manual, sync tags)
-    ChannelTag.query.filter_by(account_id=account_id, source=ChannelTag.SOURCE_EXTRACTION).delete()
-
-    # Process each stream
-    for stream in streams:
-        stream_id = str(stream.get("stream_id"))
-        channel_name = stream.get("name", "")
-        category_id = str(stream.get("category_id", ""))
-        category_name = category_map.get(category_id, "")
-
-        # Extract tags
-        tags, cleaned_name, _, _ = TagService.extract_tags(channel_name, category_name, tag_rules)
-
-        # Store tags
-        for tag_name in tags:
-            normalized_tag = TagService.normalize_tag_name(tag_name)
-
-            # Skip empty or too-short tags
-            if not normalized_tag or len(normalized_tag) < 2:
-                continue
-
-            # Get or create tag
-            tag = Tag.query.filter_by(name=normalized_tag).first()
-            if not tag:
-                tag = Tag(name=normalized_tag)
-                db.session.add(tag)
-                db.session.flush()
-
-            # Check if this tag already exists for this channel (from any source)
-            existing = ChannelTag.query.filter_by(account_id=account_id, stream_id=stream_id, tag_id=tag.id).first()
-            if not existing:
-                # Create channel tag association with extraction source
-                channel_tag = ChannelTag(
-                    account_id=account_id,
-                    stream_id=stream_id,
-                    tag_id=tag.id,
-                    source=ChannelTag.SOURCE_EXTRACTION,
-                )
-                db.session.add(channel_tag)
-
-    db.session.commit()
-    logger.info(f"Auto-processed tags for account {account_id}")
+    return jsonify(AccountAdminService.sync_categories(account))
 
 
 @accounts_bp.route("/api/accounts/<int:account_id>/stats", methods=["GET"])
@@ -516,77 +313,10 @@ def get_account_stats(account_id):
     filters plus PPV visibility), matching M3U/EPG/Xtream output.
     """
     account = Account.query.get_or_404(account_id)
-
-    # Check if account is synced to database
-    channel_count = Channel.query.filter_by(account_id=account_id, is_active=True).count()
-
-    if channel_count > 0:
-        # Use database stats (fast!)
-        category_count = db.session.query(Category.id).filter_by(account_id=account_id).count()
-
-        playlist_visible = ChannelQueryService.channels_for_account(account_id)
-        visible_count = len(playlist_visible)
-        hidden_count = channel_count - visible_count
-
-        # Get category distribution
-        category_counts = {}
-        category_data = (
-            db.session.query(Category.category_id, db.func.count(Channel.id))
-            .join(Channel, Channel.category_id == Category.id)
-            .filter(Channel.account_id == account_id, Channel.is_active)
-            .group_by(Category.category_id)
-            .all()
-        )
-        for cat_id, count in category_data:
-            category_counts[str(cat_id)] = count
-
-        return jsonify(
-            {
-                "total_channels": channel_count,
-                "visible_channels": visible_count,
-                "hidden_channels": hidden_count,
-                "total_categories": category_count,
-                "category_counts": category_counts,
-                "using_database": True,
-                "synced": True,
-                "last_sync": serialize_utc_iso(account.updated_at),
-            }
-        )
-
-    # Fallback to API call if not synced
-    try:
-        service = get_iptv_service_for_account(account)
-
-        # Get cached or fetch new
-        streams = cache_service.get_cached_streams(account_id)
-        if not streams:
-            streams = service.get_live_streams()
-            cache_service.cache_streams(account_id, streams)
-
-        categories = cache_service.get_cached_categories(account_id)
-        if not categories:
-            categories = service.get_live_categories()
-            cache_service.cache_categories(account_id, categories)
-
-        # Count by category
-        category_counts = {}
-        for stream in streams:
-            cat_id = str(stream.get("category_id", "Unknown"))
-            category_counts[cat_id] = category_counts.get(cat_id, 0) + 1
-
-        return jsonify(
-            {
-                "total_channels": len(streams),
-                "total_categories": len(categories),
-                "category_counts": category_counts,
-                "using_database": False,
-                "synced": False,
-                "last_sync": None,
-            }
-        )
-    except Exception as e:
-        logger.error(f"Error fetching stats for account {account_id}: {e}")
-        return jsonify({"error": str(e)}), 400
+    stats, error = AccountAdminService.get_account_stats(account)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify(stats)
 
 
 @accounts_bp.route("/api/accounts/<int:account_id>/filters", methods=["GET"])
@@ -1080,79 +810,15 @@ def preview_filter_matches(account_id):
     Used to provide feedback when creating filters.
     """
     account = Account.query.get_or_404(account_id)
-
-    if not account.enabled:
-        return jsonify({"success": False, "error": "Account is disabled"}), 403
-
-    # Check if account has synced channels
-    channel_count = Channel.query.filter_by(account_id=account_id, is_active=True).count()
-    if channel_count == 0:
-        return jsonify({"success": False, "error": "Account not synced - sync required"}), 503
-
-    data = request.get_json()
-    filter_type = data.get("filter_type")
-    filter_value = data.get("filter_value", "").strip()
-
-    if not filter_type or not filter_value:
-        return jsonify({"success": False, "error": "Missing filter_type or filter_value"}), 400
-
-    # Get all channels for this account
-    total_query = Channel.query.filter(Channel.account_id == account_id, Channel.is_active)
-    total_count = total_query.count()
-
-    # Build query to match channels
-    match_query = total_query
-
-    if filter_type == "category":
-        # Match category name
-        match_query = match_query.join(Category).filter(Category.category_name.ilike(f"%{filter_value}%"))
-    elif filter_type == "channel_name":
-        # Match channel name (original or cleaned)
-        match_query = match_query.filter(
-            or_(Channel.name.ilike(f"%{filter_value}%"), Channel.cleaned_name.ilike(f"%{filter_value}%"))
-        )
-    elif filter_type == "regex":
-        # Regex match (SQLite REGEXP)
-        import re
-
-        try:
-            # Test if regex is valid
-            re.compile(filter_value)
-            # Note: SQLite doesn't have built-in REGEXP support
-            # We'll need to fetch all and filter in Python for regex
-            all_channels = total_query.all()
-            pattern = re.compile(filter_value, re.IGNORECASE)
-            match_count = sum(
-                1
-                for ch in all_channels
-                if pattern.search(ch.name or "") or (ch.cleaned_name and pattern.search(ch.cleaned_name))
-            )
-            return jsonify({"success": True, "match_count": match_count, "total_count": total_count})
-        except re.error as e:
-            return jsonify({"success": False, "error": f"Invalid regex: {str(e)}"}), 400
-    elif filter_type == "tag":
-        # Match tags
-        tags = [t.strip() for t in filter_value.split(",") if t.strip()]
-        if not tags:
-            return jsonify({"success": False, "error": "No tags specified"}), 400
-        # Normalize for case-insensitive matching
-        tags = TagService.normalize_filter_tags(tags)
-
-        # Get channel IDs that have any of these tags
-        tagged_streams = (
-            db.session.query(ChannelTag.stream_id)
-            .join(Tag)
-            .filter(ChannelTag.account_id == account_id, Tag.name.in_(tags))
-            .distinct()
-        )
-
-        match_query = match_query.filter(Channel.stream_id.in_(tagged_streams))
-    else:
-        return jsonify({"success": False, "error": "Invalid filter_type"}), 400
-
-    match_count = match_query.count() if filter_type != "regex" else match_count
-
-    return jsonify({"success": True, "match_count": match_count, "total_count": total_count})
+    data = request.get_json() or {}
+    payload, error, status = AccountAdminService.preview_filter_matches(
+        account,
+        data.get("filter_type"),
+        (data.get("filter_value") or "").strip(),
+    )
+    if error:
+        return jsonify({"success": False, "error": error}), status
+    return jsonify(payload)
 
 
 @accounts_bp.route("/api/tags/cleanup-orphans", methods=["POST"])
@@ -1162,32 +828,7 @@ def cleanup_orphan_tags():
     Delete tags that have no associated channels in any account.
     This cleans up tags that were created but are no longer used.
     """
-    # Find tags that have no ChannelTag associations
-    orphaned_tags = (
-        db.session.query(Tag)
-        .outerjoin(ChannelTag, Tag.id == ChannelTag.tag_id)
-        .filter(ChannelTag.tag_id.is_(None))
-        .all()
-    )
-
-    orphan_count = len(orphaned_tags)
-    tag_names = [tag.name for tag in orphaned_tags[:100]]  # Sample for display
-
-    # Delete orphaned tags
-    for tag in orphaned_tags:
-        db.session.delete(tag)
-
-    db.session.commit()
-
-    logger.info(f"Cleaned up {orphan_count} orphaned tags")
-
-    return jsonify(
-        {
-            "success": True,
-            "tags_deleted": orphan_count,
-            "sample_tags": tag_names[:20],  # Show first 20 for reference
-        }
-    )
+    return jsonify(AccountAdminService.cleanup_orphan_tags())
 
 
 # ============================================================================
@@ -1199,7 +840,7 @@ def cleanup_orphan_tags():
 def get_credentials(account_id):
     """Get all credentials for an account"""
     account = Account.query.get_or_404(account_id)
-    return jsonify([serialize_credential(c) for c in account.credentials])
+    return jsonify(AccountAdminService.get_credentials(account))
 
 
 @accounts_bp.route("/api/accounts/<int:account_id>/credentials", methods=["POST"])
@@ -1209,37 +850,11 @@ def add_credential(account_id):
     account = Account.query.get_or_404(account_id)
     data = request.validated_data
 
-    # Check for duplicate username
-    existing = Credential.query.filter_by(account_id=account_id, username=data["username"]).first()
-    if existing:
-        return jsonify({"error": "Credential with this username already exists"}), 400
+    result, error = AccountAdminService.add_credential(account, data)
+    if error:
+        return jsonify({"error": error}), 400
 
-    credential = Credential(
-        account_id=account_id,
-        username=data["username"],
-        password=data["password"],
-        max_connections=data.get("max_connections", 1),
-        enabled=data.get("enabled", True),
-    )
-    db.session.add(credential)
-    db.session.commit()
-
-    # Test the new credential to get connection info
-    try:
-        service = IPTVService(
-            account.server, credential.username, credential.password, account.user_agent or "okhttp/3.14.9"
-        )
-        auth_info = service.authenticate()
-        user_info = auth_info.get("user_info", {})
-
-        credential.max_connections = int(user_info.get("max_connections", 1) or 1)
-        credential.status = user_info.get("status", "Unknown")
-        credential.exp_date = user_info.get("exp_date", "")
-        db.session.commit()
-    except Exception as e:
-        logger.warning(f"Could not verify new credential: {e}")
-
-    return jsonify(serialize_credential(credential)), 201
+    return jsonify(result), 201
 
 
 @accounts_bp.route("/api/accounts/<int:account_id>/credentials/<int:cred_id>", methods=["PUT"])
@@ -1250,29 +865,7 @@ def update_credential(account_id, cred_id):
     credential = Credential.query.filter_by(id=cred_id, account_id=account_id).first_or_404()
 
     data = request.validated_data
-
-    if "username" in data:
-        credential.username = data["username"]
-    if "password" in data and data["password"]:
-        credential.password = data["password"]
-    if "enabled" in data:
-        credential.enabled = data["enabled"]
-    if "max_connections" in data:
-        credential.max_connections = data["max_connections"]
-
-    db.session.commit()
-    cache_service.clear_account_cache(account_id)
-
-    account = db.session.get(Account, account_id)
-    primary = account.get_primary_credential() if account else None
-    if account and primary and primary.id == credential.id and find_account_xmltv_epg_source(account_id):
-        try:
-            upsert_account_xmltv_epg_source(account, credential)
-            db.session.commit()
-        except ValueError as e:
-            logger.warning("Could not refresh XMLTV EPG URL for account %s: %s", account_id, e)
-
-    return jsonify(serialize_credential(credential))
+    return jsonify(AccountAdminService.update_credential(account_id, credential, data))
 
 
 @accounts_bp.route("/api/accounts/<int:account_id>/credentials/<int:cred_id>", methods=["DELETE"])
@@ -1281,12 +874,9 @@ def delete_credential(account_id, cred_id):
     account = Account.query.get_or_404(account_id)
     credential = Credential.query.filter_by(id=cred_id, account_id=account_id).first_or_404()
 
-    # Don't allow deleting the last credential
-    if len(account.credentials) <= 1:
-        return jsonify({"error": "Cannot delete the last credential"}), 400
-
-    db.session.delete(credential)
-    db.session.commit()
+    error = AccountAdminService.delete_credential(account, credential)
+    if error:
+        return jsonify({"error": error}), 400
 
     return "", 204
 
@@ -1297,34 +887,11 @@ def test_credential(account_id, cred_id):
     account = Account.query.get_or_404(account_id)
     credential = Credential.query.filter_by(id=cred_id, account_id=account_id).first_or_404()
 
-    try:
-        service = IPTVService(
-            account.server, credential.username, credential.password, account.user_agent or "okhttp/3.14.9"
-        )
-        auth_info = service.authenticate()
-        user_info = auth_info.get("user_info", {})
+    result, error = AccountAdminService.test_credential(account, credential)
+    if error:
+        return jsonify({"success": False, "error": error}), 400
 
-        # Update credential with auth info
-        credential.max_connections = int(user_info.get("max_connections", 1) or 1)
-        credential.status = user_info.get("status", "Unknown")
-        credential.exp_date = user_info.get("exp_date", "")
-        db.session.commit()
-
-        return jsonify(
-            {
-                "success": True,
-                "credential": serialize_credential(credential),
-                "user_info": {
-                    "username": user_info.get("username", ""),
-                    "status": credential.status,
-                    "exp_date": credential.exp_date,
-                    "max_connections": credential.max_connections,
-                },
-            }
-        )
-    except Exception as e:
-        logger.error(f"Error testing credential {cred_id}: {e}")
-        return jsonify({"success": False, "error": str(e)}), 400
+    return jsonify(result)
 
 
 @accounts_bp.route("/api/accounts/<int:account_id>/connection-status", methods=["GET"])

@@ -54,7 +54,7 @@ class TestAccountTestConnection:
         assert response.status_code == 400
         assert "credentials" in response.json.get("error", "").lower()
 
-    @patch("routes.accounts.IPTVService")
+    @patch("services.account_admin_service.IPTVService")
     def test_test_connection_success(self, MockIPTVService, app, client, test_account):
         """Test connection using account credentials."""
         with app.app_context():
@@ -75,7 +75,7 @@ class TestAccountTestConnection:
         assert response.json["success"] is True
         assert response.json["channels"] == 10
 
-    @patch("routes.accounts.IPTVService")
+    @patch("services.account_admin_service.IPTVService")
     def test_test_connection_error(self, MockIPTVService, app, client, test_account):
         """Test connection returns error when authentication fails"""
         mock_service = MagicMock()
@@ -87,7 +87,7 @@ class TestAccountTestConnection:
         assert response.json["success"] is False
         assert "Connection refused" in response.json["error"]
 
-    @patch("routes.accounts.IPTVService")
+    @patch("services.account_admin_service.IPTVService")
     def test_test_connection_with_credentials(self, MockIPTVService, app, client, test_account, test_credential):
         """Test connection using credentials"""
         mock_service = MagicMock()
@@ -395,7 +395,7 @@ class TestCredentialManagement:
         assert response.status_code == 400
         assert "already exists" in response.json["error"]
 
-    @patch("routes.accounts.IPTVService")
+    @patch("services.account_admin_service.IPTVService")
     def test_add_credential_success(self, MockIPTVService, app, client, test_account):
         """Test successful credential addition"""
         mock_service = MagicMock()
@@ -412,7 +412,7 @@ class TestCredentialManagement:
         assert response.status_code == 201
         assert response.json["username"] == "new_user"
 
-    @patch("routes.accounts.IPTVService")
+    @patch("services.account_admin_service.IPTVService")
     def test_add_credential_verify_fails(self, MockIPTVService, app, client, test_account):
         """Test credential addition when verification fails (still adds)"""
         mock_service = MagicMock()
@@ -521,8 +521,8 @@ class TestAccountCategories:
         response = client.get("/api/accounts/999/categories")
         assert response.status_code == 404
 
-    @patch("routes.accounts.get_iptv_service_for_account")
-    @patch("routes.accounts.cache_service")
+    @patch("services.account_admin_service.get_iptv_service_for_account")
+    @patch("services.account_admin_service.cache_service")
     def test_get_categories_empty(self, mock_cache, mock_get_service, app, client, test_account):
         """GET returns empty list without calling upstream when cache and DB are empty"""
         mock_cache.get_cached_categories.return_value = None
@@ -532,8 +532,8 @@ class TestAccountCategories:
         assert response.json == []
         mock_get_service.assert_not_called()
 
-    @patch("routes.accounts.get_iptv_service_for_account")
-    @patch("routes.accounts.cache_service")
+    @patch("services.account_admin_service.get_iptv_service_for_account")
+    @patch("services.account_admin_service.cache_service")
     def test_get_categories_from_cache(self, mock_cache, mock_get_service, app, client, test_account):
         """Test getting categories from cache only"""
         mock_cache.get_cached_categories.return_value = [{"category_id": "1", "category_name": "Test Category"}]
@@ -543,8 +543,8 @@ class TestAccountCategories:
         assert len(response.json) == 1
         mock_get_service.assert_not_called()
 
-    @patch("routes.accounts.get_iptv_service_for_account")
-    @patch("routes.accounts.cache_service")
+    @patch("services.account_admin_service.get_iptv_service_for_account")
+    @patch("services.account_admin_service.cache_service")
     def test_sync_categories(self, mock_cache, mock_get_service, app, client, test_account):
         """POST sync fetches from upstream and caches"""
         mock_service = MagicMock()
