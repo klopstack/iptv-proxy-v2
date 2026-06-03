@@ -371,7 +371,8 @@ class TestCredentialManagement:
             content_type="application/json",
         )
         assert response.status_code == 400
-        assert "username" in response.json["error"].lower()
+        assert response.json["code"] == "VALIDATION_ERROR"
+        assert "username" in response.json["details"]
 
     def test_add_credential_missing_password(self, app, client, test_account):
         """Test adding credential without password"""
@@ -381,7 +382,8 @@ class TestCredentialManagement:
             content_type="application/json",
         )
         assert response.status_code == 400
-        assert "password" in response.json["error"].lower()
+        assert response.json["code"] == "VALIDATION_ERROR"
+        assert "password" in response.json["details"]
 
     def test_add_credential_duplicate_username(self, app, client, test_account, test_credential):
         """Test adding credential with duplicate username"""

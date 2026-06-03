@@ -45,6 +45,18 @@ from models import (
 from services.cache_service import cache_service
 from services.config_bundle_validation import validate_config_import_bundle
 from services.epg.match_rules import clear_fcc_pattern_cache
+from services.serializers.epg_match import (
+    serialize_epg_channel_name_mapping,
+    serialize_epg_exclusion_pattern,
+    serialize_epg_ruleset,
+    serialize_ruleset,
+)
+from services.serializers.fcc import (
+    serialize_fcc_channel_pattern,
+    serialize_fcc_location_pattern,
+    serialize_fcc_network,
+    serialize_fcc_strategy,
+)
 from services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
@@ -62,123 +74,6 @@ def _safe_json_loads(value: Optional[str], default: Any = None) -> Any:
     if not value:
         return default
     return json.loads(value)
-
-
-def _serialize_tag_rule(rule: TagRule) -> dict:
-    return {
-        "name": rule.name,
-        "pattern": rule.pattern,
-        "pattern_type": rule.pattern_type,
-        "tag_name": rule.tag_name,
-        "source": rule.source,
-        "remove_from_name": rule.remove_from_name,
-        "replacement": rule.replacement,
-        "set_is_ppv": rule.set_is_ppv,
-        "priority": rule.priority,
-        "enabled": rule.enabled,
-    }
-
-
-def _serialize_epg_match_rule(rule: EpgMatchRule) -> dict:
-    return {
-        "name": rule.name,
-        "description": rule.description,
-        "match_type": rule.match_type,
-        "source": rule.source,
-        "pattern": rule.pattern,
-        "action": rule.action,
-        "min_confidence": rule.min_confidence,
-        "required_tags": _safe_json_loads(rule.required_tags),
-        "excluded_tags": _safe_json_loads(rule.excluded_tags),
-        "fallback_epg_id": rule.fallback_epg_id,
-        "category_pattern": rule.category_pattern,
-        "category_exclude_pattern": rule.category_exclude_pattern,
-        "country_codes": _safe_json_loads(rule.country_codes),
-        "epg_source_ids": _safe_json_loads(rule.epg_source_ids),
-        "time_offset_hours": rule.time_offset_hours,
-        "priority": rule.priority,
-        "enabled": rule.enabled,
-        "stop_on_match": rule.stop_on_match,
-    }
-
-
-def _serialize_ruleset(ruleset: RuleSet) -> dict:
-    return {
-        "name": ruleset.name,
-        "description": ruleset.description,
-        "is_default": ruleset.is_default,
-        "enabled": ruleset.enabled,
-        "priority": ruleset.priority,
-        "rules": [_serialize_tag_rule(r) for r in sorted(ruleset.rules, key=lambda x: (x.priority, x.id))],
-    }
-
-
-def _serialize_epg_ruleset(ruleset: EpgMatchRuleSet) -> dict:
-    return {
-        "name": ruleset.name,
-        "description": ruleset.description,
-        "is_default": ruleset.is_default,
-        "enabled": ruleset.enabled,
-        "priority": ruleset.priority,
-        "rules": [_serialize_epg_match_rule(r) for r in sorted(ruleset.rules, key=lambda x: (x.priority, x.id))],
-    }
-
-
-def _serialize_fcc_network(model: FccMatchNetwork) -> dict:
-    return {
-        "name": model.name,
-        "display_name": model.display_name,
-        "description": model.description,
-        "fcc_affiliation_pattern": model.fcc_affiliation_pattern,
-        "tag_patterns": _safe_json_loads(model.tag_patterns, default=[]),
-        "enabled": model.enabled,
-        "priority": model.priority,
-    }
-
-
-def _serialize_fcc_channel_pattern(model: FccMatchChannelPattern) -> dict:
-    return {
-        "name": model.name,
-        "description": model.description,
-        "pattern": model.pattern,
-        "pattern_type": model.pattern_type,
-        "capture_group": model.capture_group,
-        "networks": _safe_json_loads(model.networks),
-        "enabled": model.enabled,
-        "priority": model.priority,
-    }
-
-
-def _serialize_fcc_location_pattern(model: FccMatchLocationPattern) -> dict:
-    return {
-        "name": model.name,
-        "description": model.description,
-        "pattern": model.pattern,
-        "pattern_type": model.pattern_type,
-        "extract_city": model.extract_city,
-        "extract_state": model.extract_state,
-        "city_group": model.city_group,
-        "state_group": model.state_group,
-        "enabled": model.enabled,
-        "priority": model.priority,
-    }
-
-
-def _serialize_fcc_strategy(model: FccMatchStrategy) -> dict:
-    return {
-        "name": model.name,
-        "description": model.description,
-        "strategy_type": model.strategy_type,
-        "require_network": model.require_network,
-        "require_channel_number": model.require_channel_number,
-        "require_state": model.require_state,
-        "require_city": model.require_city,
-        "match_nielsen_dma": model.match_nielsen_dma,
-        "match_community_city": model.match_community_city,
-        "match_community_state": model.match_community_state,
-        "enabled": model.enabled,
-        "priority": model.priority,
-    }
 
 
 @config_transfer_bp.route("/api/config/export", methods=["GET"])
@@ -222,7 +117,7 @@ def export_config_bundle():
             for filter_obj in Filter.query.order_by(Filter.account_id, Filter.id).all()
             if filter_obj.account is not None
         ],
-        "rulesets": [_serialize_ruleset(ruleset) for ruleset in rulesets],
+        "rulesets": [serialize_ruleset(ruleset) for ruleset in rulesets],
         "account_ruleset_assignments": [
             {
                 "account_name": account.name,
@@ -235,7 +130,7 @@ def export_config_bundle():
             .order_by(Account.name, AccountRuleSet.priority)
             .all()
         ],
-        "epg_match_rulesets": [_serialize_epg_ruleset(ruleset) for ruleset in epg_rulesets],
+        "epg_match_rulesets": [serialize_epg_ruleset(ruleset) for ruleset in epg_rulesets],
         "account_epg_match_ruleset_assignments": [
             {
                 "account_name": account.name,
@@ -249,50 +144,32 @@ def export_config_bundle():
             .all()
         ],
         "epg_exclusion_patterns": [
-            {
-                "name": pattern.name,
-                "description": pattern.description,
-                "pattern_type": pattern.pattern_type,
-                "pattern": pattern.pattern,
-                "is_regex": pattern.is_regex,
-                "hide_channel": pattern.hide_channel,
-                "enabled": pattern.enabled,
-                "priority": pattern.priority,
-            }
+            serialize_epg_exclusion_pattern(pattern, include_id=False)
             for pattern in EpgExclusionPattern.query.order_by(
                 EpgExclusionPattern.priority, EpgExclusionPattern.name
             ).all()
         ],
         "epg_channel_name_mappings": [
-            {
-                "name": mapping.name,
-                "description": mapping.description,
-                "old_name": mapping.old_name,
-                "new_name": mapping.new_name,
-                "match_type": mapping.match_type,
-                "case_sensitive": mapping.case_sensitive,
-                "enabled": mapping.enabled,
-                "priority": mapping.priority,
-            }
+            serialize_epg_channel_name_mapping(mapping, include_id=False)
             for mapping in EpgChannelNameMapping.query.order_by(
                 EpgChannelNameMapping.priority, EpgChannelNameMapping.name
             ).all()
         ],
         "fcc_patterns": {
             "networks": [
-                _serialize_fcc_network(model)
+                serialize_fcc_network(model, include_id=False)
                 for model in FccMatchNetwork.query.order_by(FccMatchNetwork.priority).all()
             ],
             "channel_patterns": [
-                _serialize_fcc_channel_pattern(model)
+                serialize_fcc_channel_pattern(model, include_id=False)
                 for model in FccMatchChannelPattern.query.order_by(FccMatchChannelPattern.priority).all()
             ],
             "location_patterns": [
-                _serialize_fcc_location_pattern(model)
+                serialize_fcc_location_pattern(model, include_id=False)
                 for model in FccMatchLocationPattern.query.order_by(FccMatchLocationPattern.priority).all()
             ],
             "strategies": [
-                _serialize_fcc_strategy(model)
+                serialize_fcc_strategy(model, include_id=False)
                 for model in FccMatchStrategy.query.order_by(FccMatchStrategy.priority).all()
             ],
             "country_suffixes": [

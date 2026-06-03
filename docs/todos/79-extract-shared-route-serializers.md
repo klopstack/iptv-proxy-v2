@@ -1,6 +1,6 @@
 # Extract shared route serializers and CRUD patterns
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P2  
 **Audit:** Application-wide audit, June 2026
 
@@ -28,9 +28,9 @@ Repeated CRUD patterns across route files:
 
 ## Acceptance criteria
 
-- [ ] Config export and FCC routes share serialization for same entity types
-- [ ] EPG source POST/PUT use schema validation
-- [ ] Credential routes use schema validation
+- [x] Config export and FCC routes share serialization for same entity types
+- [x] EPG source POST/PUT use schema validation
+- [x] Credential routes use schema validation
 
 ## Test plan
 

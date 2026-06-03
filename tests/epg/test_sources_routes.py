@@ -46,13 +46,15 @@ class TestEpgSources:
         """Test creating EPG source without name"""
         response = client.post("/api/epg/sources", json={"source_type": "xmltv_url"}, content_type="application/json")
         assert response.status_code == 400
-        assert "name" in response.json["error"].lower()
+        assert response.json["code"] == "VALIDATION_ERROR"
+        assert "name" in response.json["details"]
 
     def test_create_epg_source_missing_type(self, app, client):
         """Test creating EPG source without source_type"""
         response = client.post("/api/epg/sources", json={"name": "Test"}, content_type="application/json")
         assert response.status_code == 400
-        assert "source type" in response.json["error"].lower()
+        assert response.json["code"] == "VALIDATION_ERROR"
+        assert "source_type" in response.json["details"]
 
     def test_create_epg_source_invalid_type(self, app, client):
         """Test creating EPG source with invalid type"""
@@ -62,7 +64,8 @@ class TestEpgSources:
             content_type="application/json",
         )
         assert response.status_code == 400
-        assert "invalid" in response.json["error"].lower()
+        assert response.json["code"] == "VALIDATION_ERROR"
+        assert "source_type" in response.json["details"]
 
     def test_create_epg_source_rejects_provider_type(self, app, client):
         """Provider EPG source type is no longer supported"""
@@ -72,7 +75,8 @@ class TestEpgSources:
             content_type="application/json",
         )
         assert response.status_code == 400
-        assert "invalid" in response.json["error"].lower()
+        assert response.json["code"] == "VALIDATION_ERROR"
+        assert "source_type" in response.json["details"]
 
     def test_create_epg_source_success(self, app, client, test_account):
         """Test successful EPG source creation"""
@@ -111,7 +115,8 @@ class TestEpgSources:
             content_type="application/json",
         )
         assert response.status_code == 400
-        assert "grabber" in response.json["error"].lower()
+        assert response.json["code"] == "VALIDATION_ERROR"
+        assert "xmltv_grabber" in response.json["details"]
 
     def test_create_epg_source_xmltv_grabber_success(self, app, client):
         """Test creating XMLTV grabber source"""

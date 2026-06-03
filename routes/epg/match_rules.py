@@ -34,6 +34,11 @@ from schemas import (
 from services.cache_service import cache_service
 from services.datetime_utils import serialize_utc_iso
 from services.epg.match_rules import clear_fcc_pattern_cache
+from services.serializers.epg_match import (
+    serialize_epg_channel_name_mapping,
+    serialize_epg_exclusion_pattern,
+    serialize_epg_match_rule,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,64 +50,6 @@ account_epg_match_rules_bp = Blueprint("account_epg_match_rules", __name__)
 # ============================================================================
 # Helper Functions
 # ============================================================================
-
-
-def _serialize_epg_match_rule(rule: EpgMatchRule) -> dict:
-    """Serialize an EPG match rule to JSON-compatible dict"""
-    return {
-        "id": rule.id,
-        "ruleset_id": rule.ruleset_id,
-        "name": rule.name,
-        "description": rule.description,
-        "match_type": rule.match_type,
-        "source": rule.source,
-        "pattern": rule.pattern,
-        "action": rule.action,
-        "min_confidence": rule.min_confidence,
-        "required_tags": json.loads(rule.required_tags) if rule.required_tags else None,
-        "excluded_tags": json.loads(rule.excluded_tags) if rule.excluded_tags else None,
-        "fallback_epg_id": rule.fallback_epg_id,
-        "category_pattern": rule.category_pattern,
-        "category_exclude_pattern": rule.category_exclude_pattern,
-        "country_codes": json.loads(rule.country_codes) if rule.country_codes else None,
-        "epg_source_ids": json.loads(rule.epg_source_ids) if rule.epg_source_ids else None,
-        "time_offset_hours": rule.time_offset_hours,
-        "priority": rule.priority,
-        "enabled": rule.enabled,
-        "stop_on_match": rule.stop_on_match,
-    }
-
-
-def _serialize_exclusion_pattern(pattern: EpgExclusionPattern) -> dict:
-    """Serialize an EPG exclusion pattern to JSON-compatible dict"""
-    return {
-        "id": pattern.id,
-        "name": pattern.name,
-        "description": pattern.description,
-        "pattern_type": pattern.pattern_type,
-        "pattern": pattern.pattern,
-        "is_regex": pattern.is_regex,
-        "hide_channel": pattern.hide_channel,
-        "enabled": pattern.enabled,
-        "priority": pattern.priority,
-    }
-
-
-def _serialize_channel_name_mapping(mapping: EpgChannelNameMapping) -> dict:
-    """Serialize an EPG channel name mapping to JSON-compatible dict"""
-    return {
-        "id": mapping.id,
-        "name": mapping.name,
-        "description": mapping.description,
-        "old_name": mapping.old_name,
-        "new_name": mapping.new_name,
-        "match_type": mapping.match_type,
-        "case_sensitive": mapping.case_sensitive,
-        "priority": mapping.priority,
-        "enabled": mapping.enabled,
-        "created_at": serialize_utc_iso(mapping.created_at),
-        "updated_at": serialize_utc_iso(mapping.updated_at),
-    }
 
 
 # ============================================================================
@@ -198,7 +145,7 @@ def get_epg_match_ruleset(ruleset_id):
             "is_default": ruleset.is_default,
             "enabled": ruleset.enabled,
             "priority": ruleset.priority,
-            "rules": [_serialize_epg_match_rule(r) for r in sorted(ruleset.rules, key=lambda x: (x.priority, x.id))],
+            "rules": [serialize_epg_match_rule(r) for r in sorted(ruleset.rules, key=lambda x: (x.priority, x.id))],
         }
     )
 
@@ -328,7 +275,7 @@ def get_epg_match_rules():
 
     rules = query.order_by(EpgMatchRule.priority, EpgMatchRule.id).all()
 
-    return jsonify([_serialize_epg_match_rule(r) for r in rules])
+    return jsonify([serialize_epg_match_rule(r) for r in rules])
 
 
 @epg_match_rules_bp.route("/rules", methods=["POST"])
@@ -366,14 +313,14 @@ def create_epg_match_rule():
     db.session.commit()
     cache_service.clear_all()
 
-    return jsonify(_serialize_epg_match_rule(rule)), 201
+    return jsonify(serialize_epg_match_rule(rule)), 201
 
 
 @epg_match_rules_bp.route("/rules/<int:rule_id>", methods=["GET"])
 def get_epg_match_rule(rule_id):
     """Get a specific EPG match rule"""
     rule = EpgMatchRule.query.get_or_404(rule_id)
-    return jsonify(_serialize_epg_match_rule(rule))
+    return jsonify(serialize_epg_match_rule(rule))
 
 
 @epg_match_rules_bp.route("/rules/<int:rule_id>", methods=["PUT"])
@@ -423,7 +370,7 @@ def update_epg_match_rule(rule_id):
     db.session.commit()
     cache_service.clear_all()
 
-    return jsonify(_serialize_epg_match_rule(rule))
+    return jsonify(serialize_epg_match_rule(rule))
 
 
 @epg_match_rules_bp.route("/rules/<int:rule_id>", methods=["DELETE"])
@@ -448,7 +395,7 @@ def get_epg_exclusion_patterns():
     """Get all EPG exclusion patterns"""
     patterns = EpgExclusionPattern.query.order_by(EpgExclusionPattern.priority, EpgExclusionPattern.name).all()
 
-    return jsonify([_serialize_exclusion_pattern(p) for p in patterns])
+    return jsonify([serialize_epg_exclusion_pattern(p) for p in patterns])
 
 
 @epg_match_rules_bp.route("/exclusions", methods=["POST"])
@@ -472,14 +419,14 @@ def create_epg_exclusion_pattern():
     db.session.commit()
     cache_service.clear_all()
 
-    return jsonify(_serialize_exclusion_pattern(pattern)), 201
+    return jsonify(serialize_epg_exclusion_pattern(pattern)), 201
 
 
 @epg_match_rules_bp.route("/exclusions/<int:pattern_id>", methods=["GET"])
 def get_epg_exclusion_pattern(pattern_id):
     """Get a specific EPG exclusion pattern"""
     pattern = EpgExclusionPattern.query.get_or_404(pattern_id)
-    return jsonify(_serialize_exclusion_pattern(pattern))
+    return jsonify(serialize_epg_exclusion_pattern(pattern))
 
 
 @epg_match_rules_bp.route("/exclusions/<int:pattern_id>", methods=["PUT"])
@@ -509,7 +456,7 @@ def update_epg_exclusion_pattern(pattern_id):
     db.session.commit()
     cache_service.clear_all()
 
-    return jsonify(_serialize_exclusion_pattern(pattern))
+    return jsonify(serialize_epg_exclusion_pattern(pattern))
 
 
 @epg_match_rules_bp.route("/exclusions/<int:pattern_id>", methods=["DELETE"])
@@ -534,7 +481,7 @@ def get_epg_channel_name_mappings():
     """Get all EPG channel name mappings"""
     mappings = EpgChannelNameMapping.query.order_by(EpgChannelNameMapping.priority, EpgChannelNameMapping.name).all()
 
-    return jsonify([_serialize_channel_name_mapping(m) for m in mappings])
+    return jsonify([serialize_epg_channel_name_mapping(m) for m in mappings])
 
 
 @epg_match_rules_bp.route("/name-mappings", methods=["POST"])
@@ -559,14 +506,14 @@ def create_epg_channel_name_mapping():
     cache_service.clear_all()
     clear_fcc_pattern_cache()
 
-    return jsonify(_serialize_channel_name_mapping(mapping)), 201
+    return jsonify(serialize_epg_channel_name_mapping(mapping)), 201
 
 
 @epg_match_rules_bp.route("/name-mappings/<int:mapping_id>", methods=["GET"])
 def get_epg_channel_name_mapping(mapping_id):
     """Get a specific EPG channel name mapping"""
     mapping = EpgChannelNameMapping.query.get_or_404(mapping_id)
-    return jsonify(_serialize_channel_name_mapping(mapping))
+    return jsonify(serialize_epg_channel_name_mapping(mapping))
 
 
 @epg_match_rules_bp.route("/name-mappings/<int:mapping_id>", methods=["PUT"])
@@ -597,7 +544,7 @@ def update_epg_channel_name_mapping(mapping_id):
     cache_service.clear_all()
     clear_fcc_pattern_cache()
 
-    return jsonify(_serialize_channel_name_mapping(mapping))
+    return jsonify(serialize_epg_channel_name_mapping(mapping))
 
 
 @epg_match_rules_bp.route("/name-mappings/<int:mapping_id>", methods=["DELETE"])

@@ -44,6 +44,8 @@ unknown
 # Marshmallow schema classes used by routes
 CredentialCreateSchema
 CredentialUpdateSchema
+EpgSourceCreateSchema
+EpgSourceUpdateSchema
 AccountRuleSetAssignSchema
 
 # Flask route functions - registered via @blueprint.route() decorators

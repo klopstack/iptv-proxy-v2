@@ -80,6 +80,57 @@ class CredentialUpdateSchema(Schema):
 
 
 # ============================================================================
+# EPG Source Schemas
+# ============================================================================
+
+EPG_SOURCE_TYPES = ("schedules_direct", "xmltv_url", "xmltv_grabber", "ppv_events")
+
+
+class EpgSourceCreateSchema(Schema):
+    """Schema for creating an EPG source"""
+
+    name = fields.Str(required=True, validate=lambda x: 1 <= len(x) <= 100)
+    source_type = fields.Str(required=True, validate=lambda x: x in EPG_SOURCE_TYPES)
+    account_id = fields.Int(validate=lambda x: x > 0, allow_none=True)
+    url = fields.Str(validate=lambda x: len(x) <= 500, allow_none=True)
+    sd_username = fields.Str(validate=lambda x: len(x) <= 100, allow_none=True)
+    sd_password = fields.Str(validate=lambda x: len(x) <= 100, allow_none=True)
+    xmltv_grabber = fields.Str(validate=lambda x: len(x) <= 100, allow_none=True)
+    xmltv_config_name = fields.Str(validate=lambda x: len(x) <= 100, allow_none=True)
+    xmltv_days = fields.Int(validate=lambda x: x > 0, load_default=7)
+    xmltv_offset = fields.Int(load_default=0)
+    xmltv_extra_args = fields.Str(allow_none=True)
+    priority = fields.Int(validate=lambda x: x > 0, load_default=100)
+    enabled = fields.Bool(load_default=True)
+
+    @validates_schema
+    def validate_source_requirements(self, data, **kwargs):
+        """Enforce type-specific required fields."""
+        source_type = data.get("source_type")
+        if source_type == "xmltv_grabber" and not data.get("xmltv_grabber"):
+            raise ValidationError({"xmltv_grabber": ["XMLTV grabber name is required"]})
+
+
+class EpgSourceUpdateSchema(Schema):
+    """Schema for updating an EPG source"""
+
+    name = fields.Str(validate=lambda x: 1 <= len(x) <= 100)
+    url = fields.Str(validate=lambda x: len(x) <= 500, allow_none=True)
+    priority = fields.Int(validate=lambda x: x > 0)
+    enabled = fields.Bool()
+    sd_username = fields.Str(validate=lambda x: len(x) <= 100, allow_none=True)
+    sd_password = fields.Str(validate=lambda x: len(x) <= 100, allow_none=True)
+    xmltv_grabber = fields.Str(validate=lambda x: len(x) <= 100, allow_none=True)
+    xmltv_config_name = fields.Str(validate=lambda x: len(x) <= 100, allow_none=True)
+    xmltv_days = fields.Int(validate=lambda x: x > 0)
+    xmltv_offset = fields.Int()
+    xmltv_extra_args = fields.Str(allow_none=True)
+
+    class Meta:
+        unknown = EXCLUDE
+
+
+# ============================================================================
 # Filter Schemas
 # ============================================================================
 

@@ -19,6 +19,8 @@ from schemas import (
     EpgMatchRuleSetCreateSchema,
     EpgMatchRuleSetUpdateSchema,
     EpgMatchRuleUpdateSchema,
+    EpgSourceCreateSchema,
+    EpgSourceUpdateSchema,
     FilterCreateSchema,
     FilterUpdateSchema,
     RuleSetCreateSchema,
@@ -80,6 +82,45 @@ class TestAccountSchemas:
         with pytest.raises(ValidationError) as exc:
             schema.load(data)
         assert "server" in exc.value.messages
+
+
+class TestEpgSourceSchemas:
+    """Tests for EPG source schemas"""
+
+    def test_epg_source_create_valid_xmltv_url(self):
+        schema = EpgSourceCreateSchema()
+        result = schema.load(
+            {
+                "name": "Guide",
+                "source_type": "xmltv_url",
+                "url": "http://example.com/epg.xml",
+            }
+        )
+        assert result["source_type"] == "xmltv_url"
+        assert result["priority"] == 100
+
+    def test_epg_source_create_missing_name(self):
+        schema = EpgSourceCreateSchema()
+        with pytest.raises(ValidationError) as exc:
+            schema.load({"source_type": "xmltv_url"})
+        assert "name" in exc.value.messages
+
+    def test_epg_source_create_invalid_type(self):
+        schema = EpgSourceCreateSchema()
+        with pytest.raises(ValidationError) as exc:
+            schema.load({"name": "Guide", "source_type": "provider"})
+        assert "source_type" in exc.value.messages
+
+    def test_epg_source_create_xmltv_grabber_requires_name(self):
+        schema = EpgSourceCreateSchema()
+        with pytest.raises(ValidationError) as exc:
+            schema.load({"name": "Grabber", "source_type": "xmltv_grabber"})
+        assert "xmltv_grabber" in exc.value.messages
+
+    def test_epg_source_update_partial(self):
+        schema = EpgSourceUpdateSchema()
+        result = schema.load({"priority": 25})
+        assert result["priority"] == 25
 
 
 class TestCredentialSchemas:
