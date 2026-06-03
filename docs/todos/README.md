@@ -2,7 +2,9 @@
 
 This directory contains detailed work items identified during the post-restructuring codebase audit (May 2026). Each document is self-contained: problem statement, affected files, proposed solution, acceptance criteria, and test plan.
 
-**Work through these in order.** Later items may depend on earlier ones (especially P0 channel-selection unification).
+**Open backlog (35 items):** see **[ROADMAP.md](./ROADMAP.md)** for waves, PR batches (A–U), dependencies, and parallel workstreams. Per-item specs stay in the linked TODO files below.
+
+**Work through items in roadmap order** (or pick one explicitly). Later items may depend on earlier ones (especially P0 channel-selection unification — now ✅).
 
 ## Status legend
 
@@ -287,13 +289,14 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 
 **Architecture review:** [admin-auth-and-deployment-security.md](../architecture/admin-auth-and-deployment-security.md), [api-contract-errors-and-responses.md](../architecture/api-contract-errors-and-responses.md), [channel-visibility-is-visible.md](../architecture/channel-visibility-is-visible.md), [scheduler-and-sync-orchestration.md](../architecture/scheduler-and-sync-orchestration.md), [epg-service-architecture.md](../architecture/epg-service-architecture.md), [frontend-architecture-debt.md](../architecture/frontend-architecture-debt.md), [schema-lifecycle-and-test-parity.md](../architecture/schema-lifecycle-and-test-parity.md), [api-layer-and-fat-routes.md](../architecture/api-layer-and-fat-routes.md)
 
-**Highest impact first:** 70 → 71 → 69 (operator safety). Auth docs: ✅ 68 + [DEPLOYMENT.md](../DEPLOYMENT.md).
+**Highest impact first (open work):** see [ROADMAP.md](./ROADMAP.md) — Wave 1 (69, 84, 75) → Wave 2 PPV (52–55) → 91. Auth docs: ✅ 68 + [DEPLOYMENT.md](../DEPLOYMENT.md). Scheduler semantics: ✅ 71.
 
 ### P6 findings summary
 
-**Critical bugs:**
-- EPG auto-matching ignores live filter return value (70)
-- Scheduler marks failed syncs success; timestamps advance on failure (71)
+**Critical bugs (fixed):**
+- ~~EPG auto-matching ignores live filter return value~~ (70 ✅)
+- ~~Scheduler marks failed syncs success; timestamps advance on failure~~ (71 ✅)
+- Scheduler status API lacks per-job failure metadata (91 — see [ROADMAP](./ROADMAP.md) Wave 4)
 
 **Security:**
 - Admin auth via Traefik + Authentik — documented in [DEPLOYMENT.md](../DEPLOYMENT.md) (TODO 68 ✅)
@@ -349,4 +352,5 @@ These items were derived from full codebase reviews covering:
 - Playlist config PUT lacks schema validation; slug lookup is O(n)
 - Provider EPG de-emphasized in UI with deprecation warnings (TODO 31 ✅)
 - Vitest coverage expanded across lib helpers (TODO 32 ✅)
-- MediaFlow/stream-factory tests added (TODO 26 ✅); EPG audit remediation (52) complete
+- MediaFlow/stream-factory tests added (TODO 26 ✅)
+- PPV audit remediation (52–67) and app-wide backlog (69–91): see [ROADMAP.md](./ROADMAP.md)
