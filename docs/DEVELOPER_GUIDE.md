@@ -714,6 +714,8 @@ run_epg_sync(source.id)
 
 ## Contributing Guidelines
 
+**Cursor agents:** Follow `.cursor/rules/git-parallel-pr-workflow.mdc` for parallel PR git safety (isolated clones, worktree limits).
+
 ### Code Review Checklist
 - [ ] Tests pass (`make test`)
 - [ ] Code quality checks pass (`make lint`)

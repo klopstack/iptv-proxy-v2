@@ -1,0 +1,50 @@
+---
+description: Safe git workflow for parallel PRs and agents
+alwaysApply: true
+---
+
+# Git Workflow for Parallel PRs and Agents
+
+## Prefer temporary full clones over worktrees
+
+For parallel PR work, use **isolated clones** (e.g. `/tmp/iptv-proxy-v2-pr-<short-name>` with their own `.git`). Push to `origin` from the clone; do not share `.git/objects` across parallel agents.
+
+Main repo `/home/benklop/repos/iptv-proxy-v2`: user integration only — avoid agent commits when possible.
+
+## Worktrees only when necessary
+
+If worktrees are required:
+
+- **Max 2** active linked worktrees on one repo
+- **One mutating git operation at a time** per repo (commit, rebase, merge, fetch+prune, worktree add/remove)
+- Parallel read-only ops (status, diff, tests) are OK
+
+## Cleanup after PR completion
+
+- `git worktree remove <path>` when PR pushed/merged
+- `git worktree prune`
+- `git branch -d <branch>` if merged locally
+- `rm -rf /tmp/iptv-proxy-v2-pr-*` when clone work is done
+
+## Never do as "repair"
+
+- Do NOT delete `.git/worktrees/*/index` or `.git/index` casually
+- Do NOT use `git commit --no-verify` unless the user explicitly requests it
+- Do NOT treat fsck "missing blob" as full re-clone when multiple worktrees exist — check per-worktree `git status` first
+
+## Diagnosis order when git errors
+
+1. `git worktree list`
+2. `git -C <failing-path> status`
+3. Fix failing worktree only (remove/recreate from `origin/<branch>`) OR use a fresh clone
+4. `git fsck --full` only after worktrees are healthy
+
+## Example clone workflow
+
+```bash
+git clone git@github.com:klopstack/iptv-proxy-v2.git /tmp/iptv-proxy-v2-pr-foo
+cd /tmp/iptv-proxy-v2-pr-foo
+git checkout -b feature/foo origin/main
+# edit, commit, push
+rm -rf /tmp/iptv-proxy-v2-pr-foo  # when done
+```
