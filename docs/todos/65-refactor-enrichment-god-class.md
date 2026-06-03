@@ -1,6 +1,6 @@
 # Refactor PPV enrichment service (phased god-class split)
 
-**Status:** ✅ Ready for review (Wave 8 / PR phase 1)  
+**Status:** 🟡 Phase 1 complete (PR #35); optional phases 2–3 → [102](./102-optional-ppv-module-splits.md)  
 **Priority:** P3  
 **Audit:** PPV audit, June 2026
 
@@ -65,6 +65,14 @@ Do **not** big-bang rewrite — each phase must keep tests green.
 - No reduction in assertion count.
 
 **Phase 1 run:** `venv/bin/pytest tests/ppv/test_enrichment*.py --no-cov` — 83 passed.
+
+## Completion
+
+- **Phase 1 — PR #35:** `enrichment/` package (`match_pipeline`, `detail_fetch`, `side_effects`, `service` coordinator)
+
+## Wave 9 continuation (optional)
+
+Phases 2–3 (`epg.py`, `extraction.py` splits): [102-optional-ppv-module-splits.md](./102-optional-ppv-module-splits.md) — PR batch **AA**
 
 ## Dependencies
 

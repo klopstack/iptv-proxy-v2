@@ -7,10 +7,17 @@ This document groups open TODOs into execution **waves** and suggested **PR batc
 
 ## Status snapshot
 
-| Track | Range | Open | Recently completed |
-|-------|-------|------|-------------------|
-| P5 — PPV | 52–67 | 15 | **67** (Wave 7 PR V) |
-| P6 — App-wide | 68–94 | 16 | 68, 69, 70, 71, 72, 73, 74, 75, 80, 81, 84, 86, **87**, **88**, **94** |
+| Track | Range | Open | Notes |
+|-------|-------|------|-------|
+| P5 — PPV | 52–67 | **0** (optional **102**) | Waves 2–3 + 7 ✅; phase 1 of **65** ✅ |
+| P6 — App-wide | 68–95 | **0** (parent stubs **78**, **85**, **92**, **95**) | Waves 1–8 phase 1 ✅ |
+| **Wave 9** | 96–100 | **5** | Route splits, frontend ESM, parallel pytest |
+| **Wave 10** | 101 | **1** | Final doc review (after Wave 9) |
+| Optional | 102 | **1** | PPV `epg.py` / `extraction.py` splits |
+
+**Total open (required):** 6 (TODOs 96–101). **With optional 102:** 7.
+
+Waves **1–7** ✅. Wave **8** phase 1 ✅ (PRs #35–38: TODOs 65, 66, 78 phase 1, 79). Remaining structural work is **Wave 9** → **Wave 10**.
 
 Update [README.md](./README.md) status columns as work lands. Mark PR IDs in each TODO’s **Completion** section.
 
@@ -204,67 +211,123 @@ Update [README.md](./README.md) status columns as work lands. Mark PR IDs in eac
 
 ---
 
-## Wave 7 — DX, documentation, CI
+## Wave 7 — DX, documentation, CI ✅
 
-**Goal:** Docs match reality; stronger CI after test stability.
+**Goal:** Docs match reality; stronger CI after test stability.  
+**Completed:** PR #34 (TODOs 87, 88, 67).
 
-| TODO | When | Summary |
-|------|------|---------|
-| [87](./87-fix-stale-documentation.md) | Early + after 72/73 | API_REFERENCE, missing P4 links, P6 summary drift |
-| [88](./88-expand-ci-quality-gates.md) | After 80, 86 | vulture, Docker PR build, pre-commit |
-| [67](./67-ppv-misc-cleanup.md) | Anytime after Wave 2 | Constants, heuristics, docstrings |
-
-**PR V (Wave 7):** [87](./87-fix-stale-documentation.md) + [88](./88-expand-ci-quality-gates.md) + [67](./67-ppv-misc-cleanup.md) — documentation sync, CI gates, PPV misc cleanup.
+| TODO | Summary |
+|------|---------|
+| [87](./87-fix-stale-documentation.md) ✅ | API_REFERENCE, missing P4 links, P6 summary drift |
+| [88](./88-expand-ci-quality-gates.md) ✅ | vulture, Docker PR build, pre-commit |
+| [67](./67-ppv-misc-cleanup.md) ✅ | Constants, heuristics, docstrings |
 
 ---
 
-## Wave 8 — Large structural refactors
+## Wave 8 — Large structural refactors (phase 1) ✅
 
 **Goal:** Maintainability; **one TODO per PR**, dedicated review time.  
-**Prerequisites:** Waves 2–3 (PPV), Wave 5 (API/schema) where noted.
+**Completed:** PRs #35–38 (June 2026).
 
-| TODO | Size | Prerequisite |
-|------|------|--------------|
-| [65](./65-refactor-enrichment-god-class.md) | L | Waves 2–3 |
-| [66](./66-detail-thread-and-epg-side-effect-decoupling.md) | M | 65 |
-| [78](./78-split-fat-route-modules.md) | L | 79, 72–73 helpful |
-| [79](./79-extract-shared-route-serializers.md) | M | Can precede 78 |
+| TODO | PR | Outcome |
+|------|-----|---------|
+| [65](./65-refactor-enrichment-god-class.md) phase 1 | #35 | `enrichment/` package split |
+| [66](./66-detail-thread-and-epg-side-effect-decoupling.md) | #37 | Detail thread + EPG hooks decoupled |
+| [78](./78-split-fat-route-modules.md) phase 1 | #36 | `AccountAdminService`; `accounts.py` −32% |
+| [79](./79-extract-shared-route-serializers.md) | #38 | Shared serializers + schema validation |
 
-Defer **64** until **53** if not done in Wave 3.
+**Remaining from Wave 8 parents:** continued in **Wave 9** (96–98, 99, optional 102). See parent TODOs 78, 85, 65.
+
+---
+
+## Wave 9 — Completion and follow-ups
+
+**Goal:** Finish phased route splits, frontend ESM migration, test parallelization, and CDN hardening.  
+**Est. effort:** 2–3 weeks  
+**Prerequisites:** Wave 8 phase 1 ✅; Waves 2–3 PPV ✅; TODO 79 ✅; TODO 83 ✅.
+
+```text
+W: 96 → 97
+X: 98 (after W recommended)
+Y: 99 (parallel with W/X if separate contributor)
+Z: 100 (last — stable suite before xdist CI)
+AA: 102 (optional, anytime)
+```
+
+| Order | TODO | Parent | Summary |
+|-------|------|--------|---------|
+| 9a | [96](./96-extract-epg-match-rules-routes.md) | 78 phase 2 | Extract `routes/epg/match_rules.py` |
+| 9b | [97](./97-extract-config-transfer-routes.md) | 78 phase 3 | Extract `routes/config_transfer.py` |
+| 9c | [98](./98-fcc-patterns-split-and-cdn-sri.md) | 78 phase 4 + 92 | FCC routes + CDN SRI |
+| 9d | [99](./99-esm-tab-migration-and-eslint.md) | 85 phases 2–3 | ESM tabs + ESLint |
+| 9e | [100](./100-parallelize-pytest-xdist.md) | 95 | pytest-xdist per-worker DB |
+| 9f (opt) | [102](./102-optional-ppv-module-splits.md) | 65 phases 2–3 | Split `epg.py`, `extraction.py` |
+
+### PR batches — Wave 9
+
+| PR | TODOs | Theme | Size |
+|----|-------|-------|------|
+| **W** | 96, 97 | Route splits: match_rules + config_transfer | M (split 2 PRs) |
+| **X** | 98 | FCC patterns split + CDN SRI | M |
+| **Y** | 99 | ESM tab migration + ESLint | M–L (multi-PR OK) |
+| **Z** | 100 | Parallel pytest (pytest-xdist) | M |
+| **AA** | 102 | Optional PPV module splits | L (optional) |
+
+**Suggested merge order:** **W** (96 → 97) → **X** → **Y** (can overlap **W**/**X**) → **Z** → **AA** if scheduled → then Wave 10.
+
+---
+
+## Wave 10 — Final documentation review
+
+**Goal:** Single doc sync after Wave 9 code lands — no new features.  
+**Gate:** Run [101](./101-final-documentation-review.md) **after** batches **W–Z** merge (and **AA** if done).
+
+| TODO | Summary |
+|------|---------|
+| [101](./101-final-documentation-review.md) | README, ROADMAP, API_REFERENCE, DEVELOPER_GUIDE, TODO index, Completion links |
+
+Closes residual drift from ongoing wave merges (extends [87](./87-fix-stale-documentation.md) ✅).
 
 ---
 
 ## Master PR batch index
 
-Quick reference for all suggested pull requests (A–U + large singles).
+Quick reference for all suggested pull requests (A–AA + Wave 8 singles).
 
-| PR | Wave | TODOs | Size |
-|----|------|-------|------|
-| A | 1 | 69, 84 | S–M |
-| B | 1 | 75, 74 | M |
-| C | 2 | 52, 54 | S |
-| D | 2 | 55 | **L** |
-| E | 2 | 53, 56 | M |
-| F | 2 | 57, 58 | M |
-| G | 2 | 59 | S–M |
-| H | 3 | 60, 61 | S |
-| I | 3 | 62 | M |
-| J | 3 | 64, 63 | M–L |
-| K | 4 | 91 | M |
-| L | 4 | 76 | M |
-| M | 4 | 77 | M |
-| N | 4 | 89 | **L** |
-| O | 4 | 90 | **L** |
-| P | 5 | 72, 73 | M |
-| Q | 5 | 80, 81 | M |
-| R | 5 | 82 | M |
-| S | 6 | 83 | M |
-| T | 6 | 85 | M |
-| U | 6 | 86 | M |
-| — | 8 | 65 | **L** |
-| — | 8 | 66 | M |
-| — | 8 | 79 | M |
-| — | 8 | 78 | **L** |
+| PR | Wave | TODOs | Size | Status |
+|----|------|-------|------|--------|
+| A | 1 | 69, 84 | S–M | ✅ #10, #17 |
+| B | 1 | 75, 74 | M | ✅ #11 |
+| C | 2 | 52, 54 | S | ✅ #12 |
+| D | 2 | 55 | **L** | ✅ #13 |
+| E | 2 | 53, 56 | M | ✅ #14 |
+| F | 2 | 57, 58 | M | ✅ #15 |
+| G | 2 | 59 | S–M | ✅ #16 |
+| H | 3 | 60, 61 | S | ✅ #19 |
+| I | 3 | 62, 94 | M | ✅ #20, #27 |
+| J | 3 | 64, 63 | M–L | ✅ #21 |
+| K | 4 | 91 | M | ✅ #22 |
+| L | 4 | 76 | M | ✅ #23 |
+| M | 4 | 77 | M | ✅ #24 |
+| N | 4 | 89 | **L** | ✅ #25 |
+| O | 4 | 90 | **L** | ✅ #26 |
+| P | 5 | 72, 73 | M | ✅ #30 |
+| Q | 5 | 80, 81 | M | ✅ #29 |
+| R | 5 | 82 | M | ✅ #28 |
+| S | 6 | 83 | M | ✅ #32 |
+| T | 6 | 85 phase 1 | M | ✅ #33 |
+| U | 6 | 86 | M | ✅ #31 |
+| V | 7 | 87, 88, 67 | M | ✅ #34 |
+| — | 8 | 65 phase 1 | **L** | ✅ #35 |
+| — | 8 | 66 | M | ✅ #37 |
+| — | 8 | 78 phase 1 | **L** | ✅ #36 |
+| — | 8 | 79 | M | ✅ #38 |
+| **W** | 9 | 96, 97 | M | ⬜ |
+| **X** | 9 | 98 | M | ⬜ |
+| **Y** | 9 | 99 | M–L | ⬜ |
+| **Z** | 9 | 100 | M | ⬜ |
+| **AA** | 9 | 102 (opt) | L | ⬜ optional |
+| — | 10 | 101 | S | ⬜ after Wave 9 |
 
 **Size legend:** S = small (1–2 days), M = medium (3–5 days), L = large (1+ week, migration or major refactor).
 
@@ -308,14 +371,17 @@ Wave 6 (83–86) fits either track after Wave 1 or 5.
 
 ---
 
-## Recommended “next five” (starting point)
+## Recommended “next five” (Wave 9)
 
-If resuming without a assigned wave:
+If resuming after Waves 1–8:
 
-1. **[52](./52-fix-details-fetched-stat.md) + [54](./54-route-enrichment-through-persist-match.md)** — PPV metrics/persist (PR C)  
-3. **[55](./55-multi-source-events-schema-and-detail-fetch.md)** — plan migration window (PR D)  
-4. **[91](./91-scheduler-status-api-failure-metadata.md)** — scheduler failure visibility (PR K)  
-5. **[76](./76-deduplicate-epg-sync-infrastructure.md)** — EPG sync dedup (PR L)  
+1. **[96](./96-extract-epg-match-rules-routes.md)** — match_rules route split (PR **W**, first)  
+2. **[97](./97-extract-config-transfer-routes.md)** — config transfer split (PR **W**, second)  
+3. **[98](./98-fcc-patterns-split-and-cdn-sri.md)** — FCC + CDN SRI (PR **X**)  
+4. **[99](./99-esm-tab-migration-and-eslint.md)** — ESM tabs + ESLint (PR **Y**; can parallelize with W/X)  
+5. **[100](./100-parallelize-pytest-xdist.md)** — pytest-xdist (PR **Z**; after suite stable)  
+
+Then **[101](./101-final-documentation-review.md)** (Wave 10). Optional: **[102](./102-optional-ppv-module-splits.md)** (PR **AA**).
 
 ---
 
@@ -338,11 +404,9 @@ These closed items underpin the open work:
 
 | TODO | Defer until |
 |------|-------------|
-| 88 | 80, 86 reduce CI flake |
-| 78 | 79 + 72/73 |
-| 65, 89, 90 | Dedicated milestones after waves 2–4 |
-| 64 | 53 merged |
-| 67 | Filler between PRs |
+| 102 | Wave 9 **W–Z** if capacity limited; no product blocker |
+| 101 | All Wave 9 implementation PRs merged |
+| Parent 92, 95 | Use focused TODOs 98, 100 instead |
 
 ---
 

@@ -1,6 +1,6 @@
 # CDN script Subresource Integrity (SRI)
 
-**Status:** ⬜ Not started  
+**Status:** ⬜ Continued in Wave 9 — [98-fcc-patterns-split-and-cdn-sri.md](./98-fcc-patterns-split-and-cdn-sri.md) (PR batch **X**)  
 **Priority:** P3  
 **Deferred from:** [84-docker-and-secrets-hardening.md](./84-docker-and-secrets-hardening.md) (June 2026)
 

@@ -2,7 +2,13 @@
 
 This directory contains detailed work items identified during the post-restructuring codebase audit (May 2026). Each document is self-contained: problem statement, affected files, proposed solution, acceptance criteria, and test plan.
 
-**Open backlog (36 items):** see **[ROADMAP.md](./ROADMAP.md)** for waves, PR batches (A–U), dependencies, and parallel workstreams. Per-item specs stay in the linked TODO files below.
+**Open backlog (6 required + 1 optional):** see **[ROADMAP.md](./ROADMAP.md)** for waves, PR batches (A–AA), and Wave 9–10. Per-item specs stay in the linked TODO files below.
+
+| Required | Optional |
+|----------|----------|
+| [96](./96-extract-epg-match-rules-routes.md)–[101](./101-final-documentation-review.md) | [102](./102-optional-ppv-module-splits.md) |
+
+Waves **1–8** (phase 1) ✅ — merged PRs #10–38. Remaining work is **Wave 9** → **Wave 10** (final doc review).
 
 **Work through items in roadmap order** (or pick one explicitly). Later items may depend on earlier ones (especially P0 channel-selection unification — now ✅).
 
@@ -179,19 +185,19 @@ Full-stack review of PPV handling: enrichment pipeline, multi-source events (MiL
 | # | Document | Status | Summary |
 |---|----------|--------|---------|
 | 52 | [52-fix-details-fetched-stat.md](./52-fix-details-fetched-stat.md) | ✅ | `details_fetched` cumulative stat is never incremented |
-| 53 | [53-unify-ppv-detection-modules.md](./53-unify-ppv-detection-modules.md) | ⬜ | Consolidate `services/epg/ppv.py` and `services/ppv/detection.py` |
+| 53 | [53-unify-ppv-detection-modules.md](./53-unify-ppv-detection-modules.md) | ✅ | Consolidate `services/epg/ppv.py` and `services/ppv/detection.py` ([PR #14](https://github.com/klopstack/iptv-proxy-v2/pull/14)) |
 | 54 | [54-route-enrichment-through-persist-match.md](./54-route-enrichment-through-persist-match.md) | ✅ | Calendar path bypasses `persist_match`; fix counters and link errors |
 | 55 | [55-multi-source-events-schema-and-detail-fetch.md](./55-multi-source-events-schema-and-detail-fetch.md) | ✅ | Composite `(external_id, source)` unique; MiLB detail fetch |
-| 56 | [56-eliminate-double-enrichment-classification.md](./56-eliminate-double-enrichment-classification.md) | ⬜ | Stop running `classify_ppv_enrichment` + `extract_all` twice per channel |
-| 57 | [57-centralize-sport-key-mappings.md](./57-centralize-sport-key-mappings.md) | ⬜ | Single sport registry for timezone, context, matching |
-| 58 | [58-fix-team-resolution-and-validation.md](./58-fix-team-resolution-and-validation.md) | ⬜ | Substring team matching, WNBA in SPORTS, validation alignment |
+| 56 | [56-eliminate-double-enrichment-classification.md](./56-eliminate-double-enrichment-classification.md) | ✅ | Stop running `classify_ppv_enrichment` + `extract_all` twice per channel ([PR #14](https://github.com/klopstack/iptv-proxy-v2/pull/14)) |
+| 57 | [57-centralize-sport-key-mappings.md](./57-centralize-sport-key-mappings.md) | ✅ | Single sport registry for timezone, context, matching ([PR #15](https://github.com/klopstack/iptv-proxy-v2/pull/15)) |
+| 58 | [58-fix-team-resolution-and-validation.md](./58-fix-team-resolution-and-validation.md) | ✅ | Substring team matching, WNBA in SPORTS, validation alignment ([PR #15](https://github.com/klopstack/iptv-proxy-v2/pull/15)) |
 | 59 | [59-harden-ppv-enrichment-routes.md](./59-harden-ppv-enrichment-routes.md) | ✅ | Error handling, memory footgun, queue stats logging (PR #16) |
-| 60 | [60-add-persistence-unit-tests.md](./60-add-persistence-unit-tests.md) | 🔄 | Unit tests for `services/ppv/persistence.py` (PR #19) |
-| 61 | [61-add-channel-matching-tests.md](./61-add-channel-matching-tests.md) | 🔄 | Unit tests for UTC calendar-day grouping (PR #19) |
+| 60 | [60-add-persistence-unit-tests.md](./60-add-persistence-unit-tests.md) | ✅ | Unit tests for `services/ppv/persistence.py` ([PR #19](https://github.com/klopstack/iptv-proxy-v2/pull/19)) |
+| 61 | [61-add-channel-matching-tests.md](./61-add-channel-matching-tests.md) | ✅ | Unit tests for UTC calendar-day grouping ([PR #19](https://github.com/klopstack/iptv-proxy-v2/pull/19)) |
 | 62 | [62-add-milb-ppv-integration-test.md](./62-add-milb-ppv-integration-test.md) | ✅ | End-to-end MiLB channel → Event with `mlb_stats_api` source |
 | 63 | [63-expand-ppv-test-coverage.md](./63-expand-ppv-test-coverage.md) | ✅ | Orchestrator, cleanup, football-data provider, integration ([PR #21](https://github.com/klopstack/iptv-proxy-v2/pull/21)) |
 | 64 | [64-consolidate-ppv-detection-tests.md](./64-consolidate-ppv-detection-tests.md) | ✅ | Deduplicate overlapping detection test modules ([PR #21](https://github.com/klopstack/iptv-proxy-v2/pull/21)) |
-| 65 | [65-refactor-enrichment-god-class.md](./65-refactor-enrichment-god-class.md) | ⬜ | Phased split of ~860-line enrichment service |
+| 65 | [65-refactor-enrichment-god-class.md](./65-refactor-enrichment-god-class.md) | 🟡 | Phase 1 ✅ ([PR #35](https://github.com/klopstack/iptv-proxy-v2/pull/35)); optional phases 2–3 → [102](./102-optional-ppv-module-splits.md) |
 | 66 | [66-detail-thread-and-epg-side-effect-decoupling.md](./66-detail-thread-and-epg-side-effect-decoupling.md) | ✅ | Replace daemon detail thread; optional EPG hooks |
 | 67 | [67-ppv-misc-cleanup.md](./67-ppv-misc-cleanup.md) | ✅ | Constants, heuristics validation, provider health, docstrings |
 
@@ -255,26 +261,56 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 | 73 | [73-standardize-api-response-shapes.md](./73-standardize-api-response-shapes.md) | ✅ | Inconsistent success/error JSON envelopes |
 | 74 | [74-remove-dead-routes-and-dangerous-patterns.md](./74-remove-dead-routes-and-dangerous-patterns.md) | ✅ | Dead blueprint, duplicate FCC/categories endpoints |
 | 75 | [75-fix-side-effect-get-account-categories.md](./75-fix-side-effect-get-account-categories.md) | ✅ | GET categories triggers upstream IPTV fetch |
-| 76 | [76-deduplicate-epg-sync-infrastructure.md](./76-deduplicate-epg-sync-infrastructure.md) | ⬜ | Program persistence, sync locks, EAST/WEST constants |
+| 76 | [76-deduplicate-epg-sync-infrastructure.md](./76-deduplicate-epg-sync-infrastructure.md) | ✅ | Program persistence, sync locks, EAST/WEST constants ([PR #23](https://github.com/klopstack/iptv-proxy-v2/pull/23)) |
 | 77 | [77-centralize-tag-loading-and-category-sync-policy.md](./77-centralize-tag-loading-and-category-sync-policy.md) | ✅ | Tag loader N+1; category sync failure policy |
-| 78 | [78-split-fat-route-modules.md](./78-split-fat-route-modules.md) | ⬜ | Phased extraction from 500–1500 line route files |
-| 79 | [79-extract-shared-route-serializers.md](./79-extract-shared-route-serializers.md) | ⬜ | Shared CRUD serializers and Marshmallow schemas |
+| 78 | [78-split-fat-route-modules.md](./78-split-fat-route-modules.md) | 🟡 | Phase 1 ✅ ([PR #36](https://github.com/klopstack/iptv-proxy-v2/pull/36)); phases 2–4 → [96](./96-extract-epg-match-rules-routes.md)–[98](./98-fcc-patterns-split-and-cdn-sri.md) |
+| 79 | [79-extract-shared-route-serializers.md](./79-extract-shared-route-serializers.md) | ✅ | Shared CRUD serializers and Marshmallow schemas ([PR #38](https://github.com/klopstack/iptv-proxy-v2/pull/38)) |
 | 80 | [80-align-test-db-with-production-schema.md](./80-align-test-db-with-production-schema.md) | ✅ | PPV queue index on model; expanded schema parity tests |
 | 81 | [81-model-fk-ondelete-alignment.md](./81-model-fk-ondelete-alignment.md) | ✅ | FK ondelete alignment; migration runner FK pragma |
 | 82 | [82-scheduled-data-retention.md](./82-scheduled-data-retention.md) | ✅ | Scheduled event + image cache cleanup |
-| 83 | [83-xss-audit-legacy-frontend.md](./83-xss-audit-legacy-frontend.md) | ⬜ | innerHTML with API data in legacy JS + TagSelector |
+| 83 | [83-xss-audit-legacy-frontend.md](./83-xss-audit-legacy-frontend.md) | ✅ | innerHTML with API data in legacy JS + TagSelector ([PR #32](https://github.com/klopstack/iptv-proxy-v2/pull/32)) |
 | 84 | [84-docker-and-secrets-hardening.md](./84-docker-and-secrets-hardening.md) | ✅ | `.dockerignore`, non-root container, Flask sessions disabled (no SECRET_KEY) |
-| 85 | [85-frontend-deduplication-and-esm-migration.md](./85-frontend-deduplication-and-esm-migration.md) | 🟡 | Phase 1 done (PR T); tab ESM migration remains |
-| 86 | [86-web-smoke-tests-and-pytest-consolidation.md](./86-web-smoke-tests-and-pytest-consolidation.md) | ⬜ | Admin page smoke tests; duplicate pytest fixtures |
+| 85 | [85-frontend-deduplication-and-esm-migration.md](./85-frontend-deduplication-and-esm-migration.md) | 🟡 | Phase 1 ✅ ([PR #33](https://github.com/klopstack/iptv-proxy-v2/pull/33)); phases 2–3 → [99](./99-esm-tab-migration-and-eslint.md) |
+| 86 | [86-web-smoke-tests-and-pytest-consolidation.md](./86-web-smoke-tests-and-pytest-consolidation.md) | ✅ | Admin page smoke tests; duplicate pytest fixtures ([PR #31](https://github.com/klopstack/iptv-proxy-v2/pull/31)) |
 | 87 | [87-fix-stale-documentation.md](./87-fix-stale-documentation.md) | ✅ | API_REFERENCE auth/Xtream URLs; missing P4 todo files |
 | 88 | [88-expand-ci-quality-gates.md](./88-expand-ci-quality-gates.md) | ✅ | vulture, Docker build on PR, pre-commit tests |
 | 89 | [89-refactor-scheduler-job-registry.md](./89-refactor-scheduler-job-registry.md) | ✅ | Scheduler job registry; coordinator < 400 lines |
-| 90 | [90-split-epg-programs-and-decouple-sync.md](./90-split-epg-programs-and-decouple-sync.md) | ⬜ | Split programs.py; decouple sync post-processing |
-| 92 | [92-cdn-script-sri-hardening.md](./92-cdn-script-sri-hardening.md) | ⬜ | CDN Subresource Integrity (deferred from 84) |
+| 90 | [90-split-epg-programs-and-decouple-sync.md](./90-split-epg-programs-and-decouple-sync.md) | ✅ | Split programs.py; decouple sync post-processing ([PR #26](https://github.com/klopstack/iptv-proxy-v2/pull/26)) |
+| 92 | [92-cdn-script-sri-hardening.md](./92-cdn-script-sri-hardening.md) | 🟡 | Continued in [98](./98-fcc-patterns-split-and-cdn-sri.md) (Wave 9 PR **X**) |
 | 94 | [94-speed-up-thesportsdb-tests-no-live-http.md](./94-speed-up-thesportsdb-tests-no-live-http.md) | ✅ | Fix stale SDK mocks; stop live TheSportsDB retry loops in unit tests |
-| 95 | [95-parallelize-pytest-suite.md](./95-parallelize-pytest-suite.md) | ⬜ | pytest-xdist with per-worker DB paths; faster local/CI runs |
+| 95 | [95-parallelize-pytest-suite.md](./95-parallelize-pytest-suite.md) | 🟡 | Continued in [100](./100-parallelize-pytest-xdist.md) (Wave 9 PR **Z**) |
 
-### Recommended order for items 68–90
+### P5 / P6 summary (June 2026)
+
+| Track | Total | Open | Notes |
+|-------|-------|------|-------|
+| P5 (52–67) | 16 | **0** | All required items ✅; **65** phase 1 ✅; optional **102** |
+| P6 (68–95) | 27 | **0** | Waves 1–8 ✅; parent stubs **78**, **85**, **92**, **95** point to Wave 9 |
+| Wave 9 (96–100) | 5 | **5** | See [ROADMAP](./ROADMAP.md) batches **W–Z** |
+| Wave 10 (101) | 1 | **1** | Final doc review after Wave 9 |
+
+---
+
+## Wave 9 — Completion and follow-ups (June 2026)
+
+Phased remainders from TODOs 78, 85, 92, 95; optional PPV splits from TODO 65. Specs in each file; order in [ROADMAP.md](./ROADMAP.md).
+
+| # | Document | Status | Summary |
+|---|----------|--------|---------|
+| 96 | [96-extract-epg-match-rules-routes.md](./96-extract-epg-match-rules-routes.md) | ⬜ | TODO 78 phase 2: extract `routes/epg/match_rules.py` (PR **W**) |
+| 97 | [97-extract-config-transfer-routes.md](./97-extract-config-transfer-routes.md) | ⬜ | TODO 78 phase 3: extract `routes/config_transfer.py` (PR **W**) |
+| 98 | [98-fcc-patterns-split-and-cdn-sri.md](./98-fcc-patterns-split-and-cdn-sri.md) | ⬜ | TODO 78 phase 4 + 92: FCC routes + CDN SRI (PR **X**) |
+| 99 | [99-esm-tab-migration-and-eslint.md](./99-esm-tab-migration-and-eslint.md) | ⬜ | TODO 85 phases 2–3: ESM tabs + ESLint (PR **Y**) |
+| 100 | [100-parallelize-pytest-xdist.md](./100-parallelize-pytest-xdist.md) | ⬜ | TODO 95: pytest-xdist per-worker DB (PR **Z**) |
+| 102 | [102-optional-ppv-module-splits.md](./102-optional-ppv-module-splits.md) | ⬜ | Optional TODO 65 phases 2–3: `epg.py`, `extraction.py` (PR **AA**) |
+
+### Wave 10 — Final documentation review
+
+| # | Document | Status | Summary |
+|---|----------|--------|---------|
+| 101 | [101-final-documentation-review.md](./101-final-documentation-review.md) | ⬜ | Sync README, ROADMAP, API_REFERENCE, DEVELOPER_GUIDE, TODO index (after Wave 9) |
+
+### Recommended order for items 68–90 (historical)
 
 ```
 70-is-visible-bug ──► 71-scheduler-semantics ──► 91-scheduler-failure-status-api
@@ -292,7 +328,7 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 
 **Architecture review:** [admin-auth-and-deployment-security.md](../architecture/admin-auth-and-deployment-security.md), [api-contract-errors-and-responses.md](../architecture/api-contract-errors-and-responses.md), [channel-visibility-is-visible.md](../architecture/channel-visibility-is-visible.md), [scheduler-and-sync-orchestration.md](../architecture/scheduler-and-sync-orchestration.md), [epg-service-architecture.md](../architecture/epg-service-architecture.md), [frontend-architecture-debt.md](../architecture/frontend-architecture-debt.md), [schema-lifecycle-and-test-parity.md](../architecture/schema-lifecycle-and-test-parity.md), [api-layer-and-fat-routes.md](../architecture/api-layer-and-fat-routes.md)
 
-**Highest impact first (open work):** see [ROADMAP.md](./ROADMAP.md) — Wave 2 PPV (52–55) → 91. Wave 1 ✅ (69, 84, 75, 74). Auth docs: ✅ 68 + [DEPLOYMENT.md](../DEPLOYMENT.md). Scheduler semantics: ✅ 71.
+**Highest impact first (open work):** see [ROADMAP.md](./ROADMAP.md) — **Wave 9** (96 → 97 → 98 → 99 → 100) → **Wave 10** (101). Waves 1–8 ✅ (PRs #10–38).
 
 ### P6 findings summary
 
@@ -356,4 +392,4 @@ These items were derived from full codebase reviews covering:
 - Provider EPG de-emphasized in UI with deprecation warnings (TODO 31 ✅)
 - Vitest coverage expanded across lib helpers (TODO 32 ✅)
 - MediaFlow/stream-factory tests added (TODO 26 ✅)
-- PPV audit remediation (52–67) and app-wide backlog (69–91): see [ROADMAP.md](./ROADMAP.md)
+- PPV audit remediation (52–67) ✅; app-wide backlog (68–95) ✅; remaining: Wave 9–10 — see [ROADMAP.md](./ROADMAP.md)

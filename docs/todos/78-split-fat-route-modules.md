@@ -1,9 +1,8 @@
 # Split fat route modules (phased extraction)
 
-**Status:** 🔄 In progress (phase 1 — accounts.py)  
+**Status:** 🟡 Phase 1 complete; phases 2–4 → Wave 9 ([96](./96-extract-epg-match-rules-routes.md)–[98](./98-fcc-patterns-split-and-cdn-sri.md))  
 **Priority:** P2  
-**Audit:** Application-wide audit, June 2026  
-**Branch:** `wave8/pr-78-split-fat-routes`
+**Audit:** Application-wide audit, June 2026
 
 ## Problem
 
@@ -51,5 +50,17 @@ Routes become: parse request → call service → serialize response.
 
 ## Dependencies
 
-- TODO 79 (shared serializers) helps FCC/config phases — phase 1 avoids serializer overlap; rebase after 79 merges for credential schema validation
+- TODO 79 (shared serializers) ✅ — helps FCC/config phases
 - See `docs/architecture/api-layer-and-fat-routes.md`
+
+## Wave 9 continuation
+
+| Phase | TODO | PR batch |
+|-------|------|----------|
+| 2 — `epg/match_rules.py` | [96](./96-extract-epg-match-rules-routes.md) | **W** |
+| 3 — `config_transfer.py` | [97](./97-extract-config-transfer-routes.md) | **W** |
+| 4 — `fcc_match_patterns.py` + CDN SRI | [98](./98-fcc-patterns-split-and-cdn-sri.md) | **X** |
+
+## Completion
+
+- **Phase 1 — PR #36:** `AccountAdminService`; `accounts.py` 1,381 → 932 lines (−32%); `tests/test_account_admin_service.py`
