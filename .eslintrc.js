@@ -22,8 +22,19 @@ module.exports = {
     parseUtcTimestamp: 'readonly',
     apiUnwrapMutation: 'readonly',
     apiUnwrapData: 'readonly',
-    // Loaded from static/js/epg_sources.js in EPG templates
-    initEpgSourcesProgressPolling: 'readonly'
+    initEpgSourcesProgressPolling: 'readonly',
+    EpgManagementState: 'readonly',
+    mpegts: 'readonly',
+    showToast: 'readonly',
+    populateGrabberSelect: 'readonly',
+    openSearchLineupsModal: 'readonly',
+    viewStations: 'readonly',
+    populateRuleAccountDropdown: 'readonly',
+    loadRulesets: 'readonly',
+    loadRulesForRuleset: 'readonly',
+    loadMappings: 'readonly',
+    resetRulePreview: 'readonly',
+    event: 'readonly'
   },
   // JavaScript rules (for script tags)
   rules: {

@@ -1,6 +1,6 @@
 # ESM tab migration and ESLint (TODO 85 phases 2–3)
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Complete (tabs 1–3 + ESLint)  
 **Priority:** P2  
 **Parent:** [85-frontend-deduplication-and-esm-migration.md](./85-frontend-deduplication-and-esm-migration.md) (phase 1 ✅ PR #33)  
 **Roadmap:** [ROADMAP.md](./ROADMAP.md) — Wave 9, PR batch **Y**
@@ -40,10 +40,10 @@ Consolidate per-page inline `escapeHtml` in other templates when each page gets 
 
 ## Acceptance criteria
 
-- [ ] At least tabs 1–3 migrated to ESM `pages/` modules with Vitest coverage for new modules
-- [ ] Legacy script tags removed for migrated tabs; load order documented in `FRONTEND_JS.md`
-- [ ] ESLint passes on migrated `pages/` code (config updated if needed)
-- [ ] Existing Vitest suite green; no admin UI regressions on migrated tabs
+- [x] At least tabs 1–3 migrated to ESM `pages/` modules with Vitest coverage for new modules
+- [x] Legacy script tags removed for migrated tabs; load order documented in `FRONTEND_JS.md`
+- [x] ESLint passes on migrated `pages/` code (config updated if needed)
+- [x] Existing Vitest suite green; no admin UI regressions on migrated tabs
 
 ## Test plan
 
@@ -62,4 +62,6 @@ npm run lint          # ESLint after phase 3
 
 ## Completion
 
-_(Add PR link(s) when merged — may be multiple PRs within batch Y.)_
+- **PR:** _(add link after merge)_
+- Migrated: `epg_sources_page.js`, `epg_mappings_page.js`, `epg_manual_mapping_page.js`, `match_rules_rulesets_page.js`, `match_rules_rules_page.js`
+- New lib helpers: `epg_dom_utils.js`, `epg_mappings_helpers.js`, `match_rules_rulesets_helpers.js`; `window.EpgManagementState` bridge in `epg_common.js`

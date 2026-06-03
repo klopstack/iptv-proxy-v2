@@ -1,7 +1,8 @@
-// ============================================================================
-// EPG Match Rulesets
-// ============================================================================
-
+/**
+ * EPG match rulesets tab (ESM).
+ */
+import { escapeHtml } from '../lib/escape_html.js';
+import { buildAssignedAccountsBadgeHtml } from '../lib/match_rules_rulesets_helpers.js';
 const expandedRulesets = new Set();
 
 async function loadRulesets(preserveExpanded = false) {
@@ -38,11 +39,7 @@ async function loadRulesets(preserveExpanded = false) {
                 const status = ruleset.enabled ? '<span class="badge bg-success">Enabled</span>' : '<span class="badge bg-secondary">Disabled</span>';
                 const isExpanded = expandedRulesets.has(ruleset.id);
                 
-                let assignedAccountsBadges = '';
-                if (ruleset.assigned_accounts && ruleset.assigned_accounts.length > 0) {
-                    const accountNames = ruleset.assigned_accounts.map(a => a.name).join(', ');
-                    assignedAccountsBadges = `<span class="badge bg-info ms-2" title="Assigned to: ${accountNames}"><i class="bi bi-person-check"></i> ${ruleset.assigned_accounts.length} account${ruleset.assigned_accounts.length > 1 ? 's' : ''}</span>`;
-                }
+                const assignedAccountsBadges = buildAssignedAccountsBadgeHtml(ruleset.assigned_accounts);
                 
                 html += `
                     <div class="card mb-3">
@@ -170,7 +167,7 @@ function showCreateRulesetModal() {
     document.getElementById('rulesetForm').reset();
     document.getElementById('ruleset-id').value = '';
     document.getElementById('ruleset-enabled').checked = true;
-    if (rulesetModal) rulesetModal.show();
+    if (window.EpgManagementState.rulesetModal) window.EpgManagementState.rulesetModal.show();
 }
 
 async function editRuleset(rulesetId) {
@@ -185,7 +182,7 @@ async function editRuleset(rulesetId) {
     document.getElementById('ruleset-is-default').checked = ruleset.is_default;
     document.getElementById('ruleset-enabled').checked = ruleset.enabled;
     
-    if (rulesetModal) rulesetModal.show();
+    if (window.EpgManagementState.rulesetModal) window.EpgManagementState.rulesetModal.show();
 }
 
 async function saveRuleset() {
@@ -266,3 +263,18 @@ async function createDefaultRuleset() {
         alert('Error creating default ruleset: ' + error.message);
     }
 }
+
+const matchRulesRulesetsExports = {
+    loadRulesets,
+    loadRulesForRuleset,
+    showRulesetRules,
+    showCreateRulesetModal,
+    editRuleset,
+    saveRuleset,
+    deleteRuleset,
+    duplicateRuleset,
+    createDefaultRuleset,
+};
+
+Object.assign(window, matchRulesRulesetsExports);
+export { matchRulesRulesetsExports };

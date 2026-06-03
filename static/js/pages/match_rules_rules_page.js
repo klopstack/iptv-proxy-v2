@@ -1,7 +1,12 @@
-// ============================================================================
-// EPG Match Rules (Rules within Rulesets)
-// ============================================================================
-
+/**
+ * EPG match rules within rulesets (ESM).
+ */
+import { escapeHtml } from '../lib/escape_html.js';
+import {
+    getRuleFormFieldVisibility,
+    parseCountryCodes,
+    validateRulePreviewInput,
+} from '../lib/match_rules_helpers.js';
 function showCreateRuleModal(rulesetId) {
     document.getElementById('ruleModalTitle').textContent = 'New EPG Match Rule';
     document.getElementById('ruleForm').reset();
@@ -13,7 +18,7 @@ function showCreateRuleModal(rulesetId) {
     populateRuleAccountDropdown();
     resetRulePreview();
     updateRuleFormVisibility();
-    if (ruleModal) ruleModal.show();
+    if (window.EpgManagementState.ruleModal) window.EpgManagementState.ruleModal.show();
 }
 
 async function editRule(ruleId) {
@@ -42,7 +47,7 @@ async function editRule(ruleId) {
     populateRuleAccountDropdown();
     resetRulePreview();
     updateRuleFormVisibility();
-    if (ruleModal) ruleModal.show();
+    if (window.EpgManagementState.ruleModal) window.EpgManagementState.ruleModal.show();
 }
 
 function updateRuleFormVisibility() {
@@ -184,3 +189,15 @@ async function previewRulePattern() {
         document.getElementById('rule-preview-content').style.display = 'none';
     }
 }
+
+const matchRulesRulesExports = {
+    showCreateRuleModal,
+    editRule,
+    updateRuleFormVisibility,
+    saveRule,
+    deleteRule,
+    previewRulePattern,
+};
+
+Object.assign(window, matchRulesRulesExports);
+export { matchRulesRulesExports };
