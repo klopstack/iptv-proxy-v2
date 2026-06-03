@@ -1,0 +1,14 @@
+[
+  {
+    "id": "usyk_verhoeven",
+    "name": "Boxing 1 : Oleksandr Usyk vs. Rico Verhoeven"
+  },
+  {
+    "id": "boxing_with_date",
+    "name": "Boxing: Fury vs Usyk | 2026-06-15 22:00"
+  },
+  {
+    "id": "non_boxing_no_date",
+    "name": "Some League: Team Alpha vs Team Beta"
+  }
+]

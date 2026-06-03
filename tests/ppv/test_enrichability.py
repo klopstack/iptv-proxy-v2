@@ -8,9 +8,10 @@ import pytest
 
 from services.ppv import enrichability
 from services.ppv.enrichability import classify_ppv_enrichment, is_ppv_section_header, stale_archive_date_from_title
+from services.ppv.enrichment import PPVCalendarEnrichmentService
 
 STALE_FIXTURE = Path(__file__).parent / "fixtures" / "stale_espn_play.json"
-from services.ppv.enrichment import PPVCalendarEnrichmentService
+BOXING_FIXTURE = Path(__file__).parent / "fixtures" / "boxing_channels.json"
 
 
 class TestSectionHeader:
@@ -83,6 +84,24 @@ class TestStaleArchive:
 
     def test_current_event_not_stale_archive(self, stale_channels):
         row = next(r for r in stale_channels if r["id"] == "current_peacock")
+        assert classify_ppv_enrichment(row["name"]) is None
+
+
+class TestBoxingNoEventDate:
+    @pytest.fixture
+    def boxing_channels(self):
+        return json.loads(BOXING_FIXTURE.read_text(encoding="utf-8"))
+
+    def test_boxing_without_date_skipped(self, boxing_channels):
+        row = next(r for r in boxing_channels if r["id"] == "usyk_verhoeven")
+        assert classify_ppv_enrichment(row["name"]) == "no_event_date"
+
+    def test_boxing_with_date_still_enrichable(self, boxing_channels):
+        row = next(r for r in boxing_channels if r["id"] == "boxing_with_date")
+        assert classify_ppv_enrichment(row["name"]) is None
+
+    def test_non_boxing_without_date_not_skipped(self, boxing_channels):
+        row = next(r for r in boxing_channels if r["id"] == "non_boxing_no_date")
         assert classify_ppv_enrichment(row["name"]) is None
 
 
