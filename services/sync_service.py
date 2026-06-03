@@ -122,13 +122,16 @@ class ChannelSyncService:
         try:
             iptv_service = get_iptv_service_for_account(account)
 
-            # Sync categories first
+            # Sync categories first (required for PPV detection during channel sync).
+            # On category fetch failure we mark success=False so post-sync steps are
+            # skipped; channel sync still runs so stream data is not left entirely stale.
             try:
                 categories = iptv_service.get_live_categories()
                 stats = ChannelSyncService._sync_categories(account_id, categories, stats)
             except Exception as e:
                 logger.error(f"Error syncing categories for account {account_id}: {e}")
                 stats["errors"].append(f"Categories sync error: {str(e)}")
+                stats["success"] = False
 
             # Sync channels
             try:
@@ -541,30 +544,9 @@ class ChannelSyncService:
 
         stats["channels_processed"] = len(channels)
 
-        # Load tags for all channels
-        channel_ids = [ch.id for ch in channels]
-        channel_stream_ids = {ch.id: ch.stream_id for ch in channels}
-        channel_account_ids = {ch.id: ch.account_id for ch in channels}
+        from services.channel_tags import load_tag_names_by_channel_id
 
-        # Build channel_id -> set of tag names
-        channel_tags: Dict[int, Set[str]] = {ch.id: set() for ch in channels}
-
-        # Batch load tags
-        BATCH_SIZE = 500
-        for i in range(0, len(channel_ids), BATCH_SIZE):
-            batch_ids = channel_ids[i : i + BATCH_SIZE]
-            # We need to join through stream_id and account_id
-            for ch_id in batch_ids:
-                stream_id = channel_stream_ids[ch_id]
-                acc_id = channel_account_ids[ch_id]
-                tag_rows = (
-                    db.session.query(Tag.name)
-                    .join(ChannelTag, Tag.id == ChannelTag.tag_id)
-                    .filter(ChannelTag.account_id == acc_id, ChannelTag.stream_id == stream_id)
-                    .all()
-                )
-                for (tag_name,) in tag_rows:
-                    channel_tags[ch_id].add(tag_name.upper())
+        channel_tags = load_tag_names_by_channel_id(channels, uppercase=True)
 
         # Group channels by account and cleaned_name
         # Structure: account_id -> cleaned_name -> list of (channel, variant)

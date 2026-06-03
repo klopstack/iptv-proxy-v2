@@ -144,29 +144,9 @@ class ChannelQueryService:
     @staticmethod
     def _load_tag_names_for_channels(channels: List[Channel]) -> dict:
         """Map (account_id, stream_id) -> set of tag names."""
-        if not channels:
-            return {}
+        from services.channel_tags import load_tag_names_by_stream_keys
 
-        channel_ids = [ch.stream_id for ch in channels]
-        account_ids = list({ch.account_id for ch in channels})
-        tags_map: dict = {}
-
-        batch_size = 500
-        for i in range(0, len(channel_ids), batch_size):
-            batch = channel_ids[i : i + batch_size]
-            rows = (
-                db.session.query(ChannelTag.stream_id, ChannelTag.account_id, Tag.name)
-                .join(Tag)
-                .filter(
-                    ChannelTag.account_id.in_(account_ids),
-                    ChannelTag.stream_id.in_(batch),
-                )
-            )
-            for stream_id, account_id, tag_name in rows:
-                key = (account_id, stream_id)
-                tags_map.setdefault(key, set()).add(tag_name)
-
-        return tags_map
+        return load_tag_names_by_stream_keys(channels)
 
     @staticmethod
     def load_tags_for_account_channels(
