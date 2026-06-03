@@ -103,7 +103,7 @@ async function loadCategoriesForAccount(accountId) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        const categories = await response.json();
+        const categories = apiUnwrapData(response, await response.json());
         
         if (!Array.isArray(categories)) {
             throw new Error('Categories response is not an array');

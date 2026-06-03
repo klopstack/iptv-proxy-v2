@@ -1,6 +1,6 @@
 # Standardize API error handling repo-wide
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P1  
 **Audit:** Application-wide audit, June 2026
 
@@ -34,9 +34,9 @@ Document target envelope in architecture doc (TODO 73).
 
 ## Acceptance criteria
 
-- [ ] No route returns raw exception strings in production mode
-- [ ] All JSON blueprints use `@handle_errors` or documented exception
-- [ ] Marshmallow and manual validation produce same error shape
+- [x] No route returns raw exception strings in production mode
+- [x] All JSON blueprints use `@handle_errors` or documented exception
+- [x] Marshmallow and manual validation produce same error shape
 
 ## Test plan
 

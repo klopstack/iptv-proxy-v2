@@ -7,6 +7,7 @@ from werkzeug.exceptions import ServiceUnavailable
 
 from error_handling import (
     AuthorizationError,
+    ConflictError,
     ResourceNotFoundError,
     ServiceUnavailableError,
     ValidationError,
@@ -29,6 +30,7 @@ def test_error_response_basic():
         assert status_code == 400
         assert data["success"] is False
         assert data["error"] == "Test error"
+        assert data["code"] == "BAD_REQUEST"
         assert "details" not in data
 
 
@@ -274,7 +276,7 @@ def test_handle_errors_resource_not_found_text_response():
 def test_handle_db_error_paths():
     """Database helper returns appropriate messages and status codes."""
     message, status = handle_db_error(IntegrityError("stmt", {}, Exception("dup")))
-    assert status == 400
+    assert status == 409
     assert "constraint" in message.lower()
 
     message, status = handle_db_error(OperationalError("stmt", {}, Exception("down")))
@@ -312,7 +314,9 @@ def test_register_error_handlers_returns_json():
 
     response = client.get("/missing")
     assert response.status_code == 404
-    assert response.get_json()["error"] == "Resource not found"
+    payload = response.get_json()
+    assert payload["error"] == "Resource not found"
+    assert payload["code"] == "NOT_FOUND"
 
     response = client.get("/bad")
     assert response.status_code == 400
@@ -329,3 +333,37 @@ def test_register_error_handlers_returns_json():
     response = client.get("/maintenance")
     assert response.status_code == 503
     assert response.get_json()["error"] == "Service temporarily unavailable"
+
+
+def test_handle_errors_with_conflict_error():
+    """Test handle_errors decorator catches ConflictError"""
+    app = Flask(__name__)
+
+    with app.app_context():
+
+        @handle_errors(return_json=True)
+        def test_func():
+            raise ConflictError("Duplicate resource")
+
+        response, status_code = test_func()
+        data = response.get_json()
+
+        assert status_code == 409
+        assert data["code"] == "CONFLICT"
+
+
+def test_handle_errors_integrity_error_returns_409():
+    """IntegrityError via handle_errors returns 409 CONFLICT"""
+    app = Flask(__name__)
+
+    with app.app_context():
+
+        @handle_errors(return_json=True)
+        def test_func():
+            raise IntegrityError("stmt", {}, Exception("dup"))
+
+        response, status_code = test_func()
+        data = response.get_json()
+
+        assert status_code == 409
+        assert data["code"] == "CONFLICT"

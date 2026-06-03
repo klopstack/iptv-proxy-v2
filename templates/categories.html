@@ -86,7 +86,7 @@ function escapeHtml(text) {
 async function loadAccounts() {
     try {
         const response = await fetch('/api/accounts');
-        const data = await response.json();
+        const data = apiUnwrapData(response, await response.json());
         
         if (!response.ok) {
             throw new Error(data.error || `HTTP error ${response.status}`);
@@ -127,7 +127,7 @@ async function loadCategories() {
         }
         
         const response = await fetch(url);
-        const data = await response.json();
+        const data = apiUnwrapData(response, await response.json());
         
         if (!response.ok) {
             throw new Error(data.error || `HTTP error ${response.status}`);
@@ -164,7 +164,7 @@ async function displayCategories() {
     try {
         const response = await fetch('/api/filters');
         if (response.ok) {
-            const allFilters = await response.json();
+            const allFilters = apiUnwrapData(response, await response.json());
             activeFilters = allFilters.filter(f => 
                 f.filter_type === 'category' && 
                 f.filter_action === 'blacklist' &&
@@ -342,7 +342,7 @@ async function toggleCategoryFilter(accountId, categoryName, button) {
         
         // Check if filter already exists
         const response = await fetch(`/api/filters`);
-        const filters = await response.json();
+        const filters = apiUnwrapData(response, await response.json());
         
         const existingFilter = filters.find(f => 
             f.account_id === accountId && 
@@ -366,7 +366,7 @@ async function toggleCategoryFilter(accountId, categoryName, button) {
                 throw new Error('Failed to toggle filter');
             }
             
-            const updatedFilter = await updateResponse.json();
+            const updatedFilter = apiUnwrapMutation(updateResponse, await updateResponse.json());
             
             // Update button state
             if (updatedFilter.enabled) {

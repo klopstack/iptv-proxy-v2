@@ -82,6 +82,27 @@ def client(app):
     return app.test_client()
 
 
+def api_data(response):
+    """Extract ``data`` from a standardized collection/resource GET response."""
+    payload = response.get_json()
+    if isinstance(payload, dict) and "data" in payload:
+        return payload["data"]
+    return payload
+
+
+def api_mutation_data(response):
+    """Extract ``data`` from a standardized mutation success response."""
+    payload = response.get_json()
+    if isinstance(payload, dict) and payload.get("success") and "data" in payload:
+        return payload["data"]
+    return payload
+
+
+def api_error_payload(response):
+    """Return parsed JSON error body (standardized envelope)."""
+    return response.get_json()
+
+
 @pytest.fixture(scope="function")
 def db(app):
     """
@@ -159,3 +180,19 @@ def _no_live_thesportsdb_v2_in_unit_tests(request):
             yield
     else:
         yield
+
+
+@pytest.fixture
+def sample_account(client):
+    """Create a sample account and return its API resource dict."""
+    response = client.post(
+        "/api/accounts",
+        json={
+            "name": "Test Account",
+            "server": "test.server.com",
+            "username": "testuser",
+            "password": "testpass",
+            "enabled": True,
+        },
+    )
+    return api_mutation_data(response)

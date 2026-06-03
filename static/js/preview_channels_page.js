@@ -9,6 +9,7 @@ import {
 } from './preview_channels.js';
 import { formatLocalDateTime } from './lib/epg_datetime.js';
 import { escapeHtml, parseUrlParams } from './utils.js';
+import { unwrapData, unwrapMutation } from './lib/api_contract.js';
 
 let accounts = [];
 let currentAccountId = null;
@@ -21,7 +22,7 @@ let tagSelector = null;
 
 async function loadAccounts() {
     const response = await fetch('/api/accounts');
-    accounts = await response.json();
+    accounts = unwrapData(await response.json());
 
     const select = document.getElementById('testAccountId');
     select.innerHTML = '<option value="">Select an account...</option>';
@@ -616,7 +617,7 @@ async function loadActiveFilters(accountId) {
             document.getElementById('activeFilters').innerHTML = '<p class="text-muted">Viewing all accounts - filters vary by account</p>';
         } else {
             const filtersResponse = await fetch(`/api/accounts/${accountId}/filters`);
-            const filters = await filtersResponse.json();
+            const filters = unwrapData(await filtersResponse.json());
 
             let filtersHtml = '';
             if (filters.length === 0) {

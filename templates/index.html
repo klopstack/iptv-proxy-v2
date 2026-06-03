@@ -69,7 +69,7 @@ function formatRelativeTime(date) {
 async function loadOverviewStats() {
     try {
         const response = await fetch('/api/overview/stats');
-        const stats = await response.json();
+        const stats = apiUnwrapData(response, await response.json());
         
         let html = `
             <div class="row mb-4">
@@ -231,7 +231,7 @@ async function loadDashboard() {
         const statsHtml = await loadOverviewStats();
         
         const response = await fetch('/api/accounts');
-        const accounts = await response.json();
+        const accounts = apiUnwrapData(response, await response.json());
         
         // Start with stats HTML
         let html = statsHtml;

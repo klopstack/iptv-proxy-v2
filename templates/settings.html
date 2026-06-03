@@ -432,11 +432,11 @@ let currentStatus = null;
 async function loadProxySettings() {
     try {
         const hostnameResponse = await fetch('/api/settings/proxy_hostname');
-        const hostnameData = await hostnameResponse.json();
+        const hostnameData = apiUnwrapData(hostnameResponse, await hostnameResponse.json());
         document.getElementById('proxy-hostname').value = hostnameData.value || '';
 
         const iconsResponse = await fetch('/api/settings/proxy_icons');
-        const iconsData = await iconsResponse.json();
+        const iconsData = apiUnwrapData(iconsResponse, await iconsResponse.json());
         document.getElementById('proxy-icons').checked = iconsData.value !== 'false';
     } catch (error) {
         console.error('Error loading proxy settings:', error);

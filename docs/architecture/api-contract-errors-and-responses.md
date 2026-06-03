@@ -1,7 +1,7 @@
 # API Contract: Errors and Response Shapes
 
 **Audit:** Application-wide audit, June 2026  
-**Status:** Draft for review
+**Status:** Implemented (Wave 5 PR P — TODOs 72/73)
 
 ## Problem
 

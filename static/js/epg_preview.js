@@ -25,7 +25,7 @@ async function loadPreviewSources() {
         const response = await fetch('/api/epg/sources');
         if (!response.ok) throw new Error('Failed to load EPG sources');
         
-        const sources = await response.json();
+        const sources = apiUnwrapData(response, await response.json());
         
         // Clear existing options except the first one
         sourceSelect.innerHTML = '<option value="">Select an EPG source...</option>';

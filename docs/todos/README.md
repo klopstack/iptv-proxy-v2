@@ -131,11 +131,11 @@ Follow-up audit after TODOs 01–21. Focus: dead shims, test duplication, semant
 
 | # | Document | Status | Summary |
 |---|----------|--------|---------|
-| 35 | *(archived — doc removed)* | ✅ | FK pragma, AccountDeleteService, model ondelete alignment |
-| 36 | *(archived — doc removed)* | ✅ | schema_migrations table, create_all+migrate boot, playlist_configs migration |
-| 37 | *(archived — doc removed)* | ✅ | Atomic sync lock, sync_started_at, stale lock recovery |
-| 38 | *(archived — doc removed)* | ✅ | EPG/health cleanup scheduler, prune inactive channel_tags |
-| 39 | *(archived — doc removed)* | ✅ | channel_tags index, schema parity tests, developer docs |
+| 35 | [35-referential-integrity-and-account-delete.md](./35-referential-integrity-and-account-delete.md) | ✅ | FK pragma, AccountDeleteService, model ondelete alignment |
+| 36 | [36-schema-lifecycle-and-migration-tracking.md](./36-schema-lifecycle-and-migration-tracking.md) | ✅ | schema_migrations table, create_all+migrate boot, playlist_configs migration |
+| 37 | [37-sync-lock-hardening.md](./37-sync-lock-hardening.md) | ✅ | Atomic sync lock, sync_started_at, stale lock recovery |
+| 38 | [38-data-retention-and-growth-control.md](./38-data-retention-and-growth-control.md) | ✅ | EPG/health cleanup scheduler, prune inactive channel_tags |
+| 39 | [39-indexing-test-parity-and-docs.md](./39-indexing-test-parity-and-docs.md) | ✅ | channel_tags index, schema parity tests, developer docs |
 
 ## P1–P2 — EPG sync orchestration follow-up (May 2026)
 
@@ -251,16 +251,16 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 | 70 | [70-fix-is-visible-epg-matching-bug.md](./70-fix-is-visible-epg-matching-bug.md) | ✅ | EPG matching uses stale `is_visible` instead of live filters |
 | 71 | [71-fix-scheduler-sync-status-semantics.md](./71-fix-scheduler-sync-status-semantics.md) | ✅ | Account sync always "success"; job timestamps advance on failure |
 | 91 | [91-scheduler-status-api-failure-metadata.md](./91-scheduler-status-api-failure-metadata.md) | ✅ | Status API + SyncMetadata for per-job scheduler failures (deferred from 71) |
-| 72 | [72-standardize-api-error-handling.md](./72-standardize-api-error-handling.md) | ⬜ | `@handle_errors` on ~30–40% of routes; extends TODO 33 |
-| 73 | [73-standardize-api-response-shapes.md](./73-standardize-api-response-shapes.md) | ⬜ | Inconsistent success/error JSON envelopes |
+| 72 | [72-standardize-api-error-handling.md](./72-standardize-api-error-handling.md) | ✅ | `@handle_errors` on ~30–40% of routes; extends TODO 33 |
+| 73 | [73-standardize-api-response-shapes.md](./73-standardize-api-response-shapes.md) | ✅ | Inconsistent success/error JSON envelopes |
 | 74 | [74-remove-dead-routes-and-dangerous-patterns.md](./74-remove-dead-routes-and-dangerous-patterns.md) | ✅ | Dead blueprint, duplicate FCC/categories endpoints |
 | 75 | [75-fix-side-effect-get-account-categories.md](./75-fix-side-effect-get-account-categories.md) | ✅ | GET categories triggers upstream IPTV fetch |
 | 76 | [76-deduplicate-epg-sync-infrastructure.md](./76-deduplicate-epg-sync-infrastructure.md) | ⬜ | Program persistence, sync locks, EAST/WEST constants |
 | 77 | [77-centralize-tag-loading-and-category-sync-policy.md](./77-centralize-tag-loading-and-category-sync-policy.md) | ✅ | Tag loader N+1; category sync failure policy |
 | 78 | [78-split-fat-route-modules.md](./78-split-fat-route-modules.md) | ⬜ | Phased extraction from 500–1500 line route files |
 | 79 | [79-extract-shared-route-serializers.md](./79-extract-shared-route-serializers.md) | ⬜ | Shared CRUD serializers and Marshmallow schemas |
-| 80 | [80-align-test-db-with-production-schema.md](./80-align-test-db-with-production-schema.md) | ✅ | PPV queue index on model; expanded schema parity tests |
-| 81 | [81-model-fk-ondelete-alignment.md](./81-model-fk-ondelete-alignment.md) | ✅ | FK ondelete alignment; migration runner FK pragma |
+| 80 | [80-align-test-db-with-production-schema.md](./80-align-test-db-with-production-schema.md) | ⬜ | pytest `create_all` skips migration-only indexes |
+| 81 | [81-model-fk-ondelete-alignment.md](./81-model-fk-ondelete-alignment.md) | ⬜ | FK ondelete drift; migration FK pragma |
 | 82 | [82-scheduled-data-retention.md](./82-scheduled-data-retention.md) | ⬜ | Events and cached images grow unbounded |
 | 83 | [83-xss-audit-legacy-frontend.md](./83-xss-audit-legacy-frontend.md) | ⬜ | innerHTML with API data in legacy JS + TagSelector |
 | 84 | [84-docker-and-secrets-hardening.md](./84-docker-and-secrets-hardening.md) | ✅ | `.dockerignore`, non-root container, Flask sessions disabled (no SECRET_KEY) |

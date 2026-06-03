@@ -6,6 +6,7 @@ import logging
 from flask import Blueprint, jsonify, request
 from sqlalchemy import or_
 
+from api_responses import data_response, success_response
 from error_handling import handle_errors
 from models import Account, Category, Channel, ChannelTag, Credential, EpgSource, Filter, Tag, db
 from schemas import AccountCreateSchema, AccountUpdateSchema, validate_request_data
@@ -86,7 +87,7 @@ def get_accounts():
         }
         account_data["username"] = a.credentials[0].username if a.credentials else None
         result.append(account_data)
-    return jsonify(result)
+    return data_response(result)
 
 
 @accounts_bp.route("/api/accounts", methods=["POST"])
@@ -128,21 +129,19 @@ def create_account():
         except ValueError as e:
             logger.warning("Could not create XMLTV EPG source for account %s: %s", account.id, e)
 
-    return (
-        jsonify(
-            {
-                "id": account.id,
-                "name": account.name,
-                "server": account.server,
-                "username": credential.username,
-                "user_agent": account.user_agent,
-                "enabled": account.enabled,
-                "credentials": [credential_to_dict(credential)],
-                "total_max_connections": account.get_total_max_connections(),
-                "xmltv_epg_source": xmltv_epg_source,
-            }
-        ),
-        201,
+    return success_response(
+        {
+            "id": account.id,
+            "name": account.name,
+            "server": account.server,
+            "username": credential.username,
+            "user_agent": account.user_agent,
+            "enabled": account.enabled,
+            "credentials": [credential_to_dict(credential)],
+            "total_max_connections": account.get_total_max_connections(),
+            "xmltv_epg_source": xmltv_epg_source,
+        },
+        status_code=201,
     )
 
 
@@ -183,7 +182,7 @@ def update_account(account_id):
         except ValueError as e:
             logger.warning("Could not update XMLTV EPG source for account %s: %s", account_id, e)
 
-    return jsonify(
+    return success_response(
         {
             "id": account.id,
             "name": account.name,
@@ -601,7 +600,7 @@ def get_account_filters(account_id):
     """Get filters for a specific account"""
     # Note: Doesn't validate account exists - returns empty list if no account
     filters = Filter.query.filter_by(account_id=account_id).all()
-    return jsonify(
+    return data_response(
         [
             {
                 "id": f.id,

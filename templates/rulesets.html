@@ -374,7 +374,7 @@ document.getElementById('playlists-tab').addEventListener('shown.bs.tab', loadPl
 
 async function loadAccounts() {
     const response = await fetch('/api/accounts');
-    accounts = await response.json();
+    accounts = apiUnwrapData(response, await response.json());
     
     // Populate account filters
     const tagsFilter = document.getElementById('tags-account-filter');

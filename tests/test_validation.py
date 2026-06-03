@@ -24,8 +24,9 @@ def test_create_account_with_valid_data(client):
 
     assert response.status_code == 201
     data = response.json
-    assert data["name"] == "Test Account"
-    assert data["server"] == "test.example.com"
+    assert data["success"] is True
+    assert data["data"]["name"] == "Test Account"
+    assert data["data"]["server"] == "test.example.com"
 
 
 def test_create_account_missing_required_fields(client):
@@ -40,10 +41,11 @@ def test_create_account_missing_required_fields(client):
 
     assert response.status_code == 400
     data = response.json
-    assert "validation_errors" in data
-    assert "server" in data["validation_errors"]
-    assert "username" in data["validation_errors"]
-    assert "password" in data["validation_errors"]
+    assert data.get("code") == "VALIDATION_ERROR"
+    assert "details" in data
+    assert "server" in data["details"]
+    assert "username" in data["details"]
+    assert "password" in data["details"]
 
 
 def test_create_account_empty_name(client):
@@ -54,8 +56,8 @@ def test_create_account_empty_name(client):
 
     assert response.status_code == 400
     data = response.json
-    assert "validation_errors" in data
-    assert "name" in data["validation_errors"]
+    assert "details" in data
+    assert "name" in data["details"]
 
 
 def test_create_account_invalid_server(client):
@@ -67,8 +69,8 @@ def test_create_account_invalid_server(client):
 
     assert response.status_code == 400
     data = response.json
-    assert "validation_errors" in data
-    assert "server" in data["validation_errors"]
+    assert "details" in data
+    assert "server" in data["details"]
 
 
 def test_update_account_with_valid_data(app, client):
@@ -83,8 +85,9 @@ def test_update_account_with_valid_data(app, client):
 
     assert response.status_code == 200
     data = response.json
-    assert data["name"] == "Updated Name"
-    assert data["enabled"] is False
+    assert data["success"] is True
+    assert data["data"]["name"] == "Updated Name"
+    assert data["data"]["enabled"] is False
 
 
 def test_update_account_invalid_field(app, client):
@@ -126,8 +129,9 @@ def test_create_filter_with_valid_data(app, client):
 
     assert response.status_code == 201
     data = response.json
-    assert data["name"] == "Test Filter"
-    assert data["filter_type"] == "category"
+    assert data["success"] is True
+    assert data["data"]["name"] == "Test Filter"
+    assert data["data"]["filter_type"] == "category"
 
 
 def test_create_filter_invalid_type(app, client):
@@ -151,8 +155,8 @@ def test_create_filter_invalid_type(app, client):
 
     assert response.status_code == 400
     data = response.json
-    assert "validation_errors" in data
-    assert "filter_type" in data["validation_errors"]
+    assert "details" in data
+    assert "filter_type" in data["details"]
 
 
 def test_create_filter_empty_value(app, client):
@@ -176,8 +180,8 @@ def test_create_filter_empty_value(app, client):
 
     assert response.status_code == 400
     data = response.json
-    assert "validation_errors" in data
-    assert "filter_value" in data["validation_errors"]
+    assert "details" in data
+    assert "filter_value" in data["details"]
 
 
 # ============================================================================
@@ -234,8 +238,8 @@ def test_create_tag_rule_invalid_pattern_type(app, client):
 
     assert response.status_code == 400
     data = response.json
-    assert "validation_errors" in data
-    assert "pattern_type" in data["validation_errors"]
+    assert "details" in data
+    assert "pattern_type" in data["details"]
 
 
 def test_create_tag_rule_invalid_priority(app, client):
@@ -261,8 +265,8 @@ def test_create_tag_rule_invalid_priority(app, client):
 
     assert response.status_code == 400
     data = response.json
-    assert "validation_errors" in data
-    assert "priority" in data["validation_errors"]
+    assert "details" in data
+    assert "priority" in data["details"]
 
 
 def test_create_tag_rule_special_tag_validation(app, client):
@@ -288,8 +292,8 @@ def test_create_tag_rule_special_tag_validation(app, client):
 
     assert response.status_code == 400
     data = response.json
-    assert "validation_errors" in data
-    assert "tag_name" in data["validation_errors"]
+    assert "details" in data
+    assert "tag_name" in data["details"]
 
     # Valid: proper special tag
     response = client.post(
@@ -333,8 +337,8 @@ def test_create_playlist_config_account_overlap(client):
 
     assert response.status_code == 400
     data = response.json
-    assert "validation_errors" in data
-    assert "include_accounts" in data["validation_errors"]
+    assert "details" in data
+    assert "include_accounts" in data["details"]
 
 
 def test_create_playlist_config_tag_overlap(client):
@@ -350,8 +354,8 @@ def test_create_playlist_config_tag_overlap(client):
 
     assert response.status_code == 400
     data = response.json
-    assert "validation_errors" in data
-    assert "include_tags" in data["validation_errors"]
+    assert "details" in data
+    assert "include_tags" in data["details"]
 
 
 def test_create_playlist_config_empty_name(client):
@@ -360,8 +364,8 @@ def test_create_playlist_config_empty_name(client):
 
     assert response.status_code == 400
     data = response.json
-    assert "validation_errors" in data
-    assert "name" in data["validation_errors"]
+    assert "details" in data
+    assert "name" in data["details"]
 
 
 # ============================================================================

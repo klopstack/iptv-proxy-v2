@@ -5,14 +5,14 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
-from error_handling import handle_errors
+from api_responses import data_response, no_content, success_response
+from error_handling import ValidationError, handle_errors
 from models import Account, ChannelEpgMapping, EpgChannel, EpgProgram, EpgSource, SdLineup, SdStation, db
 from services.datetime_utils import serialize_utc_iso
 from services.epg.coverage import get_category_epg_coverage, get_epg_coverage_stats
 
 logger = logging.getLogger(__name__)
 
-# Create blueprint
 epg_sources_bp = Blueprint("epg_sources", __name__, url_prefix="/api/epg")
 
 
@@ -40,17 +40,11 @@ def _serialize_epg_source(source, *, mapping_count=0):
     }
 
 
-# ============================================================================
-# API Routes
-# ============================================================================
-
-
 @epg_sources_bp.route("/sources", methods=["GET"])
 def get_epg_sources():
     """Get all EPG sources with usage statistics"""
     sources = EpgSource.query.order_by(EpgSource.priority, EpgSource.name).all()
 
-    # Get mapping counts per source (how many channels are using EPG from each source)
     mapping_counts = (
         db.session.query(EpgSource.id, db.func.count(ChannelEpgMapping.id).label("mapping_count"))
         .join(EpgChannel, EpgChannel.source_id == EpgSource.id)
@@ -60,28 +54,28 @@ def get_epg_sources():
     )
     mapping_count_map = {row.id: row.mapping_count for row in mapping_counts}
 
-    return jsonify([_serialize_epg_source(s, mapping_count=mapping_count_map.get(s.id, 0)) for s in sources])
+    return data_response([_serialize_epg_source(s, mapping_count=mapping_count_map.get(s.id, 0)) for s in sources])
 
 
 @epg_sources_bp.route("/sources", methods=["POST"])
-@handle_errors(return_json=True, default_message="Error creating EPG source")
 def create_epg_source():
     """Create a new EPG source"""
-    data = request.json
+    data = request.json or {}
 
     if not data.get("name"):
-        return jsonify({"error": "Name is required"}), 400
+        raise ValidationError("Name is required", details={"name": "Required"})
     if not data.get("source_type"):
-        return jsonify({"error": "Source type is required"}), 400
+        raise ValidationError("Source type is required", details={"source_type": "Required"})
 
     valid_types = ["schedules_direct", "xmltv_url", "xmltv_grabber", "ppv_events"]
     if data["source_type"] not in valid_types:
-        return jsonify({"error": f"Invalid source type. Must be one of: {valid_types}"}), 400
+        raise ValidationError(
+            f"Invalid source type. Must be one of: {valid_types}",
+            details={"source_type": f"Must be one of: {valid_types}"},
+        )
 
-    # Validate xmltv_grabber fields
-    if data["source_type"] == "xmltv_grabber":
-        if not data.get("xmltv_grabber"):
-            return jsonify({"error": "XMLTV grabber name is required"}), 400
+    if data["source_type"] == "xmltv_grabber" and not data.get("xmltv_grabber"):
+        raise ValidationError("XMLTV grabber name is required", details={"xmltv_grabber": "Required"})
 
     source = EpgSource(
         name=data["name"],
@@ -102,21 +96,18 @@ def create_epg_source():
     db.session.add(source)
     db.session.commit()
 
-    return (
-        jsonify(
-            {
-                "id": source.id,
-                "name": source.name,
-                "source_type": source.source_type,
-                "message": "EPG source created successfully",
-            }
-        ),
-        201,
+    return success_response(
+        {
+            "id": source.id,
+            "name": source.name,
+            "source_type": source.source_type,
+        },
+        status_code=201,
+        message="EPG source created successfully",
     )
 
 
 @epg_sources_bp.route("/sources/<int:source_id>", methods=["PUT"])
-@handle_errors(return_json=True, default_message="Error updating EPG source")
 def update_epg_source(source_id):
     """Update an EPG source"""
     source = EpgSource.query.get_or_404(source_id)
@@ -147,11 +138,10 @@ def update_epg_source(source_id):
 
     db.session.commit()
 
-    return jsonify({"success": True, "message": "EPG source updated"})
+    return success_response(message="EPG source updated")
 
 
 @epg_sources_bp.route("/sources/<int:source_id>", methods=["DELETE"])
-@handle_errors(return_json=True, default_message="Error deleting EPG source")
 def delete_epg_source(source_id):
     """Delete an EPG source and all its channels"""
     source = EpgSource.query.get_or_404(source_id)
@@ -160,15 +150,11 @@ def delete_epg_source(source_id):
         row[0] for row in db.session.query(EpgChannel.id).filter(EpgChannel.source_id == source.id).all()
     ]
     if epg_channel_ids:
-        # ORM cascade would try to NULL epg_channel_id on mappings (NOT NULL column).
         EpgProgram.query.filter(EpgProgram.epg_channel_id.in_(epg_channel_ids)).delete(synchronize_session=False)
         ChannelEpgMapping.query.filter(ChannelEpgMapping.epg_channel_id.in_(epg_channel_ids)).delete(
             synchronize_session=False
         )
 
-    # Schedules Direct sources have additional tables (sd_lineups/sd_stations).
-    # Even though the FK is configured with ON DELETE CASCADE, being explicit here
-    # avoids ORM-level relationship quirks and keeps deletes reliable.
     if source.source_type == "schedules_direct":
         lineup_ids = [row[0] for row in db.session.query(SdLineup.id).filter(SdLineup.epg_source_id == source.id).all()]
         if lineup_ids:
@@ -178,7 +164,7 @@ def delete_epg_source(source_id):
     db.session.delete(source)
     db.session.commit()
 
-    return jsonify({"success": True, "message": "EPG source deleted"})
+    return no_content()
 
 
 @epg_sources_bp.route("/sources/<int:source_id>/mappings", methods=["GET"])
@@ -308,7 +294,7 @@ def get_epg_coverage():
 
     stats = get_epg_coverage_stats(account_id)
 
-    return jsonify(stats)
+    return data_response(stats)
 
 
 @epg_sources_bp.route("/coverage/categories/<int:account_id>", methods=["GET"])
@@ -318,7 +304,7 @@ def get_category_epg_coverage_route(account_id):
 
     coverage = get_category_epg_coverage(account_id)
 
-    return jsonify(
+    return data_response(
         {
             "account_id": account_id,
             "categories": coverage,

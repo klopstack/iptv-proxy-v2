@@ -3,8 +3,9 @@ Filter management routes
 """
 import logging
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, request
 
+from api_responses import data_response, no_content, success_response
 from models import Account, Filter, db
 from schemas import FilterCreateSchema, FilterUpdateSchema, validate_request_data
 from services.cache_service import cache_service
@@ -12,33 +13,26 @@ from services.filter_service import FilterService
 
 logger = logging.getLogger(__name__)
 
-# Create blueprint
 filters_bp = Blueprint("filters", __name__)
 
-# Initialize cache service
-# ============================================================================
-# API Routes - Filter CRUD
-# ============================================================================
+
+def _serialize_filter(filter_obj):
+    return {
+        "id": filter_obj.id,
+        "account_id": filter_obj.account_id,
+        "name": filter_obj.name,
+        "filter_type": filter_obj.filter_type,
+        "filter_action": filter_obj.filter_action,
+        "filter_value": filter_obj.filter_value,
+        "enabled": filter_obj.enabled,
+    }
 
 
 @filters_bp.route("/api/filters", methods=["GET"])
 def get_filters():
     """Get all filters"""
     filters = Filter.query.all()
-    return jsonify(
-        [
-            {
-                "id": f.id,
-                "account_id": f.account_id,
-                "name": f.name,
-                "filter_type": f.filter_type,
-                "filter_action": f.filter_action,
-                "filter_value": f.filter_value,
-                "enabled": f.enabled,
-            }
-            for f in filters
-        ]
-    )
+    return data_response([_serialize_filter(f) for f in filters])
 
 
 @filters_bp.route("/api/filters", methods=["POST"])
@@ -47,7 +41,6 @@ def create_filter():
     """Create a new filter"""
     data = request.validated_data
 
-    # Validate account exists
     db.get_or_404(Account, data["account_id"])
 
     filter_obj = Filter(
@@ -62,26 +55,10 @@ def create_filter():
     db.session.add(filter_obj)
     db.session.commit()
 
-    # Recompute visibility for the account
     FilterService.compute_visibility_for_account(data["account_id"])
-
-    # Clear cache for the account
     cache_service.clear_account_cache(data["account_id"])
 
-    return (
-        jsonify(
-            {
-                "id": filter_obj.id,
-                "account_id": filter_obj.account_id,
-                "name": filter_obj.name,
-                "filter_type": filter_obj.filter_type,
-                "filter_action": filter_obj.filter_action,
-                "filter_value": filter_obj.filter_value,
-                "enabled": filter_obj.enabled,
-            }
-        ),
-        201,
-    )
+    return success_response(_serialize_filter(filter_obj), status_code=201)
 
 
 @filters_bp.route("/api/filters/<int:filter_id>", methods=["PUT"])
@@ -99,23 +76,10 @@ def update_filter(filter_id):
 
     db.session.commit()
 
-    # Recompute visibility for the account
     FilterService.compute_visibility_for_account(filter_obj.account_id)
-
-    # Clear cache for the account
     cache_service.clear_account_cache(filter_obj.account_id)
 
-    return jsonify(
-        {
-            "id": filter_obj.id,
-            "account_id": filter_obj.account_id,
-            "name": filter_obj.name,
-            "filter_type": filter_obj.filter_type,
-            "filter_action": filter_obj.filter_action,
-            "filter_value": filter_obj.filter_value,
-            "enabled": filter_obj.enabled,
-        }
-    )
+    return success_response(_serialize_filter(filter_obj))
 
 
 @filters_bp.route("/api/filters/<int:filter_id>", methods=["DELETE"])
@@ -127,10 +91,7 @@ def delete_filter(filter_id):
     db.session.delete(filter_obj)
     db.session.commit()
 
-    # Recompute visibility for the account
     FilterService.compute_visibility_for_account(account_id)
-
-    # Clear cache for the account
     cache_service.clear_account_cache(account_id)
 
-    return "", 204
+    return no_content()
