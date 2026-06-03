@@ -1,6 +1,6 @@
 # Add unit tests for PPV channel matching context
 
-**Status:** ⬜ Not started  
+**Status:** 🔄 In review (PR #19)  
 **Priority:** P1  
 **Audit:** PPV audit, June 2026
 
@@ -32,8 +32,12 @@ Use fixed reference datetimes (`freezegun` or injectable clock) for determinism.
 
 ## Acceptance criteria
 
-- [ ] At least 10 parametrized cases covering timezone edge cases.
-- [ ] Failures produce actionable assertion messages (channel name, expected date, got date).
+- [x] At least 10 parametrized cases covering timezone edge cases.
+- [x] Failures produce actionable assertion messages (channel name, expected date, got date).
+
+## Completion
+
+- PR #19 — https://github.com/klopstack/iptv-proxy-v2/pull/19
 
 ## Test plan
 

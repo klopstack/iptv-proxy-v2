@@ -1,6 +1,6 @@
 # Add unit tests for PPV persistence layer
 
-**Status:** ⬜ Not started  
+**Status:** 🔄 In review (PR #19)  
 **Priority:** P1  
 **Audit:** PPV audit, June 2026
 
@@ -35,8 +35,12 @@ Add table-driven tests with in-memory DB fixtures:
 
 ## Acceptance criteria
 
-- [ ] `tests/ppv/test_persistence.py` covers all public functions in persistence module.
-- [ ] Tests run without mocking enrichment or reverse matcher.
+- [x] `tests/ppv/test_persistence.py` covers all public functions in persistence module.
+- [x] Tests run without mocking enrichment or reverse matcher.
+
+## Completion
+
+- PR #19 — https://github.com/klopstack/iptv-proxy-v2/pull/19
 
 ## Test plan
 
