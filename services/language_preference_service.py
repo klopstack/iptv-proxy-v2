@@ -89,10 +89,7 @@ def _load_event_links(channels: List[Channel]) -> Dict[int, Tuple[int, float]]:
         .filter(EventChannelLink.channel_id.in_(channel_ids))
         .all()
     )
-    return {
-        channel_id: (event_id, match_confidence or 0.0)
-        for channel_id, event_id, match_confidence in rows
-    }
+    return {channel_id: (event_id, match_confidence or 0.0) for channel_id, event_id, match_confidence in rows}
 
 
 def _load_channel_tags(channels: List[Channel]) -> Dict[int, List[str]]:

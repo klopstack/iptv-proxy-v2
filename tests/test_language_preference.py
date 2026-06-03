@@ -5,16 +5,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from models import (
-    Account,
-    Category,
-    Channel,
-    ChannelLink,
-    Event,
-    EventChannelLink,
-    XtreamCredential,
-    db,
-)
+from models import Account, Category, Channel, ChannelLink, Event, EventChannelLink, XtreamCredential, db
 from services.backup_pair_detection import detect_backup_pairs
 from services.channel_query_service import ChannelQueryService
 from services.language_detection_service import detect_broadcast_language

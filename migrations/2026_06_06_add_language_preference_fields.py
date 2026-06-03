@@ -34,9 +34,7 @@ def migrate(db_path):
             )
             logger.info("Added preferred_languages to xtream_credentials")
         if "language_fallback" not in xtream_cols:
-            cursor.execute(
-                "ALTER TABLE xtream_credentials ADD COLUMN language_fallback TEXT DEFAULT 'unknown'"
-            )
+            cursor.execute("ALTER TABLE xtream_credentials ADD COLUMN language_fallback TEXT DEFAULT 'unknown'")
             logger.info("Added language_fallback to xtream_credentials")
 
         cursor.execute("PRAGMA table_info(playlist_configs)")
@@ -48,9 +46,7 @@ def migrate(db_path):
             )
             logger.info("Added preferred_languages to playlist_configs")
         if "language_fallback" not in playlist_cols:
-            cursor.execute(
-                "ALTER TABLE playlist_configs ADD COLUMN language_fallback TEXT DEFAULT 'unknown'"
-            )
+            cursor.execute("ALTER TABLE playlist_configs ADD COLUMN language_fallback TEXT DEFAULT 'unknown'")
             logger.info("Added language_fallback to playlist_configs")
 
         conn.commit()
