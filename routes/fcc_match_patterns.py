@@ -27,7 +27,7 @@ from models import (
     QualityTag,
     db,
 )
-from services.cache_service import CacheService
+from services.cache_service import cache_service
 from services.datetime_utils import serialize_utc_iso
 from services.epg.match_rules import clear_fcc_pattern_cache
 
@@ -37,9 +37,6 @@ logger = logging.getLogger(__name__)
 fcc_match_patterns_bp = Blueprint("fcc_match_patterns", __name__)
 
 # Initialize cache service
-cache_service = CacheService()
-
-
 # ============================================================================
 # Web UI Routes
 # ============================================================================

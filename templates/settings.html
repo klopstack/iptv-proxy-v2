@@ -1039,14 +1039,14 @@ document.getElementById('sync-fcc-btn').addEventListener('click', async function
     btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Syncing...';
     
     try {
-        const response = await fetch('/api/sync/fcc', { method: 'POST' });
+        const response = await fetch('/api/fcc/facilities/sync', { method: 'POST' });
         
         if (response.ok) {
             const result = await response.json();
-            alert(`✓ FCC data synced successfully!\n${result.message}`);
+            alert(`✓ FCC data synced successfully!\n${result.message || 'Sync complete'}`);
         } else {
             const error = await response.json();
-            alert('Error: ' + (error.error || 'Failed to sync FCC data'));
+            alert('Error: ' + (error.error || error.message || 'Failed to sync FCC data'));
         }
     } catch (error) {
         alert('Error syncing FCC data: ' + error.message);

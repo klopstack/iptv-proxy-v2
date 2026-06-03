@@ -64,3 +64,27 @@ class CacheService:
         """Clear all cache"""
         self.cache.clear()
         logger.info("Cleared all cache")
+
+
+def init_cache_service(app):
+    """Register a single CacheService instance on the Flask app."""
+    if "cache_service" not in app.extensions:
+        app.extensions["cache_service"] = CacheService()
+    return app.extensions["cache_service"]
+
+
+def get_cache_service():
+    """Return the app-scoped CacheService (requires application context)."""
+    from flask import current_app
+
+    return current_app.extensions["cache_service"]
+
+
+class _LazyCacheService:
+    """Delegates to app-scoped CacheService; patchable in tests via routes.*.cache_service."""
+
+    def __getattr__(self, name):
+        return getattr(get_cache_service(), name)
+
+
+cache_service = _LazyCacheService()

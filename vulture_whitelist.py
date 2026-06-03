@@ -49,6 +49,7 @@ update_account
 delete_account
 test_account
 get_account_categories
+sync_account_categories
 get_account_stats
 get_account_filters
 sync_account_channels

@@ -7,7 +7,7 @@ from flask import Blueprint, jsonify, request
 
 from error_handling import handle_errors
 from models import Account, Category, Channel, ChannelTag, Tag, db
-from services.cache_service import CacheService
+from services.cache_service import cache_service
 from services.channel_query_service import ChannelQueryService
 from services.datetime_utils import serialize_utc_iso
 from services.tag_service import TagService
@@ -16,9 +16,6 @@ logger = logging.getLogger(__name__)
 
 # Create blueprint
 api_bp = Blueprint("api", __name__)
-
-# Initialize cache service
-cache_service = CacheService()
 
 # Store scheduler reference (set by app.py)
 _scheduler = None
@@ -82,27 +79,6 @@ def get_epg_sync_status():
     return jsonify({"success": True, "interval_hours": interval_hours, "sources": sources})
 
 
-@api_bp.route("/api/sync/fcc", methods=["POST"])
-@handle_errors(return_json=True, default_message="Error syncing FCC data")
-def sync_fcc_data():
-    """Sync FCC facility data"""
-    from services.fcc_facility_service import FccFacilityService
-
-    result = FccFacilityService.full_sync()
-
-    if result.get("success"):
-        stats = result.get("stats", {})
-        return jsonify(
-            {
-                "success": True,
-                "stats": stats,
-                "message": f"{stats.get('added', 0)} added, {stats.get('updated', 0)} updated, {stats.get('total', 0)} total facilities",
-            }
-        )
-    else:
-        return jsonify({"success": False, "error": result.get("message", "Unknown error")}), 500
-
-
 # ============================================================================
 # API Routes - Categories (Global)
 # ============================================================================
@@ -111,7 +87,10 @@ def sync_fcc_data():
 @api_bp.route("/api/categories", methods=["GET"])
 @handle_errors(return_json=True, default_message="Error fetching categories")
 def get_all_categories():
-    """Get all categories across all accounts with channel counts.
+    """Browse synced DB categories with channel counts (admin browse / EPG UI).
+
+    Distinct from GET /api/accounts/<id>/categories (upstream-shaped cache/DB list)
+    and GET /api/channel-health/categories (health monitor filter dropdown).
 
     visible_count / hidden_count use playlist-visible semantics (account filters
     plus PPV visibility), matching M3U/EPG/Xtream output.

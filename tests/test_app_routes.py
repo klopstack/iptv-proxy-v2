@@ -76,14 +76,11 @@ class TestAccountRoutes:
     @patch("routes.accounts.get_iptv_service_for_account")
     @patch("routes.accounts.cache_service")
     def test_get_account_categories(self, mock_cache, mock_get_service, client, sample_account):
-        """Test fetching account categories"""
-        mock_service = Mock()
-        mock_service.get_live_categories.return_value = [
+        """Test fetching account categories from cache without upstream call"""
+        mock_cache.get_cached_categories.return_value = [
             {"category_id": "1", "category_name": "Sports"},
             {"category_id": "2", "category_name": "Movies"},
         ]
-        mock_get_service.return_value = mock_service
-        mock_cache.get_cached_streams.return_value = None
 
         response = client.get(f"/api/accounts/{sample_account['id']}/categories")
 
@@ -91,17 +88,18 @@ class TestAccountRoutes:
         data = response.json
         assert len(data) == 2
         assert data[0]["category_name"] == "Sports"
+        mock_get_service.assert_not_called()
 
     @patch("routes.accounts.get_iptv_service_for_account")
-    def test_get_account_categories_error(self, mock_get_service, client, sample_account):
-        """Test fetching account categories - error"""
+    def test_sync_account_categories_error(self, mock_get_service, client, sample_account):
+        """Test syncing account categories - upstream error"""
         mock_service = Mock()
         mock_service.get_live_categories.side_effect = Exception("API Error")
         mock_get_service.return_value = mock_service
 
-        response = client.get(f"/api/accounts/{sample_account['id']}/categories")
+        response = client.post(f"/api/accounts/{sample_account['id']}/categories/sync")
 
-        assert response.status_code == 400
+        assert response.status_code == 500
         data = response.json
         assert "error" in data
 

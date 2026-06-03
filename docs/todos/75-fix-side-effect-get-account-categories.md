@@ -1,6 +1,6 @@
 # Fix side-effect GET on account categories
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Complete  
 **Priority:** P1  
 **Audit:** Application-wide audit, June 2026
 
@@ -28,9 +28,9 @@ On a **GET** request. This violates HTTP semantics, causes surprising latency, a
 
 ## Acceptance criteria
 
-- [ ] GET does not call upstream IPTV API
-- [ ] Sync endpoint documented and tested
-- [ ] UI still allows manual category refresh
+- [x] GET does not call upstream IPTV API
+- [x] Sync endpoint documented and tested
+- [x] UI still allows manual category refresh
 
 ## Test plan
 

@@ -20,10 +20,12 @@ from flask_cors import CORS
 
 from error_handling import register_error_handlers
 from models import SyncMetadata, db  # noqa: F401 - imported for db.create_all()
+from services.cache_service import init_cache_service
 from services.scheduler import SyncScheduler
 
 # Initialize Flask app
 app = Flask(__name__)
+init_cache_service(app)
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:////app/data/iptv_proxy.db")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
@@ -88,7 +90,7 @@ from routes.api import api_bp, set_scheduler
 from routes.channel_health import channel_health_bp
 from routes.channel_links import channel_links_bp
 from routes.config_transfer import config_transfer_bp
-from routes.epg.channels import account_epg_channels_bp, epg_channels_bp
+from routes.epg.channels import epg_channels_bp
 from routes.epg.match_rules import account_epg_match_rules_bp, epg_match_rules_bp
 from routes.epg.schedules_direct import schedules_direct_bp
 from routes.epg.sources import epg_sources_bp
@@ -115,7 +117,6 @@ app.register_blueprint(api_bp)
 app.register_blueprint(streams_bp)
 app.register_blueprint(epg_sources_bp)
 app.register_blueprint(epg_channels_bp)
-app.register_blueprint(account_epg_channels_bp)
 app.register_blueprint(epg_match_rules_bp)
 app.register_blueprint(account_epg_match_rules_bp)
 app.register_blueprint(schedules_direct_bp)

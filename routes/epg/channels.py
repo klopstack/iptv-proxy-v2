@@ -24,9 +24,8 @@ def _apply_playlist_visibility_filter(
     return bool(account_id and not show_filtered and not is_ppv_source)
 
 
-# Create blueprints
+# Create blueprint
 epg_channels_bp = Blueprint("epg_channels", __name__, url_prefix="/api/epg")
-account_epg_channels_bp = Blueprint("account_epg_channels", __name__)
 
 
 # ============================================================================

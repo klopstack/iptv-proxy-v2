@@ -7,7 +7,7 @@ from flask import Blueprint, jsonify, request
 
 from models import Account, Filter, db
 from schemas import FilterCreateSchema, FilterUpdateSchema, validate_request_data
-from services.cache_service import CacheService
+from services.cache_service import cache_service
 from services.filter_service import FilterService
 
 logger = logging.getLogger(__name__)
@@ -16,9 +16,6 @@ logger = logging.getLogger(__name__)
 filters_bp = Blueprint("filters", __name__)
 
 # Initialize cache service
-cache_service = CacheService()
-
-
 # ============================================================================
 # API Routes - Filter CRUD
 # ============================================================================

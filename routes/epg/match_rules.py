@@ -31,7 +31,7 @@ from schemas import (
     EpgMatchRuleUpdateSchema,
     validate_request_data,
 )
-from services.cache_service import CacheService
+from services.cache_service import cache_service
 from services.datetime_utils import serialize_utc_iso
 from services.epg.match_rules import clear_fcc_pattern_cache
 
@@ -42,9 +42,6 @@ epg_match_rules_bp = Blueprint("epg_match_rules", __name__, url_prefix="/api/epg
 account_epg_match_rules_bp = Blueprint("account_epg_match_rules", __name__)
 
 # Initialize cache service
-cache_service = CacheService()
-
-
 # ============================================================================
 # Helper Functions
 # ============================================================================

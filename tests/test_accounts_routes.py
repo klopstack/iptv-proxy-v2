@@ -521,28 +521,39 @@ class TestAccountCategories:
     @patch("routes.accounts.get_iptv_service_for_account")
     @patch("routes.accounts.cache_service")
     def test_get_categories_empty(self, mock_cache, mock_get_service, app, client, test_account):
-        """Test getting categories when none exist"""
-        mock_service = MagicMock()
-        mock_service.get_live_categories.return_value = []
-        mock_get_service.return_value = mock_service
-        mock_cache.get_cached_streams.return_value = None
+        """GET returns empty list without calling upstream when cache and DB are empty"""
+        mock_cache.get_cached_categories.return_value = None
 
         response = client.get(f"/api/accounts/{test_account}/categories")
         assert response.status_code == 200
         assert response.json == []
+        mock_get_service.assert_not_called()
 
     @patch("routes.accounts.get_iptv_service_for_account")
     @patch("routes.accounts.cache_service")
-    def test_get_categories(self, mock_cache, mock_get_service, app, client, test_account):
-        """Test getting categories"""
+    def test_get_categories_from_cache(self, mock_cache, mock_get_service, app, client, test_account):
+        """Test getting categories from cache only"""
+        mock_cache.get_cached_categories.return_value = [{"category_id": "1", "category_name": "Test Category"}]
+
+        response = client.get(f"/api/accounts/{test_account}/categories")
+        assert response.status_code == 200
+        assert len(response.json) == 1
+        mock_get_service.assert_not_called()
+
+    @patch("routes.accounts.get_iptv_service_for_account")
+    @patch("routes.accounts.cache_service")
+    def test_sync_categories(self, mock_cache, mock_get_service, app, client, test_account):
+        """POST sync fetches from upstream and caches"""
         mock_service = MagicMock()
         mock_service.get_live_categories.return_value = [{"category_id": "1", "category_name": "Test Category"}]
         mock_get_service.return_value = mock_service
         mock_cache.get_cached_streams.return_value = None
 
-        response = client.get(f"/api/accounts/{test_account}/categories")
+        response = client.post(f"/api/accounts/{test_account}/categories/sync")
         assert response.status_code == 200
-        assert len(response.json) == 1
+        assert response.json["success"] is True
+        assert response.json["count"] == 1
+        mock_service.get_live_categories.assert_called_once()
 
 
 # ============================================================================
