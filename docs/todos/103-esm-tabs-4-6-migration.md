@@ -1,6 +1,6 @@
 # ESM tab migration — tabs 4–6 and ESLint (TODO 85 phase 3)
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Complete (PR pending)  
 **Priority:** P2  
 **Parent:** [85-frontend-deduplication-and-esm-migration.md](./85-frontend-deduplication-and-esm-migration.md) (phase 2 → [99](./99-esm-tab-migration-and-eslint.md))  
 **Roadmap:** [ROADMAP.md](./ROADMAP.md) — Wave 9, PR batch **Y** (follow-on to PR #40)
@@ -16,9 +16,10 @@ Migrate remaining `epg_management.html` tabs (4–6) from legacy script bundles 
 ## Affected files
 
 - `templates/epg_management.html`
-- `static/js/match_rules_exclusions.js`, `static/js/match_rules_name_mappings.js`
-- `static/js/epg_channels.js`, `static/js/epg_preview.js`, `static/js/epg_xmltv.js`, `static/js/epg_schedules_direct.js`
-- `static/js/match_rules_reference.js`
+- ~~`static/js/match_rules_exclusions.js`, `static/js/match_rules_name_mappings.js`~~ → `static/js/pages/match_rules_*_page.js`
+- ~~`static/js/epg_channels.js`, `static/js/epg_preview.js`, `static/js/epg_xmltv.js`, `static/js/epg_schedules_direct.js`~~ → `static/js/pages/epg_*_page.js`
+- ~~`static/js/match_rules_reference.js`~~ → `static/js/pages/match_rules_reference_page.js`
+- ~~`static/js/match_rules_common.js`~~ → `static/js/pages/match_rules_common_page.js`
 - `static/js/pages/`, `static/js/lib/`
 - `vitest.config.mjs`, ESLint config
 - `docs/FRONTEND_JS.md`
@@ -39,10 +40,10 @@ Consolidate per-page inline `escapeHtml` in other templates when each page gets 
 
 ## Acceptance criteria
 
-- [ ] Tabs 4–6 migrated to ESM `pages/` modules with Vitest coverage for new modules
-- [ ] Legacy script tags removed for tabs 4–6; load order documented in `FRONTEND_JS.md`
-- [ ] ESLint passes on all migrated `pages/` code (config updated if needed)
-- [ ] Existing Vitest suite green; no admin UI regressions on tabs 4–6
+- [x] Tabs 4–6 migrated to ESM `pages/` modules with Vitest coverage for new modules
+- [x] Legacy script tags removed for tabs 4–6; load order documented in `FRONTEND_JS.md`
+- [x] ESLint passes on all migrated `pages/` code (config updated if needed)
+- [x] Existing Vitest suite green; no admin UI regressions on tabs 4–6
 
 ## Test plan
 
@@ -65,4 +66,4 @@ npm run lint          # ESLint on migrated pages/
 
 ## Completion
 
-_(Add PR link(s) when merged — may be multiple PRs within batch Y.)_
+- **PR #44:** https://github.com/klopstack/iptv-proxy-v2/pull/44 — Wave 9 TODO 103; retires 8 legacy bundles; adds `lib/epg_preview_helpers.js`, `lib/epg_channels_helpers.js`, `lib/match_rules_reference_helpers.js`

@@ -1,14 +1,15 @@
-// ============================================================================
-// Exclusion Patterns
-// ============================================================================
+/**
+ * EPG match rule exclusion patterns (ESM).
+ */
+import { escapeHtml } from '../lib/escape_html.js';
 
 async function loadExclusions() {
     try {
         const response = await fetch('/api/epg-match-rules/exclusions');
         const exclusions = await response.json();
-        
+
         let html = '';
-        
+
         if (exclusions.length === 0) {
             html = `
                 <div class="alert alert-info">
@@ -19,12 +20,12 @@ async function loadExclusions() {
         } else {
             html = '<div class="table-responsive"><table class="table table-striped">';
             html += '<thead><tr><th>Priority</th><th>Name</th><th>Type</th><th>Pattern</th><th>Hide</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
-            
-            exclusions.forEach(p => {
+
+            exclusions.forEach((p) => {
                 const status = p.enabled ? '<span class="badge bg-success">Enabled</span>' : '<span class="badge bg-secondary">Disabled</span>';
                 const hideIcon = p.hide_channel ? '<i class="bi bi-eye-slash text-warning" title="Hides channel"></i>' : '';
                 const regexBadge = p.is_regex ? '<span class="badge bg-secondary">regex</span>' : '<span class="badge bg-light text-dark">literal</span>';
-                
+
                 html += `
                     <tr>
                         <td>${p.priority}</td>
@@ -44,14 +45,14 @@ async function loadExclusions() {
                     </tr>
                 `;
             });
-            
+
             html += '</tbody></table></div>';
         }
-        
+
         document.getElementById('exclusions-list').innerHTML = html;
     } catch (error) {
         document.getElementById('exclusions-list').innerHTML = `
-            <div class="alert alert-danger">Error loading exclusions: ${error.message}</div>
+            <div class="alert alert-danger">Error loading exclusions: ${escapeHtml(error.message)}</div>
         `;
     }
 }
@@ -62,17 +63,17 @@ function showCreateExclusionModal() {
     document.getElementById('exclusion-id').value = '';
     document.getElementById('exclusion-case-sensitive').checked = false;
     document.getElementById('exclusion-enabled').checked = true;
-    
+
     populateExclusionAccountDropdown();
     resetExclusionPreview();
-    
-    if (exclusionModal) exclusionModal.show();
+
+    if (window.EpgManagementState.exclusionModal) window.EpgManagementState.exclusionModal.show();
 }
 
 async function editExclusion(exclusionId) {
     const response = await fetch(`/api/epg-match-rules/exclusions/${exclusionId}`);
     const exclusion = await response.json();
-    
+
     document.getElementById('exclusionModalTitle').textContent = 'Edit Exclusion Pattern';
     document.getElementById('exclusion-id').value = exclusion.id;
     document.getElementById('exclusion-name').value = exclusion.name;
@@ -82,11 +83,11 @@ async function editExclusion(exclusionId) {
     document.getElementById('exclusion-case-sensitive').checked = !exclusion.is_regex;
     document.getElementById('exclusion-enabled').checked = exclusion.enabled;
     document.getElementById('exclusion-priority').value = exclusion.priority;
-    
+
     populateExclusionAccountDropdown();
     resetExclusionPreview();
-    
-    if (exclusionModal) exclusionModal.show();
+
+    if (window.EpgManagementState.exclusionModal) window.EpgManagementState.exclusionModal.show();
 }
 
 async function saveExclusion() {
@@ -98,19 +99,19 @@ async function saveExclusion() {
         pattern: document.getElementById('exclusion-pattern').value,
         is_regex: !document.getElementById('exclusion-case-sensitive').checked,
         enabled: document.getElementById('exclusion-enabled').checked,
-        priority: parseInt(document.getElementById('exclusion-priority').value)
+        priority: parseInt(document.getElementById('exclusion-priority').value, 10),
     };
-    
+
     try {
         const url = id ? `/api/epg-match-rules/exclusions/${id}` : '/api/epg-match-rules/exclusions';
         const method = id ? 'PUT' : 'POST';
-        
+
         const response = await fetch(url, {
-            method: method,
+            method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
+            body: JSON.stringify(data),
         });
-        
+
         if (response.ok) {
             bootstrap.Modal.getInstance(document.getElementById('exclusionModal')).hide();
             await loadExclusions();
@@ -125,7 +126,7 @@ async function saveExclusion() {
 
 async function deleteExclusion(exclusionId) {
     if (!confirm('Delete this exclusion pattern?')) return;
-    
+
     try {
         const response = await fetch(`/api/epg-match-rules/exclusions/${exclusionId}`, { method: 'DELETE' });
         if (response.ok) {
@@ -138,11 +139,11 @@ async function deleteExclusion(exclusionId) {
 
 async function createDefaultExclusions() {
     if (!confirm('Create default exclusion patterns for PPV and event channels?')) return;
-    
+
     try {
         const response = await fetch('/api/epg-match-rules/create-default-exclusions', { method: 'POST' });
         const result = await response.json();
-        
+
         if (result.success) {
             alert(result.message);
             new bootstrap.Tab(document.getElementById('exclusions-subtab')).show();
@@ -160,7 +161,7 @@ async function previewExclusionPattern() {
     const patternType = document.getElementById('exclusion-pattern-type').value;
     const isRegex = !document.getElementById('exclusion-case-sensitive').checked;
     const accountId = document.getElementById('exclusion-account-filter').value;
-    
+
     if (!pattern) {
         document.getElementById('exclusion-preview-results').style.display = 'block';
         document.getElementById('exclusion-preview-error').style.display = 'block';
@@ -168,28 +169,28 @@ async function previewExclusionPattern() {
         document.getElementById('exclusion-preview-content').style.display = 'none';
         return;
     }
-    
+
     document.getElementById('exclusion-preview-results').style.display = 'block';
     document.getElementById('exclusion-preview-loading').style.display = 'block';
     document.getElementById('exclusion-preview-error').style.display = 'none';
     document.getElementById('exclusion-preview-content').style.display = 'none';
-    
+
     try {
         const response = await fetch('/api/epg-match-rules/exclusions/preview', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 pattern_type: patternType,
-                pattern: pattern,
+                pattern,
                 is_regex: isRegex,
-                account_id: accountId || null
-            })
+                account_id: accountId || null,
+            }),
         });
-        
+
         const data = await response.json();
-        
+
         document.getElementById('exclusion-preview-loading').style.display = 'none';
-        
+
         if (data.error) {
             document.getElementById('exclusion-preview-error').style.display = 'block';
             document.getElementById('exclusion-preview-error').textContent = data.error;
@@ -198,13 +199,13 @@ async function previewExclusionPattern() {
             document.getElementById('exclusion-preview-content').style.display = 'block';
             document.getElementById('exclusion-preview-count').textContent = data.total_count;
             document.getElementById('exclusion-preview-more').style.display = data.total_count > 100 ? 'inline' : 'none';
-            
+
             let html = '';
             if (data.matches.length === 0) {
                 html = '<p class="text-muted mb-0">No channels match this pattern</p>';
             } else {
                 html = '<ul class="list-unstyled mb-0">';
-                data.matches.forEach(match => {
+                data.matches.forEach((match) => {
                     const name = escapeHtml(match.cleaned_name || match.name);
                     const category = match.category ? `<small class="text-muted"> (${escapeHtml(match.category)})</small>` : '';
                     html += `<li class="mb-1"><code>${name}</code>${category}</li>`;
@@ -220,3 +221,16 @@ async function previewExclusionPattern() {
         document.getElementById('exclusion-preview-content').style.display = 'none';
     }
 }
+
+const matchRulesExclusionsExports = {
+    loadExclusions,
+    showCreateExclusionModal,
+    editExclusion,
+    saveExclusion,
+    deleteExclusion,
+    createDefaultExclusions,
+    previewExclusionPattern,
+};
+
+Object.assign(window, matchRulesExclusionsExports);
+export { matchRulesExclusionsExports };

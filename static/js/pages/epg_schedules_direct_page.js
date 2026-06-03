@@ -1,21 +1,22 @@
-// ============================================================================
-// Schedules Direct
-// ============================================================================
+/**
+ * Schedules Direct lineup and station management (ESM).
+ */
+import { escapeHtml } from '../lib/escape_html.js';
 
 function openSearchLineupsModal(sourceId) {
     const sourceInput = document.getElementById('sdSourceSelect');
     if (sourceInput) sourceInput.value = sourceId;
-    if (searchLineupModal) searchLineupModal.show();
+    if (window.EpgManagementState.searchLineupModal) window.EpgManagementState.searchLineupModal.show();
 }
 
 async function loadSdStatus() {
     const container = document.getElementById('sd-status-content');
     if (!container) return;
-    
+
     try {
         const response = await fetch('/api/epg/sd/status');
         const status = await response.json();
-        
+
         if (status.status === 'online') {
             container.innerHTML = `
                 <div class="alert alert-success mb-0">
@@ -34,7 +35,7 @@ async function loadSdStatus() {
     } catch (error) {
         container.innerHTML = `
             <div class="alert alert-secondary mb-0">
-                <i class="bi bi-question-circle"></i> Could not check SD status: ${error.message}
+                <i class="bi bi-question-circle"></i> Could not check SD status: ${escapeHtml(error.message)}
             </div>
         `;
     }
@@ -45,24 +46,24 @@ async function testSdCredentials() {
     const password = document.getElementById('sdPassword')?.value;
     const resultDiv = document.getElementById('sdCredentialsResult');
     if (!resultDiv) return;
-    
+
     if (!username || !password) {
         alert('Please enter credentials first');
         return;
     }
-    
+
     resultDiv.style.display = 'block';
     resultDiv.innerHTML = '<div class="alert alert-secondary"><span class="spinner-border spinner-border-sm"></span> Testing...</div>';
-    
+
     try {
         const response = await fetch('/api/epg/sd/test', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ username, password }),
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success) {
             resultDiv.innerHTML = `
                 <div class="alert alert-success">
@@ -85,7 +86,7 @@ async function loadSdLineups() {
     if (!sourceInput || !container) return;
 
     const sourceId = sourceInput.value;
-    
+
     if (!sourceId) {
         if (searchBtn) {
             searchBtn.disabled = true;
@@ -94,24 +95,24 @@ async function loadSdLineups() {
         container.innerHTML = '<div class="text-center text-muted py-3">Select a Schedules Direct source to view lineups</div>';
         return;
     }
-    
+
     container.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
-    
+
     try {
         const response = await fetch(`/api/epg/sd/lineups?source_id=${sourceId}`);
         const result = await response.json();
-        
+
         if (result.error || result.success === false) {
             container.innerHTML = `<div class="alert alert-danger">${escapeHtml(result.error || 'Failed to load lineups')}</div>`;
             if (searchBtn) searchBtn.disabled = true;
             return;
         }
-        
+
         const lineups = result.lineups || [];
         const accountLineups = result.account_lineups || 0;
         const maxLineups = result.max_lineups || 4;
         const atLimit = accountLineups >= maxLineups;
-        
+
         if (atLimit) {
             if (searchBtn) {
                 searchBtn.disabled = true;
@@ -121,7 +122,7 @@ async function loadSdLineups() {
             searchBtn.disabled = false;
             searchBtn.title = `Search for lineups to add (${accountLineups}/${maxLineups} used)`;
         }
-        
+
         let html = `
             <div class="alert ${atLimit ? 'alert-warning' : 'alert-info'} mb-3">
                 <i class="bi bi-${atLimit ? 'exclamation-triangle' : 'info-circle'}"></i>
@@ -129,7 +130,7 @@ async function loadSdLineups() {
                 ${atLimit ? '<br><small>Remove a lineup from your SD account to add more.</small>' : ''}
             </div>
         `;
-        
+
         if (lineups.length === 0) {
             if (atLimit) {
                 html += `
@@ -148,7 +149,7 @@ async function loadSdLineups() {
             container.innerHTML = html;
             return;
         }
-        
+
         html += '<div class="list-group">';
         for (const lineup of lineups) {
             html += `
@@ -187,34 +188,34 @@ async function searchLineups() {
         alert('Please select a Schedules Direct source first');
         return;
     }
-    
+
     const country = document.getElementById('searchCountry').value;
     const postalcode = document.getElementById('searchPostalCode').value;
     const container = document.getElementById('lineupSearchResults');
-    
+
     if (!postalcode) {
         alert('Please enter a postal code');
         return;
     }
-    
+
     container.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
-    
+
     try {
         const response = await fetch(`/api/epg/sd/lineups/search?source_id=${sourceId}&country=${country}&postalcode=${postalcode}`);
         const result = await response.json();
-        
+
         if (!result.success) {
             container.innerHTML = `<div class="alert alert-danger">${escapeHtml(result.error || 'Search failed')}</div>`;
             return;
         }
-        
+
         const lineups = Array.isArray(result.lineups) ? result.lineups : [];
-        
+
         if (lineups.length === 0) {
             container.innerHTML = '<div class="alert alert-info">No lineups found for this location</div>';
             return;
         }
-        
+
         let html = '<div class="list-group">';
         for (const lineup of lineups) {
             html += `
@@ -243,24 +244,24 @@ async function addSdLineup(lineupId, name, location, type) {
         alert('Please select a Schedules Direct source first');
         return;
     }
-    
+
     try {
         const response = await fetch('/api/epg/sd/lineups?sync=true', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                source_id: parseInt(sourceId),
+                source_id: parseInt(sourceId, 10),
                 lineup_id: lineupId,
-                name: name,
-                location: location,
-                lineup_type: type
-            })
+                name,
+                location,
+                lineup_type: type,
+            }),
         });
-        
+
         const result = await response.json();
-        
+
         if (response.ok) {
-            if (searchLineupModal) searchLineupModal.hide();
+            if (window.EpgManagementState.searchLineupModal) window.EpgManagementState.searchLineupModal.hide();
             if (typeof loadSdLineupsInline === 'function') {
                 await loadSdLineupsInline(parseInt(sourceId, 10));
             } else {
@@ -268,12 +269,11 @@ async function addSdLineup(lineupId, name, location, type) {
             }
             if (typeof loadSources === 'function') await loadSources();
             alert(`✓ Lineup added! ${result.message}`);
+        } else if (result.limit_reached) {
+            alert(`⚠️ Lineup limit reached!\n\nYour Schedules Direct account allows a maximum of ${result.max_lineups} lineups.\n\nYou currently have ${result.current_count} lineup(s). Please remove a lineup before adding a new one.`);
+            loadSdLineups();
         } else {
-            if (result.limit_reached) {
-                alert(`⚠️ Lineup limit reached!\n\nYour Schedules Direct account allows a maximum of ${result.max_lineups} lineups.\n\nYou currently have ${result.current_count} lineup(s). Please remove a lineup before adding a new one.`);
-            } else {
-                alert('Error: ' + (result.error || 'Failed to add lineup'));
-            }
+            alert('Error: ' + (result.error || 'Failed to add lineup'));
             loadSdLineups();
         }
     } catch (error) {
@@ -286,11 +286,11 @@ async function syncSdLineup(lineupId) {
     const originalHtml = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-    
+
     try {
         const response = await fetch(`/api/epg/sd/lineups/${lineupId}/sync`, { method: 'POST' });
         const result = await response.json();
-        
+
         if (response.ok) {
             loadSdLineups();
             const msg = result.message || `Synced ${(result.channels_synced || 0) + (result.channels_updated || 0)} channels`;
@@ -308,7 +308,7 @@ async function syncSdLineup(lineupId) {
 
 async function removeSdLineup(lineupId) {
     if (!confirm('Remove this lineup and all its stations?')) return;
-    
+
     try {
         const response = await fetch(`/api/epg/sd/lineups/${lineupId}`, { method: 'DELETE' });
         if (response.ok) {
@@ -333,8 +333,8 @@ async function viewStations(lineupId, lineupName) {
     title.textContent = `Stations: ${lineupName}`;
     if (search) search.value = '';
     container.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
-    if (sdStationsModal) sdStationsModal.show();
-    
+    if (window.EpgManagementState.sdStationsModal) window.EpgManagementState.sdStationsModal.show();
+
     try {
         const response = await fetch(`/api/epg/sd/lineups/${lineupId}/stations`);
         const data = await response.json();
@@ -349,26 +349,26 @@ function filterStations() {
     const searchInput = document.getElementById('stationSearch');
     if (!searchInput) return;
     const search = searchInput.value.toLowerCase();
-    const filtered = currentStations.filter(s => 
+    const filtered = currentStations.filter((s) =>
         (s.callsign || '').toLowerCase().includes(search) ||
         (s.name || '').toLowerCase().includes(search) ||
-        (s.channel_number || '').toString().includes(search)
+        (s.channel_number || '').toString().includes(search),
     );
     renderStations(filtered);
 }
 
 function renderStations(stations) {
     const container = document.getElementById('sd-stations-list');
-    
+
     if (stations.length === 0) {
         container.innerHTML = '<div class="text-center text-muted py-3">No stations found</div>';
         return;
     }
-    
+
     let html = '<table class="table table-striped table-sm"><thead><tr>';
     html += '<th>Ch #</th><th>Callsign</th><th>Name</th><th>Affiliate</th><th>Logo</th>';
     html += '</tr></thead><tbody>';
-    
+
     for (const s of stations) {
         html += `
             <tr>
@@ -380,7 +380,23 @@ function renderStations(stations) {
             </tr>
         `;
     }
-    
+
     html += '</tbody></table>';
     container.innerHTML = html;
 }
+
+const epgSchedulesDirectExports = {
+    openSearchLineupsModal,
+    loadSdStatus,
+    testSdCredentials,
+    loadSdLineups,
+    searchLineups,
+    addSdLineup,
+    syncSdLineup,
+    removeSdLineup,
+    viewStations,
+    filterStations,
+};
+
+Object.assign(window, epgSchedulesDirectExports);
+export { epgSchedulesDirectExports };

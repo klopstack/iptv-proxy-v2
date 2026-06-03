@@ -1,6 +1,6 @@
 # Frontend helper deduplication and ESM migration plan
 
-**Status:** 🟡 Phase 1 complete (PR #33); phases 2–3 tabs 1–3 ✅ [99](./99-esm-tab-migration-and-eslint.md); tabs 4–6 remain  
+**Status:** ✅ Phase 1 complete (PR #33); phases 2–3 ✅ ([99](./99-esm-tab-migration-and-eslint.md) PR #40 + [103](./103-esm-tabs-4-6-migration.md))  
 **Priority:** P2  
 **Audit:** Application-wide audit, June 2026
 
@@ -73,4 +73,4 @@ Per-page inline copies remain in `index.html`, `ppv.html`, `stations.html`, etc.
 
 ## Wave 9 continuation
 
-Phases 2–3 (ESM tab migration + ESLint): [99-esm-tab-migration-and-eslint.md](./99-esm-tab-migration-and-eslint.md) — PR batch **Y**
+Phases 2–3 (ESM tab migration + ESLint): [99-esm-tab-migration-and-eslint.md](./99-esm-tab-migration-and-eslint.md) PR #40 (tabs 1–3) + [103-esm-tabs-4-6-migration.md](./103-esm-tabs-4-6-migration.md) (tabs 4–6) — PR batch **Y**

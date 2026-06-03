@@ -1,6 +1,6 @@
 # ESM tab migration and ESLint (TODO 85 phases 2–3)
 
-**Status:** ✅ Complete (tabs 1–3 + ESLint)  
+**Status:** ✅ Complete (tabs 1–3 PR #40; tabs 4–6 → [103](./103-esm-tabs-4-6-migration.md))  
 **Priority:** P2  
 **Parent:** [85-frontend-deduplication-and-esm-migration.md](./85-frontend-deduplication-and-esm-migration.md) (phase 1 ✅ PR #33)  
 **Roadmap:** [ROADMAP.md](./ROADMAP.md) — Wave 9, PR batch **Y**
@@ -65,3 +65,4 @@ npm run lint          # ESLint after phase 3
 - **PR #40:** https://github.com/klopstack/iptv-proxy-v2/pull/40
 - Migrated: `epg_sources_page.js`, `epg_mappings_page.js`, `epg_manual_mapping_page.js`, `match_rules_rulesets_page.js`, `match_rules_rules_page.js`
 - New lib helpers: `epg_dom_utils.js`, `epg_mappings_helpers.js`, `match_rules_rulesets_helpers.js`; `window.EpgManagementState` bridge in `epg_common.js`
+- **Follow-on:** [103-esm-tabs-4-6-migration.md](./103-esm-tabs-4-6-migration.md) — tabs 4–6 + full `pages/` ESLint coverage

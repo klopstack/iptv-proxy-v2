@@ -1,23 +1,13 @@
-// ============================================================================
-// Match Rules Common Utilities
-// ============================================================================
-// Note: accounts and matchTypes are declared globally in epg_common.js
-
-/* global escapeHtml, AccountSelect */
-
-async function loadAccounts() {
-    try {
-        accounts = await AccountSelect.fetchAccounts();
-    } catch (error) {
-        console.error('Error loading accounts:', error);
-    }
-}
+/**
+ * Shared match-rules utilities (account dropdowns, preview reset, match types).
+ */
+import { escapeHtml } from '../lib/escape_html.js';
 
 async function loadMatchTypes() {
     try {
         const response = await fetch('/api/epg-match-rules/match-types');
         const data = await response.json();
-        matchTypes = data;
+        window.EpgManagementState.matchTypes = data;
     } catch (error) {
         console.error('Error loading match types:', error);
     }
@@ -26,7 +16,7 @@ async function loadMatchTypes() {
 function populateExclusionAccountDropdown() {
     const select = document.getElementById('exclusion-account-filter');
     select.innerHTML = '<option value="">All accounts</option>';
-    accounts.forEach(account => {
+    window.EpgManagementState.accounts.forEach((account) => {
         select.innerHTML += `<option value="${account.id}">${escapeHtml(account.name)}</option>`;
     });
 }
@@ -34,7 +24,7 @@ function populateExclusionAccountDropdown() {
 function populateRuleAccountDropdown() {
     const select = document.getElementById('rule-account-filter');
     select.innerHTML = '<option value="">All accounts</option>';
-    accounts.forEach(account => {
+    window.EpgManagementState.accounts.forEach((account) => {
         select.innerHTML += `<option value="${account.id}">${escapeHtml(account.name)}</option>`;
     });
 }
@@ -56,3 +46,14 @@ function resetRulePreview() {
     document.getElementById('rule-preview-count').textContent = '0';
     document.getElementById('rule-preview-more').style.display = 'none';
 }
+
+const matchRulesCommonExports = {
+    loadMatchTypes,
+    populateExclusionAccountDropdown,
+    populateRuleAccountDropdown,
+    resetExclusionPreview,
+    resetRulePreview,
+};
+
+Object.assign(window, matchRulesCommonExports);
+export { matchRulesCommonExports };

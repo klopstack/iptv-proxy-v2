@@ -259,7 +259,8 @@ AA: 102 (PPV module splits — 65 phases 2–3)
 | 9a | [96](./96-extract-epg-match-rules-routes.md) | 78 phase 2 | Extract `routes/epg/match_rules.py` |
 | 9b | [97](./97-extract-config-transfer-routes.md) | 78 phase 3 | Extract `routes/config_transfer.py` |
 | 9c | [98](./98-fcc-patterns-split-and-cdn-sri.md) | 78 phase 4 + 92 | FCC routes + CDN SRI |
-| 9d | [99](./99-esm-tab-migration-and-eslint.md) | 85 phases 2–3 | ESM tabs + ESLint |
+| 9d | [99](./99-esm-tab-migration-and-eslint.md) | 85 phases 2–3 | ESM tabs 1–3 ✅ PR #40 |
+| 9e | [103](./103-esm-tabs-4-6-migration.md) | 85 phase 3 | ESM tabs 4–6 + ESLint |
 | 9e | [100](./100-parallelize-pytest-xdist.md) | 95 | pytest-xdist per-worker DB |
 | 9f | [102](./102-optional-ppv-module-splits.md) | 65 phases 2–3 | Split `epg.py`, `extraction.py` |
 
@@ -269,7 +270,7 @@ AA: 102 (PPV module splits — 65 phases 2–3)
 |----|-------|-------|------|
 | **W** | 96, 97 | Route splits: match_rules + config_transfer | M (split 2 PRs) |
 | **X** | 98 | FCC patterns split + CDN SRI | M |
-| **Y** | 99 | ESM tab migration + ESLint | M–L (multi-PR OK) |
+| **Y** | 99, 103 | ESM tab migration + ESLint | M–L (multi-PR OK) |
 | **Z** | 100 | Parallel pytest (pytest-xdist) | M |
 | **AA** | 102 | PPV module splits (`epg/`, `extraction/`) | L |
 
@@ -324,7 +325,8 @@ Quick reference for all suggested pull requests (A–AA + Wave 8 singles).
 | — | 8 | 79 | M | ✅ #38 |
 | **W** | 9 | 96, 97 | M | ⬜ |
 | **X** | 9 | 98 | M | 🟡 PR open |
-| **Y** | 9 | 99 | M–L | ⬜ |
+| **Y** | 9 | 99 | M–L | ✅ PR #40 |
+| **Y** | 9 | 103 | M | 🟡 PR pending |
 | **Z** | 9 | 100 | M | ⬜ |
 | **AA** | 9 | 102 | L | ✅ |
 | — | 10 | 101 | S | ⬜ after Wave 9 |
