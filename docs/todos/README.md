@@ -50,6 +50,7 @@ Update the status column in this index as each item is completed.
 | 10 | [10-deduplicate-channel-processing.md](./10-deduplicate-channel-processing.md) | ✅ | Extract shared tag-loading and duplicate-collapse helpers |
 | 11 | [11-test-hygiene.md](./11-test-hygiene.md) | ✅ | Remove 26 skipped legacy tests; consolidate fixtures in conftest |
 | 12 | [12-ui-and-nav-cleanup.md](./12-ui-and-nav-cleanup.md) | ✅ | Nav links, `/test` route naming, artifact cleanup |
+| 104 | [104-fix-pre-commit-lint-hook-install-cycle.md](./104-fix-pre-commit-lint-hook-install-cycle.md) | ✅ | Stop `lint-py` hook from re-running install / sportsipy pip clone |
 
 ## P3 — Optional / longer-term
 

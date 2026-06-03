@@ -158,7 +158,7 @@ def test_channel_filtering(client):
 
 ### Required Commands
 
-Pre-commit hooks run the same linters as CI on every `git commit` (`make lint-py` and `make lint-js`). Install them once with `make install-hooks` (included in `make install`).
+Pre-commit hooks run the same linters as CI on every `git commit` (`make lint-py` and `make lint-js`). Run **`make install` once** after clone (creates `venv/`, installs Python/JS deps, and registers hooks via `make install-hooks`). Hooks assume the venv is ready — they do **not** re-run `pip install`, `npm install`, or `pre-commit install` on each commit.
 
 ⚠️ **Run full CI parity before pushing** (pre-commit covers lint only; tests are not hooked):
 
@@ -778,6 +778,18 @@ If you see `malformed database schema`, leftover SQLite files (including `-wal`/
 # Make sure you're in virtual environment
 source venv/bin/activate
 pip install -r requirements-dev.txt
+```
+
+**Pre-commit passes but `git commit -am` fails with `invalid object` / `Error building trees`**:
+
+This was caused by `make lint-py` depending on `make install`, which re-ran `pip install` (cloning sportsipy from git) and `pre-commit install` inside the commit hook while git held a locked index. Fixed in [TODO 104](./todos/104-fix-pre-commit-lint-hook-install-cycle.md): hooks now call `make lint-py`, which only uses the existing venv.
+
+If you still see the error on an older branch, run `make install` once, then prefer `git add … && git commit` over `git commit -am`, or upgrade to a branch that includes the Makefile fix.
+
+**Pre-commit / lint: command not found or missing tools**:
+```bash
+make install   # one-time: venv + deps + hooks
+make lint-py   # verify linters run without reinstalling deps
 ```
 
 **Docker container won't start**:

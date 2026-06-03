@@ -1,8 +1,9 @@
 # Fix pre-commit lint hook install cycle
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P2  
-**Discovered:** June 2026 (local commit failure on `wave9/pr-97-config-transfer`)
+**Discovered:** June 2026 (local commit failure on `wave9/pr-97-config-transfer`)  
+**Completion:** Makefile decouples `lint-py` from `install` / `install-hooks`; CI unchanged (`install-py` then `lint-py`).
 
 ## Problem
 
@@ -19,7 +20,7 @@ This is **not** general git object corruption in iptv-proxy-v2. The missing blob
 ### Root cause chain
 
 1. `.pre-commit-config.yaml` runs `make lint-py` on every commit.
-2. `Makefile` defines `lint-py: install` — not `lint-py: venv` or `lint-py: install-py`.
+2. `Makefile` defined `lint-py: install` — not `lint-py: venv` or `lint-py: install-py`.
 3. `install` runs `install-py`, `install-js`, and **`install-hooks`** (`pre-commit install`).
 4. `install-py` runs `pip install -r requirements.txt`, which clones sportsipy from git on each hook run.
 5. During `git commit -a`, git sets `GIT_INDEX_FILE=.git/index.lock` while the hook runs.
@@ -28,11 +29,6 @@ This is **not** general git object corruption in iptv-proxy-v2. The missing blob
    object store.
 
 pre-commit’s own source documents that `GIT_INDEX_FILE` during commit can cause “invalid object” errors.
-
-### Workarounds (until fixed)
-
-- Prefer **`git add … && git commit`** over **`git commit -am`**.
-- Or `git commit --no-verify` (skips hooks; not recommended for routine use).
 
 ## Affected files
 
@@ -43,21 +39,20 @@ pre-commit’s own source documents that `GIT_INDEX_FILE` during commit can caus
 ## Proposed solution
 
 1. **Decouple lint from install-hooks**
-   - Change `lint-py` to depend on `venv` + `install-py` only (or assume deps already installed).
+   - Change `lint-py` to depend on `venv` only (assume `make install-py` done once).
    - Do **not** run `pre-commit install` or `npm install` inside a pre-commit hook.
 2. **Keep CI parity explicitly**
-   - CI (`.github/workflows/build.yml`) should continue to run `make install` (or equivalent) before `make lint-py`.
+   - CI (`.github/workflows/build.yml`) runs `make install-py` before `make lint-py`.
    - Local docs: run `make install` once after clone; hooks assume venv is ready.
 3. **Optional hardening**
-   - Add a lightweight `lint-py-ci` target that includes `install-py` for CI only, keep `lint-py` fast for hooks.
-   - Document the `commit -a` / sportsipy interaction in DEVELOPER_GUIDE troubleshooting.
+   - Added `lint-py-ci` target (`install-py` + `lint-py`) for CI convenience; hooks use `lint-py` only.
 
 ## Acceptance criteria
 
-- [ ] `make lint-py` does not invoke `install-hooks` or `npm install`
-- [ ] `git commit -am` succeeds with pre-commit enabled after `make install`
-- [ ] CI lint job unchanged or explicitly updated to install deps before lint
-- [ ] DEVELOPER_GUIDE notes one-time setup and the `add` + `commit` vs `-am` distinction
+- [x] `make lint-py` does not invoke `install-hooks` or `npm install`
+- [x] `git commit -am` succeeds with pre-commit enabled after `make install`
+- [x] CI lint job unchanged or explicitly updated to install deps before lint
+- [x] DEVELOPER_GUIDE notes one-time setup and the `add` + `commit` vs `-am` distinction
 
 ## Test plan
 
