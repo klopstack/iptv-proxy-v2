@@ -1,8 +1,9 @@
 # Tennis calendar event source for PPV matching
 
-**Status:** 🟡 Phase 1 spike complete — Phase 2 not started  
+**Status:** 🟡 Phase 1 spike complete — Phase 2 ESPN (PR #56) in progress  
 **Priority:** P2  
-**Audit:** Production matching analysis, June 2026 (`docker.klopnet.com`)
+**Audit:** Production matching analysis, June 2026 (`docker.klopnet.com`) — [tennis-ppv-production-audit.md](../architecture/tennis-ppv-production-audit.md)  
+**Follow-up (secondary calendar):** [125](./125-sofascore-tennis-calendar-slice1.md), [126](./126-sofascore-calendar-multi-sport-and-enrichment.md)
 
 ## Problem
 
@@ -37,9 +38,10 @@ This TODO covers **professional tennis** (ATP/WTA/Challenger/ITF singles and dou
 
 1. **Audit TheSportsDB** for tennis coverage: league IDs, event density, name format vs channel titles (player order, `@` times).
 2. **Evaluate alternative APIs** (document in TODO before coding):
-   - TheSportsDB tennis leagues (if adequate)
-   - API-Tennis / Sportradar / other (license, rate limits, self-host constraints)
-   - ESPN/scrape (discouraged unless no API)
+   - TheSportsDB tennis leagues (if adequate) — **ruled out** (spike)
+   - API-Tennis / Sportradar / other — deferred; spike favored API-Tennis but **superseded by ESPN decision** (below)
+   - **ESPN** — primary calendar for ATP/WTA/Challenger (PR #56 slice 1)
+   - **SofaScore** — optional secondary for wheelchair, legends, ITF ([125](./125-sofascore-tennis-calendar-slice1.md) / [126](./126-sofascore-calendar-multi-sport-and-enrichment.md))
 3. **Decision record** in architecture doc: chosen source, refresh interval, composite `(external_id, source)` scheme per TODO 55.
 
 ### Functional
@@ -64,11 +66,17 @@ This TODO covers **professional tennis** (ATP/WTA/Challenger/ITF singles and dou
 - Sample 20 production tennis channel names; manually verify which appear in candidate APIs for the inferred date.
 - Fill decision table in this TODO or architecture doc.
 
-**Phase 2 — Minimal viable source**
+**Phase 2 — ESPN primary (PR #56)**
 
-- Implement `TennisCalendarProvider.get_events_for_date(date) -> List[CalendarEvent]`.
-- Register in calendar scraper aggregation alongside TheSportsDB + MiLB.
+- Implement ESPN tennis `get_events_for_date(date) -> List[CalendarEvent]` (in-repo module; no wholesale fork of third-party scrapers).
+- Register in calendar scraper aggregation alongside TheSportsDB + MiLB **before** SofaScore.
 - Normalize to shared `CalendarEvent` shape (`home_team`/`away_team` as player names or `event_name` for doubles).
+- `Event.SOURCE_ESPN` (or agreed constant from PR #56); `external_id` from ESPN payload.
+
+**Phase 2b — SofaScore secondary (optional)**
+
+- [125](./125-sofascore-tennis-calendar-slice1.md) — client + parser + fixtures + `SOURCE_SOFASCORE`; not wired to enrichment.
+- [126](./126-sofascore-calendar-multi-sport-and-enrichment.md) — merge after ESPN; feature flag default off; wheelchair/legends/ITF gaps.
 
 **Phase 3 — Matching tuning**
 
@@ -134,17 +142,17 @@ Baseline: **341** tennis-prefixed `no_match`.
 
 Production `get_events_for_date("2026-06-03")` → **79 events, 2 tennis** (ATP RG men's QF only). WTA, wheelchair, junior, and ITF draws missing. Player search finds Kalinskaya/Sabalenka/etc., but no corresponding events. TSDB cannot support 341 `no_match` tennis channels.
 
-### Recommended source: **API-Tennis** (`api.api-tennis.com`)
+### Spike recommendation (2026-06-03): API-Tennis — **superseded**
 
-| Factor | Rationale |
-|--------|-----------|
-| Coverage | ATP/WTA/Challenger/ITF/Boys/Girls documented; date-range `get_fixtures` fits ±7 day window |
-| Cost | ~$40/mo, 8k req/day — one call per date range ≪ budget |
-| Integration | Same merge pattern as MiLB in `thesportsdb_calendar_scraper.py` |
-| Self-host | Cloud API (acceptable; same as TSDB/MLB Stats) |
-| Names | `event_first_player` / `event_second_player` as `"F. Last"` — needs last-name fuzzy match (existing strategies) |
+The spike below recommended API-Tennis. **Current plan (June 2026):** **ESPN** as primary tennis calendar (PR #56); **SofaScore** as optional secondary ([125](./125-sofascore-tennis-calendar-slice1.md), [126](./126-sofascore-calendar-multi-sport-and-enrichment.md)) for wheelchair, legends, ITF, and later niche sports.
 
-**Not chosen for MVP:** Sportradar (enterprise quote), ATP/WTA official (B2B only), ESPN scrape (discouraged).
+| Factor | API-Tennis (spike) | ESPN (chosen primary) | SofaScore (secondary) |
+|--------|-------------------|----------------------|------------------------|
+| Coverage | Broad draws documented | ATP/WTA/Challenger live draws | Wheelchair, ITF, legends gaps |
+| Cost | ~$40/mo API key | In-repo / existing patterns | No key; rate-limited scrape |
+| Integration | MiLB merge pattern | PR #56 slice 1 | After ESPN; flag off by default |
+
+**Not chosen for MVP:** Sportradar (enterprise quote), ATP/WTA official (B2B only), API-Tennis (deferred), wholesale fork of [sofascore_scraper](https://github.com/tunjayoff/sofascore_scraper).
 
 ### Sample API responses (keys redacted)
 
@@ -170,21 +178,25 @@ Production `get_events_for_date("2026-06-03")` → **79 events, 2 tennis** (ATP 
 | Hewett/Reid vs Cattaneo/Rodrigues | Yes (WC doubles QF) | No | TBD |
 | Cvetkovic vs Pinera Celorio | Yes (junior girls) | No | Likely |
 
-### Phase 2 MVP outline
+### Phase 2 MVP outline (ESPN — PR #56)
 
-1. `services/tennis_calendar.py` — `fetch_tennis_events_for_date()` → `CalendarEvent` with `source=api_tennis`
-2. `Event.SOURCE_API_TENNIS = "api_tennis"`; `external_id` = API `event_key`
-3. Merge in `TheSportsDBCalendarScraper.get_events_for_date()` (MiLB pattern)
-4. Settings: `ppv_api_tennis_key`; cache TTL 12h; single `get_fixtures` for ±7 day window
-5. Detail fetch: skip / `basic` completeness (no TSDB detail queue)
-6. Recorded fixtures + integration test
+1. ESPN tennis calendar module — `fetch_espn_tennis_events_for_date()` → `CalendarEvent` with ESPN `source` constant from PR #56
+2. Merge in `TheSportsDBCalendarScraper.get_events_for_date()` (MiLB pattern) **before** any SofaScore rows
+3. Cache TTL 12h; align rate limits with existing scrapers
+4. Detail fetch: skip / `basic` completeness (no TSDB detail queue for non-TSDB sources)
+5. Recorded fixtures + integration test
 
-**Estimate:** 2–3 days. **Blockers:** API-Tennis trial to confirm wheelchair coverage; doubles name parsing; TODO 120 date fix; production circular-import in API supplement.
+**Estimate:** PR #56 scope. **Blockers:** doubles name parsing; TODO 120 date fix ✅.
 
-### Open questions for Phase 2
+### Phase 2b outline (SofaScore — see 125/126)
 
-- [ ] Does API-Tennis include wheelchair/quad draws on Starter plan?
+1. [125](./125-sofascore-tennis-calendar-slice1.md) — isolated client + `SOURCE_SOFASCORE`
+2. [126](./126-sofascore-calendar-multi-sport-and-enrichment.md) — merge after ESPN; `ppv_sofascore_calendar_enabled` default false
+
+### Open questions for Phase 2–2b
+
+- [ ] ESPN payload coverage for wheelchair/quad draws on same day as production audit?
 - [ ] Abbreviated vs full name matching threshold — reuse LastName strategy or tennis-specific?
 - [ ] Doubles channel format (`A Hewett G Reid`) — extend competitor extractor or match on combined tokens?
-- [ ] Shared `calendar_cache.json` vs separate tennis cache file?
-- [ ] Legends/exhibition slots (Cornet/Hingis) — accept permanent `no_match`?
+- [ ] SofaScore fixture overlap with ESPN — dedup rules in [126](./126-sofascore-calendar-multi-sport-and-enrichment.md)
+- [ ] Legends/exhibition slots — ESPN vs SofaScore vs permanent `no_match` / `skipped`

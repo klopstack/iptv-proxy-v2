@@ -2,13 +2,13 @@
 
 This directory contains detailed work items identified during the post-restructuring codebase audit (May 2026). Each document is self-contained: problem statement, affected files, proposed solution, acceptance criteria, and test plan.
 
-**Open backlog (18 required):** see **[ROADMAP.md](./ROADMAP.md)** for waves and PR batches. Per-item specs stay in the linked TODO files below.
+**Open backlog (19 required):** see **[ROADMAP.md](./ROADMAP.md)** (index) and **[ROADMAP-active.md](./ROADMAP-active.md)** (open waves). Completed waves 1–10: **[archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-waves-1-10.md)**. Per-item specs stay in the linked TODO files below.
 
 | Track | Open TODOs |
 |-------|------------|
 | Dashboard follow-ups | [107](./107-dashboard-stats-performance-hardening.md)–[110](./110-dashboard-optional-ux-follow-ups.md) |
 | PostgreSQL migration | [111](./111-pg-prep-raw-sqlite3-audit.md)–[119](./119-pg-migration-cleanup-and-docs.md) |
-| PPV production matching | [120](./120-fix-ppv-date-extraction-parsing-bugs.md)–[124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) |
+| PPV production matching | [120](./120-fix-ppv-date-extraction-parsing-bugs.md)–[126](./126-sofascore-calendar-multi-sport-and-enrichment.md) (120 ✅; 124 🟡) |
 
 Waves **1–10** ✅ — merged PRs #10–51 (audit remediation through final doc review). Wave **9** batches **W–AA** (#39–47) and Wave **10** (#101 doc sync) complete.
 
@@ -251,25 +251,27 @@ Full-stack review of PPV handling: enrichment pipeline, multi-source events (MiL
 
 ### P5 follow-up — production matching gaps (June 2026)
 
-Identified from live analysis on `docker.klopnet.com` (18,625 active PPV channels; 110 matched; 1,072 `no_match`; 15,443 `skipped`). See [ROADMAP.md](./ROADMAP.md) Wave 12.
+Identified from live analysis on `docker.klopnet.com` (18,625 active PPV channels; 110 matched; 1,072 `no_match`; 15,443 `skipped`). See [ROADMAP-active.md](./ROADMAP-active.md) Wave 12.
 
 | # | Document | Status | Summary |
 |---|----------|--------|---------|
-| 120 | [120-fix-ppv-date-extraction-parsing-bugs.md](./120-fix-ppv-date-extraction-parsing-bugs.md) | ⬜ | Wrong calendar day from `Jun 4`, `@ Jun 3`, time-only titles; align both date extractors |
+| 120 | [120-fix-ppv-date-extraction-parsing-bugs.md](./120-fix-ppv-date-extraction-parsing-bugs.md) | ✅ | Wrong calendar day from `Jun 4`, `@ Jun 3`, time-only titles; align both date extractors |
 | 121 | [121-mlb-team-abbreviation-resolution.md](./121-mlb-team-abbreviation-resolution.md) | ⬜ | Peacock `BAL at BOS` abbreviations fail; full names match |
-| 122 | [122-tennis-calendar-event-source.md](./122-tennis-calendar-event-source.md) | ⬜ | 341 tennis PPV channels; zero tennis in TheSportsDB calendar |
+| 122 | [122-tennis-calendar-event-source.md](./122-tennis-calendar-event-source.md) | 🔄 | ESPN primary tennis (PR #56); spike ✅ |
 | 123 | [123-extended-calendar-coverage-college-obscure-sports.md](./123-extended-calendar-coverage-college-obscure-sports.md) | ⬜ | WCWS, Championship playoffs, DAZN obscure leagues, boxing, stale ESPN Play |
-| 124 | [124-ppv-enrichment-attempt-tracking-and-requeue.md](./124-ppv-enrichment-attempt-tracking-and-requeue.md) | ⬜ | `ppv_enrichment_attempts` always 0; requeue workflow after matching fixes |
+| 124 | [124-ppv-enrichment-attempt-tracking-and-requeue.md](./124-ppv-enrichment-attempt-tracking-and-requeue.md) | 🔄 | `ppv_enrichment_attempts` always 0; requeue workflow after matching fixes |
+| 125 | [125-sofascore-tennis-calendar-slice1.md](./125-sofascore-tennis-calendar-slice1.md) | ⬜ | SofaScore client + tennis parser + fixtures; `SOURCE_SOFASCORE`; not wired |
+| 126 | [126-sofascore-calendar-multi-sport-and-enrichment.md](./126-sofascore-calendar-multi-sport-and-enrichment.md) | ⬜ | Merge after ESPN; sport slugs; MMA/table tennis; fallback gaps |
 
 ```
-124-attempt-tracking (parallel with 120)
-120-date-extraction ──► 121-mlb-abbrevs
-120-date-extraction ──► 122-tennis-source
-120-date-extraction ──► 123-extended-coverage (tracks D stale → A WCWS → B playoffs → C boxing)
+124-attempt-tracking (parallel with 121+)
+120-date-extraction ✅ ──► 121-mlb-abbrevs
+120 ──► 122 ESPN tennis (PR #56) ──► 125 SofaScore slice 1 ──► 126 wire + fallback
+120 ──► 123-extended-coverage (tracks D stale → A WCWS → B playoffs → C boxing)
 124-requeue ──► verify all tracks on production
 ```
 
-**Highest impact first:** 124 (tracking + requeue) + 120 → 121 (quick MLB win) → 122 / 123 tracks by volume.
+**Highest impact first:** 124 (tracking + requeue) → 121 (MLB) → 122 ESPN → 125/126 SofaScore (secondary) → 123 by volume.
 
 ---
 
@@ -320,7 +322,7 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 
 ## Wave 9 — Completion and follow-ups (June 2026)
 
-Phased remainders from TODOs 78, 85, 92, 95; PPV module splits from TODO 65 (102). Specs in each file; order in [ROADMAP.md](./ROADMAP.md).
+Phased remainders from TODOs 78, 85, 92, 95; PPV module splits from TODO 65 (102). Specs in each file; completed order in [archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-waves-1-10.md).
 
 | # | Document | Status | Summary |
 |---|----------|--------|---------|
@@ -367,7 +369,7 @@ Phased remainders from TODOs 78, 85, 92, 95; PPV module splits from TODO 65 (102
 
 **Architecture review:** [admin-auth-and-deployment-security.md](../architecture/admin-auth-and-deployment-security.md), [api-contract-errors-and-responses.md](../architecture/api-contract-errors-and-responses.md), [channel-visibility-is-visible.md](../architecture/channel-visibility-is-visible.md), [scheduler-and-sync-orchestration.md](../architecture/scheduler-and-sync-orchestration.md), [epg-service-architecture.md](../architecture/epg-service-architecture.md), [frontend-architecture-debt.md](../architecture/frontend-architecture-debt.md), [schema-lifecycle-and-test-parity.md](../architecture/schema-lifecycle-and-test-parity.md), [api-layer-and-fat-routes.md](../architecture/api-layer-and-fat-routes.md)
 
-**Highest impact first (open work):** see [ROADMAP.md](./ROADMAP.md) — **Wave 12** PPV matching (120–124) or **Wave 11** PostgreSQL prep (111–115). Waves 1–10 ✅ (PRs #10–51).
+**Highest impact first (open work):** see [ROADMAP-active.md](./ROADMAP-active.md) — **Wave 12** PPV matching (121–126) or **Wave 11** PostgreSQL prep (111–115). Waves 1–10 ✅ — [archive](./archive/ROADMAP-waves-1-10.md).
 
 ### P6 findings summary
 
@@ -461,4 +463,4 @@ These items were derived from full codebase reviews covering:
 - Provider EPG de-emphasized in UI with deprecation warnings (TODO 31 ✅)
 - Vitest coverage expanded across lib helpers (TODO 32 ✅)
 - MediaFlow/stream-factory tests added (TODO 26 ✅)
-- PPV audit remediation (52–67) ✅; app-wide backlog (68–95) ✅; Waves 9–10 ✅; dashboard 107–109 ✅; remaining: Waves 11–12 — see [ROADMAP.md](./ROADMAP.md)
+- PPV audit remediation (52–67) ✅; app-wide backlog (68–95) ✅; Waves 9–10 ✅; remaining: Waves 11–12, dashboard 107–110 — see [ROADMAP-active.md](./ROADMAP-active.md)

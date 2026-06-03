@@ -123,7 +123,7 @@ Track progress by **`no_match_count`** vs **`skipped`** with documented reasons 
 ## Dependencies
 
 - [120](./120-fix-ppv-date-extraction-parsing-bugs.md) — prerequisite for all tracks.
-- [122](./122-tennis-calendar-event-source.md) — tennis split out; do not bundle here.
+- [122](./122-tennis-calendar-event-source.md) — tennis (ESPN + SofaScore [125](./125-sofascore-tennis-calendar-slice1.md)–[126](./126-sofascore-calendar-multi-sport-and-enrichment.md)); do not bundle here.
 - [57](./57-centralize-sport-key-mappings.md) — sport context for college vs pro.
 - [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) — re-evaluate channels after changes.
 
