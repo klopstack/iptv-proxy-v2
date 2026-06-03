@@ -83,6 +83,9 @@ jobs:
       - name: Install dependencies via Makefile
         run: make install
 
+      - name: Verify required static assets
+        run: test -f static/js/mpegts.min.js
+
       - name: Run tests with coverage via Makefile
         run: make test
 

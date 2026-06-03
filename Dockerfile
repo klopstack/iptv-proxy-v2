@@ -23,11 +23,15 @@ COPY . .
 
 RUN python -c "from services.sportsipy_service import SPORTSIPY_AVAILABLE; assert SPORTSIPY_AVAILABLE, 'sportsipy team imports failed'"
 
-# Create data directory and make entrypoint executable
-RUN mkdir -p /app/data && \
+# Create data directory, non-root user (aligns with compose PUID/PGID), entrypoint
+RUN groupadd --gid 1000 appuser && \
+    useradd --uid 1000 --gid 1000 --create-home appuser && \
+    mkdir -p /app/data && \
+    chown -R appuser:appuser /app && \
     chmod +x /app/entrypoint.sh
 
-# Set working directory for data storage
+USER appuser
+
 WORKDIR /app
 
 # Environment variables

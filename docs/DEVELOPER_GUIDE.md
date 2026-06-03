@@ -37,7 +37,6 @@ pip install -r requirements-dev.txt
 
 # Set environment variables
 export DATABASE_URL="sqlite:///$(pwd)/data/iptv_proxy.db"
-export SECRET_KEY="dev-secret-key"
 
 # Initialize database
 python app.py  # Auto-creates tables on startup

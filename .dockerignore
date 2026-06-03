@@ -1,0 +1,39 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+venv/
+.venv/
+
+# Node / frontend dev
+node_modules/
+
+# Test and coverage output
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+instance/
+*.db
+*.db-wal
+*.db-shm
+
+# Git and editor
+.git/
+.gitignore
+.cursor/
+
+# Documentation and CI (not needed at runtime)
+docs/
+.github/
+
+# Local data (mounted as volume in compose)
+data/

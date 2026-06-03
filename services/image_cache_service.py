@@ -23,6 +23,8 @@ from urllib.parse import urlparse
 
 import requests
 
+from services.url_validation import is_safe_external_url
+
 logger = logging.getLogger(__name__)
 
 # Default configuration
@@ -142,8 +144,31 @@ class ImageCacheService:
             logger.error(f"Error reading cached image {url_hash[:8]}...: {e}")
             return None
 
+    def prefetch_icon(self, url: str, force_refresh: bool = False) -> str:
+        """Fetch and cache an icon from a sync-known URL.
+
+        Only call from sync pipelines (provider/EPG), never from HTTP handlers.
+
+        Returns:
+            "cached" — stored successfully (or already valid in cache)
+            "skipped" — invalid/unsafe URL or empty
+            "failed" — fetch or persistence error
+        """
+        if not url or not self._is_valid_url(url):
+            return "skipped"
+
+        allowed, reason = is_safe_external_url(url, https_only=False)
+        if not allowed:
+            logger.debug("Skipping unsafe icon URL (%s): %s", reason, url[:120])
+            return "skipped"
+
+        url_hash = self.cache_image(url, force_refresh=force_refresh)
+        return "cached" if url_hash else "failed"
+
     def cache_image(self, url: str, force_refresh: bool = False) -> Optional[str]:
         """Fetch and cache an image from URL.
+
+        Internal use — prefer prefetch_icon() from sync code paths.
 
         Args:
             url: Image URL to fetch
@@ -320,86 +345,49 @@ class ImageCacheService:
         return "application/octet-stream"
 
     def get_or_cache(self, url: str) -> Tuple[Optional[bytes], Optional[str]]:
-        """Get image from cache or fetch and cache it.
+        """Return cached image bytes if already prefetched; never fetches on demand."""
+        return self.get_cached_image(url) or (None, None)
 
-        Args:
-            url: Image URL
+    def is_icon_cached(self, url: str) -> bool:
+        """Return True when the URL has a non-expired cached icon entry."""
+        from models import CachedImage
 
-        Returns:
-            Tuple of (image_bytes, content_type) or (None, None) on failure
-        """
-        # Try cache first
-        result = self.get_cached_image(url)
-        if result:
-            return result
+        if not url or not self._is_valid_url(url):
+            return False
 
-        # Cache it
-        url_hash = self.cache_image(url)
-        if url_hash:
-            cached_result = self.get_cached_image(url)
-            if cached_result:
-                return cached_result
-
-        return None, None
+        url_hash = self.hash_url(url)
+        try:
+            cached = CachedImage.query.filter_by(url_hash=url_hash, status="cached").first()
+            if not cached:
+                return False
+            if cached.expires_at and datetime.now(timezone.utc).replace(tzinfo=None) > cached.expires_at:
+                return False
+            file_path = self.cache_dir / cached.file_path if cached.file_path else None
+            return bool(file_path and file_path.exists())
+        except Exception:
+            return False
 
     def get_proxy_url(self, original_url: str, base_url: str) -> str:
-        """Get proxy URL for an image.
+        """Get proxy URL for a prefetched icon, or the original URL if not cached.
 
-        If caching is enabled and URL is valid, returns a proxy URL.
-        Also registers the URL in the database so it can be fetched on-demand.
-        Otherwise returns the original URL.
+        Icons must be prefetched during provider/EPG sync before they can be
+        served through /icon/<hash> — arbitrary URLs are never registered here.
 
         Args:
             original_url: Original external image URL
             base_url: Base URL of this proxy (e.g., "http://localhost:8000")
 
         Returns:
-            Proxy URL or original URL
+            Proxy URL when cached, otherwise the original URL
         """
         if not original_url or not self._is_valid_url(original_url):
             return original_url or ""
 
+        if not self.is_icon_cached(original_url):
+            return original_url
+
         url_hash = self.hash_url(original_url)
-
-        # Register URL in database so serve route can fetch it on-demand
-        self._register_url(url_hash, original_url)
-
         return f"{base_url.rstrip('/')}/icon/{url_hash}"
-
-    def _register_url(self, url_hash: str, original_url: str) -> None:
-        """Register a URL in the database for on-demand fetching.
-
-        This creates a 'pending' entry if one doesn't exist, allowing
-        the serve route to fetch the image when first requested.
-        """
-        try:
-            from flask import has_app_context
-
-            if not has_app_context():
-                # Can't register without app context - image will 404 if not pre-cached
-                return
-        except ImportError:
-            return
-
-        from models import CachedImage, db
-
-        try:
-            existing = CachedImage.query.filter_by(url_hash=url_hash).first()
-            if not existing:
-                cached = CachedImage(
-                    url_hash=url_hash,
-                    original_url=original_url,
-                    status="pending",
-                )
-                db.session.add(cached)
-                db.session.commit()
-        except Exception as e:
-            # Don't fail if we can't register - just log it
-            logger.debug(f"Could not register URL {url_hash[:8]}...: {e}")
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
 
     def cleanup_expired(self, delete_files: bool = True) -> int:
         """Clean up expired cache entries.

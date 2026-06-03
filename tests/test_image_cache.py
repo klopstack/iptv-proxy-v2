@@ -5,6 +5,7 @@ Uses shared fixtures from conftest.py for proper test isolation.
 """
 import tempfile
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -118,18 +119,46 @@ class TestImageCacheService:
         # Unknown
         assert service._detect_content_type(b"unknown") == "application/octet-stream"
 
-    def test_get_proxy_url(self, temp_cache_dir):
-        """Test proxy URL generation"""
+    def test_get_proxy_url_uncached_returns_original(self, temp_cache_dir):
+        """Proxy URL falls back to original when icon is not prefetched."""
         from services.image_cache_service import ImageCacheService
 
         service = ImageCacheService(cache_dir=temp_cache_dir)
         original_url = "https://example.com/icon.png"
+
+        assert service.get_proxy_url(original_url, "http://localhost:8000") == original_url
+
+    def test_get_proxy_url_when_cached(self, app, temp_cache_dir):
+        """Proxy URL is returned only for prefetched/cached icons."""
+        from datetime import datetime, timedelta, timezone
+
+        from services.image_cache_service import ImageCacheService
+
+        original_url = "https://example.com/icon.png"
         base_url = "http://localhost:8000"
 
-        proxy_url = service.get_proxy_url(original_url, base_url)
-        url_hash = service.hash_url(original_url)
+        with app.app_context():
+            service = ImageCacheService(cache_dir=temp_cache_dir)
+            url_hash = service.hash_url(original_url)
 
-        assert proxy_url == f"http://localhost:8000/icon/{url_hash}"
+            subdir = Path(temp_cache_dir) / url_hash[:2]
+            subdir.mkdir(parents=True, exist_ok=True)
+            file_name = url_hash + ".png"
+            (subdir / file_name).write_bytes(b"\x89PNG\r\n\x1a\n")
+
+            cached = CachedImage(
+                url_hash=url_hash,
+                original_url=original_url,
+                status="cached",
+                content_type="image/png",
+                file_path=f"{url_hash[:2]}/{file_name}",
+                expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=7),
+            )
+            db.session.add(cached)
+            db.session.commit()
+
+            proxy_url = service.get_proxy_url(original_url, base_url)
+            assert proxy_url == f"{base_url}/icon/{url_hash}"
 
     def test_get_proxy_url_invalid(self, temp_cache_dir):
         """Test proxy URL returns original for invalid URLs"""
@@ -294,13 +323,10 @@ class TestImageRoutes:
         assert data["entries"][0]["expires_at"].endswith("Z")
         assert data["entries"][0]["last_accessed_at"].endswith("Z")
 
-    def test_fetch_and_cache_icon_no_url(self, image_cache_client):
-        """Test fetch endpoint without URL"""
-        response = image_cache_client.post("/icon/fetch", json={})
-        assert response.status_code == 400
-
-        data = response.get_json()
-        assert "error" in data
+    def test_fetch_and_cache_icon_removed(self, image_cache_client):
+        """Dynamic /icon/fetch endpoint is removed (SSRF hardening)."""
+        response = image_cache_client.post("/icon/fetch", json={"url": "https://example.com/x.png"})
+        assert response.status_code == 405
 
     def test_cleanup_cache(self, app, image_cache_client):
         """Test cache cleanup endpoint"""
@@ -374,12 +400,13 @@ class TestPlaylistIconProxy:
             db.session.add(category)
             db.session.flush()
 
+            icon_url = "https://external.com/icon.png"
             channel = Channel(
                 account_id=account.id,
                 stream_id="123",
                 name="Test Channel",
                 cleaned_name="Test Channel",
-                stream_icon="https://external.com/icon.png",
+                stream_icon=icon_url,
                 category_id=category.id,
                 is_active=True,
                 is_visible=True,
@@ -388,6 +415,17 @@ class TestPlaylistIconProxy:
             db.session.commit()
 
             account_id = account.id
+            icon_url = "https://external.com/icon.png"
+
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.headers = {"Content-Type": "image/png", "Content-Length": "100"}
+            mock_response.iter_content = MagicMock(return_value=[b"\x89PNG\r\n\x1a\n" + b"x" * 92])
+
+            from services.icon_prefetch import prefetch_icon_urls
+
+            with patch("requests.get", return_value=mock_response):
+                prefetch_icon_urls([icon_url])
 
         # Test default (proxy_icons=true from settings) - should have proxied URL
         response = image_cache_client.get(f"/playlist/{account_id}.m3u")

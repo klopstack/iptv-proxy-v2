@@ -81,7 +81,6 @@ clean: ## Clean up Python generated files
 
 # Local development environment variables
 export DATABASE_URL ?= sqlite:///$(PWD)/data/iptv_proxy.db
-export SECRET_KEY ?= dev-secret-key
 
 clean-js: ## Clean up JavaScript dependencies
 	rm -rf node_modules package-lock.json

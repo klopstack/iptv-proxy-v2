@@ -239,6 +239,14 @@ class ChannelSyncService:
                         logger.error("Backup pair detection after sync failed: %s", e)
                         stats["errors"].append(f"Backup pair detection error: {str(e)}")
 
+                try:
+                    from services.icon_prefetch import prefetch_account_channel_icons
+
+                    stats["icon_prefetch"] = prefetch_account_channel_icons(account_id)
+                except Exception as e:
+                    logger.error("Icon prefetch after sync failed: %s", e)
+                    stats["errors"].append(f"Icon prefetch error: {str(e)}")
+
             logger.info(
                 f"Sync completed for account {account.name}: "
                 f"{stats['channels_added']} added, {stats['channels_updated']} updated, "
