@@ -10,14 +10,17 @@ from services.ppv import enrichability
 from services.ppv.enrichability import (
     classify_ppv_enrichment,
     is_ppv_section_header,
+    is_unsupported_college_sport_title,
     is_unsupported_league_title,
     stale_archive_date_from_title,
 )
 from services.ppv.enrichment import PPVCalendarEnrichmentService
+from services.ppv.extraction import PPVEventExtractor
 
 STALE_FIXTURE = Path(__file__).parent / "fixtures" / "stale_espn_play.json"
 BOXING_FIXTURE = Path(__file__).parent / "fixtures" / "boxing_channels.json"
 CHAMPIONSHIP_FIXTURE = Path(__file__).parent / "fixtures" / "championship_playoff.json"
+WCWS_FIXTURE = Path(__file__).parent / "fixtures" / "wcws_channels.json"
 
 
 class TestSectionHeader:
@@ -135,6 +138,32 @@ class TestTrackBUnsupportedLeague:
         row = next(r for r in championship_channels if r["id"] == "charlton_leicester")
         assert classify_ppv_enrichment(row["name"]) is None
         assert is_unsupported_league_title(row["name"]) is False
+
+
+class TestTrackAUnsupportedCollegeSport:
+    @pytest.fixture
+    def wcws_channels(self):
+        return json.loads(WCWS_FIXTURE.read_text(encoding="utf-8"))
+
+    @pytest.mark.parametrize(
+        "fixture_id",
+        ["wcws_texas_tech", "btn_plus_baseball"],
+    )
+    def test_wcws_and_btn_plus_skipped(self, wcws_channels, fixture_id):
+        row = next(r for r in wcws_channels if r["id"] == fixture_id)
+        assert classify_ppv_enrichment(row["name"]) == "unsupported_sport"
+        assert classify_ppv_enrichment(row["name"], cheap_only=True) == "unsupported_sport"
+
+    def test_wcws_ranking_prefix_stripped_from_competitors(self, wcws_channels):
+        row = next(r for r in wcws_channels if r["id"] == "wcws_texas_tech")
+        extractor = PPVEventExtractor()
+        result = extractor.extract_all(row["name"])
+        assert result["competitors"] == tuple(row["expect_competitors"])
+
+    def test_ncaa_football_not_unsupported_sport(self, wcws_channels):
+        row = next(r for r in wcws_channels if r["id"] == "ncaa_football_still_enrichable")
+        assert is_unsupported_college_sport_title(row["name"]) is False
+        assert classify_ppv_enrichment(row["name"], cheap_only=True) is None
 
 
 class TestSingleExtractionPerEnrichmentBatch:

@@ -78,6 +78,9 @@ _MAJOR_FOOTBALL_REGION_TOKENS = frozenset(
         "irish",
     }
 )
+# College sports without calendar providers (TODO 123 track A)
+WCWS_PATTERN = re.compile(r"\bWCWS\b", re.IGNORECASE)
+BTN_PLUS_PATTERN = re.compile(r"BTN\+", re.IGNORECASE)
 
 _extractor = PPVEventExtractor()
 
@@ -131,6 +134,11 @@ def is_unsupported_league_title(channel_name: str) -> bool:
     return not any(token in region for token in _MAJOR_FOOTBALL_REGION_TOKENS)
 
 
+def is_unsupported_college_sport_title(channel_name: str) -> bool:
+    """Return True for WCWS/BTN+ titles with no NCAA softball/baseball calendar."""
+    return bool(WCWS_PATTERN.search(channel_name) or BTN_PLUS_PATTERN.search(channel_name))
+
+
 def classify_ppv_enrichment(
     channel_name: str,
     extraction: Optional[dict] = None,
@@ -142,7 +150,7 @@ def classify_ppv_enrichment(
 
     Reasons align with enrichment filter keys: generic_name, placeholder_name,
     section_header, placeholder, inactive, no_competitors, date_but_no_competitors,
-    far_future, stale_archive, no_event_date, unsupported_league.
+    far_future, stale_archive, no_event_date, unsupported_league, unsupported_sport.
 
     When ``extraction`` is provided (e.g. from a prior ``extract_all`` call), it is
     used for competitor/date checks instead of re-extracting from the channel name.
@@ -174,6 +182,9 @@ def classify_ppv_enrichment(
 
     if is_unsupported_league_title(channel_name):
         return "unsupported_league"
+
+    if is_unsupported_college_sport_title(channel_name):
+        return "unsupported_sport"
 
     if cheap_only:
         return None

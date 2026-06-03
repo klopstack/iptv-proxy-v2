@@ -128,12 +128,36 @@ Today sport-key routing is fragmented (see `ppv-sport-registry.md`).
 
 Some PPV categories parse correctly but have **no calendar provider** today. Enrichability marks these `skipped` (not perpetual `no_match`) where the gap is permanent without a new API.
 
+### Track A — College WCWS / BTN+
+
+**Decision (June 2026):** No reliable NCAA softball or college baseball calendar API without a dedicated spike.
+
+| Source evaluated | Result |
+|----------------|--------|
+| TheSportsDB | No WCWS / NCAA baseball events in calendar or `eventsDay` |
+| sportsipy fork | Supports MLB, NBA, NFL, NHL, NCAAB, NCAAF — **no** softball or college baseball schedules |
+| NCAA official feeds | Not integrated; licensing/reliability unknown |
+
+**Implemented:** Enrichability marks WCWS and BTN+ channels `skipped` with reason `unsupported_sport` instead of perpetual `no_match`. Ranking prefixes (`#11 Texas Tech`) strip correctly in competitor extraction.
+
+**Future work:** Dedicated NCAA softball/baseball provider registered in calendar aggregation (same pattern as ESPN tennis / TODO 122). Requeue via [124](../todos/124-ppv-enrichment-attempt-tracking-and-requeue.md) after a source lands.
+
+**Still enrichable:** Generic college football/basketball (e.g. DISNEY+ `#22 GEORGIA TECH VS. #12 BYU`) — sportsipy NCAAF/NCAAB may match when schedules align.
+
+### Track B — Obscure DAZN leagues / Championship playoffs
+
 | Category | Example | Action | Skip reason |
 |----------|---------|--------|-------------|
 | Obscure DAZN regional leagues | `\| Premier League - Sierra Leone` | `unsupported_league` | No TSDB / football-data coverage |
 | English Championship playoffs | Charlton vs Leicester (Jun 2026) | **Remain enrichable** | TSDB league ID 4399 configured; playoff fixture absent from `eventsDay` — requeue when TSDB adds data |
-| WCWS / BTN+ college | See Track A (TODO 123) | `unsupported_sport` (Track A) | No NCAA softball/baseball calendar yet |
-| Boxing undated | Usyk vs Verhoeven | `no_event_date` | Track C ✅ |
-| Stale ESPN Play archive | `\| 11-09-2023` | `stale_archive` | Track D ✅ |
 
 **Investigation notes (Track B):** TheSportsDB `LEAGUE_ID_MAP` already includes `"Championship": "4399"`. Verified via public API (June 2026): `eventsseason.php?id=4399` returns 15 season events with **zero** Charlton/Leicester rows; `eventsday.php?d=2026-06-03&s=Soccer` also empty for that fixture. football-data.org provider covers PL/La Liga only — not EFL Championship. No scraper config change fixes this; a dedicated EFL source would be required.
+
+### Other tracks (123)
+
+| Category | Skip reason | Status |
+|----------|-------------|--------|
+| Boxing undated | `no_event_date` | Track C ✅ PR #61 |
+| Stale ESPN Play | `stale_archive` | Track D ✅ PR #59 |
+| Obscure DAZN leagues | `unsupported_league` | Track B ✅ |
+| English Championship playoffs | Remain enrichable | TSDB league 4399 configured; playoff fixtures absent from API |
