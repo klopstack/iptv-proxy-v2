@@ -47,7 +47,7 @@ venv/bin/pytest tests/ -q --no-cov -n auto --randomly-seed=<seed>
 
 ## Completion
 
-- **PR:** _(link added on push)_
+- **PR:** [#47](https://github.com/klopstack/iptv-proxy-v2/pull/47)
 - Added `pytest-randomly==3.16.0`; plugin auto-enables on install (works with `-n auto`).
 - `make test-fast`: 2752 passed, ~63s; seed logged (`Using --randomly-seed=…`).
 - No order-dependent failures required fixes in this pass.

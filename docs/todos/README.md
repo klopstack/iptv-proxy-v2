@@ -303,7 +303,7 @@ Phased remainders from TODOs 78, 85, 92, 95; optional PPV splits from TODO 65. S
 | 98 | [98-fcc-patterns-split-and-cdn-sri.md](./98-fcc-patterns-split-and-cdn-sri.md) | ⬜ | TODO 78 phase 4 + 92: FCC routes + CDN SRI (PR **X**) |
 | 99 | [99-esm-tab-migration-and-eslint.md](./99-esm-tab-migration-and-eslint.md) | ⬜ | TODO 85 phases 2–3: ESM tabs + ESLint (PR **Y**) |
 | 100 | [100-parallelize-pytest-xdist.md](./100-parallelize-pytest-xdist.md) | 🟡 | TODO 95: pytest-xdist per-worker DB (PR **Z**, in PR) |
-| 105 | [105-randomize-pytest-order.md](./105-randomize-pytest-order.md) | ✅ | pytest-randomly for order-dependent failure detection (PR **AB**) |
+| 105 | [105-randomize-pytest-order.md](./105-randomize-pytest-order.md) | ✅ | pytest-randomly for order-dependent failure detection ([PR #47](https://github.com/klopstack/iptv-proxy-v2/pull/47), batch **AB**) |
 | 102 | [102-optional-ppv-module-splits.md](./102-optional-ppv-module-splits.md) | ⬜ | Optional TODO 65 phases 2–3: `epg.py`, `extraction.py` (PR **AA**) |
 
 ### Wave 10 — Final documentation review
