@@ -1,7 +1,8 @@
 # Tennis calendar event source for PPV matching
 
-**Status:** 🟡 Phase 1 spike complete — Phase 2 ESPN (PR #56) in progress  
+**Status:** ✅ Done  
 **Priority:** P2  
+**PRs:** [#55](https://github.com/klopstack/iptv-proxy-v2/pull/55) (spike), [#56](https://github.com/klopstack/iptv-proxy-v2/pull/56) (ESPN slice 1)
 **Audit:** Production matching analysis, June 2026 (`docker.klopnet.com`) — [tennis-ppv-production-audit.md](../architecture/tennis-ppv-production-audit.md)  
 **Follow-up (secondary calendar):** [125](./125-sofascore-tennis-calendar-slice1.md), [126](./126-sofascore-calendar-multi-sport-and-enrichment.md)
 
@@ -200,3 +201,9 @@ The spike below recommended API-Tennis. **Current plan (June 2026):** **ESPN** a
 - [ ] Doubles channel format (`A Hewett G Reid`) — extend competitor extractor or match on combined tokens?
 - [ ] SofaScore fixture overlap with ESPN — dedup rules in [126](./126-sofascore-calendar-multi-sport-and-enrichment.md)
 - [ ] Legends/exhibition slots — ESPN vs SofaScore vs permanent `no_match` / `skipped`
+
+## Completion
+
+- **PR #55:** [spike/122-tennis-calendar-source](https://github.com/klopstack/iptv-proxy-v2/pull/55) — source evaluation, architecture spike doc
+- **PR #56:** [feature/espn-tennis-calendar](https://github.com/klopstack/iptv-proxy-v2/pull/56) — ESPN tennis calendar client, parser, merge into `get_events_for_date`
+- **Follow-up:** SofaScore secondary — [125](./125-sofascore-tennis-calendar-slice1.md) ✅ [#58](https://github.com/klopstack/iptv-proxy-v2/pull/58), [126](./126-sofascore-calendar-multi-sport-and-enrichment.md) ✅ [#60](https://github.com/klopstack/iptv-proxy-v2/pull/60)

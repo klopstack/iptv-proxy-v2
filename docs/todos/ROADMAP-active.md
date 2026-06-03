@@ -4,7 +4,7 @@
 **Index:** [ROADMAP.md](./ROADMAP.md) · **Archive (waves 1–10):** [archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-waves-1-10.md)  
 **Companion:** [README.md](./README.md) (per-item specs)
 
-Open work only. Completed waves **1–10** (PRs #10–51) live in the archive file — do not duplicate here.
+Open work only. Completed waves **1–10** (PRs #10–51) and **Wave 12** (PRs #52–63) live in the archive sections below — do not re-implement.
 
 ---
 
@@ -14,18 +14,19 @@ Open work only. Completed waves **1–10** (PRs #10–51) live in the archive fi
 |-------|-------|------|-------|
 | Dashboard follow-ups | 107–110 | **0** | 107–109 ✅; [110](./110-dashboard-optional-ux-follow-ups.md) won't do |
 | Wave 11 — PostgreSQL | 111–119 | **9** | Series A + Series B |
-| Wave 12 — PPV matching | 121–126 | **6** | 120 ✅; 124 🟡 in review; 125–126 SofaScore |
-| **Total required** | | **15** | 111–119, 121–126 |
+| Wave 12 — PPV matching | 120–126, 123 | **0** | ✅ complete June 2026; 123 A/B in review [#62](https://github.com/klopstack/iptv-proxy-v2/pull/62)/[#63](https://github.com/klopstack/iptv-proxy-v2/pull/63) |
+| **Total required** | | **9** | 111–119 only |
 
-Waves **1–10** ✅ — see [archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-waves-1-10.md).
+Waves **1–10** ✅ — see [archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-waves-1-10.md).  
+**Wave 12** ✅ — see [§ Wave 12 complete](#wave-12--ppv-production-matching-gaps--complete-june-2026) below.
 
-**Suggested parallel tracks:** Wave 12 (PPV) and Wave 11 (PostgreSQL prep) can run on separate contributors.
+**Suggested parallel tracks:** Wave 11 (PostgreSQL prep) is the primary open track.
 
 ---
 
 ## How to use
 
-1. Pick a wave or “next five” item below.
+1. Pick a wave item below (Wave 11).
 2. Read the linked TODO file before coding.
 3. Run that TODO’s test plan; mark ✅ in [README.md](./README.md) and add PR under **Completion** in the TODO.
 4. Refresh the snapshot table in [ROADMAP.md](./ROADMAP.md) when counts change.
@@ -36,16 +37,12 @@ Waves **1–10** ✅ — see [archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-w
 
 | Rule | Rationale |
 |------|-----------|
-| **120 before 121–123** | Correct calendar day before abbrev/source work |
-| **122 (ESPN) before 125–126** | Primary tennis before SofaScore secondary |
-| **125 before 126** | SofaScore client/parser before enrichment merge |
-| **124 with 120+** | Requeue to verify matching fixes on production |
 | **111 + 112 → 113 → 114 → 115** | PostgreSQL Series A order |
 | **117 + 116 → 118 → 119** | PostgreSQL Series B order |
 
-Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMAP-waves-1-10.md#cross-track-dependency-rules).
+Historical Wave 12 rules (120 before 121–123, 122 before 125–126, etc.) are satisfied — see [Wave 12 complete](#wave-12--ppv-production-matching-gaps--complete-june-2026).
 
-**Do not batch in one effort:** PostgreSQL switchover (118) + PPV calendar providers (122/125/126) + large route refactors.
+Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMAP-waves-1-10.md#cross-track-dependency-rules).
 
 ---
 
@@ -63,7 +60,7 @@ Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMA
 ## Wave 11 — PostgreSQL migration track
 
 **Goal:** Replace SQLite with PostgreSQL as the production database backend.  
-**Gate:** Series B requires Series A complete. Can run in parallel with Wave 12.
+**Gate:** Series B requires Series A complete.
 
 ### Series A — Preparation (SQLite-safe)
 
@@ -83,44 +80,36 @@ Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMA
 
 ---
 
-## Wave 12 — PPV production matching gaps
+## Wave 12 — PPV production matching gaps ✅ complete (June 2026)
 
 **Goal:** Close gaps from live audit (June 2026): dates, MLB abbrevs, tennis calendar, extended sports, requeue.  
-**Est. effort:** 2–4 weeks (122/123/125/126 spike-dependent)  
-**Prerequisites:** P5 waves 2–3 ✅ (52–67)
+**Status:** All batches merged or in final PR review. Production requeue still required ([124](./124-ppv-enrichment-attempt-tracking-and-requeue.md)).
 
-Production baselines (2026-06-03): 110 matched, 1,072 `no_match`, 341 tennis `no_match`, 27 Peacock `no_match`, 0 channels with `ppv_enrichment_attempts > 0`.
+| Batch | TODO | PR(s) | Theme |
+|-------|------|-------|-------|
+| **AC** | [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) | [#53](https://github.com/klopstack/iptv-proxy-v2/pull/53) | Attempt tracking + requeue |
+| **AD** | [120](./120-fix-ppv-date-extraction-parsing-bugs.md) | [#52](https://github.com/klopstack/iptv-proxy-v2/pull/52) | Date extraction parity |
+| **AE** | [121](./121-mlb-team-abbreviation-resolution.md) | [#54](https://github.com/klopstack/iptv-proxy-v2/pull/54) | MLB three-letter abbrevs (Peacock) |
+| **AF** | [122](./122-tennis-calendar-event-source.md) | [#55](https://github.com/klopstack/iptv-proxy-v2/pull/55), [#56](https://github.com/klopstack/iptv-proxy-v2/pull/56) | ESPN primary tennis |
+| **AH** | [125](./125-sofascore-tennis-calendar-slice1.md) | [#58](https://github.com/klopstack/iptv-proxy-v2/pull/58) | SofaScore client + parser |
+| **AI** | [126](./126-sofascore-calendar-multi-sport-and-enrichment.md) | [#60](https://github.com/klopstack/iptv-proxy-v2/pull/60) | SofaScore merge + multi-sport doc |
+| **AG** | [123](./123-extended-calendar-coverage-college-obscure-sports.md) | [#59](https://github.com/klopstack/iptv-proxy-v2/pull/59) (D), [#61](https://github.com/klopstack/iptv-proxy-v2/pull/61) (C), [#62](https://github.com/klopstack/iptv-proxy-v2/pull/62) (B), [#63](https://github.com/klopstack/iptv-proxy-v2/pull/63) (A) | College / obscure / boxing / stale ESPN Play |
 
-| Batch | TODOs | Theme | Effort |
-|-------|-------|-------|--------|
-| **AC** | [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) | Attempt tracking + requeue | S |
-| **AD** | [120](./120-fix-ppv-date-extraction-parsing-bugs.md) | Date extraction parity | M — ✅ done |
-| **AE** | [121](./121-mlb-team-abbreviation-resolution.md) | MLB three-letter abbrevs (Peacock) | S |
-| **AF** | [122](./122-tennis-calendar-event-source.md) | **ESPN** primary tennis (PR #56) | L |
-| **AH** | [125](./125-sofascore-tennis-calendar-slice1.md) | SofaScore client + parser (no wire) | M |
-| **AI** | [126](./126-sofascore-calendar-multi-sport-and-enrichment.md) | SofaScore merge + multi-sport doc | M–L |
-| **AG** | [123](./123-extended-calendar-coverage-college-obscure-sports.md) | College / obscure / boxing / stale ESPN Play | L |
+**123 track summary:** D stale archive ✅ · C boxing no-date ✅ · B obscure DAZN leagues 🔄 #62 · A WCWS/BTN+ skip 🔄 #63 (WCWS calendar API deferred — see architecture note).
 
-**Order:** AC + AD first → AE → **AF (ESPN)** → AH (125, parallel with AF tail) → AI (126 after 125 + AF) → AG (parallel). Requeue (124) after each batch to measure impact.
-
-```text
-120 ✅ ──► 121
-     └──► 122 ESPN (PR #56) ──► 125 SofaScore slice 1 ──► 126 wire + fallback
-     └──► 123 (multi-track)
-124 requeue ◄── verify all tracks
-```
+**Production follow-up:** After deploy, run no_match requeue per [124 runbook](./124-ppv-enrichment-attempt-tracking-and-requeue.md) to measure matching impact.
 
 ---
 
 ## Recommended “next five”
 
-1. **[124](./124-ppv-enrichment-attempt-tracking-and-requeue.md)** — attempt tracking + requeue (batch **AC**)
-2. **[121](./121-mlb-team-abbreviation-resolution.md)** — MLB abbrev resolution (batch **AE**)
-3. **[122](./122-tennis-calendar-event-source.md)** — ESPN tennis calendar (batch **AF**, PR #56)
-4. **[111](./111-pg-prep-raw-sqlite3-audit.md)** — PostgreSQL prep (batch **PG-A1**, parallel)
-5. **[125](./125-sofascore-tennis-calendar-slice1.md)** — SofaScore slice 1 (batch **AH**, after AF)
+1. **[111](./111-pg-prep-raw-sqlite3-audit.md)** — PostgreSQL prep (batch **PG-A1**)
+2. **[112](./112-pg-prep-json-column-types.md)** — JSON column types (batch **PG-A1**)
+3. **[113](./113-pg-prep-alembic-migration-system.md)** — Alembic migration system (batch **PG-A2**)
+4. **[114](./114-pg-prep-test-db-hardening.md)** — Test DB hardening (batch **PG-A3**)
+5. **[115](./115-pg-prep-ci-docker-config.md)** — CI/Docker PG (batch **PG-A3**)
 
-**Next after AF lands:** [126](./126-sofascore-calendar-multi-sport-and-enrichment.md) (**AI**). Optional parallel: [123](./123-extended-calendar-coverage-college-obscure-sports.md) (**AG**).
+**Ops (post Wave 12 deploy):** Requeue `no_match` channels via [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md).
 
 ---
 
@@ -134,6 +123,7 @@ Production baselines (2026-06-03): 110 matched, 1,072 `no_match`, 341 tennis `no
 | App-wide audit | 68–95, 96–105 |
 | Dashboard follow-ups | 106–109 ✅ |
 | Waves 1–10 execution | See [archive](./archive/ROADMAP-waves-1-10.md) |
+| **Wave 12 PPV matching** | 120–126, 123 (tracks A–D) — PRs #52–63 |
 
 ---
 

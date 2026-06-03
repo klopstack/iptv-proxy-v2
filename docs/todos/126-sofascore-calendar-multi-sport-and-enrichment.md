@@ -1,7 +1,8 @@
 # SofaScore calendar — multi-sport, merge, and enrichment fallback
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P2  
+**PR:** https://github.com/klopstack/iptv-proxy-v2/pull/60
 **Roadmap:** [ROADMAP-active.md](./ROADMAP-active.md) — Wave 12 batch **AI**  
 **Depends on:** [125](./125-sofascore-tennis-calendar-slice1.md), [122](./122-tennis-calendar-event-source.md) ESPN slice merged
 
@@ -112,4 +113,5 @@ Include daily request budget: N sports × 1 req/day × 7-day window ≤ rate lim
 
 ## Completion
 
-*(Add PR link and date when merged.)*
+- **PR:** https://github.com/klopstack/iptv-proxy-v2/pull/60
+- **Deliverables:** SofaScore tennis wired into `get_events_for_date`; ESPN dedup filter; `ppv_sofascore_calendar_enabled` flag; `docs/architecture/sofascore-calendar-sport-slugs.md`; calendar merge tests with mocked supplemental fetches.

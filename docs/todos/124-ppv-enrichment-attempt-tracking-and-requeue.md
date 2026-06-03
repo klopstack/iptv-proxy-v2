@@ -1,6 +1,6 @@
 # PPV enrichment attempt tracking and no_match requeue workflow
 
-**Status:** 🟡 In review  
+**Status:** ✅ Done  
 **Priority:** P1  
 **Audit:** Production matching analysis, June 2026 (`docker.klopnet.com`)
 
