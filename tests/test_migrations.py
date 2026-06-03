@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from run_migrations import ensure_schema_migrations_table, get_applied_migrations, run_migrations
+from run_migrations import ensure_schema_migrations_table, get_applied_migrations, run_migrations, sqlite_connect
 
 
 @pytest.fixture
@@ -64,9 +64,15 @@ class TestMigrationRunner:
         columns = {row[1] for row in cursor.fetchall()}
         assert "slug" in columns
 
-        cursor = conn.execute("PRAGMA foreign_keys")
-        assert cursor.fetchone()[0] == 0  # raw sqlite3 connection; app enables via listener
         conn.close()
+
+        fk_conn = sqlite_connect(temp_db)
+        try:
+            assert fk_conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+            violations = fk_conn.execute("PRAGMA foreign_key_check").fetchall()
+            assert violations == [], f"foreign_key_check violations: {violations}"
+        finally:
+            fk_conn.close()
 
         applied = get_applied_migrations(temp_db)
         assert len(applied) >= 40

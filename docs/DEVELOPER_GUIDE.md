@@ -196,9 +196,11 @@ mypy app.py models/ services/  # Type checking
 
 See [`entrypoint.sh`](../entrypoint.sh). Do not rely on `create_all()` alone for upgrades; always add a migration for schema changes.
 
+**Local init:** `flask init-db` runs `create_all()` only. Run `python run_migrations.py` afterward so indexes and DDL from migrations match production (Docker entrypoint runs both steps).
+
 ### Foreign keys
 
-SQLite requires `PRAGMA foreign_keys=ON` per connection. The app enables this in [`app.py`](../app.py) (`set_sqlite_pragma`). Migration DDL with `ON DELETE CASCADE` only takes effect when this pragma is set.
+SQLite requires `PRAGMA foreign_keys=ON` per connection. The app enables this in [`app.py`](../app.py) (`set_sqlite_pragma`). [`run_migrations.py`](../run_migrations.py) uses the same pragma via `sqlite_connect()`. Migration DDL with `ON DELETE CASCADE` only takes effect when this pragma is set.
 
 ### Account deletion
 

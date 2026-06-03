@@ -142,7 +142,7 @@ class EpgMatchRule(db.Model):  # type: ignore[name-defined]
     ]
 
     id = db.Column(db.Integer, primary_key=True)
-    ruleset_id = db.Column(db.Integer, db.ForeignKey("epg_match_rulesets.id"), nullable=False)
+    ruleset_id = db.Column(db.Integer, db.ForeignKey("epg_match_rulesets.id", ondelete="CASCADE"), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
 
