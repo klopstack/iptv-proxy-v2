@@ -34,6 +34,8 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
 from models import ChannelEpgMapping, EpgChannel, EpgProgram, EpgSource, db
 from services.datetime_utils import serialize_utc_iso
+from services.epg.program_persistence import create_epg_program as _create_program
+from services.epg.program_persistence import update_epg_program as _update_program
 from services.epg.utils import get_decompressing_stream, parse_xmltv_time
 
 ProgressCallback = Optional[Callable[..., None]]
@@ -446,115 +448,6 @@ def sync_programs_for_source(
     )
 
     return stats
-
-
-def _create_program(epg_channel_id: int, data: Dict[str, Any]) -> EpgProgram:
-    """Create a new EpgProgram from parsed data."""
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-
-    prog = EpgProgram(
-        epg_channel_id=epg_channel_id,
-        start_time=data["start_time"],
-        stop_time=data["stop_time"],
-        title=data["title"],
-        sub_title=data.get("sub_title"),
-        description=data.get("description"),
-        categories=json.dumps(data["categories"]) if data.get("categories") else None,
-        season=data.get("season"),
-        episode=data.get("episode"),
-        episode_id=data.get("episode_id"),
-        rating=data.get("rating"),
-        rating_system=data.get("rating_system"),
-        original_air_date=data.get("original_air_date"),
-        is_new=data.get("is_new", False),
-        is_live=data.get("is_live", False),
-        is_premiere=data.get("is_premiere", False),
-        sport=data.get("sport"),
-        team_home=data.get("team_home"),
-        team_away=data.get("team_away"),
-        icon_url=data.get("icon_url"),
-        last_updated=now,
-        created_at=now,
-    )
-    return prog
-
-
-def _update_program(prog: EpgProgram, data: Dict[str, Any]) -> bool:
-    """
-    Update an existing EpgProgram with new data.
-
-    Returns:
-        True if any field was modified, False if no changes
-    """
-    import json
-
-    # Track if anything changed
-    changed = False
-
-    # Prepare categories JSON for comparison
-    new_categories = json.dumps(data["categories"]) if data.get("categories") else None
-
-    # Check each field and only update if different
-    if prog.stop_time != data["stop_time"]:
-        prog.stop_time = data["stop_time"]
-        changed = True
-    if prog.title != data["title"]:
-        prog.title = data["title"]
-        changed = True
-    if prog.sub_title != data.get("sub_title"):
-        prog.sub_title = data.get("sub_title")
-        changed = True
-    if prog.description != data.get("description"):
-        prog.description = data.get("description")
-        changed = True
-    if prog.categories != new_categories:
-        prog.categories = new_categories
-        changed = True
-    if prog.season != data.get("season"):
-        prog.season = data.get("season")
-        changed = True
-    if prog.episode != data.get("episode"):
-        prog.episode = data.get("episode")
-        changed = True
-    if prog.episode_id != data.get("episode_id"):
-        prog.episode_id = data.get("episode_id")
-        changed = True
-    if prog.rating != data.get("rating"):
-        prog.rating = data.get("rating")
-        changed = True
-    if prog.rating_system != data.get("rating_system"):
-        prog.rating_system = data.get("rating_system")
-        changed = True
-    if prog.original_air_date != data.get("original_air_date"):
-        prog.original_air_date = data.get("original_air_date")
-        changed = True
-    if prog.is_new != data.get("is_new", False):
-        prog.is_new = data.get("is_new", False)
-        changed = True
-    if prog.is_live != data.get("is_live", False):
-        prog.is_live = data.get("is_live", False)
-        changed = True
-    if prog.is_premiere != data.get("is_premiere", False):
-        prog.is_premiere = data.get("is_premiere", False)
-        changed = True
-    if prog.sport != data.get("sport"):
-        prog.sport = data.get("sport")
-        changed = True
-    if prog.team_home != data.get("team_home"):
-        prog.team_home = data.get("team_home")
-        changed = True
-    if prog.team_away != data.get("team_away"):
-        prog.team_away = data.get("team_away")
-        changed = True
-    if prog.icon_url != data.get("icon_url"):
-        prog.icon_url = data.get("icon_url")
-        changed = True
-
-    # Only update timestamp if something actually changed
-    if changed:
-        prog.last_updated = datetime.now(timezone.utc).replace(tzinfo=None)
-
-    return changed
 
 
 def get_current_program(epg_channel_id: int) -> Optional[EpgProgram]:

@@ -9,12 +9,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from flask import Flask
-from sqlalchemy import update
 
 from models import EpgSource, SyncMetadata, db
 from services.datetime_utils import serialize_utc_iso
 from services.epg_sync_progress import PHASE_COMPLETE, PHASE_ERROR, PHASE_QUEUED, EpgSyncProgress
 from services.epg_sync_service import EpgSyncService
+from services.sync_lock import recover_stale_sync_locks as _recover_stale_sync_locks
+from services.sync_lock import try_acquire_sync_lock
 
 logger = logging.getLogger(__name__)
 
@@ -29,36 +30,14 @@ def try_acquire_epg_sync_lock(source_id: int, *, force: bool = False) -> bool:
 
     Returns True if this caller holds the lock.
     """
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    if force:
-        locked = (
-            getattr(
-                db.session.execute(
-                    update(EpgSource).where(EpgSource.id == source_id, EpgSource.sync_in_progress.is_(True))
-                ),
-                "rowcount",
-                0,
-            )
-            or 0
-        ) > 0
-        if locked:
-            source = db.session.get(EpgSource, source_id)
-            logger.warning(
-                "EPG sync force=True overriding in-progress lock for source %s (id=%s)",
-                source.name if source else "?",
-                source_id,
-            )
-        result = db.session.execute(
-            update(EpgSource).where(EpgSource.id == source_id).values(sync_in_progress=True, sync_started_at=now)
-        )
-    else:
-        result = db.session.execute(
-            update(EpgSource)
-            .where(EpgSource.id == source_id, EpgSource.sync_in_progress.is_(False))
-            .values(sync_in_progress=True, sync_started_at=now)
-        )
-    db.session.commit()
-    return (getattr(result, "rowcount", 0) or 0) > 0
+    source = db.session.get(EpgSource, source_id)
+    return try_acquire_sync_lock(
+        EpgSource,
+        source_id,
+        force=force,
+        entity_label=source.name if source else None,
+        log_entity_type="EPG source",
+    )
 
 
 def recover_stale_epg_sync_locks(max_age_hours: int = STALE_EPG_SYNC_LOCK_HOURS) -> int:
@@ -68,31 +47,12 @@ def recover_stale_epg_sync_locks(max_age_hours: int = STALE_EPG_SYNC_LOCK_HOURS)
     Returns:
         Number of sources recovered.
     """
-    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=max_age_hours)
-    stale = EpgSource.query.filter(
-        EpgSource.sync_in_progress.is_(True),
-        db.or_(
-            db.and_(EpgSource.sync_started_at.isnot(None), EpgSource.sync_started_at < cutoff),
-            db.and_(EpgSource.sync_started_at.is_(None), EpgSource.updated_at < cutoff),
-        ),
-    ).all()
-
-    for source in stale:
-        logger.warning(
-            "Recovering stale EPG sync lock for source %s (id=%s, started=%s)",
-            source.name,
-            source.id,
-            source.sync_started_at,
-        )
-        source.sync_in_progress = False
-        source.sync_started_at = None
-        source.sync_phase = None
-        source.sync_progress = None
-
-    if stale:
-        db.session.commit()
-
-    return len(stale)
+    return _recover_stale_sync_locks(
+        EpgSource,
+        max_age=timedelta(hours=max_age_hours),
+        log_entity_type="EPG source",
+        extra_recover_values={"sync_phase": None, "sync_progress": None},
+    )
 
 
 def source_needs_sync(source: EpgSource, interval_hours: int) -> bool:
