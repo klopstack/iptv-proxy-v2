@@ -5,10 +5,9 @@ from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple
 
 from services.datetime_utils import parse_title_timezone
-from services.ppv.extraction import competitors
+from services.ppv.extraction import competitors, patterns
 from services.ppv.extraction.date_strategies import DEFAULT_DATE_STRATEGIES
 from services.ppv.extraction.date_strategies.base import parse_date_with_strategies
-from services.ppv.extraction import patterns
 from services.ppv.extraction.types import MatchupInfo
 
 

@@ -86,9 +86,7 @@ def list_ppv_events(
         channel_counts = {event_id: count for event_id, count in counts}
 
     return {
-        "events": [
-            serialize_event_summary(event, channel_count=channel_counts.get(event.id, 0)) for event in events
-        ],
+        "events": [serialize_event_summary(event, channel_count=channel_counts.get(event.id, 0)) for event in events],
         "pagination": {
             "page": page,
             "per_page": per_page,

@@ -3,7 +3,6 @@
 from typing import Any, Dict, List, Optional, Tuple
 
 from models import Event
-
 from services.ppv.epg import queries, sync, xmltv
 
 

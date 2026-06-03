@@ -17,7 +17,9 @@ TRAILING_TIME_PATTERN = r"\s+\d{1,2}:\d{2}\s*(?:am|pm)?$"
 
 NO_EVENT_PATTERN = r"NO EVENT STREAMING"
 
-DATE_PATTERN = r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})(?:st|nd|rd|th)?\s+(\d{1,2}):(\d{2})(?:\s+(AM|PM))?"
+DATE_PATTERN = (
+    r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})(?:st|nd|rd|th)?\s+(\d{1,2}):(\d{2})(?:\s+(AM|PM))?"
+)
 
 ISO_DATE_PATTERN = r"(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})"
 
