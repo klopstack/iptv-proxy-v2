@@ -1,6 +1,6 @@
 # Add MiLB PPV end-to-end integration test
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P1  
 **Audit:** PPV audit, June 2026
 
@@ -36,8 +36,8 @@ This gap allowed detail-fetch and schema issues (TODO 55) to go unnoticed.
 
 ## Acceptance criteria
 
-- [ ] One integration test passes with recorded fixtures (no live network).
-- [ ] Test documents expected channel name format in docstring.
+- [x] One integration test passes with recorded fixtures (no live network).
+- [x] Test documents expected channel name format in docstring.
 
 ## Test plan
 
@@ -46,3 +46,7 @@ Self-contained.
 ## Dependencies
 
 - TODO 55 (multi-source detail fetch) may extend assertions.
+
+## Completion
+
+- **PR:** [#20](https://github.com/klopstack/iptv-proxy-v2/pull/20) — `tests/ppv/test_milb_enrichment_integration.py` exercises extractor, calendar MiLB path (mocked MLB Stats HTTP), reverse matcher, and `persist_match`; asserts `SOURCE_MLB_STATS`, link, `matched` status, and empty TSDB detail queue.

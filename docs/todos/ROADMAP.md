@@ -10,7 +10,7 @@ This document groups **35 open TODOs** into execution **waves** and suggested **
 | Track | Range | Open | Recently completed |
 |-------|-------|------|-------------------|
 | P5 — PPV | 52–67 | 16 | — |
-| P6 — App-wide | 68–91 | 18 | 68, 69, 70, 71, 74, 75, 84 |
+| P6 — App-wide | 68–94 | 18 | 68, 69, 70, 71, 74, 75, 84, **94** |
 
 Update [README.md](./README.md) status columns as work lands. Mark PR IDs in each TODO’s **Completion** section.
 
@@ -114,6 +114,7 @@ Update [README.md](./README.md) status columns as work lands. Mark PR IDs in eac
 | 3a | [60](./60-add-persistence-unit-tests.md) | 54 | `persistence.py` unit tests |
 | 3b | [61](./61-add-channel-matching-tests.md) | — | UTC calendar-day grouping tests |
 | 3c | [62](./62-add-milb-ppv-integration-test.md) | 55 | MiLB channel → Event E2E |
+| 3c′ | [94](./94-speed-up-thesportsdb-tests-no-live-http.md) | — | TheSportsDB unit tests: patch `call_thesportsdb_api` (ships with PR **I**) ✅ |
 | 3d | [64](./64-consolidate-ppv-detection-tests.md) | 53 | Dedupe detection test modules |
 | 3e | [63](./63-expand-ppv-test-coverage.md) | 52–59 stable | Orchestrator, cleanup, providers |
 
@@ -122,7 +123,7 @@ Update [README.md](./README.md) status columns as work lands. Mark PR IDs in eac
 | PR | TODOs | Theme | Size |
 |----|-------|-------|------|
 | **H** | 60, 61 | PPV unit tests | S |
-| **I** | 62 | MiLB E2E | M |
+| **I** | 62, 94 | MiLB E2E + TheSportsDB test mocks (no live HTTP) | M |
 | **J** | 64, 63 | Test dedup + expansion | M–L (split 63 if needed) |
 
 ---
@@ -213,7 +214,7 @@ Update [README.md](./README.md) status columns as work lands. Mark PR IDs in eac
 | [88](./88-expand-ci-quality-gates.md) | After 80, 86 | vulture, Docker PR build, pre-commit |
 | [67](./67-ppv-misc-cleanup.md) | Anytime after Wave 2 | Constants, heuristics, docstrings |
 
-No fixed PR batch — small PRs or folded into related waves.
+Wave 7 items: small PRs or folded into related waves (94 ships with Wave 3 **PR I**).
 
 ---
 
@@ -312,10 +313,9 @@ Wave 6 (83–86) fits either track after Wave 1 or 5.
 If resuming without a assigned wave:
 
 1. **[52](./52-fix-details-fetched-stat.md) + [54](./54-route-enrichment-through-persist-match.md)** — PPV metrics/persist (PR C)  
-2. **[55](./55-multi-source-events-schema-and-detail-fetch.md)** — plan migration window (PR D)  
-3. **[91](./91-scheduler-status-api-failure-metadata.md)** — scheduler failure visibility (PR K)  
-4. **[76](./76-deduplicate-epg-sync-infrastructure.md)** — EPG sync dedup (PR L)  
-5. **[60](./60-add-persistence-unit-tests.md)** — after Wave 2 stabilizes PPV persist path  
+3. **[55](./55-multi-source-events-schema-and-detail-fetch.md)** — plan migration window (PR D)  
+4. **[91](./91-scheduler-status-api-failure-metadata.md)** — scheduler failure visibility (PR K)  
+5. **[76](./76-deduplicate-epg-sync-infrastructure.md)** — EPG sync dedup (PR L)  
 
 ---
 

@@ -188,7 +188,7 @@ Full-stack review of PPV handling: enrichment pipeline, multi-source events (MiL
 | 59 | [59-harden-ppv-enrichment-routes.md](./59-harden-ppv-enrichment-routes.md) | ✅ | Error handling, memory footgun, queue stats logging (PR #16) |
 | 60 | [60-add-persistence-unit-tests.md](./60-add-persistence-unit-tests.md) | 🔄 | Unit tests for `services/ppv/persistence.py` (PR #19) |
 | 61 | [61-add-channel-matching-tests.md](./61-add-channel-matching-tests.md) | 🔄 | Unit tests for UTC calendar-day grouping (PR #19) |
-| 62 | [62-add-milb-ppv-integration-test.md](./62-add-milb-ppv-integration-test.md) | ⬜ | End-to-end MiLB channel → Event with `mlb_stats_api` source |
+| 62 | [62-add-milb-ppv-integration-test.md](./62-add-milb-ppv-integration-test.md) | ✅ | End-to-end MiLB channel → Event with `mlb_stats_api` source |
 | 63 | [63-expand-ppv-test-coverage.md](./63-expand-ppv-test-coverage.md) | ⬜ | Orchestrator, cleanup, football-data provider, integration |
 | 64 | [64-consolidate-ppv-detection-tests.md](./64-consolidate-ppv-detection-tests.md) | ⬜ | Deduplicate overlapping detection test modules |
 | 65 | [65-refactor-enrichment-god-class.md](./65-refactor-enrichment-god-class.md) | ⬜ | Phased split of ~860-line enrichment service |
@@ -271,6 +271,7 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 | 89 | [89-refactor-scheduler-job-registry.md](./89-refactor-scheduler-job-registry.md) | ⬜ | Split 676-line scheduler god class |
 | 90 | [90-split-epg-programs-and-decouple-sync.md](./90-split-epg-programs-and-decouple-sync.md) | ⬜ | Split programs.py; decouple sync post-processing |
 | 92 | [92-cdn-script-sri-hardening.md](./92-cdn-script-sri-hardening.md) | ⬜ | CDN Subresource Integrity (deferred from 84) |
+| 94 | [94-speed-up-thesportsdb-tests-no-live-http.md](./94-speed-up-thesportsdb-tests-no-live-http.md) | ✅ | Fix stale SDK mocks; stop live TheSportsDB retry loops in unit tests |
 
 ### Recommended order for items 68–90
 
