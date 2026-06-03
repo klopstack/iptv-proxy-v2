@@ -187,6 +187,8 @@ class TestSyncStatus:
                 "sportsipy_refresh",
                 "epg_program_cleanup",
                 "health_check_cleanup",
+                "event_cleanup",
+                "image_cache_cleanup",
             ):
                 job = status["syncs"][job_name]
                 assert "last_failure_at" in job

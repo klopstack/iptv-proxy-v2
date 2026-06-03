@@ -1,4 +1,4 @@
-"""EPG program and health-check history cleanup jobs."""
+"""Scheduled data retention jobs (EPG, health, events, image cache)."""
 
 import logging
 
@@ -28,4 +28,29 @@ def run_health_check_cleanup() -> bool:
         return True
     except Exception:
         logger.error("Error during health check cleanup", exc_info=True)
+        return False
+
+
+def run_event_cleanup() -> bool:
+    try:
+        from services.event_retention import cleanup_old_events
+
+        deleted = cleanup_old_events()
+        logger.info("Event cleanup removed %s event(s)", deleted)
+        return True
+    except Exception:
+        logger.error("Error during event cleanup", exc_info=True)
+        return False
+
+
+def run_image_cache_cleanup() -> bool:
+    try:
+        from services.image_cache_service import ImageCacheService
+
+        cache = ImageCacheService.get_instance()
+        removed = cache.cleanup_expired(delete_files=True)
+        logger.info("Image cache cleanup marked %s expired entr(ies)", removed)
+        return True
+    except Exception:
+        logger.error("Error during image cache cleanup", exc_info=True)
         return False

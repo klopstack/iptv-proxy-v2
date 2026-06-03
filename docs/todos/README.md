@@ -261,7 +261,7 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 | 79 | [79-extract-shared-route-serializers.md](./79-extract-shared-route-serializers.md) | ⬜ | Shared CRUD serializers and Marshmallow schemas |
 | 80 | [80-align-test-db-with-production-schema.md](./80-align-test-db-with-production-schema.md) | ⬜ | pytest `create_all` skips migration-only indexes |
 | 81 | [81-model-fk-ondelete-alignment.md](./81-model-fk-ondelete-alignment.md) | ⬜ | FK ondelete drift; migration FK pragma |
-| 82 | [82-scheduled-data-retention.md](./82-scheduled-data-retention.md) | ⬜ | Events and cached images grow unbounded |
+| 82 | [82-scheduled-data-retention.md](./82-scheduled-data-retention.md) | ✅ | Scheduled event + image cache cleanup |
 | 83 | [83-xss-audit-legacy-frontend.md](./83-xss-audit-legacy-frontend.md) | ⬜ | innerHTML with API data in legacy JS + TagSelector |
 | 84 | [84-docker-and-secrets-hardening.md](./84-docker-and-secrets-hardening.md) | ✅ | `.dockerignore`, non-root container, Flask sessions disabled (no SECRET_KEY) |
 | 85 | [85-frontend-deduplication-and-esm-migration.md](./85-frontend-deduplication-and-esm-migration.md) | ⬜ | escapeHtml/loadAccounts/datetime dupes; epg_management migration |

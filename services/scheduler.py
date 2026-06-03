@@ -14,8 +14,10 @@ from services.scheduler_constants import (
     DEFAULT_ACCOUNT_INTERVAL_HOURS,
     DEFAULT_EPG_INTERVAL_HOURS,
     DEFAULT_EPG_PROGRAM_CLEANUP_INTERVAL_HOURS,
+    DEFAULT_EVENT_CLEANUP_INTERVAL_HOURS,
     DEFAULT_FCC_INTERVAL_HOURS,
     DEFAULT_HEALTH_CHECK_CLEANUP_INTERVAL_HOURS,
+    DEFAULT_IMAGE_CACHE_CLEANUP_INTERVAL_HOURS,
     DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS,
     DEFAULT_PPV_PREFETCH_INTERVAL_HOURS,
     DEFAULT_PPV_TIME_REFRESH_INTERVAL_HOURS,
@@ -26,8 +28,10 @@ from services.scheduler_constants import (
     SYNC_KEY_FCC_INTERVAL,
     SYNC_KEY_LAST_ACCOUNT_SYNC,
     SYNC_KEY_LAST_EPG_PROGRAM_CLEANUP,
+    SYNC_KEY_LAST_EVENT_CLEANUP,
     SYNC_KEY_LAST_FCC_SYNC,
     SYNC_KEY_LAST_HEALTH_CHECK_CLEANUP,
+    SYNC_KEY_LAST_IMAGE_CACHE_CLEANUP,
     SYNC_KEY_LAST_PPV_ENRICHMENT,
     SYNC_KEY_LAST_PPV_PREFETCH,
     SYNC_KEY_LAST_PPV_TIME_REFRESH,
@@ -166,6 +170,11 @@ class SyncScheduler:
                 "health_check_cleanup": (
                     SYNC_KEY_LAST_HEALTH_CHECK_CLEANUP,
                     DEFAULT_HEALTH_CHECK_CLEANUP_INTERVAL_HOURS,
+                ),
+                "event_cleanup": (SYNC_KEY_LAST_EVENT_CLEANUP, DEFAULT_EVENT_CLEANUP_INTERVAL_HOURS),
+                "image_cache_cleanup": (
+                    SYNC_KEY_LAST_IMAGE_CACHE_CLEANUP,
+                    DEFAULT_IMAGE_CACHE_CLEANUP_INTERVAL_HOURS,
                 ),
             }
             return {
@@ -367,3 +376,9 @@ class SyncScheduler:
 
     def _cleanup_health_checks(self) -> bool:
         return cleanup_job.run_health_check_cleanup()
+
+    def _cleanup_old_events(self) -> bool:
+        return cleanup_job.run_event_cleanup()
+
+    def _cleanup_image_cache(self) -> bool:
+        return cleanup_job.run_image_cache_cleanup()
