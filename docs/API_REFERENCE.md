@@ -461,9 +461,39 @@ GET /api/overview/stats
 
 ## Error Handling
 
+
+### Standard Success Responses
+
+Admin JSON routes on the migrated blueprints (accounts, settings, filters, EPG sources, overview/categories API) use these envelopes:
+
+**Collection or resource GET:**
+```json
+{ "data": [ ... ] }
+```
+or `{ "data": { ... } }` for a single resource wrapper.
+
+**Mutation (POST/PUT):**
+```json
+{ "success": true, "data": { ... } }
+```
+Optional top-level `"message"` for human-readable confirmation.
+
+**DELETE:** `204 No Content` with an empty body.
+
+**Errors (all JSON admin routes using `@handle_errors` or Marshmallow validation):**
+```json
+{
+  "success": false,
+  "error": "Human-readable message",
+  "code": "VALIDATION_ERROR",
+  "details": { "field": "reason" }
+}
+```
+
 ### Standard Error Response
 ```json
 {
+  "success": false,
   "error": "Error description",
   "code": "ERROR_CODE",
   "details": {

@@ -692,7 +692,7 @@ const ENRICHMENT_PAGE_SIZE = 50;
 async function loadAccounts() {
     try {
         const response = await fetch('/api/accounts');
-        const accounts = await response.json();
+        const accounts = apiUnwrapData(response, await response.json());
         const select = document.getElementById('enrichAccountSelect');
         
         accounts.forEach(acc => {

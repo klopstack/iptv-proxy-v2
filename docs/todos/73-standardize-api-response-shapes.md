@@ -1,6 +1,6 @@
 # Standardize API success response shapes
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P1  
 **Audit:** Application-wide audit, June 2026
 
@@ -38,9 +38,9 @@ Migrate high-traffic endpoints first; document breaking changes for any external
 
 ## Acceptance criteria
 
-- [ ] API_REFERENCE documents actual envelope with examples per resource type
-- [ ] New endpoints follow chosen convention
-- [ ] Top 5 blueprints migrated (accounts, settings, epg/sources, filters, api)
+- [x] API_REFERENCE documents actual envelope with examples per resource type
+- [x] New endpoints follow chosen convention
+- [x] Top 5 blueprints migrated (accounts, settings, epg/sources, filters, api)
 
 ## Test plan
 

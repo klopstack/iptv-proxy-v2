@@ -19,7 +19,7 @@ let epgSyncStatusById = {};
 async function loadAccounts() {
     try {
         const response = await fetch('/api/accounts');
-        const data = await response.json();
+        const data = apiUnwrapData(response, await response.json());
         
         if (!response.ok || !Array.isArray(data)) {
             console.error('Error loading accounts:', data.error || 'Invalid response');
@@ -48,7 +48,7 @@ async function loadAccounts() {
 async function loadSources() {
     try {
         const response = await fetch('/api/epg/sources');
-        const data = await response.json();
+        const data = apiUnwrapData(response, await response.json());
         
         if (!response.ok || !Array.isArray(data)) {
             throw new Error(data.error || 'Invalid response from server');
@@ -664,7 +664,7 @@ async function loadCoverage() {
     
     try {
         const response = await fetch('/api/epg/coverage');
-        const stats = await response.json();
+        const stats = apiUnwrapData(response, await response.json());
         
         const coveragePercent = stats.total_channels > 0 
             ? ((stats.channels_with_epg_mapping / stats.total_channels) * 100).toFixed(1)

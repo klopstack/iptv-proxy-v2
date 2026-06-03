@@ -5,6 +5,7 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
+from api_responses import data_response
 from error_handling import handle_errors
 from models import Account, Category, Channel, ChannelTag, Tag, db
 from services.cache_service import cache_service
@@ -211,7 +212,7 @@ def get_all_categories():
 
         result.append(cat_data)
 
-    return jsonify(result)
+    return data_response(result)
 
 
 # ============================================================================
@@ -298,7 +299,7 @@ def get_epg_cache_status():
     from services.epg.cache import get_cache_stats
 
     stats = get_cache_stats()
-    return jsonify(stats)
+    return data_response(stats)
 
 
 @api_bp.route("/api/epg-cache/clear", methods=["POST"])

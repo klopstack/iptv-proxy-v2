@@ -113,7 +113,7 @@ const modal = new bootstrap.Modal(document.getElementById('filterModal'));
 async function loadAccounts() {
     try {
         const response = await fetch('/api/accounts');
-        accounts = await response.json();
+        accounts = apiUnwrapData(response, await response.json());
         
         // Populate account selects
         const accountSelect = document.getElementById('accountSelect');
@@ -140,7 +140,7 @@ async function loadFilters() {
         const url = accountId ? `/api/accounts/${accountId}/filters` : '/api/filters';
         
         const response = await fetch(url);
-        filters = await response.json();
+        filters = apiUnwrapData(response, await response.json());
         renderFilters();
     } catch (error) {
         document.getElementById('filters-list').innerHTML = `

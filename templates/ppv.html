@@ -412,7 +412,7 @@ function populatePreviewAccountSelect(accounts) {
 async function loadAccountsVisibility() {
     try {
         const response = await fetch('/api/accounts');
-        const accounts = await response.json();
+        const accounts = apiUnwrapData(response, await response.json());
         const visibilityOptions = await window.AccountApi.fetchPpvVisibilityOptions();
 
         let html = '<div class="list-group">';
@@ -944,7 +944,7 @@ async function loadPpvRenameFormats() {
     const container = document.getElementById('ppv-rename-list');
     try {
         const response = await fetch('/api/accounts');
-        const accounts = await response.json();
+        const accounts = apiUnwrapData(response, await response.json());
 
         if (!accounts.length) {
             container.innerHTML = '<p class="text-muted small">No accounts configured.</p>';

@@ -4,6 +4,7 @@ Tests for API routes - scheduler and additional coverage
 from unittest.mock import MagicMock, patch
 
 from models import Account, Category, Channel, ChannelTag, Tag, db
+from tests.conftest import api_data
 
 # ============================================================================
 # Scheduler API Tests
@@ -298,7 +299,7 @@ class TestCategoriesAPI:
         """Test getting categories when none exist"""
         response = client.get("/api/categories")
         assert response.status_code == 200
-        assert response.json == []
+        assert api_data(response) == []
 
     def test_get_categories_with_data(self, app, client, test_account):
         """Test getting categories with data"""
@@ -440,7 +441,7 @@ class TestCategoriesAPI:
 
         response = client.get(f"/api/categories?account_id={account_id}")
         assert response.status_code == 200
-        cat = next(c for c in response.json if c["id"] == category_db_id)
+        cat = next(c for c in api_data(response) if c["id"] == category_db_id)
         assert cat["visible_count"] == 1
         assert cat["hidden_count"] == 1
         assert cat["total_count"] == 2

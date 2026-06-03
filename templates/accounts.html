@@ -339,7 +339,7 @@ const credentialEditModal = new bootstrap.Modal(document.getElementById('credent
 async function loadAccounts() {
     try {
         const response = await fetch('/api/accounts');
-        accounts = await response.json();
+        accounts = apiUnwrapData(response, await response.json());
         renderAccounts();
     } catch (error) {
         document.getElementById('accounts-list').innerHTML = `
@@ -604,7 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 
                 if (response.ok) {
-                    const accountId = id || (await response.json()).id;
+                    const accountId = id || apiUnwrapMutation(response, await response.json()).id;
                     
                     // Also update PPV visibility
                     const ppvVisibility = document.getElementById('accountPpvVisibility').value;

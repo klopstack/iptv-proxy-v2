@@ -515,6 +515,23 @@ class EpgChannelNameMappingUpdateSchema(Schema):
 # ============================================================================
 
 
+def _normalize_validation_details(messages):
+    """Flatten Marshmallow validation messages for the API error envelope."""
+    if not messages:
+        return None
+
+    details = {}
+    for field, msgs in messages.items():
+        if isinstance(msgs, dict):
+            nested = _normalize_validation_details(msgs)
+            details[field] = nested if nested is not None else msgs
+        elif isinstance(msgs, list):
+            details[field] = msgs[0] if len(msgs) == 1 else "; ".join(str(m) for m in msgs)
+        else:
+            details[field] = str(msgs)
+    return details
+
+
 def validate_request_data(schema_class, *, partial=False):
     """
     Decorator to validate request data using a Marshmallow schema
@@ -530,7 +547,9 @@ def validate_request_data(schema_class, *, partial=False):
     """
     from functools import wraps
 
-    from flask import jsonify, request
+    from flask import request
+
+    from error_handling import error_response
 
     def decorator(f):
         @wraps(f)
@@ -541,7 +560,12 @@ def validate_request_data(schema_class, *, partial=False):
                 request.validated_data = validated_data
                 return f(*args, **kwargs)
             except ValidationError as err:
-                return jsonify({"error": "Validation failed", "validation_errors": err.messages}), 400
+                return error_response(
+                    "Validation failed",
+                    400,
+                    details=_normalize_validation_details(err.messages),
+                    code="VALIDATION_ERROR",
+                )
 
         return wrapper
 

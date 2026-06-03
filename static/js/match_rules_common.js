@@ -13,7 +13,7 @@ function escapeHtml(text) {
 async function loadAccounts() {
     try {
         const response = await fetch('/api/accounts');
-        accounts = await response.json();
+        accounts = apiUnwrapData(response, await response.json());
     } catch (error) {
         console.error('Error loading accounts:', error);
     }

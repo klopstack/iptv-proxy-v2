@@ -18,6 +18,10 @@ module.exports = {
     FormData: 'readonly',
     // Shared components defined in base.html
     TagSelector: 'writable',
+    formatUtcTimestamp: 'readonly',
+    parseUtcTimestamp: 'readonly',
+    apiUnwrapMutation: 'readonly',
+    apiUnwrapData: 'readonly',
     // Loaded from static/js/epg_sources.js in EPG templates
     initEpgSourcesProgressPolling: 'readonly'
   },

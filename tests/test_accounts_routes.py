@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from models import Account, Category, Channel, ChannelTag, Credential, Event, EventChannelLink, Tag, db
+from tests.conftest import api_data, api_mutation_data
 
 
 @pytest.fixture
@@ -1086,7 +1087,7 @@ class TestAccountXmltvEpgSource:
             content_type="application/json",
         )
         assert response.status_code == 201
-        data = response.json
+        data = api_mutation_data(response)
         assert data["xmltv_epg_source"] is not None
         assert data["xmltv_epg_source"]["source_type"] == "xmltv_url"
         assert "xmltv.php" in data["xmltv_epg_source"]["url"]
@@ -1106,5 +1107,5 @@ class TestAccountXmltvEpgSource:
         client.post(f"/api/accounts/{test_account}/xmltv-epg-source")
         response = client.get("/api/accounts")
         assert response.status_code == 200
-        row = next(a for a in response.json if a["id"] == test_account)
+        row = next(a for a in api_data(response) if a["id"] == test_account)
         assert row["xmltv_epg_source"] is not None

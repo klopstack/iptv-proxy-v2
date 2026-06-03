@@ -66,7 +66,7 @@ async function populateEpgSourcesForManualMapping() {
     
     try {
         const response = await fetch('/api/epg/sources');
-        const sourcesData = await response.json();
+        const sourcesData = apiUnwrapData(response, await response.json());
         const sourcesList = Array.isArray(sourcesData) ? sourcesData : (sourcesData.sources || []);
         
         sourceSelect.innerHTML = '<option value="">All Sources</option>';

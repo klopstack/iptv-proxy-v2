@@ -18,7 +18,7 @@ import os
 from flask import Flask
 from flask_cors import CORS
 
-from error_handling import register_error_handlers
+from error_handling import register_error_handlers, wrap_blueprint_json_errors
 from models import SyncMetadata, db  # noqa: F401 - imported for db.create_all()
 from services.cache_service import init_cache_service
 from services.flask_session import disable_flask_sessions
@@ -133,6 +133,14 @@ app.register_blueprint(ppv_epg_bp)
 app.register_blueprint(settings_bp)
 app.register_blueprint(xtream_bp)
 app.register_blueprint(config_transfer_bp)
+
+
+# Standard JSON error handling on high-traffic admin blueprints (TODO 72)
+wrap_blueprint_json_errors(app, accounts_bp, default_message="Error processing account request")
+wrap_blueprint_json_errors(app, filters_bp, default_message="Error processing filter request")
+wrap_blueprint_json_errors(app, settings_bp, default_message="Error processing settings request")
+wrap_blueprint_json_errors(app, epg_sources_bp, default_message="Error processing EPG source request")
+wrap_blueprint_json_errors(app, api_bp, default_message="Error processing API request")
 
 # Pass scheduler to API blueprint
 set_scheduler(sync_scheduler)

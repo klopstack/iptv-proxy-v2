@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
-def error_response(message, status_code=400, details=None):
+def error_response(message, status_code=400, details=None, code=None):
     """
     Create a standardized error response
 
@@ -30,11 +30,18 @@ def error_response(message, status_code=400, details=None):
         message: User-friendly error message
         status_code: HTTP status code
         details: Optional additional details (dict)
+        code: Optional symbolic error code (defaults from status)
 
     Returns:
         tuple: (response, status_code)
     """
-    response = {"success": False, "error": message}
+    from api_responses import default_error_code
+
+    response = {
+        "success": False,
+        "error": message,
+        "code": code or default_error_code(status_code),
+    }
 
     if details:
         response["details"] = details
@@ -140,11 +147,20 @@ def handle_errors(
                 if log_errors:
                     logger.warning(f"Validation error in {f.__name__}: {e}")
                 message = str(e) if str(e) else "Validation error"
-                details = e.details if hasattr(e, "details") else None
+                details = e.details if getattr(e, "details", None) else None
                 if return_json:
-                    return error_response(message, 400, details)
+                    return error_response(message, 400, details, code="VALIDATION_ERROR")
                 else:
                     return text_error_response(message, 400)
+
+            except ConflictError as e:
+                if log_errors:
+                    logger.warning(f"Conflict in {f.__name__}: {e}")
+                message = str(e) if str(e) else "Resource conflict"
+                if return_json:
+                    return error_response(message, 409, code="CONFLICT")
+                else:
+                    return text_error_response(message, 409)
 
             except AuthorizationError as e:
                 # Authorization errors (403)
@@ -187,25 +203,50 @@ def handle_errors(
                     return text_error_response(message, 404)
 
             except Exception as exc:
+                from flask import current_app
+                from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
+
+                if isinstance(exc, IntegrityError):
+                    message, status = handle_db_error(exc, operation=f.__name__)
+                    if log_errors:
+                        logger.warning(f"Database integrity error in {f.__name__}: {exc}")
+                    if return_json:
+                        return error_response(message, status, code="CONFLICT" if status == 409 else "BAD_REQUEST")
+                    return text_error_response(message, status)
+
+                if isinstance(exc, OperationalError):
+                    message, status = handle_db_error(exc, operation=f.__name__)
+                    if log_errors:
+                        logger.error(f"Database operational error in {f.__name__}: {exc}", exc_info=True)
+                    if return_json:
+                        return error_response(message, status, code="SERVICE_UNAVAILABLE")
+                    return text_error_response(message, status)
+
+                if isinstance(exc, SQLAlchemyError):
+                    message, status = handle_db_error(exc, operation=f.__name__)
+                    if log_errors:
+                        logger.error(f"Database error in {f.__name__}: {exc}", exc_info=True)
+                    if return_json:
+                        return error_response(message, status, code="INTERNAL_ERROR")
+                    return text_error_response(message, status)
+
                 # Unexpected errors (500)
                 if log_errors:
                     logger.error(f"Unexpected error in {f.__name__}", exc_info=True)
 
                 # Never expose internal error details in production
                 # But log them for debugging
-                from flask import current_app
-
                 if current_app.config.get("DEBUG") and include_traceback_in_dev:
                     details = {"exception_type": type(exc).__name__, "traceback": traceback.format_exc()}
                     if return_json:
-                        return error_response(str(exc), 500, details)
+                        return error_response(str(exc), 500, details, code="INTERNAL_ERROR")
                     else:
                         return text_error_response(f"{str(exc)}\n\n{traceback.format_exc()}", 500)
                 else:
                     # Production: generic message
                     message = default_message if default_message else "An internal error occurred"
                     if return_json:
-                        return error_response(message, 500)
+                        return error_response(message, 500, code="INTERNAL_ERROR")
                     else:
                         return text_error_response(message, 500)
 
@@ -289,6 +330,14 @@ class ResourceNotFoundError(Exception):
 class ValidationError(ValueError):
     """Raise when input validation fails (400)"""
 
+    def __init__(self, message="Validation error", details=None):
+        super().__init__(message)
+        self.details = details
+
+
+class ConflictError(Exception):
+    """Raise when a request conflicts with existing state (409)"""
+
 
 class AuthorizationError(PermissionError):
     """Raise when user lacks permission (403)"""
@@ -314,17 +363,17 @@ def register_error_handlers(app):
     @app.errorhandler(404)
     def not_found(error):
         """Handle 404 errors"""
-        return error_response("Resource not found", 404)
+        return error_response("Resource not found", 404, code="NOT_FOUND")
 
     @app.errorhandler(403)
     def forbidden(error):
         """Handle 403 errors"""
-        return error_response("Permission denied", 403)
+        return error_response("Permission denied", 403, code="FORBIDDEN")
 
     @app.errorhandler(400)
     def bad_request(error):
         """Handle 400 errors"""
-        return error_response("Bad request", 400)
+        return error_response("Bad request", 400, code="BAD_REQUEST")
 
     @app.errorhandler(500)
     def internal_error(error):
@@ -333,14 +382,14 @@ def register_error_handlers(app):
 
         # Never expose internal errors in production
         if app.config.get("DEBUG"):
-            return error_response(str(error), 500)
+            return error_response(str(error), 500, code="INTERNAL_ERROR")
         else:
-            return error_response("An internal error occurred", 500)
+            return error_response("An internal error occurred", 500, code="INTERNAL_ERROR")
 
     @app.errorhandler(503)
     def service_unavailable(error):
         """Handle 503 errors"""
-        return error_response("Service temporarily unavailable", 503)
+        return error_response("Service temporarily unavailable", 503, code="SERVICE_UNAVAILABLE")
 
 
 # ============================================================================
@@ -364,7 +413,7 @@ def handle_db_error(e, operation="database operation"):
     if isinstance(e, IntegrityError):
         # Constraint violation (e.g., duplicate, foreign key)
         logger.warning(f"Database integrity error during {operation}: {e}")
-        return "Database constraint violation. Check for duplicates or invalid references.", 400
+        return "Database constraint violation. Check for duplicates or invalid references.", 409
 
     elif isinstance(e, OperationalError):
         # Database connection or operational issues
@@ -375,3 +424,29 @@ def handle_db_error(e, operation="database operation"):
         # Other database errors
         logger.error(f"Database error during {operation}: {e}", exc_info=True)
         return "A database error occurred", 500
+
+
+def wrap_blueprint_json_errors(app, blueprint, default_message="An error occurred"):
+    """
+    Wrap all JSON blueprint view functions with ``@handle_errors(return_json=True)``.
+
+    Call from ``app.py`` after ``app.register_blueprint(blueprint)``.
+    """
+    prefix = f"{blueprint.name}."
+    for full_endpoint, view_func in list(app.view_functions.items()):
+        if not full_endpoint.startswith(prefix):
+            continue
+        if getattr(view_func, "_json_error_handling_applied", False):
+            continue
+        wrapped = handle_errors(return_json=True, default_message=default_message)(view_func)
+        wrapped._json_error_handling_applied = True
+        app.view_functions[full_endpoint] = wrapped
+        short_endpoint = full_endpoint[len(prefix) :]
+        blueprint.view_functions[short_endpoint] = wrapped
+
+
+def apply_json_error_handling(blueprint, default_message="An error occurred"):
+    """Deprecated alias — prefer ``wrap_blueprint_json_errors(app, blueprint)`` in app.py."""
+    from flask import current_app
+
+    wrap_blueprint_json_errors(current_app, blueprint, default_message=default_message)

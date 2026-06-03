@@ -170,7 +170,9 @@ class TestPlaylistConfigCRUD:
             content_type="application/json",
         )
         assert response.status_code == 400
-        assert "validation_errors" in response.json
+        payload = response.json
+        assert payload["code"] == "VALIDATION_ERROR"
+        assert "tag_match_mode" in payload["details"]
 
     def test_update_playlist_config_tag_overlap(self, app, client, test_playlist_config):
         """Test updating with overlapping include/exclude tags returns 400"""
@@ -180,7 +182,7 @@ class TestPlaylistConfigCRUD:
             content_type="application/json",
         )
         assert response.status_code == 400
-        assert "include_tags" in response.json["validation_errors"]
+        assert "include_tags" in response.json["details"]
 
     def test_update_playlist_config_partial_name_only(self, app, client, test_playlist_config):
         """Test partial update with name only"""
