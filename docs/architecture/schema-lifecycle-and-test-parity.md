@@ -1,7 +1,7 @@
 # Schema Lifecycle and Test Parity
 
 **Audit:** Application-wide audit, June 2026  
-**Status:** Draft for review
+**Status:** Current (Wave 5 PR Q — TODOs 80, 81)
 
 ## Production boot path
 
@@ -25,16 +25,16 @@ Documented in `migrations/README.md` and `DEVELOPER_GUIDE.md`.
 | test_migrations.py | ✅ | ✅ | Full |
 | flask init-db | ✅ | ❌ | Model only |
 
-**Gap:** `ix_channel_ppv_queue` exists only in migration, not model — default tests lack it (TODO 80).
+**Resolved (TODO 80):** `ix_channel_ppv_queue` is defined on `Channel.__table_args__` so `create_all()` matches post-migration production.
 
 ## High-risk schema items
 
 | Item | Severity | Tracking |
 |------|----------|----------|
 | `Event.external_id` global UNIQUE vs multi-source | High | TODO 55 |
-| FK ondelete model/migration drift | Medium | TODO 81 |
+| FK ondelete model/migration drift | Medium | TODO 81 — aligned for hot-path FKs; denormalized `channel_tags` documented |
 | SQLite table-rebuild migrations | Medium | Document fragility |
-| `channel_tags` without channel FK | Medium | Denormalized by design |
+| `channel_tags` without channel FK | Medium | Denormalized by design — see `ChannelTag` docstring; cleaned by AccountDeleteService / retention |
 
 ## schema_migrations table
 
@@ -47,8 +47,8 @@ Raw SQL tracking in `run_migrations.py` — not an ORM model. ~55 executable mig
 | Covered | Gaps |
 |---------|------|
 | Full migration chain (test_migrations.py) | Default conftest path |
-| Critical tables + 2 indexes (test_schema_parity.py) | PPV queue index, composite uniques, FK lists |
-| FK=ON via app connection | FK during migrations |
+| Critical tables + indexes (test_schema_parity.py) | PPV queue index, FK ondelete spot checks |
+| FK=ON via app connection | FK=ON in `run_migrations.sqlite_connect`; `foreign_key_check` in test_migrations |
 | EPG/health retention (test_data_retention.py) | Events, image cache |
 
 ## README doc drift
