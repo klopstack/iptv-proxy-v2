@@ -3,14 +3,14 @@
 **Last updated:** June 2026  
 **Companion:** [README.md](./README.md) (per-item specs), [../architecture/](../architecture/) (design notes)
 
-This document groups **35 open TODOs** into execution **waves** and suggested **PR batches**. Individual acceptance criteria and test plans remain in each TODO file — implement from those, not from this summary alone.
+This document groups **36 open TODOs** into execution **waves** and suggested **PR batches**. Individual acceptance criteria and test plans remain in each TODO file — implement from those, not from this summary alone.
 
 ## Status snapshot
 
 | Track | Range | Open | Recently completed |
 |-------|-------|------|-------------------|
 | P5 — PPV | 52–67 | 16 | — |
-| P6 — App-wide | 68–91 | 18 | 68, 69, 70, 71, 74, 75, 84 |
+| P6 — App-wide | 68–94 | 19 | 68, 69, 70, 71, 74, 75, 84 |
 
 Update [README.md](./README.md) status columns as work lands. Mark PR IDs in each TODO’s **Completion** section.
 
@@ -209,11 +209,18 @@ Update [README.md](./README.md) status columns as work lands. Mark PR IDs in eac
 
 | TODO | When | Summary |
 |------|------|---------|
+| [94](./94-speed-up-thesportsdb-tests-no-live-http.md) | **Early** (quick win) | Stale SDK mocks → live retry sleeps; patch `call_thesportsdb_api` |
 | [87](./87-fix-stale-documentation.md) | Early + after 72/73 | API_REFERENCE, missing P4 links, P6 summary drift |
-| [88](./88-expand-ci-quality-gates.md) | After 80, 86 | vulture, Docker PR build, pre-commit |
+| [88](./88-expand-ci-quality-gates.md) | After 80, 86, **94** | vulture, Docker PR build, pre-commit |
 | [67](./67-ppv-misc-cleanup.md) | Anytime after Wave 2 | Constants, heuristics, docstrings |
 
-No fixed PR batch — small PRs or folded into related waves.
+### PR batches — Wave 7
+
+| PR | TODOs | Theme | Size |
+|----|-------|-------|------|
+| **V** | 94 | TheSportsDB test mocks + no live HTTP | **S** |
+
+Other Wave 7 items: small PRs or folded into related waves.
 
 ---
 
@@ -260,6 +267,7 @@ Quick reference for all suggested pull requests (A–U + large singles).
 | S | 6 | 83 | M |
 | T | 6 | 85 | M |
 | U | 6 | 86 | M |
+| V | 7 | 94 | **S** |
 | — | 8 | 65 | **L** |
 | — | 8 | 66 | M |
 | — | 8 | 79 | M |
@@ -311,11 +319,11 @@ Wave 6 (83–86) fits either track after Wave 1 or 5.
 
 If resuming without a assigned wave:
 
-1. **[52](./52-fix-details-fetched-stat.md) + [54](./54-route-enrichment-through-persist-match.md)** — PPV metrics/persist (PR C)  
-2. **[55](./55-multi-source-events-schema-and-detail-fetch.md)** — plan migration window (PR D)  
-3. **[91](./91-scheduler-status-api-failure-metadata.md)** — scheduler failure visibility (PR K)  
-4. **[76](./76-deduplicate-epg-sync-infrastructure.md)** — EPG sync dedup (PR L)  
-5. **[60](./60-add-persistence-unit-tests.md)** — after Wave 2 stabilizes PPV persist path  
+1. **[94](./94-speed-up-thesportsdb-tests-no-live-http.md)** — ~5 min → under 30s for TheSportsDB tests; stops hammering live API (PR V)  
+2. **[52](./52-fix-details-fetched-stat.md) + [54](./54-route-enrichment-through-persist-match.md)** — PPV metrics/persist (PR C)  
+3. **[55](./55-multi-source-events-schema-and-detail-fetch.md)** — plan migration window (PR D)  
+4. **[91](./91-scheduler-status-api-failure-metadata.md)** — scheduler failure visibility (PR K)  
+5. **[76](./76-deduplicate-epg-sync-infrastructure.md)** — EPG sync dedup (PR L)  
 
 ---
 
@@ -338,7 +346,8 @@ These closed items underpin the open work:
 
 | TODO | Defer until |
 |------|-------------|
-| 88 | 80, 86 reduce CI flake |
+| 88 | 80, 86, **94** reduce CI flake |
+| 94 | None — do early for faster local/CI runs |
 | 78 | 79 + 72/73 |
 | 65, 89, 90 | Dedicated milestones after waves 2–4 |
 | 64 | 53 merged |
