@@ -1,0 +1,461 @@
+/**
+ * Main dashboard (TODO 106): Tier-1 from /api/dashboard/summary, deferred sections in parallel.
+ */
+import { unwrapData } from '../lib/api_contract.js';
+import { escapeHtml } from '../lib/escape_html.js';
+import { parseUtcTimestamp } from '../lib/epg_datetime.js';
+
+function formatRelativeTime(date) {
+    const parsed = parseUtcTimestamp(date);
+    if (!parsed || Number.isNaN(parsed.getTime())) return 'Unknown';
+
+    const now = new Date();
+    const diffMs = now - parsed;
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffSecs < 60) return 'just now';
+    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return parsed.toLocaleDateString();
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / k ** i).toFixed(1))} ${sizes[i]}`;
+}
+
+function renderSyncAlerts(overview) {
+    const scheduler = overview.scheduler || {};
+    const accounts = overview.accounts || {};
+    if (!scheduler.has_sync_issues) {
+        return '';
+    }
+
+    const failedJobs = (scheduler.failed_jobs || [])
+        .map((j) => `<li><strong>${escapeHtml(j.job)}</strong>: ${escapeHtml(j.last_error || 'Unknown error')}</li>`)
+        .join('');
+    const failedAccounts = (accounts.failed_sync_accounts || [])
+        .map((a) => `<li><a href="/accounts">${escapeHtml(a.name)}</a></li>`)
+        .join('');
+
+    return `
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-octagon"></i>
+                    <strong>Sync issues detected</strong>
+                    ${failedJobs ? `<ul class="mb-1 mt-2">${failedJobs}</ul>` : ''}
+                    ${failedAccounts ? `<div>Failed accounts (${accounts.failed_sync_count || 0}):</div><ul class="mb-0">${failedAccounts}</ul>` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderTier1(summary) {
+    const health = summary.channel_health || {};
+    const byStatus = health.by_status || {};
+    const streams = summary.streams || {};
+    const downCount = byStatus.down || 0;
+    const healthHref = downCount > 0 ? '/channel-health?status=down' : '/channel-health';
+
+    const healthy = (byStatus.healthy || 0).toLocaleString();
+    const degraded = (byStatus.degraded || 0).toLocaleString();
+    const down = downCount.toLocaleString();
+    const unknown = (byStatus.unknown || 0).toLocaleString();
+    const total = (health.total || 0).toLocaleString();
+
+    const activeSessions = (streams.active_sessions || 0).toLocaleString();
+    const sharedUpstream = streams.shared_upstream || 0;
+    const subscribers = streams.subscribers || 0;
+    const backend = streams.backend || 'ffmpeg';
+    const showMux = backend === 'ffmpeg' && (sharedUpstream > 0 || subscribers > 0);
+
+    let streamDetail = `<small class="opacity-75">Proxied sessions (ActiveStream)</small>`;
+    if (showMux || backend === 'ffmpeg') {
+        streamDetail += `<br><small class="opacity-75">Shared upstream: ${sharedUpstream.toLocaleString()}`;
+        if (subscribers > 0) {
+            streamDetail += ` · Multiplex viewers: ${subscribers.toLocaleString()}`;
+        }
+        streamDetail += ` (${escapeHtml(backend)})</small>`;
+    }
+
+    return `
+        ${renderSyncAlerts(summary.overview || {})}
+        <div class="row mb-4">
+            <div class="col-md-4 mb-3">
+                <div class="card h-100 ${downCount > 0 ? 'border-danger' : ''}">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="bi bi-heart-pulse"></i> Channel Health</h6>
+                        <a href="${healthHref}" class="btn btn-sm btn-outline-primary">Details</a>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center g-2">
+                            <div class="col-4">
+                                <div class="h5 mb-0 text-success">${healthy}</div>
+                                <small class="text-muted">Healthy</small>
+                            </div>
+                            <div class="col-4">
+                                <div class="h5 mb-0 text-warning">${degraded}</div>
+                                <small class="text-muted">Degraded</small>
+                            </div>
+                            <div class="col-4">
+                                <div class="h5 mb-0 text-danger">${down}</div>
+                                <small class="text-muted">Down</small>
+                            </div>
+                            <div class="col-6">
+                                <div class="h6 mb-0">${unknown}</div>
+                                <small class="text-muted">Unknown</small>
+                            </div>
+                            <div class="col-6">
+                                <div class="h6 mb-0">${total}</div>
+                                <small class="text-muted">In playlist</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card bg-dark text-white h-100">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 opacity-75">Operating streams</h6>
+                        <h2 class="card-title mb-1">${activeSessions}</h2>
+                        ${streamDetail}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card bg-secondary text-white h-100">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 opacity-75">Operating clients</h6>
+                        <h2 class="card-title mb-1">${activeSessions}</h2>
+                        <small class="opacity-75">Active proxied sessions</small>
+                        ${subscribers > 0 ? `<br><small class="opacity-75">Multiplex viewers: ${subscribers.toLocaleString()}</small>` : ''}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderOverviewCards(stats) {
+    return `
+        <div class="row mb-4" id="dashboard-overview-cards">
+            <div class="col-md-3 mb-3">
+                <div class="card bg-primary text-white h-100">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 opacity-75">Accounts</h6>
+                        <h2 class="card-title mb-0">${stats.accounts.enabled} / ${stats.accounts.total}</h2>
+                        <small class="opacity-75">${stats.accounts.synced} synced</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card bg-success text-white h-100">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 opacity-75">Channels</h6>
+                        <h2 class="card-title mb-0">${stats.channels.visible.toLocaleString()}</h2>
+                        <small class="opacity-75">${stats.channels.total.toLocaleString()} total, ${stats.channels.ppv} PPV</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card bg-info text-white h-100">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 opacity-75">EPG Data</h6>
+                        <h2 class="card-title mb-0">${stats.epg.programs.toLocaleString()}</h2>
+                        <small class="opacity-75">${stats.epg.coverage.percentage}% coverage, ${stats.epg.sources.enabled} sources</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card bg-warning text-dark h-100">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2">Tags</h6>
+                        <h2 class="card-title mb-0">${stats.tags.total}</h2>
+                        <small>${stats.tags.tagged_channels.toLocaleString()} tagged channels</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderSchedulerCard(stats) {
+    const scheduler = stats.scheduler;
+    if (!scheduler) {
+        return '';
+    }
+    if (scheduler.running) {
+        const lastAccountSync = scheduler.last_syncs?.accounts
+            ? formatRelativeTime(scheduler.last_syncs.accounts)
+            : 'Never';
+        const lastEpgSync = scheduler.last_syncs?.epg
+            ? formatRelativeTime(scheduler.last_syncs.epg)
+            : 'Never';
+        return `
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card border-success">
+                        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0"><i class="bi bi-arrow-repeat"></i> Scheduler Status</h6>
+                            <span class="badge bg-light text-success"><i class="bi bi-check-circle"></i> Running</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>Accounts Sync:</strong> Every ${scheduler.intervals.accounts}h
+                                    <br><small class="text-muted">Last: ${lastAccountSync}</small>
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>EPG Sync:</strong> Every ${scheduler.intervals.epg}h
+                                    <br><small class="text-muted">Last: ${lastEpgSync}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    return `
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Scheduler Not Running</strong> —
+                    Automatic syncs are disabled. Go to <a href="/settings">Settings</a> to enable.
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+async function loadOverviewStatsDeferred() {
+    try {
+        const response = await fetch('/api/overview/stats');
+        const stats = unwrapData(await response.json());
+        const container = document.getElementById('dashboard-deferred');
+        if (!container) return;
+        container.insertAdjacentHTML('afterbegin', renderOverviewCards(stats) + renderSchedulerCard(stats));
+    } catch (error) {
+        console.error('Error loading overview stats:', error);
+    }
+}
+
+async function loadTagPlaylistsDeferred() {
+    const container = document.getElementById('dashboard-deferred');
+    if (!container) return;
+    try {
+        const response = await fetch('/api/playlist-configs');
+        const playlists = await response.json();
+        if (!Array.isArray(playlists) || playlists.length === 0) {
+            return;
+        }
+
+        let rows = '';
+        for (const playlist of playlists) {
+            const tagBadges = playlist.include_tags.slice(0, 3)
+                .map((t) => `<span class="badge bg-primary me-1">${escapeHtml(t)}</span>`)
+                .join('');
+            const moreTags = playlist.include_tags.length > 3
+                ? `<span class="badge bg-secondary">+${playlist.include_tags.length - 3} more</span>`
+                : '';
+            const playlistUrl = `/playlist/config/${playlist.slug}.m3u`;
+            rows += `
+                <tr>
+                    <td>
+                        <strong>${escapeHtml(playlist.name)}</strong>
+                        ${!playlist.enabled ? '<span class="badge bg-secondary ms-1">Disabled</span>' : ''}
+                    </td>
+                    <td>${tagBadges}${moreTags}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <a href="${playlistUrl}" target="_blank" class="btn btn-outline-success" title="Download playlist">
+                                <i class="bi bi-download"></i>
+                            </a>
+                            <button type="button" class="btn btn-outline-secondary dashboard-copy-url" data-url="${escapeHtml(`${window.location.origin}${playlistUrl}`)}" title="Copy URL">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+
+        container.insertAdjacentHTML('beforeend', `
+            <div class="row mt-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0"><i class="bi bi-collection-play"></i> Tag Playlists</h5>
+                            <a href="/rulesets#playlists" class="btn btn-sm btn-light"><i class="bi bi-gear"></i> Manage</a>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead><tr><th>Name</th><th>Tags</th><th>Actions</th></tr></thead>
+                                    <tbody>${rows}</tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `);
+        container.querySelectorAll('.dashboard-copy-url').forEach((btn) => {
+            btn.addEventListener('click', () => copyToClipboard(btn.dataset.url));
+        });
+    } catch (error) {
+        console.error('Error loading tag playlists:', error);
+    }
+}
+
+async function loadImageCacheDeferred() {
+    const container = document.getElementById('dashboard-deferred');
+    if (!container) return;
+    try {
+        const response = await fetch('/api/image-cache/stats');
+        const cacheStats = await response.json();
+        const hitRate = cacheStats.total_fetches > 0
+            ? ((cacheStats.total_hits / cacheStats.total_fetches) * 100).toFixed(1)
+            : 0;
+
+        container.insertAdjacentHTML('beforeend', `
+            <div class="row mt-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0"><i class="bi bi-image"></i> Image Cache</h5>
+                            <a href="/settings#image-cache" class="btn btn-sm btn-light"><i class="bi bi-gear"></i> Manage</a>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-md-3 col-6 mb-2">
+                                    <div class="h4 mb-0 text-primary">${cacheStats.cached_images.toLocaleString()}</div>
+                                    <small class="text-muted">Cached Images</small>
+                                </div>
+                                <div class="col-md-3 col-6 mb-2">
+                                    <div class="h4 mb-0 text-info">${formatBytes(cacheStats.total_size_bytes)}</div>
+                                    <small class="text-muted">Cache Size</small>
+                                </div>
+                                <div class="col-md-3 col-6 mb-2">
+                                    <div class="h4 mb-0 text-success">${hitRate}%</div>
+                                    <small class="text-muted">Hit Rate</small>
+                                </div>
+                                <div class="col-md-3 col-6 mb-2">
+                                    <div class="h4 mb-0 text-warning">${cacheStats.total_hits.toLocaleString()}</div>
+                                    <small class="text-muted">Cache Hits</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `);
+    } catch (error) {
+        console.error('Error loading image cache stats:', error);
+    }
+}
+
+function renderQuickActions() {
+    return `
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <h3>Quick Actions</h3>
+                <div class="list-group">
+                    <a href="/accounts" class="list-group-item list-group-item-action">
+                        <i class="bi bi-plus-circle"></i> Manage Accounts
+                    </a>
+                    <a href="/channel-health" class="list-group-item list-group-item-action">
+                        <i class="bi bi-heart-pulse"></i> Channel Health
+                    </a>
+                    <a href="/filters" class="list-group-item list-group-item-action">
+                        <i class="bi bi-funnel-fill"></i> Manage Filters
+                    </a>
+                    <a href="/rulesets" class="list-group-item list-group-item-action">
+                        <i class="bi bi-tags-fill"></i> Manage Tags &amp; Rulesets
+                    </a>
+                    <a href="/rulesets#playlists" class="list-group-item list-group-item-action">
+                        <i class="bi bi-collection-play"></i> Tag Playlists
+                    </a>
+                    <a href="/settings" class="list-group-item list-group-item-action">
+                        <i class="bi bi-gear-fill"></i> Settings &amp; Scheduler
+                    </a>
+                    <a href="/preview" class="list-group-item list-group-item-action">
+                        <i class="bi bi-play-circle"></i> Test Playlists
+                    </a>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        const toast = document.createElement('div');
+        toast.className = 'position-fixed bottom-0 end-0 p-3';
+        toast.style.zIndex = '9999';
+        toast.innerHTML = `
+            <div class="toast show" role="alert">
+                <div class="toast-body bg-success text-white rounded">
+                    <i class="bi bi-check-circle"></i> URL copied to clipboard!
+                </div>
+            </div>
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2000);
+    }).catch((err) => {
+        alert(`Failed to copy: ${err.message}`);
+    });
+}
+
+async function loadDashboard() {
+    const content = document.getElementById('dashboard-content');
+    if (!content) return;
+
+    try {
+        const response = await fetch('/api/dashboard/summary');
+        const summary = unwrapData(await response.json());
+
+        content.innerHTML = `
+            <div id="dashboard-tier1">${renderTier1(summary)}</div>
+            <div id="dashboard-deferred">
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <div class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span> Loading overview…</div>
+                    </div>
+                </div>
+            </div>
+            ${renderQuickActions()}
+        `;
+
+        const deferred = document.getElementById('dashboard-deferred');
+        const loadingRow = deferred?.querySelector('.row.mb-3');
+
+        await Promise.all([
+            loadOverviewStatsDeferred(),
+            loadTagPlaylistsDeferred(),
+            loadImageCacheDeferred(),
+        ]);
+
+        if (loadingRow) {
+            loadingRow.remove();
+        }
+    } catch (error) {
+        content.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle"></i> Error loading dashboard: ${escapeHtml(error.message)}
+            </div>
+        `;
+    }
+}
+
+loadDashboard();
