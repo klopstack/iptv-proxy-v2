@@ -1,7 +1,6 @@
 """Tests for SofaScore tennis calendar provider (slice 1 — not wired to enrichment)."""
 
 import json
-import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -31,11 +30,7 @@ class TestParseTennisFixture:
     def test_parses_kalinskaya_match(self):
         payload = _load_fixture()
         events = parse_tennis_scheduled_events(payload, date_str="2026-06-03")
-        match = next(
-            e
-            for e in events
-            if {e.home_team, e.away_team} == {"Anna Kalinskaya", "Maja Chwalinska"}
-        )
+        match = next(e for e in events if {e.home_team, e.away_team} == {"Anna Kalinskaya", "Maja Chwalinska"})
         assert match.event_id == "16198594"
         assert match.source == EVENT_SOURCE_SOFASCORE
         assert match.sport == "Tennis"
