@@ -35,9 +35,13 @@ class DateExtractor:
     and reverse matching bucket channels on the same calendar day.
     """
 
-    def __init__(self, reference_date: Optional[datetime] = None, date_strategies: Optional[List[DateParseStrategy]] = None):
+    def __init__(
+        self, reference_date: Optional[datetime] = None, date_strategies: Optional[List[DateParseStrategy]] = None
+    ):
         self.reference_date = reference_date or datetime.now(timezone.utc).replace(tzinfo=None)
-        self._strategies = date_strategies if date_strategies is not None else DEFAULT_DATE_STRATEGIES
+        self._strategies: List[DateParseStrategy] = (
+            date_strategies if date_strategies is not None else DEFAULT_DATE_STRATEGIES
+        )
         self.dateparser_settings = {
             "PREFER_DATES_FROM": "current_period",
             "RELATIVE_BASE": self.reference_date,

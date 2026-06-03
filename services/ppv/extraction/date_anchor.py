@@ -24,8 +24,7 @@ from services.ppv.extraction.patterns import (
 
 # Optional @ before month abbreviation (e.g. "@ Jun 4 01:55")
 MONTH_DAY_ANCHOR_PATTERN = re.compile(
-    r"@?\s*"
-    + DATE_PATTERN,
+    r"@?\s*" + DATE_PATTERN,
     re.IGNORECASE,
 )
 
@@ -34,15 +33,12 @@ START_STOP_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-ISO_DATE_LOOSE_PATTERN = re.compile(
-    r"\b(\d{4}[-/]\d{1,2}[-/]\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)\b"
-)
+ISO_DATE_LOOSE_PATTERN = re.compile(r"\b(\d{4}[-/]\d{1,2}[-/]\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)\b")
 
 _MONTH_SIGNAL = r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\b"
 _DAY_MONTH_SIGNAL = r"\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b"
 _FULL_MONTH_SIGNAL = (
-    r"\b(?:January|February|March|April|May|June|July|August|"
-    r"September|October|November|December)\s+\d{1,2}\b"
+    r"\b(?:January|February|March|April|May|June|July|August|" r"September|October|November|December)\s+\d{1,2}\b"
 )
 
 
