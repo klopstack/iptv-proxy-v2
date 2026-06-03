@@ -17,6 +17,7 @@ from services.scheduler import (
     SYNC_KEY_ACCOUNT_INTERVAL,
     SYNC_KEY_LAST_ACCOUNT_SYNC,
     SYNC_KEY_LAST_FCC_SYNC,
+    SYNC_KEY_LAST_PPV_PREFETCH,
     SYNC_KEY_SCHEDULER_HEARTBEAT,
     SyncScheduler,
 )
@@ -123,6 +124,89 @@ class TestSyncStatus:
             assert status["syncs"]["accounts"]["last_sync"] is not None
             assert status["syncs"]["accounts"]["last_sync"].endswith("Z")
             assert status["syncs"]["accounts"]["next_sync"].endswith("Z")
+            assert status["syncs"]["accounts"]["last_run_status"] == "success"
+
+    def test_get_status_includes_all_registered_jobs(self, scheduler, app):
+        with app.app_context():
+            status = scheduler.get_status()
+            for job_name in (
+                "accounts",
+                "epg",
+                "fcc",
+                "ppv_prefetch",
+                "ppv_enrichment",
+                "ppv_time_refresh",
+                "sportsipy_refresh",
+                "epg_program_cleanup",
+                "health_check_cleanup",
+            ):
+                job = status["syncs"][job_name]
+                assert "last_failure_at" in job
+                assert "last_error" in job
+                assert "last_run_status" in job
+                assert "last_success_at" in job
+
+
+class TestSchedulerFailureMetadata:
+    """Scheduler job failure metadata (TODO 91)."""
+
+    def test_record_failure_does_not_advance_success_timestamp(self, scheduler, app):
+        with app.app_context():
+            old = datetime.now(timezone.utc) - timedelta(hours=200)
+            SyncMetadata.set(SYNC_KEY_LAST_FCC_SYNC, old.isoformat())
+            db.session.commit()
+
+            scheduler._record_sync_failure(SYNC_KEY_LAST_FCC_SYNC, "FCC timeout")
+
+            result = scheduler._get_last_sync_time(SYNC_KEY_LAST_FCC_SYNC)
+            assert result is not None
+            assert abs((result - old).total_seconds()) < 2
+            assert SyncMetadata.get(scheduler._failure_error_key(SYNC_KEY_LAST_FCC_SYNC)) == "FCC timeout"
+
+    def test_get_status_includes_failure_fields(self, scheduler, app):
+        with app.app_context():
+            scheduler._record_sync_failure(SYNC_KEY_LAST_PPV_PREFETCH, "prefetch failed")
+
+            status = scheduler.get_status()
+            job = status["syncs"]["ppv_prefetch"]
+            assert job["last_run_status"] == "error"
+            assert job["last_error"] == "prefetch failed"
+            assert job["last_failure_at"] is not None
+            assert job["last_failure_at"].endswith("Z")
+
+    def test_success_clears_last_error_retains_failure_at(self, scheduler, app):
+        with app.app_context():
+            scheduler._record_sync_failure(SYNC_KEY_LAST_FCC_SYNC, "temporary error")
+            failure_at = SyncMetadata.get(scheduler._failure_at_key(SYNC_KEY_LAST_FCC_SYNC))
+
+            scheduler._record_sync_success(SYNC_KEY_LAST_FCC_SYNC)
+            now = datetime.now(timezone.utc)
+            scheduler._set_last_sync_time(SYNC_KEY_LAST_FCC_SYNC, now)
+
+            status = scheduler.get_status()["syncs"]["fcc"]
+            assert status["last_run_status"] == "success"
+            assert status["last_error"] is None
+            assert SyncMetadata.get(scheduler._failure_error_key(SYNC_KEY_LAST_FCC_SYNC)) is None
+            assert SyncMetadata.get(scheduler._failure_at_key(SYNC_KEY_LAST_FCC_SYNC)) == failure_at
+
+    @patch("services.scheduler.SyncScheduler._sync_fcc_data", return_value=False)
+    def test_check_and_sync_records_fcc_failure_metadata(self, _mock_fcc, scheduler, app):
+        with app.app_context():
+            old = datetime.now(timezone.utc) - timedelta(hours=200)
+            SyncMetadata.set(SYNC_KEY_LAST_FCC_SYNC, old.isoformat())
+            db.session.commit()
+
+            def needs_fcc_only(key, _interval_hours):
+                return key == SYNC_KEY_LAST_FCC_SYNC
+
+            with patch.object(scheduler, "_needs_sync", side_effect=needs_fcc_only):
+                with patch.object(scheduler, "_scan_channel_health"):
+                    with patch.object(scheduler, "_sync_epg_sources_if_due"):
+                        scheduler._check_and_sync()
+
+            assert SyncMetadata.get(scheduler._failure_error_key(SYNC_KEY_LAST_FCC_SYNC)) == "Job returned failure"
+            status = scheduler.get_status()["syncs"]["fcc"]
+            assert status["last_run_status"] == "error"
 
 
 class TestSyncTimeTracking:

@@ -567,12 +567,23 @@ def get_overview_stats():
     total_accounts = Account.query.count()
     enabled_accounts = Account.query.filter_by(enabled=True).count()
     synced_accounts = Account.query.filter(Account.last_sync.isnot(None), Account.last_sync_status == "success").count()
+    failed_sync_accounts = (
+        Account.query.filter_by(enabled=True, last_sync_status="error")
+        .order_by(Account.last_sync.desc())
+        .limit(20)
+        .all()
+    )
 
     stats["accounts"] = {
         "total": total_accounts,
         "enabled": enabled_accounts,
         "synced": synced_accounts,
         "disabled": total_accounts - enabled_accounts,
+        "failed_sync_count": Account.query.filter_by(enabled=True, last_sync_status="error").count(),
+        "failed_sync_accounts": [
+            {"id": account.id, "name": account.name, "last_sync": serialize_utc_iso(account.last_sync)}
+            for account in failed_sync_accounts
+        ],
     }
 
     # Channel stats
@@ -637,21 +648,34 @@ def get_overview_stats():
     # Scheduler stats
     if _scheduler:
         scheduler_status = _scheduler.get_status()
+        syncs = scheduler_status.get("syncs", {})
+        failed_jobs = [
+            {
+                "job": job_name,
+                "last_error": info.get("last_error"),
+                "last_failure_at": info.get("last_failure_at"),
+                "last_run_status": info.get("last_run_status"),
+            }
+            for job_name, info in syncs.items()
+            if info.get("last_run_status") == "error"
+        ]
         stats["scheduler"] = {
             "running": scheduler_status.get("running", False),
             "intervals": {
-                "accounts": scheduler_status.get("syncs", {}).get("accounts", {}).get("interval_hours"),
-                "epg": scheduler_status.get("syncs", {}).get("epg", {}).get("interval_hours"),
-                "fcc": scheduler_status.get("syncs", {}).get("fcc", {}).get("interval_hours"),
+                "accounts": syncs.get("accounts", {}).get("interval_hours"),
+                "epg": syncs.get("epg", {}).get("interval_hours"),
+                "fcc": syncs.get("fcc", {}).get("interval_hours"),
             },
             "next_syncs": {
-                "accounts": scheduler_status.get("syncs", {}).get("accounts", {}).get("next_sync"),
-                "epg": scheduler_status.get("syncs", {}).get("epg", {}).get("next_sync"),
+                "accounts": syncs.get("accounts", {}).get("next_sync"),
+                "epg": syncs.get("epg", {}).get("next_sync"),
             },
             "last_syncs": {
-                "accounts": scheduler_status.get("syncs", {}).get("accounts", {}).get("last_sync"),
-                "epg": scheduler_status.get("syncs", {}).get("epg", {}).get("last_sync"),
+                "accounts": syncs.get("accounts", {}).get("last_sync"),
+                "epg": syncs.get("epg", {}).get("last_sync"),
             },
+            "failed_jobs": failed_jobs,
+            "has_sync_issues": bool(failed_jobs) or stats["accounts"].get("failed_sync_count", 0) > 0,
         }
     else:
         stats["scheduler"] = {"running": False}
