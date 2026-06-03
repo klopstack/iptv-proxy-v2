@@ -9,16 +9,17 @@ This document groups open TODOs into execution **waves** and suggested **PR batc
 
 | Track | Range | Open | Notes |
 |-------|-------|------|-------|
-| P5 — PPV | 52–67, **102** | **0** | Waves 2–3 + 7 ✅; **65** phases 1–3 ✅ |
-| P6 — App-wide | 68–95 | **0** (parent stubs **78**, **85**, **92**, **95**) | Waves 1–8 phase 1 ✅ |
-| **Wave 9** | 96–100 | **5** | Route splits, frontend ESM, parallel pytest |
-| **Wave 10** | 101 | **1** | Final doc review (after Wave 9) |
-| **Wave 9 (cont.)** | 102 | **0** | PPV `epg/` / `extraction/` package splits (PR **AA**) |
-| **Wave 11 — DB migration** | 111–119 | **9** | SQLite → PostgreSQL; Series A (prep, safe on SQLite) + Series B (cutover) |
+| P5 — PPV | 52–67, **102** | **0** | Waves 2–3 + 7 + 9 ✅; **65** phases 1–3 ✅ |
+| P6 — App-wide | 68–95 | **0** | Waves 1–8 ✅; parents **78**, **85**, **92**, **95** fully complete |
+| **Wave 9** | 96–100, 102, 103, 105 | **0** | PRs #39–47 (route splits, ESM, xdist, PPV packages) |
+| **Wave 10** | 101 | **0** | Final doc review ✅ |
+| **Dashboard follow-ups** | 107–110 | **4** | Post–[106](./106-improve-main-dashboard.md) (PR #48) |
+| **Wave 11 — DB migration** | 111–119 | **9** | SQLite → PostgreSQL; Series A + Series B |
+| **Wave 12 — PPV matching gaps** | 120–124 | **5** | Production audit on `docker.klopnet.com`, June 2026 |
 
-**Total open (required):** 6 (TODOs 96–101). **102** complete in Wave 9 batch **AA**.
+**Total open (required):** 18 (107–110, 111–119, 120–124).
 
-Waves **1–7** ✅. Wave **8** phase 1 ✅ (PRs #35–38: TODOs 65, 66, 78 phase 1, 79). Remaining structural work is **Wave 9** → **Wave 10**.
+Waves **1–10** ✅ (PRs #10–51). Next work: **Wave 12** (PPV matching) and/or **Wave 11** (PostgreSQL prep), in parallel if desired.
 
 Update [README.md](./README.md) status columns as work lands. Mark PR IDs in each TODO’s **Completion** section.
 
@@ -42,6 +43,8 @@ Update [README.md](./README.md) status columns as work lands. Mark PR IDs in eac
 | **54 before 60** | Persistence tests assume unified `persist_match` path |
 | **53 before 64** | Detection test dedup after module unification |
 | **57 before 58** | Team validation consumes sport registry |
+| **120 before 121–123** | Correct calendar day before abbrev/source work |
+| **124 with 120+** | Requeue needed to verify matching fixes on production |
 | **72 before 73** (or one PR) | Error handling before response envelope changes |
 | **83 before 85** | XSS audit defines escaping patterns for dedup/ESM |
 | **76 before 90** | EPG sync dedup before programs split/decouple |
@@ -241,11 +244,10 @@ Update [README.md](./README.md) status columns as work lands. Mark PR IDs in eac
 
 ---
 
-## Wave 9 — Completion and follow-ups
+## Wave 9 — Completion and follow-ups ✅
 
 **Goal:** Finish phased route splits, frontend ESM migration, test parallelization, and CDN hardening.  
-**Est. effort:** 2–3 weeks  
-**Prerequisites:** Wave 8 phase 1 ✅; Waves 2–3 PPV ✅; TODO 79 ✅; TODO 83 ✅.
+**Completed:** PRs #39–47 (June 2026).
 
 ```text
 W: 96 → 97
@@ -282,14 +284,10 @@ AA: 102 (PPV module splits — 65 phases 2–3)
 
 ---
 
-## Wave 10 — Final documentation review
+## Wave 10 — Final documentation review ✅
 
 **Goal:** Single doc sync after Wave 9 code lands — no new features.  
-**Gate:** Run [101](./101-final-documentation-review.md) **after** batches **W–Z** merge (and **AA** if done).
-
-| TODO | Summary |
-|------|---------|
-| [101](./101-final-documentation-review.md) | README, ROADMAP, API_REFERENCE, DEVELOPER_GUIDE, TODO index, Completion links |
+**Completed:** [101](./101-final-documentation-review.md) — README, ROADMAP, API_REFERENCE, DEVELOPER_GUIDE, FRONTEND_JS, TODO index, Wave 9 Completion links.
 
 Closes residual drift from ongoing wave merges (extends [87](./87-fix-stale-documentation.md) ✅).
 
@@ -360,14 +358,13 @@ Quick reference for all suggested pull requests (A–AA + Wave 8 singles).
 | — | 8 | 66 | M | ✅ #37 |
 | — | 8 | 78 phase 1 | **L** | ✅ #36 |
 | — | 8 | 79 | M | ✅ #38 |
-| **W** | 9 | 96, 97 | M | ⬜ |
-| **X** | 9 | 98 | M | 🟡 PR open |
-| **Y** | 9 | 99 | M–L | ✅ PR #40 |
-| **Y** | 9 | 103 | M | 🟡 PR pending |
-| **Z** | 9 | 100 | M | ⬜ |
-| **AB** | 9 | 105 | S | ⬜ after **Z** |
-| **AA** | 9 | 102 | L | ✅ |
-| — | 10 | 101 | S | ⬜ after Wave 9 |
+| **W** | 9 | 96, 97 | M | ✅ #42, #39 |
+| **X** | 9 | 98 | M | ✅ #41 |
+| **Y** | 9 | 99, 103 | M–L | ✅ #40, #44 |
+| **Z** | 9 | 100 | M | ✅ #43 |
+| **AB** | 9 | 105 | S | ✅ #47 |
+| **AA** | 9 | 102 | L | ✅ #45 |
+| — | 10 | 101 | S | ✅ doc sync |
 
 **Size legend:** S = small (1–2 days), M = medium (3–5 days), L = large (1+ week, migration or major refactor).
 
@@ -411,18 +408,37 @@ Wave 6 (83–86) fits either track after Wave 1 or 5.
 
 ---
 
-## Recommended “next five” (Wave 9)
+## Recommended “next five” (post–Wave 10)
 
-If resuming after Waves 1–8:
+If resuming after Waves 1–10:
 
-1. **[96](./96-extract-epg-match-rules-routes.md)** — match_rules route split (PR **W**, first)  
-2. **[97](./97-extract-config-transfer-routes.md)** — config transfer split (PR **W**, second)  
-3. **[98](./98-fcc-patterns-split-and-cdn-sri.md)** — FCC + CDN SRI (PR **X**)  
-4. **[99](./99-esm-tab-migration-and-eslint.md)** — ESM tabs + ESLint (PR **Y**; can parallelize with W/X)  
-5. **[100](./100-parallelize-pytest-xdist.md)** — pytest-xdist (PR **Z**; after suite stable)
-6. **[105](./105-randomize-pytest-order.md)** — pytest-randomly (PR **AB**; after **Z**)
+1. **[124](./124-ppv-enrichment-attempt-tracking-and-requeue.md)** — attempt tracking + requeue (batch **AC**; pairs with matching fixes)  
+2. **[120](./120-fix-ppv-date-extraction-parsing-bugs.md)** — date extraction parity (batch **AD**)  
+3. **[121](./121-mlb-team-abbreviation-resolution.md)** — MLB abbrev resolution (batch **AE**)  
+4. **[111](./111-pg-prep-raw-sqlite3-audit.md)** — PostgreSQL prep: raw sqlite3 audit (batch **PG-A1**, parallel with PPV)  
+5. **[107](./107-dashboard-stats-performance-hardening.md)** — dashboard SQL/caching (TODO 106 phase 3)
 
-Then **[101](./101-final-documentation-review.md)** (Wave 10). **[102](./102-optional-ppv-module-splits.md)** (PR **AA**) complete — PPV `epg/` and `extraction/` package splits.
+Optional spikes: **[122](./122-tennis-calendar-event-source.md)** (AF), **[123](./123-extended-calendar-coverage-college-obscure-sports.md)** (AG).
+
+---
+
+## Wave 12 — PPV production matching gaps
+
+**Goal:** Close gaps found in live production matching audit (June 2026): date parsing, MLB abbrevs, missing calendar sources, enrichment requeue.  
+**Est. effort:** 2–4 weeks (122/123 spike-dependent)  
+**Prerequisites:** P5 waves 2–3 ✅ (52–67); can run in parallel with Wave 9/11.
+
+| Batch | TODOs | Theme | Effort |
+|-------|-------|-------|--------|
+| **AC** | 124 | Attempt tracking + `no_match` requeue API/script | S |
+| **AD** | 120 | Date extraction parity (both extractors) | M |
+| **AE** | 121 | MLB three-letter abbrev resolution (Peacock) | S |
+| **AF** | 122 | Tennis calendar source (spike → provider) | L |
+| **AG** | 123 | College / obscure / boxing / stale archive (multi-track) | L |
+
+**Order:** AC + AD first → AE → AF/AG (parallel). Requeue production (124) after each batch to measure impact.
+
+Production baselines (2026-06-03): 110 matched, 1,072 `no_match`, 341 tennis `no_match`, 27 Peacock `no_match`, 0 channels with `ppv_enrichment_attempts > 0`.
 
 ---
 
@@ -446,8 +462,8 @@ These closed items underpin the open work:
 | TODO | Defer until |
 |------|-------------|
 | 102 | ✅ Complete (Wave 9 batch **AA**) |
-| 101 | All Wave 9 implementation PRs merged |
-| Parent 92, 95 | Use focused TODOs 98, 100 instead |
+| 101 | ✅ Complete (Wave 10 doc sync) |
+| Parent 92, 95 | ✅ Completed via TODOs 98, 100 |
 
 ---
 

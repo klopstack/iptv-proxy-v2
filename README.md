@@ -339,6 +339,10 @@ DELETE /api/xtream-credentials/<id>
 
 See [docs/XTREAM_CODES_API.md](docs/XTREAM_CODES_API.md) for complete documentation.
 
+## Backlog and roadmap
+
+Post-restructuring work is tracked in [docs/todos/README.md](docs/todos/README.md) and [docs/todos/ROADMAP.md](docs/todos/ROADMAP.md). **Waves 1–10** (audit remediation through final documentation review) are complete as of June 2026 (merged PRs #10–51). Open backlog: PostgreSQL migration (TODOs 111–119), PPV production matching gaps (120–124), and dashboard follow-ups (107–110).
+
 ## Development
 
 ### Setup Development Environment
@@ -361,16 +365,23 @@ make install-hooks
 
 ### Run Tests
 
-```bash
-# Run tests with coverage (75% minimum required)
-pytest tests/ -v --cov=. --cov-report=html --cov-report=term-missing
+Tests run in parallel by default (`pytest-xdist`, per-worker SQLite). Use `make test-clean` if you see database lock or schema errors.
 
-# Or use Makefile
+```bash
+# Parallel with coverage (matches CI; 75% minimum)
 make test
 
-# Fast test without coverage
+# Parallel without coverage (fastest local loop)
 make test-fast
+# alias:
+make test-parallel
+
+# Serial run (debugging order-dependent flakes)
+make test-clean
+venv/bin/pytest tests/ -q --no-cov
 ```
+
+See [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md#testing) for `pytest-randomly` seeds and reproduction tips.
 
 ### Linting and Code Quality
 

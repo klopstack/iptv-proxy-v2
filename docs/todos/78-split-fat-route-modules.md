@@ -1,6 +1,6 @@
 # Split fat route modules (phased extraction)
 
-**Status:** 🟡 Phase 1 complete; phases 2–3 → Wave 9 ([96](./96-extract-epg-match-rules-routes.md)–[97](./97-extract-config-transfer-routes.md)); phase 4 → [98](./98-fcc-patterns-split-and-cdn-sri.md) ✅  
+**Status:** ✅ Done (phases 1–4; phases 2–4 via Wave 9 PRs #39–42, #41)  
 **Priority:** P2  
 **Audit:** Application-wide audit, June 2026
 
@@ -40,7 +40,7 @@ Routes become: parse request → call service → serialize response.
 
 - [x] Phase 1 (`accounts.py`): reduced 1,381 → 932 lines (−32%) via `AccountAdminService`
 - [x] Phase 4 (`fcc_match_patterns.py`): reduced 801 → 128 lines (−84%) via `FccMatchPatternsService` + shared CRUD helper (PR batch **X**)
-- [ ] Each remaining phase reduces target route file by ≥30% without behavior change
+- [x] Each remaining phase reduces target route file by ≥30% without behavior change
 - [x] Extracted logic has unit tests independent of Flask request context (`tests/test_account_admin_service.py`)
 - [x] No regression in existing route test suites (`tests/test_accounts_routes.py`)
 
@@ -65,4 +65,6 @@ Routes become: parse request → call service → serialize response.
 ## Completion
 
 - **Phase 1 — PR #36:** `AccountAdminService`; `accounts.py` 1,381 → 932 lines (−32%); `tests/test_account_admin_service.py`
+- **Phase 2 — PR #42:** `EpgMatchRulesRouteService`; `epg/match_rules.py` 1,444 → 294 lines (−80%); `tests/test_epg_match_rules_route_service.py`
 - **Phase 3 — PR #39:** `ConfigTransferService`; `config_transfer.py` 954 → 71 lines (−93%); `tests/test_config_transfer_service.py`
+- **Phase 4 — PR #41:** `FccMatchPatternsService`; `fcc_match_patterns.py` 801 → 128 lines (−84%); CDN SRI in `templates/base.html`

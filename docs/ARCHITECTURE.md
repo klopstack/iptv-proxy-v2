@@ -46,7 +46,7 @@ IPTV Proxy v2 is a Flask-based IPTV proxy that sits between Xtream Codes API ser
 - **`app.py`**: Clean entry point (~200 lines) with blueprint registration and scheduler setup
 
 ### Routes Layer
-- **`routes/`**: Flask blueprints organized by feature (**23** registered in `app.py`)
+- **`routes/`**: Flask blueprints organized by feature (**23** registered in `app.py`; see `register_blueprint` in `app.py`)
   - `routes/web.py` - HTML page rendering
   - `routes/accounts.py`, `filters.py`, `rulesets.py`, `playlists.py` - Core admin CRUD
   - `routes/api.py`, `settings.py`, `streams.py`, `config_transfer.py` - API, settings, streams, import/export
@@ -55,13 +55,15 @@ IPTV Proxy v2 is a Flask-based IPTV proxy that sits between Xtream Codes API ser
   - `routes/xtream.py` - Xtream Codes API (`/player_api.php`, `/live/...`)
   - `routes/channel_health.py`, `channel_links.py`, `stations.py`, `images.py`, `fcc_match_patterns.py`
 
+**Thin routes (Wave 9):** `accounts.py`, `config_transfer.py`, `epg/match_rules.py`, and `fcc_match_patterns.py` delegate to `AccountAdminService`, `ConfigTransferService`, `EpgMatchRulesRouteService`, and `FccMatchPatternsService` respectively.
+
 ### Business Logic
 - **`services/`**: Business logic services (66 Python modules, ~25,000 lines)
   - `IPTVService` - Xtream Codes API integration
   - `TagService` - Tag extraction and rule processing
   - `services/epg/` - EPG package (14 modules: `generation`, `matching`, `parsing`, `programs`, `sd_programs`, etc.)
   - `ChannelQueryService` - Unified channel selection for M3U, EPG, Xtream, and previews
-  - `services/ppv/` - PPV enrichment, visibility, and event-based EPG
+  - `services/ppv/` - PPV enrichment (`enrichment/`), visibility, event EPG (`epg/`), title extraction (`extraction/`), matching
   - `CacheService` - Simple in-memory caching (3600s TTL)
   - `FilterService` - Channel filtering logic (used internally by `ChannelQueryService`)
 

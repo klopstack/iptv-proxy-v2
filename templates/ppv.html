@@ -887,7 +887,7 @@ document.getElementById('process-queue-btn').addEventListener('click', async fun
         statusEl.className = 'alert alert-success';
         statusEl.innerHTML = `
             <i class="bi bi-check-circle"></i> Enrichment completed!<br>
-            <small>Processed: ${result.processed} | Matched: ${result.matched} | No Match: ${result.no_match}</small>
+            <small>Processed: ${result.channels_processed} | Matched: ${result.channels_matched} | No Match: ${result.channels_no_match}</small>
         `;
         statusEl.style.display = 'block';
 
