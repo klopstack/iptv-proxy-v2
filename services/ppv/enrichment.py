@@ -67,6 +67,12 @@ DETAIL_FETCH_BATCH_SIZE = 25
 
 DetailQueueItem = Tuple[str, str]  # (external_id, source)
 
+# Wakes detail-fetch thread blocked on queue.get() during stop_detail_fetcher()
+_DETAIL_QUEUE_STOP: DetailQueueItem = ("", "")
+
+# Idle poll when queues are empty (longer timeout would slow test teardown and shutdown)
+DETAIL_QUEUE_IDLE_TIMEOUT_SECONDS = 1.0
+
 
 def _calendar_event_source(calendar_event: CalendarEvent) -> str:
     source = getattr(calendar_event, "source", None) or Event.SOURCE_THESPORTSDB
@@ -570,6 +576,11 @@ class PPVCalendarEnrichmentService:
     def stop_detail_fetcher(self) -> None:
         """Stop the background detail fetcher thread."""
         self._stop_detail_thread.set()
+        for queue in (self._detail_queue, self._refresh_queue):
+            try:
+                queue.put_nowait(_DETAIL_QUEUE_STOP)
+            except Exception:
+                pass
         if self._detail_thread:
             self._detail_thread.join(timeout=10)
             logger.info("Stopped PPV detail fetcher thread")
@@ -595,9 +606,12 @@ class PPVCalendarEnrichmentService:
                     force_refresh = True
                 except Empty:
                     try:
-                        external_id, source = self._detail_queue.get(timeout=5.0)
+                        external_id, source = self._detail_queue.get(timeout=DETAIL_QUEUE_IDLE_TIMEOUT_SECONDS)
                     except Empty:
                         continue
+
+                if external_id == _DETAIL_QUEUE_STOP[0] or self._stop_detail_thread.is_set():
+                    continue
 
                 try:
                     self._fetch_event_details(external_id, source, force_refresh=force_refresh)
