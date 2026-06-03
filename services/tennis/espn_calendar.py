@@ -27,7 +27,9 @@ CACHE_TTL_SECONDS = 3600
 REQUEST_TIMEOUT = 30
 
 ESPN_TENNIS_TOURS = ("wta", "atp")
-SCOREBOARD_URL_TEMPLATE = "https://site.api.espn.com/apis/site/v2/sports/tennis/{tour}/scoreboard?dates={date_yyyymmdd}"
+SCOREBOARD_URL_TEMPLATE = (
+    "https://site.api.espn.com/apis/site/v2/sports/tennis/{tour}/scoreboard?dates={date_yyyymmdd}"
+)
 
 _espn_cache: Dict[str, Tuple[List[CalendarEvent], float]] = {}
 
@@ -69,7 +71,13 @@ def _competitor_side_name(competitor: dict) -> Optional[str]:
     if roster.get("displayName"):
         return roster["displayName"]
     athletes = roster.get("athletes") or []
-    names = [a.get("displayName") for a in athletes if isinstance(a, dict) and a.get("displayName")]
+    names: List[str] = []
+    for a in athletes:
+        if not isinstance(a, dict):
+            continue
+        display = a.get("displayName")
+        if display:
+            names.append(str(display))
     if len(names) >= 2:
         return " / ".join(names[:2])
     if names:
