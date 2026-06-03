@@ -147,6 +147,27 @@ async function loadOverviewStats() {
             </div>
         `;
         
+        if (stats.scheduler && stats.scheduler.has_sync_issues) {
+            const failedJobs = (stats.scheduler.failed_jobs || [])
+                .map(j => `<li><strong>${j.job}</strong>: ${j.last_error || 'Unknown error'}</li>`)
+                .join('');
+            const failedAccounts = (stats.accounts.failed_sync_accounts || [])
+                .map(a => `<li><a href="/accounts">${a.name}</a></li>`)
+                .join('');
+            html += `
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-octagon"></i>
+                            <strong>Sync issues detected</strong>
+                            ${failedJobs ? `<ul class="mb-1 mt-2">${failedJobs}</ul>` : ''}
+                            ${failedAccounts ? `<div>Failed accounts (${stats.accounts.failed_sync_count || 0}):</div><ul class="mb-0">${failedAccounts}</ul>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
         // Add scheduler status if available
         if (stats.scheduler && stats.scheduler.running) {
             const lastAccountSync = stats.scheduler.last_syncs?.accounts 

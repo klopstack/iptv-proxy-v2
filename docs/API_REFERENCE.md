@@ -428,6 +428,37 @@ POST /api/fcc/facilities/sync
 
 Downloads and syncs FCC TV facility data. Legacy `POST /api/sync/fcc` was removed.
 
+### Scheduler Status
+```http
+GET /api/scheduler/status
+```
+
+Returns scheduler heartbeat, lock state, per-job sync intervals, and failure metadata.
+
+Each entry under `syncs` (accounts, epg, fcc, ppv_prefetch, ppv_enrichment, ppv_time_refresh, sportsipy_refresh, epg_program_cleanup, health_check_cleanup) includes:
+
+| Field | Description |
+|-------|-------------|
+| `interval_hours` | Configured run interval |
+| `last_sync` | Last successful run (UTC ISO); unchanged on failure |
+| `last_success_at` | Alias of `last_sync` |
+| `next_sync` | Next scheduled run based on last success |
+| `overdue` | Whether the job is past its interval |
+| `last_failure_at` | Last failed attempt (UTC ISO); retained after later successes |
+| `last_error` | Truncated error message from the last failure; cleared on success |
+| `last_run_status` | `success`, `error`, or `unknown` |
+
+Failure metadata is stored in `sync_metadata` as `{last_*_sync}_failure_at` and `{last_*_sync}_error`.
+
+### Overview Stats (sync failures)
+```http
+GET /api/overview/stats
+```
+
+`accounts.failed_sync_count` and `accounts.failed_sync_accounts` list enabled accounts with `last_sync_status == "error"`.
+
+`scheduler.failed_jobs` lists jobs whose `last_run_status` is `error`. `scheduler.has_sync_issues` is true when any failed job or failed account exists.
+
 ## Error Handling
 
 ### Standard Error Response

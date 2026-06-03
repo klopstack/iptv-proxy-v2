@@ -805,14 +805,20 @@ function updateSyncStatus(elementId, syncInfo) {
     
     const lastSync = syncInfo.last_sync ? formatRelativeTime(syncInfo.last_sync) : 'Never';
     const nextSync = syncInfo.next_sync ? formatRelativeTime(syncInfo.next_sync) : 'Pending';
-    const statusClass = syncInfo.overdue ? 'text-warning' : 'text-success';
-    const statusIcon = syncInfo.overdue ? 'exclamation-triangle' : 'check-circle';
+    const hasError = syncInfo.last_run_status === 'error';
+    const statusClass = hasError ? 'text-danger' : (syncInfo.overdue ? 'text-warning' : 'text-success');
+    const statusIcon = hasError ? 'x-circle' : (syncInfo.overdue ? 'exclamation-triangle' : 'check-circle');
+    const errorLine = hasError && syncInfo.last_error
+        ? `<br><span class="text-danger"><i class="bi bi-exclamation-circle"></i> ${syncInfo.last_error}</span>`
+        : '';
     
     el.innerHTML = `
         <i class="bi bi-${statusIcon} ${statusClass}"></i>
         Last: <strong>${lastSync}</strong> | 
         Next: <strong class="${syncInfo.overdue ? 'text-warning' : ''}">${nextSync}</strong>
         ${syncInfo.overdue ? '<span class="badge bg-warning ms-2">Due</span>' : ''}
+        ${hasError ? '<span class="badge bg-danger ms-2">Failed</span>' : ''}
+        ${errorLine}
     `;
 }
 

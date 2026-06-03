@@ -1,6 +1,6 @@
 # Expose scheduler job failures in status API
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P2  
 **Audit:** Application-wide audit, June 2026  
 **Deferred from:** [71-fix-scheduler-sync-status-semantics.md](./71-fix-scheduler-sync-status-semantics.md)
@@ -42,10 +42,15 @@ Optional: align with TODO 89 job registry so status is driven from a single `Job
 
 ## Acceptance criteria
 
-- [ ] Failed scheduler job writes failure metadata without advancing `last_*_sync` timestamp
-- [ ] `GET /api/scheduler/status` exposes failure fields for each registered job type
-- [ ] Admin/sync overview surfaces at least one failed job or failed account without reading logs
-- [ ] API reference documents new fields
+- [x] Failed scheduler job writes failure metadata without advancing `last_*_sync` timestamp
+- [x] `GET /api/scheduler/status` exposes failure fields for each registered job type
+- [x] Admin/sync overview surfaces at least one failed job or failed account without reading logs
+- [x] API reference documents new fields
+
+## Completion
+
+- **PR:** [#22](https://github.com/klopstack/iptv-proxy-v2/pull/22) (`wave4/pr-k-91-scheduler-failure-metadata`)
+- **Policy:** On success, `last_error` is cleared; `last_failure_at` is retained until the next failure overwrites it.
 
 ## Test plan
 

@@ -56,6 +56,11 @@ SYNC_KEY_SCHEDULER_HEARTBEAT = "scheduler_heartbeat"
 # Must exceed longest single sync step (EPG fetches use up to 600s timeouts)
 SCHEDULER_HEARTBEAT_TIMEOUT_SECONDS = 900
 
+# Failure metadata suffixes (e.g. last_fcc_sync + _failure_at -> last_fcc_sync_failure_at)
+SYNC_FAILURE_AT_SUFFIX = "_failure_at"
+SYNC_FAILURE_ERROR_SUFFIX = "_error"
+MAX_SYNC_ERROR_LENGTH = 500
+
 
 class SyncScheduler:
     """Scheduler for periodic channel sync with persistent timing and separate intervals"""
@@ -155,11 +160,18 @@ class SyncScheduler:
                     next_sync = None
                     overdue = True
 
+                failure = self._get_sync_failure_fields(key)
+                last_run_status = self._resolve_last_run_status(last_sync, failure["last_error"])
+
                 return {
                     "interval_hours": interval_hours,
                     "last_sync": serialize_utc_iso(last_sync),
+                    "last_success_at": serialize_utc_iso(last_sync),
                     "next_sync": serialize_utc_iso(next_sync),
                     "overdue": overdue,
+                    "last_failure_at": failure["last_failure_at"],
+                    "last_error": failure["last_error"],
+                    "last_run_status": last_run_status,
                 }
 
             from services.epg_sync_orchestrator import source_needs_sync
@@ -179,8 +191,21 @@ class SyncScheduler:
                     "accounts": get_sync_info(SYNC_KEY_LAST_ACCOUNT_SYNC, self._account_interval_hours),
                     "epg": get_sync_info(SYNC_KEY_LAST_EPG_SYNC, self._epg_interval_hours),
                     "fcc": get_sync_info(SYNC_KEY_LAST_FCC_SYNC, self._fcc_interval_hours),
+                    "ppv_prefetch": get_sync_info(SYNC_KEY_LAST_PPV_PREFETCH, DEFAULT_PPV_PREFETCH_INTERVAL_HOURS),
                     "ppv_enrichment": get_sync_info(
                         SYNC_KEY_LAST_PPV_ENRICHMENT, DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS
+                    ),
+                    "ppv_time_refresh": get_sync_info(
+                        SYNC_KEY_LAST_PPV_TIME_REFRESH, DEFAULT_PPV_TIME_REFRESH_INTERVAL_HOURS
+                    ),
+                    "sportsipy_refresh": get_sync_info(
+                        SYNC_KEY_LAST_SPORTSIPY_REFRESH, DEFAULT_SPORTSIPY_REFRESH_INTERVAL_HOURS
+                    ),
+                    "epg_program_cleanup": get_sync_info(
+                        SYNC_KEY_LAST_EPG_PROGRAM_CLEANUP, DEFAULT_EPG_PROGRAM_CLEANUP_INTERVAL_HOURS
+                    ),
+                    "health_check_cleanup": get_sync_info(
+                        SYNC_KEY_LAST_HEALTH_CHECK_CLEANUP, DEFAULT_HEALTH_CHECK_CLEANUP_INTERVAL_HOURS
                     ),
                 },
                 "epg_sources": epg_sources,
@@ -259,6 +284,81 @@ class SyncScheduler:
             when = datetime.now(timezone.utc)
         SyncMetadata.set(key, serialize_utc_iso(when))
 
+    @staticmethod
+    def _failure_at_key(last_sync_key: str) -> str:
+        return f"{last_sync_key}{SYNC_FAILURE_AT_SUFFIX}"
+
+    @staticmethod
+    def _failure_error_key(last_sync_key: str) -> str:
+        return f"{last_sync_key}{SYNC_FAILURE_ERROR_SUFFIX}"
+
+    @staticmethod
+    def _truncate_sync_error(message: str) -> str:
+        text = str(message).strip() if message else ""
+        if len(text) <= MAX_SYNC_ERROR_LENGTH:
+            return text
+        return text[: MAX_SYNC_ERROR_LENGTH - 3] + "..."
+
+    def _record_sync_failure(self, last_sync_key: str, error: str) -> None:
+        """Persist failure metadata without advancing the success timestamp."""
+        now = datetime.now(timezone.utc)
+        SyncMetadata.set(self._failure_at_key(last_sync_key), serialize_utc_iso(now))
+        SyncMetadata.set(self._failure_error_key(last_sync_key), self._truncate_sync_error(error))
+
+    def _record_sync_success(self, last_sync_key: str) -> None:
+        """Clear active error on success; retain last_failure_at for operator history."""
+        SyncMetadata.delete(self._failure_error_key(last_sync_key))
+
+    def _get_sync_failure_fields(self, last_sync_key: str) -> dict:
+        failure_at = self._get_last_sync_time(self._failure_at_key(last_sync_key))
+        error = SyncMetadata.get(self._failure_error_key(last_sync_key))
+        return {
+            "last_failure_at": serialize_utc_iso(failure_at),
+            "last_error": error or None,
+        }
+
+    @staticmethod
+    def _resolve_last_run_status(
+        last_success: Optional[datetime],
+        last_error: Optional[str],
+    ) -> str:
+        if last_error:
+            return "error"
+        if last_success is not None:
+            return "success"
+        return "unknown"
+
+    def _default_failure_message(self, last_sync_key: str) -> str:
+        if last_sync_key == SYNC_KEY_LAST_ACCOUNT_SYNC:
+            return "One or more enabled accounts failed to sync"
+        return "Job returned failure"
+
+    def _run_scheduled_job(
+        self,
+        last_sync_key: str,
+        interval_hours: int,
+        job_fn,
+        *,
+        log_message: Optional[str] = None,
+    ) -> None:
+        """Run an interval-gated job; advance success timestamp only on True result."""
+        if not self._needs_sync(last_sync_key, interval_hours):
+            return
+        if log_message:
+            logger.info(log_message)
+        try:
+            success = job_fn()
+        except Exception as exc:
+            logger.error("Scheduled job %s failed: %s", last_sync_key, exc)
+            self._record_sync_failure(last_sync_key, str(exc))
+            return
+        if success:
+            self._set_last_sync_time(last_sync_key)
+            self._record_sync_success(last_sync_key)
+            self._touch_heartbeat()
+        else:
+            self._record_sync_failure(last_sync_key, self._default_failure_message(last_sync_key))
+
     def _needs_sync(self, key: str, interval_hours: int) -> bool:
         """Check if a sync is needed based on last sync time"""
         last_sync = self._get_last_sync_time(key)
@@ -323,31 +423,29 @@ class SyncScheduler:
             # Health scans first so long EPG/account sync jobs cannot starve them
             self._scan_channel_health()
 
-            # Check if account/channel sync is needed
-            if self._needs_sync(SYNC_KEY_LAST_ACCOUNT_SYNC, self._account_interval_hours):
-                logger.info(f"Account sync due (interval: {self._account_interval_hours} hours)")
-                if self._sync_accounts():
-                    self._set_last_sync_time(SYNC_KEY_LAST_ACCOUNT_SYNC)
-                    self._touch_heartbeat()
+            self._run_scheduled_job(
+                SYNC_KEY_LAST_ACCOUNT_SYNC,
+                self._account_interval_hours,
+                self._sync_accounts,
+                log_message=f"Account sync due (interval: {self._account_interval_hours} hours)",
+            )
 
             self._sync_epg_sources_if_due()
 
-            # Check if FCC sync is needed (configurable, default weekly)
-            if self._needs_sync(SYNC_KEY_LAST_FCC_SYNC, self._fcc_interval_hours):
-                logger.info(f"FCC sync due (interval: {self._fcc_interval_hours} hours)")
-                if self._sync_fcc_data():
-                    self._set_last_sync_time(SYNC_KEY_LAST_FCC_SYNC)
-                    self._touch_heartbeat()
+            self._run_scheduled_job(
+                SYNC_KEY_LAST_FCC_SYNC,
+                self._fcc_interval_hours,
+                self._sync_fcc_data,
+                log_message=f"FCC sync due (interval: {self._fcc_interval_hours} hours)",
+            )
 
-            # Check if PPV event pre-fetch is needed (every 6 hours)
-            # This loads event data for dates found in channels + 30 days ahead
-            if self._needs_sync(SYNC_KEY_LAST_PPV_PREFETCH, DEFAULT_PPV_PREFETCH_INTERVAL_HOURS):
-                logger.info("PPV event pre-fetch due (6 hour schedule)")
-                if self._prefetch_ppv_events():
-                    self._set_last_sync_time(SYNC_KEY_LAST_PPV_PREFETCH)
-                    self._touch_heartbeat()
+            self._run_scheduled_job(
+                SYNC_KEY_LAST_PPV_PREFETCH,
+                DEFAULT_PPV_PREFETCH_INTERVAL_HOURS,
+                self._prefetch_ppv_events,
+                log_message="PPV event pre-fetch due (6 hour schedule)",
+            )
 
-            # Check if PPV enrichment is needed (hourly; each run drains the queue in a loop)
             if self._needs_sync(SYNC_KEY_LAST_PPV_ENRICHMENT, DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS):
                 try:
                     from services.ppv.orchestrator import get_ppv_orchestrator
@@ -355,41 +453,43 @@ class SyncScheduler:
                     _queue = get_ppv_orchestrator(self.app).get_queue_stats()
                 except Exception:
                     _queue = {}
-                logger.info(
-                    "PPV enrichment due (interval: %s min, backlog: %s)",
-                    int(DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS * 60),
-                    _queue.get("queued_count", "?"),
+                self._run_scheduled_job(
+                    SYNC_KEY_LAST_PPV_ENRICHMENT,
+                    DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS,
+                    self._enrich_ppv_events,
+                    log_message=(
+                        f"PPV enrichment due (interval: {int(DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS * 60)} min, "
+                        f"backlog: {_queue.get('queued_count', '?')})"
+                    ),
                 )
-                if self._enrich_ppv_events():
-                    self._set_last_sync_time(SYNC_KEY_LAST_PPV_ENRICHMENT)
-                    self._touch_heartbeat()
 
-            if self._needs_sync(SYNC_KEY_LAST_PPV_TIME_REFRESH, DEFAULT_PPV_TIME_REFRESH_INTERVAL_HOURS):
-                logger.info("PPV near-term event time refresh due (hourly schedule)")
-                if self._refresh_ppv_event_times():
-                    self._set_last_sync_time(SYNC_KEY_LAST_PPV_TIME_REFRESH)
-                    self._touch_heartbeat()
+            self._run_scheduled_job(
+                SYNC_KEY_LAST_PPV_TIME_REFRESH,
+                DEFAULT_PPV_TIME_REFRESH_INTERVAL_HOURS,
+                self._refresh_ppv_event_times,
+                log_message="PPV near-term event time refresh due (hourly schedule)",
+            )
 
-            # Check if sportsipy team data refresh is needed (weekly)
-            if self._needs_sync(SYNC_KEY_LAST_SPORTSIPY_REFRESH, DEFAULT_SPORTSIPY_REFRESH_INTERVAL_HOURS):
-                logger.info("Sportsipy team data refresh due (weekly schedule)")
-                if self._refresh_sportsipy_teams():
-                    self._set_last_sync_time(SYNC_KEY_LAST_SPORTSIPY_REFRESH)
-                    self._touch_heartbeat()
+            self._run_scheduled_job(
+                SYNC_KEY_LAST_SPORTSIPY_REFRESH,
+                DEFAULT_SPORTSIPY_REFRESH_INTERVAL_HOURS,
+                self._refresh_sportsipy_teams,
+                log_message="Sportsipy team data refresh due (weekly schedule)",
+            )
 
-            # Expired EPG program cleanup (daily)
-            if self._needs_sync(SYNC_KEY_LAST_EPG_PROGRAM_CLEANUP, DEFAULT_EPG_PROGRAM_CLEANUP_INTERVAL_HOURS):
-                logger.info("EPG program cleanup due (daily schedule)")
-                if self._cleanup_epg_programs():
-                    self._set_last_sync_time(SYNC_KEY_LAST_EPG_PROGRAM_CLEANUP)
-                    self._touch_heartbeat()
+            self._run_scheduled_job(
+                SYNC_KEY_LAST_EPG_PROGRAM_CLEANUP,
+                DEFAULT_EPG_PROGRAM_CLEANUP_INTERVAL_HOURS,
+                self._cleanup_epg_programs,
+                log_message="EPG program cleanup due (daily schedule)",
+            )
 
-            # Health check history cleanup (weekly)
-            if self._needs_sync(SYNC_KEY_LAST_HEALTH_CHECK_CLEANUP, DEFAULT_HEALTH_CHECK_CLEANUP_INTERVAL_HOURS):
-                logger.info("Health check history cleanup due (weekly schedule)")
-                if self._cleanup_health_checks():
-                    self._set_last_sync_time(SYNC_KEY_LAST_HEALTH_CHECK_CLEANUP)
-                    self._touch_heartbeat()
+            self._run_scheduled_job(
+                SYNC_KEY_LAST_HEALTH_CHECK_CLEANUP,
+                DEFAULT_HEALTH_CHECK_CLEANUP_INTERVAL_HOURS,
+                self._cleanup_health_checks,
+                log_message="Health check history cleanup due (weekly schedule)",
+            )
 
             self._touch_heartbeat()
 
@@ -517,16 +617,27 @@ class SyncScheduler:
             self._touch_heartbeat()
             result = EpgSyncOrchestrator(self.app).sync_due_sources(self._epg_interval_hours, parallel=True)
             self._touch_heartbeat()
-            if result.get("total_sources", 0) == 0:
+            total_sources = result.get("total_sources", 0)
+            if total_sources == 0:
                 return
             logger.info(
                 "EPG sync pass complete: %s/%s succeeded (%s skipped)",
                 result.get("sources_synced", 0),
-                result.get("total_sources", 0),
+                total_sources,
                 result.get("sources_skipped", 0),
             )
+            if result.get("success"):
+                self._record_sync_success(SYNC_KEY_LAST_EPG_SYNC)
+            else:
+                error_message = f"EPG sync: {result.get('sources_synced', 0)}/{total_sources} sources succeeded"
+                for entry in result.get("results") or []:
+                    if not entry.get("success") and entry.get("message"):
+                        error_message = str(entry["message"])
+                        break
+                self._record_sync_failure(SYNC_KEY_LAST_EPG_SYNC, error_message)
         except Exception as e:
             logger.error("Error in EPG source sync: %s", e)
+            self._record_sync_failure(SYNC_KEY_LAST_EPG_SYNC, str(e))
 
     def _prefetch_ppv_events(self) -> bool:
         """

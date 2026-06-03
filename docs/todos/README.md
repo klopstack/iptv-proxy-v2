@@ -250,7 +250,7 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 | 69 | [69-lock-down-destructive-admin-endpoints.md](./69-lock-down-destructive-admin-endpoints.md) | ✅ | App-level hardening: FCC reset CLI-only, SSRF, import validation (not Flask auth) |
 | 70 | [70-fix-is-visible-epg-matching-bug.md](./70-fix-is-visible-epg-matching-bug.md) | ✅ | EPG matching uses stale `is_visible` instead of live filters |
 | 71 | [71-fix-scheduler-sync-status-semantics.md](./71-fix-scheduler-sync-status-semantics.md) | ✅ | Account sync always "success"; job timestamps advance on failure |
-| 91 | [91-scheduler-status-api-failure-metadata.md](./91-scheduler-status-api-failure-metadata.md) | ⬜ | Status API + SyncMetadata for per-job scheduler failures (deferred from 71) |
+| 91 | [91-scheduler-status-api-failure-metadata.md](./91-scheduler-status-api-failure-metadata.md) | ✅ | Status API + SyncMetadata for per-job scheduler failures (deferred from 71) |
 | 72 | [72-standardize-api-error-handling.md](./72-standardize-api-error-handling.md) | ⬜ | `@handle_errors` on ~30–40% of routes; extends TODO 33 |
 | 73 | [73-standardize-api-response-shapes.md](./73-standardize-api-response-shapes.md) | ⬜ | Inconsistent success/error JSON envelopes |
 | 74 | [74-remove-dead-routes-and-dangerous-patterns.md](./74-remove-dead-routes-and-dangerous-patterns.md) | ✅ | Dead blueprint, duplicate FCC/categories endpoints |
