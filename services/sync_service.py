@@ -66,13 +66,12 @@ class ChannelSyncService:
     """Service for synchronizing channels from IPTV providers"""
 
     @staticmethod
-    def sync_account(account_id: int, _force: bool = False) -> Dict:
+    def sync_account(account_id: int) -> Dict:
         """
         Sync channels and categories for a specific account
 
         Args:
             account_id: Account ID to sync
-            _force: Force sync even if recently synced (reserved for future use)
 
         Returns:
             Dict with sync statistics

@@ -138,7 +138,7 @@ Update [README.md](./README.md) status columns as work lands. Mark PR IDs in eac
 | 4a | [91](./91-scheduler-status-api-failure-metadata.md) | Per-job failure fields in status API + SyncMetadata |
 | 4b | [76](./76-deduplicate-epg-sync-infrastructure.md) | Program persistence, sync locks, shared constants |
 | 4c | [77](./77-centralize-tag-loading-and-category-sync-policy.md) | Tag loader N+1; category sync failure policy |
-| 4d | [89](./89-refactor-scheduler-job-registry.md) | Scheduler job registry (large) |
+| 4d | [89](./89-refactor-scheduler-job-registry.md) | Scheduler job registry (large) ✅ |
 | 4e | [90](./90-split-epg-programs-and-decouple-sync.md) | Split `programs.py`; decouple sync side effects |
 
 **Architecture:** [scheduler-and-sync-orchestration.md](../architecture/scheduler-and-sync-orchestration.md), [epg-service-architecture.md](../architecture/epg-service-architecture.md)
