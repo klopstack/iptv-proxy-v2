@@ -43,7 +43,7 @@ Open each URL; expect **HTTP 200**, nav highlights correctly, no blank page or u
 
 | Page | Path | Check |
 |------|------|--------|
-| Dashboard | `/` | Overview cards load; scheduler/sync section appears if scheduler running |
+| Dashboard | `/` | Tier-1 summary: channel health (healthy/degraded/down), operating streams/clients, sync alert if issues; deferred overview cards load after `GET /api/dashboard/summary` |
 | Accounts | `/accounts` | Account list or empty state |
 | Filters | `/filters` | Account selector + filter list area |
 | Preview Channels | `/preview` | Account dropdown populated |
@@ -290,12 +290,20 @@ curl -X POST http://127.0.0.1:8000/api/ppv-enrichment/process
 
 ### Dashboard (`/`)
 
+*Source: [106](./todos/106-improve-main-dashboard.md) (PR #48), [107](./todos/107-dashboard-stats-performance-hardening.md)–[109](./todos/109-update-smoke-test-dashboard-checks.md).*
+
 | Step | Action | Expected |
 |------|--------|----------|
-| 1 | Load dashboard | If `has_sync_issues`, warning lists failed jobs or accounts |
-| 2 | Failed account link (if shown) | Navigates to account detail |
+| 1 | Open `/` → Network tab (first paint) | `GET /api/dashboard/summary` returns **200** with `{ data: { channel_health, streams, overview, ppv } }`; **no** sequential `GET /api/accounts/{id}/stats` before interactive summary |
+| 2 | Channel health card | Healthy / degraded / down counts match `/channel-health` summary (same API field). If down > 0, link to `/channel-health?status=down` works |
+| 3 | Stream metrics | With an active proxied session, operating stream/client counts update (or match `/stream/active` / multiplexer stats when FFmpeg backend) |
+| 4 | Sync issues | If `overview.scheduler.has_sync_issues`, danger alert lists failed jobs/accounts |
+| 5 | Deferred section | Overview cards (accounts, channels, EPG, tags) load via `GET /api/overview/stats` with `{ data: ... }` envelope |
 
-- [ ] Overview stats load (`/api/overview/stats` envelope: `{ data: ... }`)
+- [ ] Tier-1 summary paints without per-account stats storm
+- [ ] Channel health and stream/client widgets show expected values
+- [ ] Sync failure alert appears when `has_sync_issues` is true
+- [ ] Deferred overview stats load (`/api/overview/stats` envelope: `{ data: ... }`)
 
 ### Background behavior (observational)
 

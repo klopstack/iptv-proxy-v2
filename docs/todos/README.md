@@ -344,10 +344,10 @@ Phased remainders from TODOs 78, 85, 92, 95; PPV module splits from TODO 65 (102
 | # | Document | Status | Summary |
 |---|----------|--------|---------|
 | 106 | [106-improve-main-dashboard.md](./106-improve-main-dashboard.md) | ✅ | Landing dashboard: channel health + live stream/client counts; fix slow N× account stats load ([PR #48](https://github.com/klopstack/iptv-proxy-v2/pull/48)) |
-| 107 | [107-dashboard-stats-performance-hardening.md](./107-dashboard-stats-performance-hardening.md) | ⬜ | TODO 106 phase 3: SQL account visible counts, overview caching, summary timing logs |
-| 108 | [108-migrate-overview-stats-api-envelope.md](./108-migrate-overview-stats-api-envelope.md) | ⬜ | `GET /api/overview/stats` → `data_response` (deferred from 106 / PR #48) |
-| 109 | [109-update-smoke-test-dashboard-checks.md](./109-update-smoke-test-dashboard-checks.md) | ⬜ | TODO 106 phase 4: post-merge smoke doc dashboard §1 / §7 |
-| 110 | [110-dashboard-optional-ux-follow-ups.md](./110-dashboard-optional-ux-follow-ups.md) | ⬜ | P3 optional: lazy account cards on `/`, server-rendered Tier-1 |
+| 107 | [107-dashboard-stats-performance-hardening.md](./107-dashboard-stats-performance-hardening.md) | ✅ | TODO 106 phase 3: CQS visible count helper, overview EPG cache, summary timing logs |
+| 108 | [108-migrate-overview-stats-api-envelope.md](./108-migrate-overview-stats-api-envelope.md) | ✅ | `GET /api/overview/stats` → `data_response` (deferred from 106 / PR #48) |
+| 109 | [109-update-smoke-test-dashboard-checks.md](./109-update-smoke-test-dashboard-checks.md) | ✅ | TODO 106 phase 4: post-merge smoke doc dashboard §1 / §7 |
+| 110 | [110-dashboard-optional-ux-follow-ups.md](./110-dashboard-optional-ux-follow-ups.md) | 🚫 | P3 optional: lazy account cards / server-render Tier-1 — won't do |
 
 ### Recommended order for items 68–90 (historical)
 
@@ -461,4 +461,4 @@ These items were derived from full codebase reviews covering:
 - Provider EPG de-emphasized in UI with deprecation warnings (TODO 31 ✅)
 - Vitest coverage expanded across lib helpers (TODO 32 ✅)
 - MediaFlow/stream-factory tests added (TODO 26 ✅)
-- PPV audit remediation (52–67) ✅; app-wide backlog (68–95) ✅; Waves 9–10 ✅; remaining: Waves 11–12, dashboard 107–110 — see [ROADMAP.md](./ROADMAP.md)
+- PPV audit remediation (52–67) ✅; app-wide backlog (68–95) ✅; Waves 9–10 ✅; dashboard 107–109 ✅; remaining: Waves 11–12 — see [ROADMAP.md](./ROADMAP.md)

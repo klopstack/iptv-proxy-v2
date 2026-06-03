@@ -188,7 +188,6 @@ class TestOverviewStatsCoverageFix:
             response = client.get("/api/overview/stats")
 
         assert response.status_code == 200
-        payload = response.get_json()
-        stats = payload.get("data", payload)
+        stats = api_data(response)
         assert stats["epg"]["coverage"]["percentage"] == 42.5
         assert stats["epg"]["coverage"]["mapped_channels"] == 99

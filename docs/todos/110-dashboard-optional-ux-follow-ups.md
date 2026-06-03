@@ -1,6 +1,6 @@
 # Dashboard optional UX follow-ups (TODO 106 backlog)
 
-**Status:** ⬜ Not started  
+**Status:** 🚫 Won't do (P3 optional — Tier-1 summary + `/accounts` suffice; lazy cards/server-render add complexity without operator demand)
 **Priority:** P3 (optional)  
 **Deferred from:** [106-improve-main-dashboard.md](./106-improve-main-dashboard.md) open questions / options H — [PR #48](https://github.com/klopstack/iptv-proxy-v2/pull/48)
 

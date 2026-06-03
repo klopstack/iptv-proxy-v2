@@ -1,6 +1,6 @@
 # Migrate overview stats API to data_response envelope
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P2  
 **Deferred from:** [106-improve-main-dashboard.md](./106-improve-main-dashboard.md) — [PR #48](https://github.com/klopstack/iptv-proxy-v2/pull/48)  
 **Related:** [73-standardize-api-response-shapes.md](./73-standardize-api-response-shapes.md) ✅
@@ -42,11 +42,11 @@ Gaps:
 
 ## Acceptance criteria
 
-- [ ] `GET /api/overview/stats` returns `{ "data": { "accounts", "channels", ... } }` on success
-- [ ] Contract test fails if `data` key is missing
-- [ ] Deferred dashboard overview cards still render on `/`
-- [ ] `docs/API_REFERENCE.md` documents the wrapped shape
-- [ ] No breaking change for external consumers without a note in PR / CHANGELOG (if any exist)
+- [x] `GET /api/overview/stats` returns `{ "data": { "accounts", "channels", ... } }` on success
+- [x] Contract test fails if `data` key is missing
+- [x] Deferred dashboard overview cards still render on `/`
+- [x] `docs/API_REFERENCE.md` documents the wrapped shape
+- [x] No breaking change for external consumers without a note in PR / CHANGELOG (if any exist)
 
 ## Test plan
 

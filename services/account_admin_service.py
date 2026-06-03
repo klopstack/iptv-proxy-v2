@@ -263,8 +263,7 @@ class AccountAdminService:
         if channel_count > 0:
             category_count = db.session.query(Category.id).filter_by(account_id=account_id).count()
 
-            playlist_visible = ChannelQueryService.channels_for_account(account_id)
-            visible_count = len(playlist_visible)
+            visible_count = ChannelQueryService.count_channels_for_account(account_id)
             hidden_count = channel_count - visible_count
 
             category_counts = {}

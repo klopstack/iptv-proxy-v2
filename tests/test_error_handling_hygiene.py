@@ -22,7 +22,7 @@ class TestOverviewStatsErrorHandling:
             response = client.get("/api/overview/stats")
 
         assert response.status_code == 200
-        coverage = response.json["epg"]["coverage"]
+        coverage = response.get_json()["data"]["epg"]["coverage"]
         assert coverage["percentage"] == 0
         assert coverage["mapped_channels"] == 0
         assert coverage["error"] == "coverage down"
@@ -34,7 +34,7 @@ class TestOverviewStatsErrorHandling:
                 response = client.get("/api/overview/stats")
 
         assert response.status_code == 200
-        last_sync = response.json["last_full_sync"]
+        last_sync = response.get_json()["data"]["last_full_sync"]
         assert last_sync["accounts"] is None
         assert last_sync["epg"] is None
         assert last_sync["error"] == "metadata unavailable"
