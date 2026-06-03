@@ -48,4 +48,4 @@ make test-fast
 
 ## Completion
 
-_(Add PR link when merged.)_
+- **PR #42:** https://github.com/klopstack/iptv-proxy-v2/pull/42 — `EpgMatchRulesRouteService`; `routes/epg/match_rules.py` 1,444 → 294 lines (−80%); `tests/test_epg_match_rules_route_service.py`
