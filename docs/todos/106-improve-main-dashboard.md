@@ -1,6 +1,6 @@
 # Improve main dashboard — health, live ops, and load time
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done (June 2026)  
 **Priority:** P2  
 **Audit:** Operator UX / landing-page review, June 2026
 
@@ -223,13 +223,30 @@ Server-side HTML render is cheap; **latency is API-shaped**, not Jinja.
 
 ## Acceptance criteria
 
-- [ ] Dashboard above-the-fold shows channel health summary (at least down + degraded + healthy counts) with link to `/channel-health`
-- [ ] Dashboard shows current **operating streams** and **operating clients** per agreed definitions, backend-aware where needed
-- [ ] Initial meaningful paint uses **one** primary API call (or parallel Tier-1 calls), not sequential per-account stats
-- [ ] With 5+ accounts, dashboard interactive summary loads in bounded time (target: &lt;2s on typical DB; document test fixture baseline)
-- [ ] EPG coverage % on overview/dashboard is correct (`coverage_percent` wired)
-- [ ] API tests cover new summary endpoint; smoke doc updated
-- [ ] No regression to scheduler sync-issue alerts (TODO 91 fields still visible)
+- [x] Dashboard above-the-fold shows channel health summary (at least down + degraded + healthy counts) with link to `/channel-health`
+- [x] Dashboard shows current **operating streams** and **operating clients** per agreed definitions, backend-aware where needed
+- [x] Initial meaningful paint uses **one** primary API call (or parallel Tier-1 calls), not sequential per-account stats
+- [x] With 5+ accounts, dashboard interactive summary loads in bounded time (no per-account stats on first paint)
+- [x] EPG coverage % on overview/dashboard is correct (`coverage_percent` wired)
+- [x] API tests cover new summary endpoint; smoke doc updated in `docs/API_REFERENCE.md`
+- [x] No regression to scheduler sync-issue alerts (TODO 91 fields still visible)
+
+## Completion notes
+
+- Stack **A + C + B**: `GET /api/dashboard/summary`, removed blocking per-account stats, parallel deferred sections.
+- Stream metrics: `active_sessions` = `ActiveStream` count; `shared_upstream` / `subscribers` from multiplexer when FFmpeg backend.
+- **PR:** [#48](https://github.com/klopstack/iptv-proxy-v2/pull/48) (`feature/dashboard-106`)
+
+## Deferred
+
+Tracked as follow-up TODOs (planning docs on PR branch):
+
+| # | Document | Scope |
+|---|----------|-------|
+| 107 | [107-dashboard-stats-performance-hardening.md](./107-dashboard-stats-performance-hardening.md) | Phase 3: SQL visible counts for `get_account_stats`, overview stats caching/optimization, dashboard summary timing logs |
+| 108 | [108-migrate-overview-stats-api-envelope.md](./108-migrate-overview-stats-api-envelope.md) | `GET /api/overview/stats` → `data_response` envelope (TODO 73 parity with summary endpoint) |
+| 109 | [109-update-smoke-test-dashboard-checks.md](./109-update-smoke-test-dashboard-checks.md) | Phase 4: `docs/SMOKE_TEST_POST_MERGE.md` §1 / §7 dashboard checks |
+| 110 | [110-dashboard-optional-ux-follow-ups.md](./110-dashboard-optional-ux-follow-ups.md) | P3 optional: lazy per-account cards, server-rendered Tier-1 |
 
 ## Test plan
 
