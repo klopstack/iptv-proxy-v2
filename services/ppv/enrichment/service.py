@@ -153,6 +153,8 @@ class PPVCalendarEnrichmentService:
         return self._detail_worker.refresh_upcoming_event_times(hours_ahead=hours_ahead)
 
     def get_status(self) -> Dict[str, Any]:
+        from services.tennis.sofascore_calendar import get_sofascore_calendar_stats
+
         queue_sizes = self._detail_worker.get_queue_sizes()
         return {
             "detail_queue_size": queue_sizes["detail_queue_size"],
@@ -160,6 +162,7 @@ class PPVCalendarEnrichmentService:
             "llm_queue_size": queue_sizes["llm_queue_size"],
             "detail_thread_running": self._detail_worker.is_running(),
             "calendar_cache_stats": self.match_pipeline.calendar_scraper.get_cache_stats(),
+            "sofascore_calendar_stats": get_sofascore_calendar_stats(),
             "cumulative_stats": {
                 "calendar_processed": SyncMetadata.get(METADATA_KEY_CALENDAR_PROCESSED, "0"),
                 "calendar_matched": SyncMetadata.get(METADATA_KEY_CALENDAR_MATCHED, "0"),
