@@ -1,6 +1,6 @@
 # Replace background detail thread and decouple EPG side effects
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done (PR #37)  
 **Priority:** P2  
 **Audit:** PPV audit, June 2026
 
@@ -34,10 +34,10 @@ Every enrichment batch calls `sync_ppv_epg_after_enrichment` and `prune_orphan_p
 
 ## Acceptance criteria
 
-- [ ] No daemon thread holding global session across requests.
-- [ ] LLM failure/timeout does not block TheSportsDB detail queue.
-- [ ] Enrichment tests can run without patching EPG sync when hook disabled.
-- [ ] App shutdown does not leave orphaned threads.
+- [x] No daemon thread holding global session across requests (`DetailFetchWorker` per-item context + `db.session.remove()`).
+- [x] LLM failure/timeout does not block TheSportsDB detail queue (idle-queue LLM drain + timeout).
+- [x] Enrichment tests can run without patching EPG sync when hook disabled (`EnrichmentPostHooks.noop()`).
+- [x] App shutdown does not leave orphaned threads (`atexit` + dev `finally` call `stop_detail_fetcher()`).
 
 ## Test plan
 
