@@ -134,10 +134,11 @@ class PPVEnrichmentOrchestrator:
         """Scan pending channels (recent first) until batch_size enrichable or max_scan."""
         max_scan = batch_size * PPV_ENRICHMENT_MAX_SCAN_MULTIPLIER
         selected: list = []
-        skipped_marked = 0
+        # Collect (channel_obj, error_msg) during the read phase; writes happen
+        # only after the yield_per cursor is fully consumed (see below).
+        skip_channels: list[tuple] = []
         scanned = 0
         skip_commit_batch = 500
-        pending_skip_writes = 0
 
         query = Channel.query.filter(
             Channel.account_id == account_id,
@@ -149,30 +150,33 @@ class PPVEnrichmentOrchestrator:
             Channel.id.asc(),
         )
 
-        for channel in query.yield_per(200):
-            scanned += 1
-            if scanned > max_scan:
-                break
+        # no_autoflush prevents SQLAlchemy from issuing an UPDATE before a lazy
+        # SELECT when ORM objects become expired after a mid-loop commit.  That
+        # autoflush-triggered write races with concurrent writers (e.g. the
+        # channel health scan) and causes "database is locked" on SQLite.
+        with db.session.no_autoflush:
+            for channel in query.yield_per(200):
+                scanned += 1
+                if scanned > max_scan:
+                    break
 
-            reason = classify_ppv_enrichment(channel.name, cheap_only=True)
-            if reason is not None:
+                reason = classify_ppv_enrichment(channel.name, cheap_only=True)
+                if reason is not None:
+                    skip_channels.append((channel, skip_error_message(reason)))
+                    continue
+
+                selected.append(channel)
+                if len(selected) >= batch_size:
+                    break
+
+        # Apply skip marks and commit in batches now that the cursor is closed.
+        for i in range(0, len(skip_channels), skip_commit_batch):
+            for channel, error_msg in skip_channels[i : i + skip_commit_batch]:
                 channel.ppv_enrichment_status = "skipped"
-                channel.ppv_enrichment_error = skip_error_message(reason)
-                skipped_marked += 1
-                pending_skip_writes += 1
-                if pending_skip_writes >= skip_commit_batch:
-                    db.session.commit()
-                    pending_skip_writes = 0
-                continue
-
-            selected.append(channel)
-            if len(selected) >= batch_size:
-                break
-
-        if pending_skip_writes:
+                channel.ppv_enrichment_error = error_msg
             db.session.commit()
 
-        return selected, skipped_marked
+        return selected, len(skip_channels)
 
     def prefetch_calendars(self, days_ahead: int = 30, days_back: int = 7) -> Dict[str, Any]:
         """Warm calendar cache for upcoming PPV dates."""

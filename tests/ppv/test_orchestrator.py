@@ -154,6 +154,61 @@ class TestSelectEnrichableBatch:
             scanned = Channel.query.filter_by(account_id=account.id, ppv_enrichment_status="skipped").count()
             assert scanned <= max_scan
 
+    def test_skip_marks_deferred_until_after_cursor_consumed(self, app):
+        """Regression: 'database is locked' from autoflush during yield_per loop.
+
+        Previously, marking channels skipped and committing mid-loop expired
+        other in-session ORM objects.  The next channel.name access triggered
+        an autoflush (write) that raced with concurrent writers (e.g. the
+        channel health scan) and raised sqlite3.OperationalError: database is
+        locked.
+
+        The fix defers all writes (no_autoflush + post-loop commits) until
+        after the yield_per cursor is fully consumed.  Verify that all channels
+        are correctly marked skipped and persisted to the DB, and that no
+        unexpected dirty state is left in the session.
+        """
+        with app.app_context():
+            account = Account(
+                name="DeferredWrites", server="http://t", username="u", password="p", enabled=True
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            recent = datetime.now(timezone.utc).replace(tzinfo=None)
+            for i in range(12):
+                db.session.add(
+                    Channel(
+                        account_id=account.id,
+                        stream_id=f"dw-{i}",
+                        name=f"PPV {i}",  # placeholder names → all classified as skip
+                        is_ppv=True,
+                        ppv_enrichment_status="queued",
+                        last_seen=recent,
+                    )
+                )
+            db.session.commit()
+
+            pending = or_(
+                Channel.ppv_enrichment_status.is_(None),
+                Channel.ppv_enrichment_status.in_(["queued", "retry_pending"]),
+            )
+            selected, skipped = PPVEnrichmentOrchestrator._select_enrichable_batch(
+                account.id, batch_size=5, pending_status_filter=pending
+            )
+
+            assert selected == []
+            assert skipped == 12
+            # No dirty objects left — all writes were committed.
+            assert not db.session.dirty
+
+            # Expire all in-memory state and re-query to confirm persistence.
+            db.session.expire_all()
+            persisted = Channel.query.filter_by(
+                account_id=account.id, ppv_enrichment_status="skipped"
+            ).count()
+            assert persisted == 12
+
 
 class TestAdaptiveBatchSize:
     def test_backlog_threshold_selects_larger_batch(self, app):
