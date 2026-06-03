@@ -48,6 +48,8 @@ def create_or_update_event(calendar_event: CalendarEvent) -> Tuple[Optional[Even
         event_source = getattr(calendar_event, "source", None) or Event.SOURCE_THESPORTSDB
         if event_source == "mlb_stats_api":
             event_source = Event.SOURCE_MLB_STATS
+        elif event_source == "espn":
+            event_source = Event.SOURCE_ESPN
 
         event = Event.query.filter_by(
             external_id=calendar_event.event_id,
