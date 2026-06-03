@@ -637,8 +637,8 @@ class TestDetailFetcher:
 
             service.stop_detail_fetcher()
 
-            # Thread should stop within timeout
-            assert not service._detail_thread.is_alive() or service._stop_detail_thread.is_set()
+            assert not service._detail_worker.is_running()
+            assert service._stop_detail_thread.is_set()
 
     def test_start_fetcher_twice_logs_warning(self, app):
         """Test that starting fetcher twice logs a warning."""
@@ -649,7 +649,7 @@ class TestDetailFetcher:
             thread1 = service._detail_thread
 
             # Starting again should not create new thread
-            with patch("services.ppv.enrichment.logger") as mock_logger:
+            with patch("services.ppv.enrichment.service.logger") as mock_logger:
                 service.start_detail_fetcher()
                 mock_logger.warning.assert_called_once()
 
@@ -841,12 +841,13 @@ class TestFarFutureEnrichmentFilter:
             far_date = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=45)
 
             # Patch the internal steps so we can inspect the valid_extractions list
+            from services.ppv.enrichment_post_hooks import EnrichmentPostHooks, set_enrichment_post_hooks
+
+            set_enrichment_post_hooks(EnrichmentPostHooks.noop())
             with patch.object(service, "_extract_all_channels") as mock_extract, patch.object(
                 service, "_group_by_date"
             ) as mock_group, patch.object(service, "_update_stats"), patch(
                 "services.ppv.enrichment.sync_enrichment_status_from_links"
-            ), patch(
-                "services.ppv.enrichment.prune_orphan_ppv_events"
             ):
                 ch = self._make_channel("UFC 405: Jones vs Smith")
                 mock_extract.return_value = [
@@ -876,12 +877,13 @@ class TestFarFutureEnrichmentFilter:
             service = PPVCalendarEnrichmentService(app)
             near_date = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=20)
 
+            from services.ppv.enrichment_post_hooks import EnrichmentPostHooks, set_enrichment_post_hooks
+
+            set_enrichment_post_hooks(EnrichmentPostHooks.noop())
             with patch.object(service, "_extract_all_channels") as mock_extract, patch.object(
                 service, "_group_by_date"
             ) as mock_group, patch.object(service, "_update_stats"), patch(
                 "services.ppv.enrichment.sync_enrichment_status_from_links"
-            ), patch(
-                "services.ppv.enrichment.prune_orphan_ppv_events"
             ):
                 ch = self._make_channel("UFC 403: Brown vs White")
                 mock_extract.return_value = [
@@ -907,12 +909,13 @@ class TestFarFutureEnrichmentFilter:
         with app.app_context():
             service = PPVCalendarEnrichmentService(app)
 
+            from services.ppv.enrichment_post_hooks import EnrichmentPostHooks, set_enrichment_post_hooks
+
+            set_enrichment_post_hooks(EnrichmentPostHooks.noop())
             with patch.object(service, "_extract_all_channels") as mock_extract, patch.object(
                 service, "_group_by_date"
             ) as mock_group, patch.object(service, "_update_stats"), patch(
                 "services.ppv.enrichment.sync_enrichment_status_from_links"
-            ), patch(
-                "services.ppv.enrichment.prune_orphan_ppv_events"
             ):
                 ch = self._make_channel("UFC 404: Fighter vs Fighter")
                 mock_extract.return_value = [

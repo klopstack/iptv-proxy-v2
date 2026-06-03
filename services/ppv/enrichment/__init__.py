@@ -19,11 +19,12 @@ from services.ppv.enrichment.service import (
     get_calendar_enrichment_service,
 )
 from services.ppv.enrichment.side_effects import EnrichmentSideEffects
-from services.ppv.enrichment.types import DETAIL_FETCH_BATCH_SIZE, EnrichmentResult
+from services.ppv.enrichment.types import DETAIL_FETCH_BATCH_SIZE, DETAIL_QUEUE_STOP, EnrichmentResult
 from services.ppv.persistence import sync_enrichment_status_from_links
 
 __all__ = [
     "DETAIL_FETCH_BATCH_SIZE",
+    "DETAIL_QUEUE_STOP",
     "logger",
     "CalendarMatchPipeline",
     "DetailFetchWorker",

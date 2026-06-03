@@ -6,6 +6,7 @@ Application entry point: registers 23 Flask blueprints (see register_blueprint
 calls below) and starts the background sync scheduler.
 """
 
+import atexit
 import logging
 import os
 
@@ -139,6 +140,19 @@ wrap_blueprint_json_errors(app, api_bp, default_message="Error processing API re
 # Pass scheduler to API blueprint
 set_scheduler(sync_scheduler)
 
+
+def _shutdown_ppv_detail_worker() -> None:
+    try:
+        from services.ppv.enrichment import _service_instance
+
+        if _service_instance is not None:
+            _service_instance.stop_detail_fetcher()
+    except Exception as e:
+        logger.debug("PPV detail worker shutdown: %s", e)
+
+
+atexit.register(_shutdown_ppv_detail_worker)
+
 # Optionally start scheduler. Disable during tests to avoid DB locks.
 _disable_scheduler = (
     os.getenv("DISABLE_SCHEDULER", "false").lower() == "true" or os.getenv("PYTEST_CURRENT_TEST") is not None
@@ -247,5 +261,5 @@ if __name__ == "__main__":
     try:
         app.run(host="0.0.0.0", port=port, debug=debug)
     finally:
-        # Stop scheduler on shutdown
+        _shutdown_ppv_detail_worker()
         sync_scheduler.stop()

@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from flask import Flask
 
+import services.ppv.enrichment as ppv_enrichment
 from models import Channel, Event, SyncMetadata
 from services.ppv.constants import (
     METADATA_KEY_CALENDAR_MATCHED,
@@ -14,6 +15,7 @@ from services.ppv.constants import (
 from services.ppv.enrichment.detail_fetch import DetailFetchWorker
 from services.ppv.enrichment.match_pipeline import CalendarMatchPipeline
 from services.ppv.enrichment.side_effects import EnrichmentSideEffects
+from services.ppv.enrichment_post_hooks import get_enrichment_post_hooks
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +25,22 @@ class PPVCalendarEnrichmentService:
     Calendar-based PPV enrichment coordinator.
 
     Delegates to CalendarMatchPipeline, DetailFetchWorker, and EnrichmentSideEffects.
+    Post-batch EPG sync runs via EnrichmentPostHooks (TODO 66).
     """
 
     def __init__(self, app: Flask):
         self.app = app
         self.match_pipeline = CalendarMatchPipeline()
-        self.detail_worker = DetailFetchWorker(app)
+        session_stats = {
+            "channels_processed": 0,
+            "channels_matched": 0,
+            "channels_no_extraction": 0,
+            "channels_no_match": 0,
+            "calendar_requests": 0,
+            "api_requests": 0,
+        }
+        self._detail_worker = DetailFetchWorker(app, stats=session_stats)
+        self.detail_worker = self._detail_worker
         self.side_effects = EnrichmentSideEffects()
 
     # --- Back-compat: pipeline surface used by tests ---
@@ -59,27 +71,27 @@ class PPVCalendarEnrichmentService:
 
     @property
     def thesportsdb(self):
-        return self.detail_worker.thesportsdb
+        return self._detail_worker.thesportsdb
 
     @property
     def _detail_queue(self):
-        return self.detail_worker.detail_queue
+        return self._detail_worker.detail_queue
 
     @property
     def _refresh_queue(self):
-        return self.detail_worker.refresh_queue
+        return self._detail_worker.refresh_queue
 
     @property
     def _detail_thread(self):
-        return self.detail_worker._detail_thread
+        return self._detail_worker._detail_thread
 
     @property
     def _stop_detail_thread(self):
-        return self.detail_worker._stop_detail_thread
+        return self._detail_worker._stop_detail_thread
 
     @property
     def _stats(self):
-        return self.detail_worker.session_stats
+        return self._detail_worker.session_stats
 
     def _extract_all_channels(self, channels):
         return self.match_pipeline.extract_all_channels(channels)
@@ -94,10 +106,10 @@ class PPVCalendarEnrichmentService:
         return self.match_pipeline.match_channel_to_calendar(channel, extraction, calendar_events, date_str, **kwargs)
 
     def _update_event_from_api(self, event, api_data):
-        return self.detail_worker.update_event_from_api(event, api_data)
+        return self._detail_worker.update_event_from_api(event, api_data)
 
     def _fetch_event_details(self, external_id, source, force_refresh=False):
-        return self.detail_worker.fetch_event_details(external_id, source, force_refresh=force_refresh)
+        return self._detail_worker.fetch_event_details(external_id, source, force_refresh=force_refresh)
 
     def _update_stats(self, results):
         return self.side_effects.update_cumulative_stats(results)
@@ -109,40 +121,49 @@ class PPVCalendarEnrichmentService:
             results, event_ids_to_fetch = self.match_pipeline.run(channels, coordinator=self)
 
             if fetch_details and event_ids_to_fetch:
-                self.detail_worker.queue_items(event_ids_to_fetch)
-                logger.info(f"Queued {len(event_ids_to_fetch)} events for detail fetching")
-                self.detail_worker.ensure_running()
+                for external_id, source in event_ids_to_fetch:
+                    self._detail_worker.queue_detail(external_id, source)
+
+                logger.info("Queued %s events for detail fetching", len(event_ids_to_fetch))
+
+                if not self._detail_worker.is_running():
+                    self.start_detail_fetcher()
 
             self._update_stats(results)
-            return self.side_effects.after_batch(channels, results)
+            ppv_enrichment.sync_enrichment_status_from_links(ch.id for ch in channels)
+            get_enrichment_post_hooks().run(results)
+            return results
 
     def start_detail_fetcher(self) -> None:
-        self.detail_worker.start()
+        if self._detail_worker.is_running():
+            logger.warning("Detail fetcher thread already running")
+            return
+        self._detail_worker.start()
 
     def stop_detail_fetcher(self) -> None:
-        self.detail_worker.stop()
+        self._detail_worker.stop()
 
     def refresh_upcoming_event_times(self, hours_ahead: int = 48) -> Dict[str, Any]:
-        return self.detail_worker.refresh_upcoming_event_times(hours_ahead=hours_ahead)
+        return self._detail_worker.refresh_upcoming_event_times(hours_ahead=hours_ahead)
 
     def get_status(self) -> Dict[str, Any]:
+        queue_sizes = self._detail_worker.get_queue_sizes()
         return {
-            "detail_queue_size": self.detail_worker.detail_queue.qsize(),
-            "refresh_queue_size": self.detail_worker.refresh_queue.qsize(),
-            "detail_thread_running": (
-                self.detail_worker._detail_thread.is_alive() if self.detail_worker._detail_thread else False
-            ),
+            "detail_queue_size": queue_sizes["detail_queue_size"],
+            "refresh_queue_size": queue_sizes["refresh_queue_size"],
+            "llm_queue_size": queue_sizes["llm_queue_size"],
+            "detail_thread_running": self._detail_worker.is_running(),
             "calendar_cache_stats": self.match_pipeline.calendar_scraper.get_cache_stats(),
             "cumulative_stats": {
                 "calendar_processed": SyncMetadata.get(METADATA_KEY_CALENDAR_PROCESSED, "0"),
                 "calendar_matched": SyncMetadata.get(METADATA_KEY_CALENDAR_MATCHED, "0"),
                 "details_fetched": SyncMetadata.get(METADATA_KEY_DETAILS_FETCHED, "0"),
             },
-            "session_stats": self.detail_worker.session_stats.copy(),
+            "session_stats": self._detail_worker.session_stats.copy(),
         }
 
     def queue_event_detail(self, event_id: str, source: str = Event.SOURCE_THESPORTSDB) -> None:
-        self.detail_worker.queue_event(event_id, source)
+        self._detail_worker.queue_event(event_id, source)
 
 
 _service_instance: Optional[PPVCalendarEnrichmentService] = None

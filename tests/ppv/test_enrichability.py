@@ -65,18 +65,27 @@ class TestSingleExtractionPerEnrichmentBatch:
             ch_event.name = "UK: DAZN PPV 1 - Arsenal vs Brighton | 2026-06-15 | 17:15"
             channels = [ch_generic, ch_event]
 
-            with patch.object(
-                service.extractor,
-                "extract_all",
-                wraps=service.extractor.extract_all,
-            ) as mock_extract, patch.object(service, "_group_by_date", return_value={}), patch.object(
-                service, "_update_stats"
-            ), patch(
-                "services.ppv.enrichment.sync_enrichment_status_from_links"
-            ), patch(
-                "services.ppv.enrichment.prune_orphan_ppv_events"
-            ):
-                result = service.enrich_channels(channels, fetch_details=False)
+            from services.ppv.enrichment_post_hooks import (
+                EnrichmentPostHooks,
+                get_enrichment_post_hooks,
+                set_enrichment_post_hooks,
+            )
+
+            original_hooks = get_enrichment_post_hooks()
+            set_enrichment_post_hooks(EnrichmentPostHooks.noop())
+            try:
+                with patch.object(
+                    service.extractor,
+                    "extract_all",
+                    wraps=service.extractor.extract_all,
+                ) as mock_extract, patch.object(service, "_group_by_date", return_value={}), patch.object(
+                    service, "_update_stats"
+                ), patch(
+                    "services.ppv.enrichment.sync_enrichment_status_from_links"
+                ):
+                    result = service.enrich_channels(channels, fetch_details=False)
+            finally:
+                set_enrichment_post_hooks(original_hooks)
 
             assert mock_extract.call_count <= len(channels)
             assert result["no_extraction"] >= 1
