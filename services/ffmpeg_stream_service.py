@@ -609,7 +609,7 @@ class FFmpegStreamService:
             for _ in range(10):
                 if self._shutdown:
                     break
-                time.sleep(1)
+                time.sleep(0.1)
 
     def _cleanup_idle_streams(self) -> None:
         """Clean up streams with no subscribers."""

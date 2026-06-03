@@ -275,25 +275,30 @@ class TestNeedsSync:
 class TestStartStop:
     """Test scheduler start/stop operations"""
 
-    def test_start_scheduler(self, scheduler):
+    @patch.object(SyncScheduler, "_run")
+    def test_start_scheduler(self, mock_run, scheduler):
         """Test starting the scheduler"""
         scheduler.start()
         assert scheduler.running is True
         assert scheduler.thread is not None
         scheduler.stop()
+        mock_run.assert_called()
 
-    def test_start_scheduler_twice(self, scheduler):
+    @patch.object(SyncScheduler, "_run")
+    def test_start_scheduler_twice(self, mock_run, scheduler):
         """Test starting scheduler when already running"""
         scheduler.start()
         scheduler.start()  # Should log warning but not crash
         assert scheduler.running is True
         scheduler.stop()
 
-    def test_stop_scheduler(self, scheduler):
+    @patch.object(SyncScheduler, "_run")
+    def test_stop_scheduler(self, mock_run, scheduler):
         """Test stopping the scheduler"""
         scheduler.start()
         scheduler.stop()
         assert scheduler.running is False
+        mock_run.assert_called()
 
 
 class TestLoadInterval:

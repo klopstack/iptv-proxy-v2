@@ -51,7 +51,8 @@ class TestMlbStatsApiClient:
         assert len(games) == 2
         assert games[0]["_level"] == "Triple-A"
 
-    def test_retries_on_server_error(self):
+    @patch("services.mlb_stats_api.time.sleep")
+    def test_retries_on_server_error(self, _mock_sleep):
         client = MlbStatsApiClient(request_delay=0)
         mock_resp = MagicMock()
         mock_resp.status_code = 503
