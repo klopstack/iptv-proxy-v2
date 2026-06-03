@@ -427,7 +427,7 @@ iptv-proxy-v2/
 │   └── _core.py           # SQLAlchemy model definitions
 ├── routes/                # Flask blueprints (accounts, playlists, xtream, epg, ppv, ...)
 ├── services/              # Business logic (sync, epg, ppv, filter, stream proxy, ...)
-│   ├── ppv/              # PPV enrichment domain package
+│   ├── ppv/              # PPV domain package (enrichment/, epg/, extraction/, matching/)
 │   └── epg/              # EPG parsing, matching, generation
 ├── templates/             # Web UI (Jinja2)
 ├── static/js/             # Frontend scripts

@@ -10,7 +10,7 @@ This app mixes legacy inline/classic scripts in Jinja templates with newer ES mo
 | Page bootstrap (attach libs to `window`) | `static/js/pages/{page}_bootstrap.js` | `<script type="module" src="{{ url_for('static', filename='js/pages/…') }}">` |
 | Full page logic (preferred for new work) | `static/js/pages/*.js` or top-level `static/js/*_page.js` | module `src` only |
 | EPG management tab modules (ESM) | `static/js/pages/epg_*_page.js`, `static/js/pages/match_rules_*_page.js` | `<script type="module">` after `epg_management_bootstrap.js` |
-| Legacy EPG / match-rules bundles | remaining `static/js/epg_*.js`, `static/js/match_rules_*.js` | classic `<script src>` (non-module globals) |
+| Legacy EPG / match-rules bundles | `static/js/epg_common.js` only | classic `<script src>` (shared state + modals) |
 
 ## Page bootstrap pattern
 
@@ -41,11 +41,14 @@ Examples: `accounts_bootstrap.js`, `ppv_bootstrap.js`, `settings_bootstrap.js`, 
 
 Load order for EPG management (`epg_management.html`):
 
-1. `mpegts.min.js`, `epg_common.js` (shared state + `window.EpgManagementState` bridge)
-2. Remaining legacy tab bundles (`epg_channels.js`, `epg_schedules_direct.js`, …)
-3. `match_rules_common.js` and other unmigrated match-rules bundles
-4. `epg_management_bootstrap.js`, then migrated tab modules (`epg_sources_page.js`, `epg_mappings_page.js`, `epg_manual_mapping_page.js`, `match_rules_rulesets_page.js`, `match_rules_rules_page.js`)
-5. Inline init (`DOMContentLoaded`)
+1. `mpegts.min.js`, `epg_common.js` (shared state, modals, `window.EpgManagementState` bridge)
+2. `epg_management_bootstrap.js` (lib helpers on `window` for inline HTML and legacy bridges)
+3. ESM tab modules in dependency order:
+   - `epg_sources_page.js`, `epg_mappings_page.js`, `epg_manual_mapping_page.js`
+   - `match_rules_common_page.js`, `match_rules_rulesets_page.js`, `match_rules_rules_page.js`
+   - `match_rules_exclusions_page.js`, `match_rules_name_mappings_page.js`, `match_rules_reference_page.js`
+   - `epg_channels_page.js`, `epg_xmltv_page.js`, `epg_schedules_direct_page.js`, `epg_preview_page.js`
+4. Inline init (`DOMContentLoaded`)
 
 Migrated tab modules import from `static/js/lib/` and assign handlers to `window` for inline HTML `onclick` and the template init block. Bootstrap modules run before `DOMContentLoaded`.
 
@@ -55,7 +58,7 @@ Migrated tab modules import from `static/js/lib/` and assign handlers to `window
 - **ES modules:** `eslint static/js/lib static/js/pages` with `sourceType: 'module'`.
 - **Do not** add `eslint-disable-next-script` for module imports; use external bootstrap files instead.
 - ESM tab modules under `static/js/pages/*_page.js` are linted with `sourceType: 'module'`.
-- Legacy non-module bundles (`epg_common.js`, unmigrated `epg_*.js`, etc.) are not ESLint module targets until migrated.
+- Legacy non-module bundle remaining on EPG management: `epg_common.js` only.
 
 ## Escaping API data in `innerHTML`
 
