@@ -649,7 +649,7 @@ class TestDetailFetcher:
             thread1 = service._detail_thread
 
             # Starting again should not create new thread
-            with patch("services.ppv.enrichment.logger") as mock_logger:
+            with patch("services.ppv.enrichment.service.logger") as mock_logger:
                 service.start_detail_fetcher()
                 mock_logger.warning.assert_called_once()
 

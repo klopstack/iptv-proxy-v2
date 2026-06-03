@@ -47,14 +47,18 @@ class DetailFetchWorker:
         self.thesportsdb = thesportsdb or TheSportsDBService()
         self._fetch_handler = fetch_handler or self._fetch_event_details_api
         self._llm_handler = llm_handler or self._run_llm_enrichment_for_event
-        self.session_stats: Dict[str, int] = stats if stats is not None else {
-            "channels_processed": 0,
-            "channels_matched": 0,
-            "channels_no_extraction": 0,
-            "channels_no_match": 0,
-            "calendar_requests": 0,
-            "api_requests": 0,
-        }
+        self.session_stats: Dict[str, int] = (
+            stats
+            if stats is not None
+            else {
+                "channels_processed": 0,
+                "channels_matched": 0,
+                "channels_no_extraction": 0,
+                "channels_no_match": 0,
+                "calendar_requests": 0,
+                "api_requests": 0,
+            }
+        )
 
         self.detail_queue: Queue[DetailQueueItem] = Queue()
         self.refresh_queue: Queue[DetailQueueItem] = Queue()

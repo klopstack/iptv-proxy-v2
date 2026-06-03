@@ -4,8 +4,8 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from models import Event, db
-from services.ppv.enrichment.detail_fetch import DetailFetchWorker
 from services.ppv.enrichment import PPVCalendarEnrichmentService
+from services.ppv.enrichment.detail_fetch import DetailFetchWorker
 from services.ppv.enrichment_post_hooks import EnrichmentPostHooks, get_enrichment_post_hooks, set_enrichment_post_hooks
 
 
@@ -122,13 +122,13 @@ class TestLlmDoesNotBlockApiQueue:
             llm_handler=llm_handler,
         )
         worker._llm_queue.put("llm-1")
-        worker._detail_queue.put(("api-1", Event.SOURCE_THESPORTSDB))
+        worker.detail_queue.put(("api-1", Event.SOURCE_THESPORTSDB))
 
         with patch.object(worker, "_process_llm_item") as mock_llm:
             worker._drain_llm_when_idle()
             mock_llm.assert_not_called()
 
-        worker._detail_queue.get_nowait()
+        worker.detail_queue.get_nowait()
         with patch.object(worker, "_process_llm_item") as mock_llm:
             worker._drain_llm_when_idle()
             mock_llm.assert_called_once_with("llm-1")

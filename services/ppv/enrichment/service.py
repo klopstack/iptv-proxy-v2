@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from flask import Flask
 
+import services.ppv.enrichment as ppv_enrichment
 from models import Channel, Event, SyncMetadata
 from services.ppv.constants import (
     METADATA_KEY_CALENDAR_MATCHED,
@@ -15,7 +16,6 @@ from services.ppv.enrichment.detail_fetch import DetailFetchWorker
 from services.ppv.enrichment.match_pipeline import CalendarMatchPipeline
 from services.ppv.enrichment.side_effects import EnrichmentSideEffects
 from services.ppv.enrichment_post_hooks import get_enrichment_post_hooks
-from services.ppv.persistence import sync_enrichment_status_from_links
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +130,7 @@ class PPVCalendarEnrichmentService:
                     self.start_detail_fetcher()
 
             self._update_stats(results)
-            sync_enrichment_status_from_links(ch.id for ch in channels)
+            ppv_enrichment.sync_enrichment_status_from_links(ch.id for ch in channels)
             get_enrichment_post_hooks().run(results)
             return results
 
