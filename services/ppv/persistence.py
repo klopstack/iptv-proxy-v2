@@ -14,8 +14,12 @@ from services.thesportsdb_calendar_scraper import CalendarEvent
 logger = logging.getLogger(__name__)
 
 
-def create_or_update_event(calendar_event: CalendarEvent) -> Optional[Event]:
-    """Create or update an Event from calendar scraper data."""
+def create_or_update_event(calendar_event: CalendarEvent) -> Tuple[Optional[Event], bool]:
+    """Create or update an Event from calendar scraper data.
+
+    Returns:
+        (event, was_created) — event is None when validation rejects the calendar row.
+    """
     try:
         if calendar_event.scheduled_at:
             now = datetime.now(timezone.utc)
@@ -30,7 +34,7 @@ def create_or_update_event(calendar_event: CalendarEvent) -> Optional[Event]:
                     event_date,
                     abs(days_diff),
                 )
-                return None
+                return None, False
             if days_diff > MAX_EVENT_FUTURE_DAYS:
                 logger.warning(
                     "Rejecting far-future event: %s @ %s (%s days ahead)",
@@ -38,7 +42,7 @@ def create_or_update_event(calendar_event: CalendarEvent) -> Optional[Event]:
                     event_date,
                     days_diff,
                 )
-                return None
+                return None, False
 
         event_source = getattr(calendar_event, "source", None) or Event.SOURCE_THESPORTSDB
         if event_source == "mlb_stats_api":
@@ -68,7 +72,7 @@ def create_or_update_event(calendar_event: CalendarEvent) -> Optional[Event]:
                 event.away_team_id = calendar_event.away_team_id
             if getattr(calendar_event, "sport", None):
                 event.sport = calendar_event.sport
-            return event
+            return event, False
 
         event = Event(
             external_id=calendar_event.event_id,
@@ -89,11 +93,11 @@ def create_or_update_event(calendar_event: CalendarEvent) -> Optional[Event]:
             status=Event.STATUS_SCHEDULED,
         )
         db.session.add(event)
-        return event
+        return event, True
 
     except Exception as e:
         logger.error("Error creating event for %s: %s", calendar_event.event_id, e)
-        return None
+        return None, False
 
 
 def link_channel_to_event(
@@ -172,18 +176,31 @@ def persist_match(
     Persist a calendar match for a channel.
 
     Returns:
-        (event, created_new_link) — event is None if validation failed.
+        (event, was_created) — event is None if validation or persistence failed.
     """
-    event = create_or_update_event(calendar_event)
+    event, was_created = create_or_update_event(calendar_event)
     if not event:
         channel.ppv_enrichment_status = "no_match"
+        channel.ppv_enrichment_error = None
         return None, False
 
-    db.session.flush()
-    link_channel_to_event(channel, event, confidence, match_method)
-    channel.ppv_enrichment_status = "matched"
-    channel.ppv_enrichment_error = None
-    return event, True
+    try:
+        db.session.flush()
+        link_channel_to_event(channel, event, confidence, match_method)
+        channel.ppv_enrichment_status = "matched"
+        channel.ppv_enrichment_error = None
+        return event, was_created
+    except Exception as e:
+        logger.error(
+            "Error persisting match for channel %s event %s: %s",
+            channel.id,
+            calendar_event.event_id,
+            e,
+        )
+        db.session.rollback()
+        channel.ppv_enrichment_status = "retry_pending"
+        channel.ppv_enrichment_error = str(e)
+        return None, False
 
 
 def persist_enhanced_match(
@@ -193,7 +210,7 @@ def persist_enhanced_match(
     """
     Persist a match from EnhancedPPVMatcher (EnhancedMatchResult).
 
-    Returns (event, success). No-op if match_result has no event.
+    Returns (event, was_created). No-op if match_result has no event.
     """
     if not match_result or not getattr(match_result, "event", None):
         return None, False

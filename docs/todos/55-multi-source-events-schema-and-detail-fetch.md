@@ -1,6 +1,6 @@
 # Multi-source events: schema audit and detail fetch branching
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done (PR #13)  
 **Priority:** P0  
 **Audit:** PPV audit, June 2026
 
@@ -44,10 +44,14 @@ Migration `2026_01_02_add_event_tables.py` created `external_id VARCHAR(50) NOT 
 
 ## Acceptance criteria
 
-- [ ] Two events with same `external_id` but different `source` can coexist.
-- [ ] MiLB-matched events do not produce spurious "not found" warnings in detail loop.
-- [ ] Detail queue respects source-specific fetch or explicit skip.
-- [ ] Migration is idempotent and tested against existing DB fixtures.
+- [x] Two events with same `external_id` but different `source` can coexist.
+- [x] MiLB-matched events do not produce spurious "not found" warnings in detail loop.
+- [x] Detail queue respects source-specific fetch or explicit skip.
+- [x] Migration is idempotent and tested against existing DB fixtures.
+
+## Completion
+
+- PR #13 — https://github.com/klopstack/iptv-proxy-v2/pull/13
 
 ## Test plan
 
