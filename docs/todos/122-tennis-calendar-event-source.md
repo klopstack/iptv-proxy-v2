@@ -1,6 +1,6 @@
 # Tennis calendar event source for PPV matching
 
-**Status:** ⬜ Not started  
+**Status:** 🟡 Phase 1 spike complete — Phase 2 not started  
 **Priority:** P2  
 **Audit:** Production matching analysis, June 2026 (`docker.klopnet.com`)
 
@@ -122,3 +122,69 @@ Baseline: **341** tennis-prefixed `no_match`.
 ## Recommended order
 
 **122 after 120** — date fix alone will not match tennis; new source required. Can run spike in parallel with 121.
+
+---
+
+## Phase 1 spike completion (2026-06-03)
+
+**Spike doc:** [tennis-calendar-source-spike.md](../architecture/tennis-calendar-source-spike.md)  
+**Probe script:** `scripts/spike_tennis_calendar.py` (requires `PPV_API_TENNIS_KEY`; not production-wired)
+
+### TSDB verdict: **No** (ruled out)
+
+Production `get_events_for_date("2026-06-03")` → **79 events, 2 tennis** (ATP RG men's QF only). WTA, wheelchair, junior, and ITF draws missing. Player search finds Kalinskaya/Sabalenka/etc., but no corresponding events. TSDB cannot support 341 `no_match` tennis channels.
+
+### Recommended source: **API-Tennis** (`api.api-tennis.com`)
+
+| Factor | Rationale |
+|--------|-----------|
+| Coverage | ATP/WTA/Challenger/ITF/Boys/Girls documented; date-range `get_fixtures` fits ±7 day window |
+| Cost | ~$40/mo, 8k req/day — one call per date range ≪ budget |
+| Integration | Same merge pattern as MiLB in `thesportsdb_calendar_scraper.py` |
+| Self-host | Cloud API (acceptable; same as TSDB/MLB Stats) |
+| Names | `event_first_player` / `event_second_player` as `"F. Last"` — needs last-name fuzzy match (existing strategies) |
+
+**Not chosen for MVP:** Sportradar (enterprise quote), ATP/WTA official (B2B only), ESPN scrape (discouraged).
+
+### Sample API responses (keys redacted)
+
+**TheSportsDB** — only tennis on 2026-06-03:
+
+```json
+{"idEvent": "2479089", "strEvent": "Roland Garros Félix Auger Aliassime vs Flavio Cobolli", "strLeague": "ATP World Tour", "dateEvent": "2026-06-03", "strHomeTeam": null, "strAwayTeam": null}
+```
+
+**API-Tennis** (documented fixture shape; live validation pending trial key):
+
+```json
+{"event_key": "143104", "event_date": "2026-06-03", "event_time": "11:00", "event_first_player": "A. Kalinskaya", "event_second_player": "M. Chwalinska", "event_type_type": "Wta Singles", "tournament_name": "French Open", "tournament_round": "Quarter-finals"}
+```
+
+### Sample channel verification (5 matchups)
+
+| Channel | Real event? | TSDB | API-Tennis (expected) |
+|---------|-------------|------|------------------------|
+| Kalinskaya vs Chwalinska | Yes (RG WTA QF) | No | Yes |
+| Sabalenka vs Shnaider | Yes (RG WTA QF) | No | Yes |
+| Lapthorne vs Vink | Yes (wheelchair quad QF) | No | TBD — wheelchair not in public type list |
+| Hewett/Reid vs Cattaneo/Rodrigues | Yes (WC doubles QF) | No | TBD |
+| Cvetkovic vs Pinera Celorio | Yes (junior girls) | No | Likely |
+
+### Phase 2 MVP outline
+
+1. `services/tennis_calendar.py` — `fetch_tennis_events_for_date()` → `CalendarEvent` with `source=api_tennis`
+2. `Event.SOURCE_API_TENNIS = "api_tennis"`; `external_id` = API `event_key`
+3. Merge in `TheSportsDBCalendarScraper.get_events_for_date()` (MiLB pattern)
+4. Settings: `ppv_api_tennis_key`; cache TTL 12h; single `get_fixtures` for ±7 day window
+5. Detail fetch: skip / `basic` completeness (no TSDB detail queue)
+6. Recorded fixtures + integration test
+
+**Estimate:** 2–3 days. **Blockers:** API-Tennis trial to confirm wheelchair coverage; doubles name parsing; TODO 120 date fix; production circular-import in API supplement.
+
+### Open questions for Phase 2
+
+- [ ] Does API-Tennis include wheelchair/quad draws on Starter plan?
+- [ ] Abbreviated vs full name matching threshold — reuse LastName strategy or tennis-specific?
+- [ ] Doubles channel format (`A Hewett G Reid`) — extend competitor extractor or match on combined tokens?
+- [ ] Shared `calendar_cache.json` vs separate tennis cache file?
+- [ ] Legends/exhibition slots (Cornet/Hingis) — accept permanent `no_match`?
