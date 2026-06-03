@@ -3,21 +3,19 @@ Channel sync service for synchronizing channels from IPTV providers to local dat
 """
 
 import logging
-from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
 
 from models import Account, Category, Channel, ChannelLink, ChannelTag, Settings, Tag, db
+from services.epg.constants import EAST_TAGS, WEST_TAGS
 from services.iptv_service import get_iptv_service_for_account
+from services.sync_lock import recover_stale_sync_locks as _recover_stale_sync_locks
+from services.sync_lock import sync_lock_context
 from services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
-
-# Tag names that indicate east/west variants (used for auto-detection)
-EAST_TAGS = {"EAST", "E", "ET", "EST", "EASTERN"}
-WEST_TAGS = {"WEST", "W", "PT", "PST", "PACIFIC", "WESTERN"}
 
 # Stale sync locks older than this are cleared on startup
 STALE_SYNC_LOCK_MINUTES = 30
@@ -30,32 +28,13 @@ def recover_stale_sync_locks(max_age_minutes: int = STALE_SYNC_LOCK_MINUTES) -> 
     Returns:
         Number of accounts recovered.
     """
-    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=max_age_minutes)
-    stale = Account.query.filter(
-        Account.sync_in_progress.is_(True),
-        db.or_(
-            db.and_(Account.sync_started_at.isnot(None), Account.sync_started_at < cutoff),
-            db.and_(Account.sync_started_at.is_(None), Account.updated_at < cutoff),
-        ),
-    ).all()
-
-    for account in stale:
-        logger.warning(
-            "Recovering stale sync lock for account %s (id=%s, started=%s)",
-            account.name,
-            account.id,
-            account.sync_started_at,
-        )
-        account.sync_in_progress = False
-        account.sync_started_at = None
-
-    if stale:
-        db.session.commit()
-
-    return len(stale)
+    return _recover_stale_sync_locks(
+        Account,
+        max_age=timedelta(minutes=max_age_minutes),
+        log_entity_type="account",
+    )
 
 
-@contextmanager
 def sync_lock(account_id: int):
     """
     Context manager for acquiring/releasing sync lock on an account.
@@ -72,39 +51,15 @@ def sync_lock(account_id: int):
     Yields:
         Account: The locked account instance
     """
-    account = db.session.get(Account, account_id)
-    if not account:
-        raise ValueError(f"Account {account_id} not found")
-
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    result = db.session.execute(
-        update(Account)
-        .where(Account.id == account_id, Account.sync_in_progress.is_(False))
-        .values(sync_in_progress=True, sync_started_at=now)
+    return sync_lock_context(
+        Account,
+        account_id,
+        not_found_error=f"Account {account_id} not found",
+        in_progress_error=lambda account: (
+            f"Sync already in progress for account {account.name if account else account_id}"
+        ),
+        log_entity_type="account",
     )
-    db.session.commit()
-
-    if (getattr(result, "rowcount", 0) or 0) == 0:
-        account = db.session.get(Account, account_id)
-        raise ValueError(f"Sync already in progress for account {account.name if account else account_id}")
-
-    account = db.session.get(Account, account_id)
-    account_name = account.name if account else str(account_id)
-    logger.info(f"Acquired sync lock for account {account_name} (ID: {account_id})")
-
-    try:
-        yield account
-    finally:
-        try:
-            account = db.session.get(Account, account_id)
-            if account:
-                account.sync_in_progress = False
-                account.sync_started_at = None
-                db.session.commit()
-                logger.info(f"Released sync lock for account {account.name} (ID: {account_id})")
-        except Exception as e:
-            logger.error(f"Error releasing sync lock for account {account_id}: {e}")
-            db.session.rollback()
 
 
 class ChannelSyncService:

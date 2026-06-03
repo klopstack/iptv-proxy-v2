@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from models import EpgChannel, EpgProgram, EpgSource, SdLineup, SdStation, db
+from services.epg.program_persistence import create_epg_program, update_epg_program
 
 logger = logging.getLogger(__name__)
 
@@ -281,6 +282,7 @@ def sync_sd_programs_for_source(
     stats = {
         "programs_added": 0,
         "programs_updated": 0,
+        "programs_unchanged": 0,
         "programs_deleted": 0,
         "channels_processed": 0,
         "schedules_fetched": 0,
@@ -454,13 +456,12 @@ def sync_sd_programs_for_source(
             existing_prog = existing.get(start_time)
 
             if existing_prog:
-                # Update existing
-                _update_epg_program(existing_prog, data)
-                stats["programs_updated"] += 1
+                if update_epg_program(existing_prog, data):
+                    stats["programs_updated"] += 1
+                else:
+                    stats["programs_unchanged"] += 1
             else:
-                # Create new
-                new_prog = _create_epg_program(epg_channel_id, data)
-                db.session.add(new_prog)
+                db.session.add(create_epg_program(epg_channel_id, data))
                 stats["programs_added"] += 1
 
         # Commit in batches
@@ -600,61 +601,3 @@ def _update_md5_cache(
 
     # Commit MD5 updates
     db.session.commit()
-
-
-def _create_epg_program(epg_channel_id: int, data: Dict[str, Any]) -> EpgProgram:
-    """Create a new EpgProgram from parsed SD data."""
-    import json
-
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-
-    prog = EpgProgram(
-        epg_channel_id=epg_channel_id,
-        start_time=data["start_time"],
-        stop_time=data["stop_time"],
-        title=data["title"],
-        sub_title=data.get("sub_title"),
-        description=data.get("description"),
-        categories=json.dumps(data["categories"]) if data.get("categories") else None,
-        season=data.get("season"),
-        episode=data.get("episode"),
-        episode_id=data.get("episode_id"),
-        rating=data.get("rating"),
-        rating_system=data.get("rating_system"),
-        original_air_date=data.get("original_air_date"),
-        is_new=data.get("is_new", False),
-        is_live=data.get("is_live", False),
-        is_premiere=data.get("is_premiere", False),
-        sport=data.get("sport"),
-        team_home=data.get("team_home"),
-        team_away=data.get("team_away"),
-        icon_url=data.get("icon_url"),
-        last_updated=now,
-        created_at=now,
-    )
-    return prog
-
-
-def _update_epg_program(prog: EpgProgram, data: Dict[str, Any]):
-    """Update an existing EpgProgram with new SD data."""
-    import json
-
-    prog.stop_time = data["stop_time"]
-    prog.title = data["title"]
-    prog.sub_title = data.get("sub_title")
-    prog.description = data.get("description")
-    prog.categories = json.dumps(data["categories"]) if data.get("categories") else None
-    prog.season = data.get("season")
-    prog.episode = data.get("episode")
-    prog.episode_id = data.get("episode_id")
-    prog.rating = data.get("rating")
-    prog.rating_system = data.get("rating_system")
-    prog.original_air_date = data.get("original_air_date")
-    prog.is_new = data.get("is_new", False)
-    prog.is_live = data.get("is_live", False)
-    prog.is_premiere = data.get("is_premiere", False)
-    prog.sport = data.get("sport")
-    prog.team_home = data.get("team_home")
-    prog.team_away = data.get("team_away")
-    prog.icon_url = data.get("icon_url")
-    prog.last_updated = datetime.now(timezone.utc).replace(tzinfo=None)
