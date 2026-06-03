@@ -300,7 +300,8 @@ Phased remainders from TODOs 78, 85, 92, 95; optional PPV splits from TODO 65. S
 | 96 | [96-extract-epg-match-rules-routes.md](./96-extract-epg-match-rules-routes.md) | ⬜ | TODO 78 phase 2: extract `routes/epg/match_rules.py` (PR **W**) |
 | 97 | [97-extract-config-transfer-routes.md](./97-extract-config-transfer-routes.md) | ⬜ | TODO 78 phase 3: extract `routes/config_transfer.py` (PR **W**) |
 | 98 | [98-fcc-patterns-split-and-cdn-sri.md](./98-fcc-patterns-split-and-cdn-sri.md) | ⬜ | TODO 78 phase 4 + 92: FCC routes + CDN SRI (PR **X**) |
-| 99 | [99-esm-tab-migration-and-eslint.md](./99-esm-tab-migration-and-eslint.md) | ⬜ | TODO 85 phases 2–3: ESM tabs + ESLint (PR **Y**) |
+| 99 | [99-esm-tab-migration-and-eslint.md](./99-esm-tab-migration-and-eslint.md) | ✅ | TODO 85 phases 2–3 tabs 1–3 (PR **Y** #40); tabs 4–6 → [103](./103-esm-tabs-4-6-migration.md) |
+| 103 | [103-esm-tabs-4-6-migration.md](./103-esm-tabs-4-6-migration.md) | 🟡 | TODO 85 phase 3 tabs 4–6 + ESLint (PR **Y** follow-on) |
 | 100 | [100-parallelize-pytest-xdist.md](./100-parallelize-pytest-xdist.md) | 🟡 | TODO 95: pytest-xdist per-worker DB (PR **Z**, in PR) |
 | 102 | [102-optional-ppv-module-splits.md](./102-optional-ppv-module-splits.md) | ⬜ | Optional TODO 65 phases 2–3: `epg.py`, `extraction.py` (PR **AA**) |
 

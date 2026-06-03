@@ -1,16 +1,20 @@
-// ============================================================================
-// XMLTV Grabbers
-// ============================================================================
+/**
+ * XMLTV grabber management (ESM).
+ */
+import { escapeJsSingleQuoted } from '../lib/epg_dom_utils.js';
+import { formatLocalDateTime } from '../lib/epg_datetime.js';
+import { escapeHtml } from '../lib/escape_html.js';
 
 let xmltvGrabbers = [];
 
 async function loadXmltvGrabbers() {
     const container = document.getElementById('xmltv-grabbers-list');
-    
+    if (!container) return;
+
     try {
         const response = await fetch('/api/xmltv/grabbers');
         xmltvGrabbers = await response.json();
-        
+
         if (xmltvGrabbers.length === 0) {
             container.innerHTML = `
                 <div class="alert alert-warning">
@@ -20,10 +24,10 @@ async function loadXmltvGrabbers() {
             `;
             return;
         }
-        
+
         let html = '<div class="table-responsive"><table class="table table-striped table-sm">';
         html += '<thead><tr><th>Grabber</th><th>Description</th><th>Capabilities</th><th>Actions</th></tr></thead><tbody>';
-        
+
         for (const grabber of xmltvGrabbers) {
             const caps = (grabber.capabilities || []).slice(0, 3).join(', ');
             const grabberNameJs = escapeJsSingleQuoted(grabber.name);
@@ -45,10 +49,9 @@ async function loadXmltvGrabbers() {
                 </tr>
             `;
         }
-        
+
         html += '</tbody></table></div>';
         container.innerHTML = html;
-        
     } catch (error) {
         container.innerHTML = `<div class="alert alert-danger">Error loading grabbers: ${escapeHtml(error.message)}</div>`;
     }
@@ -56,7 +59,8 @@ async function loadXmltvGrabbers() {
 
 async function populateGrabberSelect() {
     const select = document.getElementById('grabberSelect');
-    
+    if (!select) return;
+
     if (xmltvGrabbers.length === 0) {
         try {
             const response = await fetch('/api/xmltv/grabbers');
@@ -66,7 +70,7 @@ async function populateGrabberSelect() {
             return;
         }
     }
-    
+
     select.innerHTML = '<option value="">Select a grabber...</option>';
     for (const grabber of xmltvGrabbers) {
         const option = document.createElement('option');
@@ -78,17 +82,18 @@ async function populateGrabberSelect() {
 
 async function loadXmltvConfigs() {
     const container = document.getElementById('xmltv-configs-list');
-    
+    if (!container) return;
+
     try {
         const response = await fetch('/api/xmltv/configs');
         const data = await response.json();
         const configs = data.configs || [];
-        
+
         if (configs.length === 0) {
             container.innerHTML = '<div class="text-center text-muted py-3">No saved configurations</div>';
             return;
         }
-        
+
         let html = '<div class="list-group">';
         for (const config of configs) {
             html += `
@@ -105,7 +110,6 @@ async function loadXmltvConfigs() {
         }
         html += '</div>';
         container.innerHTML = html;
-        
     } catch (error) {
         container.innerHTML = `<div class="alert alert-danger">Error: ${escapeHtml(error.message)}</div>`;
     }
@@ -113,7 +117,7 @@ async function loadXmltvConfigs() {
 
 async function deleteXmltvConfig(configName) {
     if (!confirm(`Delete configuration "${configName}"?`)) return;
-    
+
     try {
         const response = await fetch(`/api/xmltv/configs/${configName}`, { method: 'DELETE' });
         if (response.ok) {
@@ -132,27 +136,27 @@ async function testGrabber() {
     const grabberName = document.getElementById('grabberSelect').value;
     const configName = document.getElementById('grabberConfigName').value;
     const resultDiv = document.getElementById('grabberTestResult');
-    
+
     if (!grabberName) {
         alert('Please select a grabber first');
         return;
     }
-    
+
     const btn = document.getElementById('testGrabberBtn');
     const originalHtml = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Testing...';
     resultDiv.style.display = 'block';
     resultDiv.innerHTML = '<div class="alert alert-info">Testing grabber, please wait...</div>';
-    
+
     try {
         const response = await fetch(`/api/xmltv/grabbers/${grabberName}/test`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ config_name: configName || null })
+            body: JSON.stringify({ config_name: configName || null }),
         });
         const result = await response.json();
-        
+
         if (result.success) {
             resultDiv.innerHTML = `
                 <div class="alert alert-success">
@@ -177,19 +181,19 @@ async function testGrabber() {
 
 async function viewGrabberChannels(grabberName) {
     alert(`Loading channels from ${grabberName}... This may take a moment.`);
-    
+
     try {
         const response = await fetch(`/api/xmltv/grabbers/${grabberName}/channels`);
         const data = await response.json();
-        
+
         if (data.error) {
             alert('Error: ' + data.error);
             return;
         }
-        
+
         const channels = data.channels || [];
         let msg = `Found ${channels.length} channels:\n\n`;
-        msg += channels.slice(0, 20).map(c => `${c.id}: ${c.name}`).join('\n');
+        msg += channels.slice(0, 20).map((c) => `${c.id}: ${c.name}`).join('\n');
         if (channels.length > 20) {
             msg += `\n... and ${channels.length - 20} more`;
         }
@@ -205,11 +209,24 @@ function quickCreateGrabberSource(grabberName) {
     document.getElementById('sourceType').value = 'xmltv_grabber';
     document.getElementById('sourceName').value = `XMLTV - ${grabberName}`;
     onSourceTypeChange();
-    
+
     setTimeout(() => {
         document.getElementById('grabberSelect').value = grabberName;
     }, 100);
-    
+
     document.getElementById('sourceModalLabel').textContent = 'Add EPG Source';
-    if (sourceModal) sourceModal.show();
+    if (window.EpgManagementState.sourceModal) window.EpgManagementState.sourceModal.show();
 }
+
+const epgXmltvExports = {
+    loadXmltvGrabbers,
+    populateGrabberSelect,
+    loadXmltvConfigs,
+    deleteXmltvConfig,
+    testGrabber,
+    viewGrabberChannels,
+    quickCreateGrabberSource,
+};
+
+Object.assign(window, epgXmltvExports);
+export { epgXmltvExports };
