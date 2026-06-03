@@ -185,7 +185,7 @@ Full-stack review of PPV handling: enrichment pipeline, multi-source events (MiL
 | 56 | [56-eliminate-double-enrichment-classification.md](./56-eliminate-double-enrichment-classification.md) | ⬜ | Stop running `classify_ppv_enrichment` + `extract_all` twice per channel |
 | 57 | [57-centralize-sport-key-mappings.md](./57-centralize-sport-key-mappings.md) | ⬜ | Single sport registry for timezone, context, matching |
 | 58 | [58-fix-team-resolution-and-validation.md](./58-fix-team-resolution-and-validation.md) | ⬜ | Substring team matching, WNBA in SPORTS, validation alignment |
-| 59 | [59-harden-ppv-enrichment-routes.md](./59-harden-ppv-enrichment-routes.md) | ⬜ | Error handling, memory footgun, queue stats logging |
+| 59 | [59-harden-ppv-enrichment-routes.md](./59-harden-ppv-enrichment-routes.md) | ✅ | Error handling, memory footgun, queue stats logging (PR #16) |
 | 60 | [60-add-persistence-unit-tests.md](./60-add-persistence-unit-tests.md) | 🔄 | Unit tests for `services/ppv/persistence.py` (PR #19) |
 | 61 | [61-add-channel-matching-tests.md](./61-add-channel-matching-tests.md) | 🔄 | Unit tests for UTC calendar-day grouping (PR #19) |
 | 62 | [62-add-milb-ppv-integration-test.md](./62-add-milb-ppv-integration-test.md) | ⬜ | End-to-end MiLB channel → Event with `mlb_stats_api` source |
