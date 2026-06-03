@@ -310,7 +310,10 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="{{ url_for('static', filename='js/pages/base_bootstrap.js') }}"></script>
     <script>
+        /* global parseUtcTimestamp, formatUtcTimestamp, escapeHtml */
+
         function apiUnwrapData(_response, payload) {
             if (payload !== null && typeof payload === 'object' && Object.prototype.hasOwnProperty.call(payload, 'data')) {
                 return payload.data;
@@ -339,24 +342,6 @@
                 return payload.message;
             }
             return 'Request failed';
-        }
-
-        // Shared datetime helpers for inline template scripts.
-        // Naive ISO strings are interpreted as UTC for consistency with backend transport.
-        function parseUtcTimestamp(isoString) {
-            if (!isoString) return null;
-            const raw = String(isoString);
-            const normalized = raw.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(raw)
-                ? raw
-                : `${raw}Z`;
-            const date = new Date(normalized);
-            return Number.isNaN(date.getTime()) ? null : date;
-        }
-
-        function formatUtcTimestamp(isoString, fallback = '-') {
-            const date = parseUtcTimestamp(isoString);
-            if (!date) return fallback;
-            return date.toLocaleString(undefined, { timeZoneName: 'short' });
         }
 
         /**

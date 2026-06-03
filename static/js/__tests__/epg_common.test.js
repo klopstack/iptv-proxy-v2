@@ -3,13 +3,43 @@ import {
     formatLocalDateTime,
     formatProgramTimeRange,
     formatRelativeTime,
+    formatUtcTimestamp,
     parseUTCDateTime,
+    parseUtcTimestamp,
 } from '../lib/epg_datetime.js';
+
+describe('parseUtcTimestamp (legacy bridge)', () => {
+    it('matches parseUTCDateTime for naive ISO strings', () => {
+        expect(parseUtcTimestamp('2026-05-22T15:30:00')?.toISOString()).toBe(
+            parseUTCDateTime('2026-05-22T15:30:00')?.toISOString(),
+        );
+    });
+
+    it('returns null for invalid timestamps', () => {
+        expect(parseUtcTimestamp('not-a-date')).toBeNull();
+    });
+});
+
+describe('formatUtcTimestamp', () => {
+    it('returns fallback when input is empty', () => {
+        expect(formatUtcTimestamp('', 'Unknown')).toBe('Unknown');
+    });
+
+    it('formats valid UTC timestamps', () => {
+        const formatted = formatUtcTimestamp('2026-05-22T15:30:00Z');
+        expect(formatted).not.toBe('-');
+        expect(formatted.length).toBeGreaterThan(5);
+    });
+});
 
 describe('parseUTCDateTime', () => {
     it('returns null for empty input', () => {
         expect(parseUTCDateTime('')).toBeNull();
         expect(parseUTCDateTime(null)).toBeNull();
+    });
+
+    it('returns null for invalid timestamps', () => {
+        expect(parseUTCDateTime('not-a-date')).toBeNull();
     });
 
     it('appends Z for timezone-less ISO strings', () => {

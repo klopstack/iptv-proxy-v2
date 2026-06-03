@@ -25,11 +25,7 @@ let exclusionModal;
 let assignModal;
 let nameMappingModal;
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
+// escapeHtml: canonical implementation in static/js/lib/escape_html.js (window bridge)
 
 function debounce(func, wait) {
     let timeout;

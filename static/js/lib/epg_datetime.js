@@ -17,7 +17,18 @@ export function parseUTCDateTime(dateStr) {
         normalized = `${normalized}Z`;
     }
 
-    return new Date(normalized);
+    const date = new Date(normalized);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function parseUtcTimestamp(isoString) {
+    return parseUTCDateTime(isoString);
+}
+
+export function formatUtcTimestamp(isoString, fallback = '-') {
+    const date = parseUtcTimestamp(isoString);
+    if (!date) return fallback;
+    return date.toLocaleString(undefined, { timeZoneName: 'short' });
 }
 
 /**

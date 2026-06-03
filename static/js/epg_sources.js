@@ -16,30 +16,16 @@ let currentSourceMappings = {
 /** Live sync rows from GET /api/sync/epg/status (source_id -> snapshot) */
 let epgSyncStatusById = {};
 
+/* global AccountSelect, escapeHtml */
+
 async function loadAccounts() {
     try {
-        const response = await fetch('/api/accounts');
-        const data = apiUnwrapData(response, await response.json());
-        
-        if (!response.ok || !Array.isArray(data)) {
-            console.error('Error loading accounts:', data.error || 'Invalid response');
-            return;
-        }
-        
-        accounts = data;
-        
-        // Populate account selects
-        const selects = ['mappingAccountSelect', 'matchAccountSelect'];
-        selects.forEach(id => {
-            const select = document.getElementById(id);
-            if (select) {
-                const firstOption = select.options[0].outerHTML;
-                select.innerHTML = firstOption;
-                accounts.forEach(a => {
-                    select.innerHTML += `<option value="${a.id}">${a.name}</option>`;
-                });
-            }
-        });
+        accounts = await AccountSelect.fetchAccounts();
+        AccountSelect.populateAccountSelects(
+            ['mappingAccountSelect', 'matchAccountSelect'],
+            accounts,
+            { preserveFirstOption: true },
+        );
     } catch (error) {
         console.error('Error loading accounts:', error);
     }
@@ -126,12 +112,6 @@ function renderSourceStatusCell(source) {
     return `<span class="badge bg-secondary">${escapeHtml(source.last_sync_status)}</span>`;
 }
 
-function escapeHtml(text) {
-    if (text == null) return '';
-    const div = document.createElement('div');
-    div.textContent = String(text);
-    return div.innerHTML;
-}
 
 function renderSources() {
     const container = document.getElementById('sources-list');

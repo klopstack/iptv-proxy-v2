@@ -33,7 +33,12 @@ Examples: `accounts_bootstrap.js`, `ppv_bootstrap.js`, `settings_bootstrap.js`, 
 
 ## Shared bridges
 
+- **`escapeHtml`** — canonical implementation in `static/js/lib/escape_html.js`. Re-exported from `utils.js` for ESM pages. Exposed on `window` via `pages/base_bootstrap.js` (all admin pages) and `pages/epg_management_bootstrap.js` (legacy EPG/match-rules bundles). Legacy classic scripts must not define local copies; use the global after the bootstrap module runs.
+- **`parseUtcTimestamp` / `formatUtcTimestamp`** — implemented in `static/js/lib/epg_datetime.js`, exposed on `window` by `base_bootstrap.js` for inline template scripts (replaces former inline helpers in `base.html`).
+- **`AccountSelect`** (`fetchAccounts`, `populateAccountSelect`, `populateAccountSelects`) in `static/js/lib/account_select.js` — exposed on `window` by `epg_management_bootstrap.js` for legacy EPG/match-rules `loadAccounts()` call sites.
 - **`installEpgSyncProgressOnWindow()`** in `static/js/lib/install_epg_sync_progress.js` — used by Settings and EPG Management to expose `window.EpgSyncProgress`.
+
+Load order for pages with legacy globals: classic `<script src>` bundles first, then `<script type="module" src="…_bootstrap.js">`, then inline init (e.g. `DOMContentLoaded`). Bootstrap modules run before `DOMContentLoaded`, so globals are available to inline and event handlers.
 
 ## Linting
 
