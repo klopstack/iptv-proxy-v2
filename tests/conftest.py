@@ -16,7 +16,17 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 # Use an absolute, dedicated test DB path so stale repo-root or instance/test.db
 # files cannot interfere regardless of working directory or leftover WAL files.
-TEST_DB_PATH = PROJECT_ROOT / "instance" / "pytest.db"
+# Under pytest-xdist, each worker gets its own file to avoid SQLite contention.
+
+
+def _resolve_test_db_path() -> Path:
+    worker = os.environ.get("PYTEST_XDIST_WORKER")
+    if worker and worker != "master":
+        return PROJECT_ROOT / "instance" / f"pytest_{worker}.db"
+    return PROJECT_ROOT / "instance" / "pytest.db"
+
+
+TEST_DB_PATH = _resolve_test_db_path()
 
 
 def _cleanup_test_db() -> None:

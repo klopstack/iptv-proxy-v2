@@ -1,4 +1,4 @@
-.PHONY: help install install-js install-hooks test test-js test-fast test-clean lint lint-py lint-js format clean run debug docker-build docker-run venv vulture vulture-all
+.PHONY: help install install-js install-hooks test test-js test-fast test-parallel test-clean lint lint-py lint-js format clean run debug docker-build docker-run venv vulture vulture-all
 
 VENV = venv
 PYTHON = $(VENV)/bin/python
@@ -37,15 +37,18 @@ install-hooks: install-py ## Install git pre-commit hooks (same linters as CI)
 
 test-clean: ## Remove stale test database files
 	rm -f test.db test.db-* instance/test.db instance/test.db-* instance/pytest.db instance/pytest.db-*
+	rm -f instance/pytest_gw*.db instance/pytest_gw*.db-*
 
-test: install test-clean ## Run tests with coverage in venv
-	$(PYTEST) tests/ -v --cov=. --cov-report=html --cov-report=term-missing
+test: install test-clean ## Run tests with coverage in venv (parallel, matches CI)
+	$(PYTEST) tests/ -v -n auto --cov=. --cov-report=html --cov-report=term-missing
 
 test-js: install-js ## Run JavaScript unit tests
 	npm test
 
-test-fast: install test-clean ## Run tests without coverage in venv
-	$(PYTEST) tests/ -v
+test-fast: install test-clean ## Run tests without coverage in venv (parallel)
+	$(PYTEST) tests/ -q --no-cov -n auto
+
+test-parallel: test-fast ## Alias for parallel no-coverage run
 
 lint-py: install ## Run Python linting checks in venv
 	$(FLAKE8) . --count --select=E9,F63,F7,F82 --show-source --statistics

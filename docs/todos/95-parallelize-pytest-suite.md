@@ -1,6 +1,6 @@
 # Parallelize pytest suite (pytest-xdist)
 
-**Status:** ⬜ Continued in Wave 9 — [100-parallelize-pytest-xdist.md](./100-parallelize-pytest-xdist.md) (PR batch **Z**)  
+**Status:** 🟡 Implemented in [100-parallelize-pytest-xdist.md](./100-parallelize-pytest-xdist.md) (PR batch **Z**)  
 **Priority:** P2  
 **Audit:** Test runtime review, June 2026
 

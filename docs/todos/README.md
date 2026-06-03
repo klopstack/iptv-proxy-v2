@@ -301,7 +301,7 @@ Phased remainders from TODOs 78, 85, 92, 95; optional PPV splits from TODO 65. S
 | 97 | [97-extract-config-transfer-routes.md](./97-extract-config-transfer-routes.md) | ⬜ | TODO 78 phase 3: extract `routes/config_transfer.py` (PR **W**) |
 | 98 | [98-fcc-patterns-split-and-cdn-sri.md](./98-fcc-patterns-split-and-cdn-sri.md) | ⬜ | TODO 78 phase 4 + 92: FCC routes + CDN SRI (PR **X**) |
 | 99 | [99-esm-tab-migration-and-eslint.md](./99-esm-tab-migration-and-eslint.md) | ⬜ | TODO 85 phases 2–3: ESM tabs + ESLint (PR **Y**) |
-| 100 | [100-parallelize-pytest-xdist.md](./100-parallelize-pytest-xdist.md) | ⬜ | TODO 95: pytest-xdist per-worker DB (PR **Z**) |
+| 100 | [100-parallelize-pytest-xdist.md](./100-parallelize-pytest-xdist.md) | 🟡 | TODO 95: pytest-xdist per-worker DB (PR **Z**, in PR) |
 | 102 | [102-optional-ppv-module-splits.md](./102-optional-ppv-module-splits.md) | ⬜ | Optional TODO 65 phases 2–3: `epg.py`, `extraction.py` (PR **AA**) |
 
 ### Wave 10 — Final documentation review

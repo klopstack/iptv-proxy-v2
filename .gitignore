@@ -17,6 +17,8 @@ test.db
 test.db-*
 instance/pytest.db
 instance/pytest.db-*
+instance/pytest_gw*.db
+instance/pytest_gw*.db-*
 instance/test.db
 instance/test.db-*
 # Runtime data under data/ (not committed)
