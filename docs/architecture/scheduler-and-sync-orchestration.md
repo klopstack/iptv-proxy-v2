@@ -20,9 +20,11 @@ flowchart TD
         S[Sportsipy/team refresh]
         C1[EPG program cleanup]
         C2[Health check cleanup]
+        C3[Event cleanup]
+        C4[Image cache cleanup]
     end
 
-    H --> A --> E --> F --> P1 --> P2 --> P3 --> S --> C1 --> C2
+    H --> A --> E --> F --> P1 --> P2 --> P3 --> S --> C1 --> C2 --> C3 --> C4
 ```
 
 ## Known issues
