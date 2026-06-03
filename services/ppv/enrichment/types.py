@@ -20,6 +20,8 @@ def calendar_event_source(calendar_event: CalendarEvent) -> str:
     source = getattr(calendar_event, "source", None) or Event.SOURCE_THESPORTSDB
     if source == "mlb_stats_api":
         return Event.SOURCE_MLB_STATS
+    if source == "espn":
+        return Event.SOURCE_ESPN
     return source
 
 

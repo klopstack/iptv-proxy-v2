@@ -458,7 +458,11 @@ class TheSportsDBCalendarScraper:
             html_events = self._fetch_calendar_page(date, sport)
             api_events = self._fetch_api_events_for_date(date, sport)
             milb_events = self._fetch_milb_events_for_date(date, sport)
-            events = self._merge_calendar_events(html_events, api_events + milb_events)
+            espn_tennis_events = self._fetch_espn_tennis_events_for_date(date, sport)
+            events = self._merge_calendar_events(
+                html_events,
+                api_events + milb_events + espn_tennis_events,
+            )
             if events:
                 self._cache[cache_key] = (events, time.time())
                 self._save_persistent_cache()
@@ -575,6 +579,16 @@ class TheSportsDBCalendarScraper:
         from services.mlb_stats_calendar import fetch_milb_events_for_date
 
         return fetch_milb_events_for_date(date)
+
+    def _fetch_espn_tennis_events_for_date(self, date: str, sport: str = "") -> List[CalendarEvent]:
+        """Fetch ATP/WTA tennis from ESPN scoreboard when sport filter allows."""
+        if sport:
+            sport_lower = sport.lower()
+            if "tennis" not in sport_lower and sport_lower not in ("", "all"):
+                return []
+        from services.tennis.espn_calendar import fetch_espn_tennis_events_for_date
+
+        return fetch_espn_tennis_events_for_date(date)
 
     def _is_date_in_api_supplement_window(self, date: str) -> bool:
         """Return False for dates too far from today to query via eventsDay."""
