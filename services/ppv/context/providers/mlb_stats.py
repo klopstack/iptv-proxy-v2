@@ -12,6 +12,7 @@ from typing import Dict, Optional, Set
 
 from services.mlb_stats_api import MILB_SPORT_IDS, get_mlb_stats_client
 from services.ppv.context.base import ContextDataProvider, DataType
+from services.ppv.sport_registry import normalize_sport_key
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,8 @@ class MlbStatsContextProvider(ContextDataProvider):
         if data_type not in self.provided_data_types:
             return False
         if sport in self.supported_sports:
+            return True
+        if normalize_sport_key(sport) == "milb":
             return True
         if league and "milb" in league.lower():
             return True

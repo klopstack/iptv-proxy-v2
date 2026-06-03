@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional, Set
+from typing import List, Optional, Set
 
 from services.ppv.context.base import ContextDataProvider, DataType
 from services.ppv.context.cache import get_cache, make_form_key, make_h2h_key
+from services.ppv.sport_registry import sportsipy_sport_key
 
 logger = logging.getLogger(__name__)
 
@@ -33,23 +34,9 @@ _SUPPORTED_SPORTS: Set[str] = {
     "NCAAB",
 }
 
-# Map normalised sport name → sportsipy key used by SportsipyService
-_SPORT_KEY: Dict[str, str] = {
-    "american football": "nfl",
-    "nfl": "nfl",
-    "basketball": "nba",
-    "nba": "nba",
-    "ice hockey": "nhl",
-    "nhl": "nhl",
-    "baseball": "mlb",
-    "mlb": "mlb",
-    "ncaaf": "ncaaf",
-    "ncaab": "ncaab",
-}
-
 
 def _sport_key(sport: str) -> Optional[str]:
-    return _SPORT_KEY.get(sport.lower())
+    return sportsipy_sport_key(sport)
 
 
 class SportsipyContextProvider(ContextDataProvider):
