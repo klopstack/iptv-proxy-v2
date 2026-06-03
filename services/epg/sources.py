@@ -3,7 +3,7 @@
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from models import EpgChannel, EpgSource, db
 from services.epg.utils import make_sd_xmltv_id
@@ -24,7 +24,7 @@ def sync_sd_channels_to_epg(source: EpgSource, channels: List[Dict]) -> Dict:
     Returns:
         Dict with sync statistics
     """
-    stats = {
+    stats: Dict[str, Any] = {
         "channels_added": 0,
         "channels_updated": 0,
         "channels_removed": 0,
@@ -84,6 +84,13 @@ def sync_sd_channels_to_epg(source: EpgSource, channels: List[Dict]) -> Dict:
             stats["channels_removed"] += 1
 
     db.session.commit()
+
+    try:
+        from services.icon_prefetch import prefetch_epg_source_icons
+
+        stats["icon_prefetch"] = prefetch_epg_source_icons(source.id)
+    except Exception as e:
+        logger.error("Icon prefetch after SD sync failed for source %s: %s", source.id, e)
 
     logger.info(
         f"SD sync for source {source.id} ({source.name}): "

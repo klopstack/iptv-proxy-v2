@@ -10,7 +10,7 @@ This document groups **35 open TODOs** into execution **waves** and suggested **
 | Track | Range | Open | Recently completed |
 |-------|-------|------|-------------------|
 | P5 — PPV | 52–67 | 16 | — |
-| P6 — App-wide | 68–91 | 19 | 68, 70, 71 |
+| P6 — App-wide | 68–91 | 19 | 68, 70, 71, 84 |
 
 Update [README.md](./README.md) status columns as work lands. Mark PR IDs in each TODO’s **Completion** section.
 

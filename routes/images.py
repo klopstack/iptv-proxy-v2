@@ -1,8 +1,8 @@
 """
 Image caching proxy routes
 
-Serves cached images to reduce external API calls and avoid
-hitting daily image quotas (e.g., Schedules Direct limits).
+Serves prefetched icons only. Icons are registered and fetched during
+provider channel sync and EPG sync — not on arbitrary client requests.
 """
 
 import logging
@@ -22,93 +22,34 @@ images_bp = Blueprint("images", __name__)
 @images_bp.route("/icon/<url_hash>")
 @handle_errors(return_json=False, default_message="Error serving cached image")
 def serve_cached_icon(url_hash):
-    """Serve a cached icon by URL hash.
+    """Serve a prefetched icon by URL hash.
 
-    If the image is cached, serve it directly.
-    If not cached but we have the original URL, fetch and cache it.
+    Only icons fetched during provider/EPG sync are available. This route
+    never initiates outbound HTTP requests (SSRF-safe).
     """
     from models import CachedImage
 
-    # Validate hash format (should be 64 hex chars)
     if not url_hash or len(url_hash) != 64 or not all(c in "0123456789abcdef" for c in url_hash.lower()):
         return Response("Invalid image hash", status=400)
 
     cache = get_image_cache()
+    cached = CachedImage.query.filter_by(url_hash=url_hash, status="cached").first()
+    if not cached:
+        return Response("Image not found", status=404)
 
-    # Look up the original URL from database
-    cached = CachedImage.query.filter_by(url_hash=url_hash).first()
+    result = cache.get_cached_image(cached.original_url)
+    if not result:
+        return Response("Image not found", status=404)
 
-    if cached:
-        # If already cached, try to serve from cache
-        if cached.status == "cached":
-            result = cache.get_cached_image(cached.original_url)
-            if result:
-                image_data, content_type = result
-                return Response(
-                    image_data,
-                    mimetype=content_type,
-                    headers={
-                        "Cache-Control": "public, max-age=604800",  # 7 days
-                        "X-Cache": "HIT",
-                    },
-                )
-
-        # Not in cache (pending, expired or missing), try to fetch
-        if cached.original_url:
-            fetched_hash = cache.cache_image(cached.original_url)
-            if fetched_hash:
-                result = cache.get_cached_image(cached.original_url)
-                if result:
-                    image_data, content_type = result
-                    return Response(
-                        image_data,
-                        mimetype=content_type,
-                        headers={
-                            "Cache-Control": "public, max-age=604800",
-                            "X-Cache": "MISS",
-                        },
-                    )
-
-    # Image not found or couldn't be fetched
-    return Response("Image not found", status=404)
-
-
-@images_bp.route("/icon/fetch", methods=["POST"])
-@handle_errors(return_json=True, default_message="Error fetching image")
-def fetch_and_cache_icon():
-    """Fetch and cache an image from a URL.
-
-    Request body:
-    {
-        "url": "https://example.com/icon.png"
-    }
-
-    Returns:
-    {
-        "success": true,
-        "url_hash": "abc123...",
-        "proxy_url": "/icon/abc123..."
-    }
-    """
-    data = request.json or {}
-    url = data.get("url")
-
-    if not url:
-        return jsonify({"error": "URL is required"}), 400
-
-    cache = get_image_cache()
-
-    url_hash = cache.cache_image(url)
-    if url_hash:
-        return jsonify(
-            {
-                "success": True,
-                "url_hash": url_hash,
-                "proxy_url": f"/icon/{url_hash}",
-            }
-        )
-    else:
-        return jsonify({"success": False, "error": "Failed to fetch or cache image"}), 500
+    image_data, content_type = result
+    return Response(
+        image_data,
+        mimetype=content_type,
+        headers={
+            "Cache-Control": "public, max-age=604800",
+            "X-Cache": "HIT",
+        },
+    )
 
 
 @images_bp.route("/api/image-cache/stats", methods=["GET"])
@@ -210,7 +151,6 @@ def delete_cache_entry(entry_id):
     cached = db.get_or_404(CachedImage, entry_id)
     cache = get_image_cache()
 
-    # Delete file if it exists
     if cached.file_path:
         file_path = cache.cache_dir / cached.file_path
         if file_path.exists():

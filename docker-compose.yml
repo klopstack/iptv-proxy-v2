@@ -10,7 +10,6 @@ services:
       - ./data:/app/data  # Persist database
     environment:
       PORT: "8000"
-      SECRET_KEY: "${SECRET_KEY:-change-me-in-production}"
       DEBUG: "False"
       # Stream backend configuration: "ffmpeg" (default) or "mediaflow"
       STREAM_BACKEND: "${STREAM_BACKEND:-ffmpeg}"
