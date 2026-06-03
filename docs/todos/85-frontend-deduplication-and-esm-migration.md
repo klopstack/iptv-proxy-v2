@@ -1,6 +1,6 @@
 # Frontend helper deduplication and ESM migration plan
 
-**Status:** ✅ Phase 1 complete (PR #33); phases 2–3 ✅ ([99](./99-esm-tab-migration-and-eslint.md) PR #40 + [103](./103-esm-tabs-4-6-migration.md))  
+**Status:** ✅ Done (phases 1–3: PR #33, #40, #44)  
 **Priority:** P2  
 **Audit:** Application-wide audit, June 2026
 
@@ -70,7 +70,5 @@ Per-page inline copies remain in `index.html`, `ppv.html`, `stations.html`, etc.
 ## Completion
 
 - **PR #33 (Wave 6T):** Phase 1 — `lib/escape_html.js`, `lib/account_select.js`, `base_bootstrap.js`, bootstrap load-order fix, dedupe in `epg_common.js`, `match_rules_common.js`, `epg_sources.js`, `epg_sync_progress.js`
-
-## Wave 9 continuation
-
-Phases 2–3 (ESM tab migration + ESLint): [99-esm-tab-migration-and-eslint.md](./99-esm-tab-migration-and-eslint.md) PR #40 (tabs 1–3) + [103-esm-tabs-4-6-migration.md](./103-esm-tabs-4-6-migration.md) (tabs 4–6) — PR batch **Y**
+- **PR #40 (Wave 9Y):** Phase 2 — ESM tabs 1–3; see [99](./99-esm-tab-migration-and-eslint.md)
+- **PR #44 (Wave 9Y):** Phase 3 — ESM tabs 4–6; see [103](./103-esm-tabs-4-6-migration.md)

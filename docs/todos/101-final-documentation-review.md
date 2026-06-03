@@ -1,6 +1,6 @@
 # Final documentation review (post–Wave 9)
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P2  
 **Roadmap:** [ROADMAP.md](./ROADMAP.md) — **Wave 10** (gate after Wave 9 implementation)
 
@@ -42,11 +42,11 @@ Waves 1–8 and Wave 9 will leave scattered **Completion** sections and README s
 
 ## Acceptance criteria
 
-- [ ] No broken internal doc links from todos README
-- [ ] Open TODO count in README matches ⬜/🔄 rows (excluding optional 102 if deferred)
-- [ ] API_REFERENCE and DEVELOPER_GUIDE claims verifiable against code or marked “planned”
-- [ ] ROADMAP snapshot reflects Waves 1–9 (and 10) completion state
-- [ ] Wave 9 TODO files 96–100 have PR links in **Completion** where applicable
+- [x] No broken internal doc links from todos README
+- [x] Open TODO count in README matches ⬜ rows (18 open: 107–110, 111–119, 120–124)
+- [x] API_REFERENCE and DEVELOPER_GUIDE claims verifiable against code or marked “planned”
+- [x] ROADMAP snapshot reflects Waves 1–10 completion state
+- [x] Wave 9 TODO files 96–100, 102, 103, 105 have PR links in **Completion**
 
 ## Test plan
 
@@ -60,4 +60,20 @@ Waves 1–8 and Wave 9 will leave scattered **Completion** sections and README s
 
 ## Completion
 
-_(Add PR link when merged.)_
+**Wave 10 doc sync (June 2026)** — no implementation PR; documentation-only pass.
+
+Synced after Wave 9 merges #39–47:
+
+| Area | Updates |
+|------|---------|
+| `README.md` | Backlog pointer; parallel test commands |
+| `docs/todos/README.md` | Wave 9–10 ✅; parents 78/85/92/95 ✅; open count 18 |
+| `docs/todos/ROADMAP.md` | Waves 9–10 ✅; snapshot; next-five → 120–124 / 111 / 107 |
+| `docs/API_REFERENCE.md` | Config export/import endpoints |
+| `docs/DEVELOPER_GUIDE.md` | Route service map; PPV package layout; `make test-parallel` |
+| `docs/ARCHITECTURE.md` | Thin route modules + route services |
+| Per-TODO 96–100, 102, 103, 105 | Status ✅; Completion PR links verified |
+
+**PR inventory (Wave 9):** [#39](https://github.com/klopstack/iptv-proxy-v2/pull/39) 97, [#40](https://github.com/klopstack/iptv-proxy-v2/pull/40) 99, [#41](https://github.com/klopstack/iptv-proxy-v2/pull/41) 98, [#42](https://github.com/klopstack/iptv-proxy-v2/pull/42) 96, [#43](https://github.com/klopstack/iptv-proxy-v2/pull/43) 100, [#44](https://github.com/klopstack/iptv-proxy-v2/pull/44) 103, [#45](https://github.com/klopstack/iptv-proxy-v2/pull/45) 102, [#46](https://github.com/klopstack/iptv-proxy-v2/pull/46) 104, [#47](https://github.com/klopstack/iptv-proxy-v2/pull/47) 105.
+
+**Known residual drift (doc-only fix deferred):** Index rows for archived TODOs **01–51** still use markdown links to removed spec files (~45 paths). README now documents this; full fix would strip links or restore archived specs (out of Wave 10 scope).

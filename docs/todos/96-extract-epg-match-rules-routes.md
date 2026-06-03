@@ -1,6 +1,6 @@
 # Extract EPG match rules routes (TODO 78 phase 2)
 
-**Status:** 🟡 In review  
+**Status:** ✅ Done  
 **Priority:** P2  
 **Parent:** [78-split-fat-route-modules.md](./78-split-fat-route-modules.md) (phase 1 ✅ PR #36)  
 **Roadmap:** [ROADMAP.md](./ROADMAP.md) — Wave 9, PR batch **W**
