@@ -1,9 +1,15 @@
 """Tests for PPV enrichability classification."""
 
+import json
+from pathlib import Path
 from unittest.mock import Mock, patch
 
+import pytest
+
 from services.ppv import enrichability
-from services.ppv.enrichability import classify_ppv_enrichment, is_ppv_section_header
+from services.ppv.enrichability import classify_ppv_enrichment, is_ppv_section_header, stale_archive_date_from_title
+
+STALE_FIXTURE = Path(__file__).parent / "fixtures" / "stale_espn_play.json"
 from services.ppv.enrichment import PPVCalendarEnrichmentService
 
 
@@ -51,6 +57,33 @@ class TestEnrichability:
         with patch.object(enrichability._extractor, "extract_all") as mock_extract:
             assert classify_ppv_enrichment("UK: DAZN PPV 1 - Arsenal vs Brighton", extraction) is None
             mock_extract.assert_not_called()
+
+
+class TestStaleArchive:
+    @pytest.fixture
+    def stale_channels(self):
+        return json.loads(STALE_FIXTURE.read_text(encoding="utf-8"))
+
+    @pytest.mark.parametrize(
+        "fixture_id",
+        ["espn_play_2023", "espn_play_2024"],
+    )
+    def test_espn_play_archive_titles_skipped(self, stale_channels, fixture_id):
+        row = next(r for r in stale_channels if r["id"] == fixture_id)
+        assert classify_ppv_enrichment(row["name"]) == "stale_archive"
+        assert classify_ppv_enrichment(row["name"], cheap_only=True) == "stale_archive"
+
+    def test_stale_archive_parses_us_date(self, stale_channels):
+        row = next(r for r in stale_channels if r["id"] == "espn_play_2023")
+        parsed = stale_archive_date_from_title(row["name"])
+        assert parsed is not None
+        assert parsed.year == 2023
+        assert parsed.month == 11
+        assert parsed.day == 9
+
+    def test_current_event_not_stale_archive(self, stale_channels):
+        row = next(r for r in stale_channels if r["id"] == "current_peacock")
+        assert classify_ppv_enrichment(row["name"]) is None
 
 
 class TestSingleExtractionPerEnrichmentBatch:

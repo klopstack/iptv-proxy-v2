@@ -6,14 +6,42 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from services.ppv.constants import FAR_FUTURE_VISIBILITY_DAYS
+from services.ppv.constants import FAR_FUTURE_VISIBILITY_DAYS, STALE_ARCHIVE_ENRICHMENT_DAYS
 from services.ppv.detection import is_generic_channel_name, is_ppv_placeholder_name
 from services.ppv.extraction import PPVEventExtractor
 
 # Section headers / category dividers in IPTV feeds (e.g. "##### DAZN PPV #####")
 PPV_SECTION_HEADER_PATTERN = re.compile(r"^#+\s*.+\s*#+\s*$", re.IGNORECASE)
+# ESPN Play / archive feeds: "| 11-09-2023" or "| 01-18-2024" (US month-day-year)
+US_ARCHIVE_DATE_PATTERN = re.compile(r"(?:\||\s)(\d{1,2})-(\d{1,2})-(\d{4})\b")
 
 _extractor = PPVEventExtractor()
+
+
+def _naive_utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _is_stale_archive_date(event_date: datetime) -> bool:
+    naive = event_date.replace(tzinfo=None) if event_date.tzinfo else event_date
+    cutoff = _naive_utc_now() - timedelta(days=STALE_ARCHIVE_ENRICHMENT_DAYS)
+    return naive < cutoff
+
+
+def _parse_us_archive_date(channel_name: str) -> Optional[datetime]:
+    match = US_ARCHIVE_DATE_PATTERN.search(channel_name)
+    if not match:
+        return None
+    month, day, year = (int(match.group(i)) for i in (1, 2, 3))
+    try:
+        return datetime(year, month, day)
+    except ValueError:
+        return None
+
+
+def stale_archive_date_from_title(channel_name: str) -> Optional[datetime]:
+    """Return an explicit past archive date embedded in the title, if any."""
+    return _parse_us_archive_date(channel_name)
 
 
 def is_ppv_section_header(name: str) -> bool:
@@ -35,7 +63,7 @@ def classify_ppv_enrichment(
 
     Reasons align with enrichment filter keys: generic_name, placeholder_name,
     section_header, placeholder, inactive, no_competitors, date_but_no_competitors,
-    far_future.
+    far_future, stale_archive.
 
     When ``extraction`` is provided (e.g. from a prior ``extract_all`` call), it is
     used for competitor/date checks instead of re-extracting from the channel name.
@@ -61,6 +89,10 @@ def classify_ppv_enrichment(
     if _extractor.is_inactive_channel(channel_name):
         return "inactive"
 
+    archive_date = stale_archive_date_from_title(channel_name)
+    if archive_date and _is_stale_archive_date(archive_date):
+        return "stale_archive"
+
     if cheap_only:
         return None
 
@@ -77,7 +109,7 @@ def classify_ppv_enrichment(
 
     event_date = extraction.get("date")
     if isinstance(event_date, datetime):
-        far_future_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=FAR_FUTURE_VISIBILITY_DAYS)
+        far_future_cutoff = _naive_utc_now() + timedelta(days=FAR_FUTURE_VISIBILITY_DAYS)
         if event_date.replace(tzinfo=None) > far_future_cutoff:
             return "far_future"
 
