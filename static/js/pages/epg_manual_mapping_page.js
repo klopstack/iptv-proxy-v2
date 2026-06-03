@@ -1,9 +1,8 @@
-// ============================================================================
-// Manual EPG Mapping - Enhanced with Program Search and Preview
-// ============================================================================
-
-/* global showToast, escapeHtml, manualMappingModal, mpegts */
-
+/**
+ * Manual EPG mapping modal (ESM).
+ */
+import { parseUTCDateTime } from '../lib/epg_datetime.js';
+import { escapeHtml } from '../lib/escape_html.js';
 let epgSearchState = { search: '', offset: 0, hasMore: true, loading: false };
 let currentSearchMode = 'channel'; // 'channel' or 'program'
 let currentOnlyFilter = false;
@@ -165,7 +164,7 @@ function showManualMappingModal(channelId, channelName, accountId, streamId, exi
     // Populate EPG sources if not already done
     populateEpgSourcesForManualMapping();
     
-    if (manualMappingModal) manualMappingModal.show();
+    if (window.EpgManagementState.manualMappingModal) window.EpgManagementState.manualMappingModal.show();
 }
 
 async function loadCurrentMappingProgram(epgChannelId) {
@@ -304,7 +303,7 @@ async function deleteExistingMapping() {
         
         if (response.ok) {
             showToast('Mapping deleted successfully', 'success');
-            if (manualMappingModal) manualMappingModal.hide();
+            if (window.EpgManagementState.manualMappingModal) window.EpgManagementState.manualMappingModal.hide();
             // Refresh the mappings table
             if (typeof loadMappings === 'function') {
                 loadMappings();
@@ -757,7 +756,7 @@ async function saveManualMapping() {
         
         if (response.ok) {
             const mapping = await response.json();
-            manualMappingModal.hide();
+            window.EpgManagementState.manualMappingModal.hide();
             
             // Update the row in the table
             const row = document.querySelector(`tr[data-channel-id="${channelId}"]`);
@@ -875,3 +874,13 @@ document.addEventListener('DOMContentLoaded', () => {
         deleteMappingBtn.addEventListener('click', deleteExistingMapping);
     }
 });
+
+const epgManualMappingExports = {
+    showManualMappingModal,
+    searchEpgChannels,
+    saveManualMapping,
+    setupEpgChannelScroll,
+};
+
+Object.assign(window, epgManualMappingExports);
+export { epgManualMappingExports };

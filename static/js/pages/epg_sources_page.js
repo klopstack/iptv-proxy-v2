@@ -1,29 +1,32 @@
-// ============================================================================
-// EPG Sources Management
-// ============================================================================
-// Note: accounts, sources, sourceModal, searchLineupModal, manualMappingModal,
-// sdStationsModal, sourceMappingsModal are declared in epg_common.js
+/**
+ * EPG Sources tab (ESM). Handlers are exposed on window for inline HTML and init script.
+ */
+import { fetchAccounts, populateAccountSelects } from '../lib/account_select.js';
+import { escapeHtml } from '../lib/escape_html.js';
+import { debounce, escapeJsSingleQuoted } from '../lib/epg_dom_utils.js';
+import { formatLocalDateTime } from '../lib/epg_datetime.js';
+import {
+    getSourceTypeFieldVisibility,
+    isLegacyProviderSource,
+} from '../lib/epg_sources_helpers.js';
 
-    // Source mappings state
 let currentSourceMappings = {
     sourceId: null,
     sourceName: '',
     offset: 0,
     limit: 50,
-    search: ''
+    search: '',
 };
 
 /** Live sync rows from GET /api/sync/epg/status (source_id -> snapshot) */
 let epgSyncStatusById = {};
 
-/* global AccountSelect, escapeHtml */
-
 async function loadAccounts() {
     try {
-        accounts = await AccountSelect.fetchAccounts();
-        AccountSelect.populateAccountSelects(
+        window.EpgManagementState.accounts = await fetchAccounts();
+        populateAccountSelects(
             ['mappingAccountSelect', 'matchAccountSelect'],
-            accounts,
+            window.EpgManagementState.accounts,
             { preserveFirstOption: true },
         );
     } catch (error) {
@@ -40,7 +43,7 @@ async function loadSources() {
             throw new Error(data.error || 'Invalid response from server');
         }
         
-        sources = data;
+        window.EpgManagementState.sources = data;
         renderSources();
         populateSourceSelects();
         refreshSourceRowProgress();
@@ -58,7 +61,7 @@ function populateSourceSelects() {
         if (select) {
             const firstOption = select.options[0].outerHTML;
             select.innerHTML = firstOption;
-            sources.forEach(s => {
+            window.EpgManagementState.sources.forEach(s => {
                 const option = document.createElement('option');
                 option.value = s.id;
                 option.dataset.sourceType = s.source_type;
@@ -82,7 +85,7 @@ function refreshSourceRowProgress() {
         const sourceId = parseInt(row.dataset.epgSourceId, 10);
         const cell = row.querySelector('.epg-sync-status-cell');
         if (!cell) return;
-        const source = sources.find((s) => s.id === sourceId);
+        const source = window.EpgManagementState.sources.find((s) => s.id === sourceId);
         if (source) {
             cell.innerHTML = renderSourceStatusCell(source);
         }
@@ -110,7 +113,7 @@ function renderSourceStatusCell(source) {
             : '';
         return `<span class="badge bg-danger">Error</span>${msg}`;
     }
-    if (source.last_sync_status == null || source.last_sync_status === undefined) {
+    if (source.last_sync_status === null || source.last_sync_status === undefined) {
         return '<span class="badge bg-secondary">Never synced</span>';
     }
     return `<span class="badge bg-secondary">${escapeHtml(source.last_sync_status)}</span>`;
@@ -119,7 +122,7 @@ function renderSourceStatusCell(source) {
 function renderSources() {
     const container = document.getElementById('sources-list');
     
-    if (sources.length === 0) {
+    if (window.EpgManagementState.sources.length === 0) {
         container.innerHTML = `
             <div class="alert alert-info">
                 <i class="bi bi-info-circle"></i> No EPG sources configured yet.
@@ -146,7 +149,7 @@ function renderSources() {
         <tbody>
     `;
     
-    for (const source of sources) {
+    for (const source of window.EpgManagementState.sources) {
         const isLegacyProvider = isLegacyProviderSource(source);
         const statusBadge = renderSourceStatusCell(source);
 
@@ -278,7 +281,7 @@ async function saveSource() {
         });
         
         if (response.ok) {
-            if (sourceModal) sourceModal.hide();
+            if (window.EpgManagementState.sourceModal) window.EpgManagementState.sourceModal.hide();
             await loadSources();
             alert('✓ EPG source saved successfully');
         } else {
@@ -291,7 +294,7 @@ async function saveSource() {
 }
 
 function editSource(id) {
-    const source = sources.find(s => s.id === id);
+    const source = window.EpgManagementState.sources.find(s => s.id === id);
     if (!source) return;
     
     document.getElementById('sourceId').value = source.id;
@@ -319,7 +322,7 @@ function editSource(id) {
     
     onSourceTypeChange();
     document.getElementById('sourceModalLabel').textContent = 'Edit EPG Source';
-    if (sourceModal) sourceModal.show();
+    if (window.EpgManagementState.sourceModal) window.EpgManagementState.sourceModal.show();
 }
 
 async function deleteSource(id) {
@@ -345,7 +348,7 @@ async function syncSource(id) {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
 
-    const source = sources.find((s) => s.id === id);
+    const source = window.EpgManagementState.sources.find((s) => s.id === id);
     if (source && source.source_type === 'schedules_direct') {
         alert('⚠️ Schedules Direct Sync\n\nSchedules Direct sources are synced per-lineup.\n\nPlease go to the "Schedules Direct" tab and sync individual lineups.');
         btn.disabled = false;
@@ -428,7 +431,7 @@ async function loadSdLineupsInline(sourceId) {
             return;
         }
 
-        let statuses = {};
+        const statuses = {};
         try {
             const statusResp = await fetch(`/api/epg/sd/lineups/status?source_id=${sourceId}`);
             const statusJson = await statusResp.json();
@@ -543,7 +546,7 @@ async function showSourceMappings(sourceId, sourceName) {
         loadSourceMappingsPage();
     };
     
-    if (sourceMappingsModal) sourceMappingsModal.show();
+    if (window.EpgManagementState.sourceMappingsModal) window.EpgManagementState.sourceMappingsModal.show();
     await loadSourceMappingsPage();
 }
 
@@ -680,3 +683,27 @@ async function loadCoverage() {
         content.innerHTML = `<div class="alert alert-danger">Error loading coverage: ${escapeHtml(error.message)}</div>`;
     }
 }
+
+const epgSourcesExports = {
+    loadAccounts,
+    loadSources,
+    populateSourceSelects,
+    onEpgSourcesPageProgress,
+    refreshSourceRowProgress,
+    onSourceTypeChange,
+    saveSource,
+    editSource,
+    deleteSource,
+    syncSource,
+    initEpgSourcesProgressPolling,
+    toggleSdLineups,
+    showSdLineups,
+    loadSdLineupsInline,
+    syncSdLineupInline,
+    showSourceMappings,
+    loadCoverage,
+    currentSourceMappings,
+};
+
+Object.assign(window, epgSourcesExports);
+export { epgSourcesExports };

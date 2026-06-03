@@ -6,6 +6,7 @@ import {
     populateAccountSelect,
     populateAccountSelects,
 } from '../lib/account_select.js';
+import { debounce, escapeJsSingleQuoted } from '../lib/epg_dom_utils.js';
 import { escapeHtml } from '../lib/escape_html.js';
 import {
     formatLocalDate,
@@ -33,6 +34,8 @@ import {
 installEpgSyncProgressOnWindow();
 
 Object.assign(window, {
+    debounce,
+    escapeJsSingleQuoted,
     escapeHtml,
     parseUTCDateTime,
     formatLocalTime,

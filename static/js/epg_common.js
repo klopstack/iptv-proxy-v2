@@ -2,10 +2,62 @@
 // EPG Common Utilities
 // ============================================================================
 
-// Global state shared across EPG modules
+// Global state shared across EPG modules (classic scripts + ESM via window.EpgManagementState)
 let accounts = [];
 let sources = [];
 let matchTypes = [];
+
+/** Bridge for ESM page modules in static/js/pages/ */
+window.EpgManagementState = {
+    get accounts() {
+        return accounts;
+    },
+    set accounts(value) {
+        accounts = value;
+    },
+    get sources() {
+        return sources;
+    },
+    set sources(value) {
+        sources = value;
+    },
+    get matchTypes() {
+        return matchTypes;
+    },
+    set matchTypes(value) {
+        matchTypes = value;
+    },
+    get sourceModal() {
+        return sourceModal;
+    },
+    get searchLineupModal() {
+        return searchLineupModal;
+    },
+    get manualMappingModal() {
+        return manualMappingModal;
+    },
+    get sdStationsModal() {
+        return sdStationsModal;
+    },
+    get sourceMappingsModal() {
+        return sourceMappingsModal;
+    },
+    get rulesetModal() {
+        return rulesetModal;
+    },
+    get ruleModal() {
+        return ruleModal;
+    },
+    get exclusionModal() {
+        return exclusionModal;
+    },
+    get assignModal() {
+        return assignModal;
+    },
+    get nameMappingModal() {
+        return nameMappingModal;
+    },
+};
 
 // ============================================================================
 // Time Formatting Utilities

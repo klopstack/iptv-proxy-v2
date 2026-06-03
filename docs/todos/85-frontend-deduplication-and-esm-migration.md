@@ -1,6 +1,6 @@
 # Frontend helper deduplication and ESM migration plan
 
-**Status:** 🟡 Phase 1 complete (PR #33); phases 2–3 → Wave 9 [99](./99-esm-tab-migration-and-eslint.md)  
+**Status:** 🟡 Phase 1 complete (PR #33); phases 2–3 tabs 1–3 ✅ [99](./99-esm-tab-migration-and-eslint.md); tabs 4–6 remain  
 **Priority:** P2  
 **Audit:** Application-wide audit, June 2026
 

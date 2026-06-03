@@ -1,7 +1,9 @@
-// ============================================================================
-// Channel EPG Mappings
-// ============================================================================
-
+/**
+ * Channel EPG mappings tab (ESM).
+ */
+import { escapeHtml } from '../lib/escape_html.js';
+import { escapeJsSingleQuoted } from '../lib/epg_dom_utils.js';
+import { formatMappingConfidencePercent } from '../lib/epg_mappings_helpers.js';
 const mappingsState = {
     offset: 0,
     limit: 100,
@@ -333,7 +335,7 @@ function renderMappingRow(item, viewMode) {
             ? '<span class="badge bg-info">Auto</span>'
             : `<span class="badge bg-secondary">${escapeHtml(mapping.mapping_type || 'Unknown')}</span>`;
         
-        const confidencePercent = Math.round((mapping.confidence || 0) * 100);
+        const confidencePercent = formatMappingConfidencePercent(mapping.confidence || 0);
         const overrideIcon = mapping.is_override ? ' <i class="bi bi-pin-fill text-warning" title="Override"></i>' : '';
         
         matchInfoCell = `${typeBadge} ${confidencePercent}%${overrideIcon}`;
@@ -711,3 +713,18 @@ async function hideChannel(accountId, channelName) {
         showToast('Error: ' + error.message, 'error');
     }
 }
+
+const epgMappingsExports = {
+    mappingsState,
+    updateAutoMatchButton,
+    loadCategoriesForAccount,
+    loadMappings,
+    loadMoreMappings,
+    clearCategoryMappings,
+    runAutoMatch,
+    rematchAutoMatches,
+    hideChannel,
+};
+
+Object.assign(window, epgMappingsExports);
+export { epgMappingsExports };
