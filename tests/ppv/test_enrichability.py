@@ -11,6 +11,7 @@ from services.ppv.enrichability import (
     classify_ppv_enrichment,
     is_ppv_section_header,
     is_unsupported_college_sport_title,
+    is_unsupported_league_title,
     stale_archive_date_from_title,
 )
 from services.ppv.enrichment import PPVCalendarEnrichmentService
@@ -18,6 +19,7 @@ from services.ppv.extraction import PPVEventExtractor
 
 STALE_FIXTURE = Path(__file__).parent / "fixtures" / "stale_espn_play.json"
 BOXING_FIXTURE = Path(__file__).parent / "fixtures" / "boxing_channels.json"
+CHAMPIONSHIP_FIXTURE = Path(__file__).parent / "fixtures" / "championship_playoff.json"
 WCWS_FIXTURE = Path(__file__).parent / "fixtures" / "wcws_channels.json"
 
 
@@ -110,6 +112,32 @@ class TestBoxingNoEventDate:
     def test_non_boxing_without_date_not_skipped(self, boxing_channels):
         row = next(r for r in boxing_channels if r["id"] == "non_boxing_no_date")
         assert classify_ppv_enrichment(row["name"]) is None
+
+
+class TestTrackBUnsupportedLeague:
+    @pytest.fixture
+    def championship_channels(self):
+        return json.loads(CHAMPIONSHIP_FIXTURE.read_text(encoding="utf-8"))
+
+    @pytest.mark.parametrize(
+        "fixture_id",
+        ["sierra_leone_premier", "aruba_league"],
+    )
+    def test_obscure_dazn_leagues_skipped(self, championship_channels, fixture_id):
+        row = next(r for r in championship_channels if r["id"] == fixture_id)
+        assert classify_ppv_enrichment(row["name"]) == "unsupported_league"
+        assert classify_ppv_enrichment(row["name"], cheap_only=True) == "unsupported_league"
+
+    def test_major_league_region_not_skipped(self, championship_channels):
+        row = next(r for r in championship_channels if r["id"] == "english_premier_not_skipped")
+        assert classify_ppv_enrichment(row["name"]) is None
+        assert is_unsupported_league_title(row["name"]) is False
+
+    def test_charlton_leicester_still_enrichable(self, championship_channels):
+        """Championship playoff absent from TSDB; remain enrichable for future requeue."""
+        row = next(r for r in championship_channels if r["id"] == "charlton_leicester")
+        assert classify_ppv_enrichment(row["name"]) is None
+        assert is_unsupported_league_title(row["name"]) is False
 
 
 class TestTrackAUnsupportedCollegeSport:

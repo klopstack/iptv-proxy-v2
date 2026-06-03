@@ -126,7 +126,9 @@ Today sport-key routing is fragmented (see `ppv-sport-registry.md`).
 
 ## Unsupported calendar coverage (TODO 123, June 2026)
 
-### Track A — College WCWS / BTN+ (deferred)
+Some PPV categories parse correctly but have **no calendar provider** today. Enrichability marks these `skipped` (not perpetual `no_match`) where the gap is permanent without a new API.
+
+### Track A — College WCWS / BTN+
 
 **Decision (June 2026):** No reliable NCAA softball or college baseball calendar API without a dedicated spike.
 
@@ -142,11 +144,20 @@ Today sport-key routing is fragmented (see `ppv-sport-registry.md`).
 
 **Still enrichable:** Generic college football/basketball (e.g. DISNEY+ `#22 GEORGIA TECH VS. #12 BYU`) — sportsipy NCAAF/NCAAB may match when schedules align.
 
+### Track B — Obscure DAZN leagues / Championship playoffs
+
+| Category | Example | Action | Skip reason |
+|----------|---------|--------|-------------|
+| Obscure DAZN regional leagues | `\| Premier League - Sierra Leone` | `unsupported_league` | No TSDB / football-data coverage |
+| English Championship playoffs | Charlton vs Leicester (Jun 2026) | **Remain enrichable** | TSDB league ID 4399 configured; playoff fixture absent from `eventsDay` — requeue when TSDB adds data |
+
+**Investigation notes (Track B):** TheSportsDB `LEAGUE_ID_MAP` already includes `"Championship": "4399"`. Verified via public API (June 2026): `eventsseason.php?id=4399` returns 15 season events with **zero** Charlton/Leicester rows; `eventsday.php?d=2026-06-03&s=Soccer` also empty for that fixture. football-data.org provider covers PL/La Liga only — not EFL Championship. No scraper config change fixes this; a dedicated EFL source would be required.
+
 ### Other tracks (123)
 
 | Category | Skip reason | Status |
 |----------|-------------|--------|
 | Boxing undated | `no_event_date` | Track C ✅ PR #61 |
 | Stale ESPN Play | `stale_archive` | Track D ✅ PR #59 |
-| Obscure DAZN leagues | `unsupported_league` | Track B (separate PR) |
+| Obscure DAZN leagues | `unsupported_league` | Track B ✅ |
 | English Championship playoffs | Remain enrichable | TSDB league 4399 configured; playoff fixtures absent from API |
