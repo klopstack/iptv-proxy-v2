@@ -13,6 +13,7 @@ from models import Account, Channel, Settings, db
 from services.ppv.constants import (
     ENRICHMENT_BACKLOG_BATCH_SIZE,
     ENRICHMENT_BATCH_SIZE,
+    MIN_MATCH_CONFIDENCE,
     PPV_ENRICHMENT_BACKLOG_THRESHOLD,
     PPV_ENRICHMENT_HOT_WINDOW_HOURS,
     PPV_ENRICHMENT_MAX_SCAN_MULTIPLIER,
@@ -195,6 +196,26 @@ class PPVEnrichmentOrchestrator:
         db.session.commit()
         return True
 
+    def requeue_no_match_channels(self, account_id: Optional[int] = None) -> int:
+        """Mark no_match PPV channels as queued via bulk update (no ORM load)."""
+        query = Channel.query.filter(
+            Channel.is_ppv.is_(True),
+            Channel.ppv_enrichment_status == "no_match",
+        )
+        if account_id is not None:
+            query = query.filter_by(account_id=account_id)
+        count = query.update(
+            {
+                Channel.ppv_enrichment_status: "queued",
+                Channel.ppv_enrichment_attempts: 0,
+                Channel.ppv_enrichment_error: None,
+            },
+            synchronize_session=False,
+        )
+        if count:
+            db.session.commit()
+        return count
+
     def queue_all_ppv(self, account_id: int) -> int:
         """Queue all PPV channels on an account for enrichment."""
         channels = Channel.query.filter_by(account_id=account_id, is_ppv=True).all()
@@ -233,7 +254,7 @@ class PPVEnrichmentOrchestrator:
             for channel in channels:
                 try:
                     result = matcher.find_match(channel.name)
-                    if result and result.event and result.confidence >= 0.35:
+                    if result and result.event and result.confidence >= MIN_MATCH_CONFIDENCE:
                         event, _was_created = persist_enhanced_match(channel, result)
                         if event:
                             matched += 1

@@ -165,7 +165,9 @@ class TestPPVEnrichmentRoutes:
         response = client.post("/api/ppv-enrichment/process", json={}, content_type="application/json")
         assert response.status_code == 500
         data = response.get_json()
+        assert data["success"] is False
         assert "error" in data
+        assert "Test error" not in data["error"]
 
     @patch("routes.ppv_enrichment.get_calendar_enrichment_service")
     def test_get_status_error_handling(self, mock_get_service, client):
@@ -177,7 +179,52 @@ class TestPPVEnrichmentRoutes:
         response = client.get("/api/ppv-enrichment/status")
         assert response.status_code == 500
         data = response.get_json()
+        assert data["success"] is False
         assert "error" in data
+        assert "Status error" not in data["error"]
+
+    @patch("routes.ppv_enrichment.get_calendar_enrichment_service")
+    @patch("services.ppv.orchestrator.get_ppv_orchestrator")
+    def test_get_status_queue_stats_degraded(self, mock_get_orchestrator, mock_get_service, client):
+        """Queue stats failure is logged and flagged in the response."""
+        mock_service = MagicMock()
+        mock_service.get_status.return_value = {
+            "detail_queue_size": 0,
+            "detail_thread_running": False,
+            "calendar_cache_stats": {},
+            "cumulative_stats": {},
+            "session_stats": {},
+        }
+        mock_get_service.return_value = mock_service
+        mock_get_orchestrator.return_value.get_queue_stats.side_effect = RuntimeError("queue unavailable")
+
+        response = client.get("/api/ppv-enrichment/status")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["queue_stats_error"] is True
+        assert "queued_count" not in data
+
+    @patch("services.jobs.ppv_enrichment.run_ppv_enrichment")
+    @patch("services.ppv.orchestrator.get_ppv_orchestrator")
+    def test_process_include_no_match_requeues_then_drains(
+        self, mock_get_orchestrator, mock_run, client, test_account, test_ppv_channels
+    ):
+        """include_no_match re-queues via bulk update instead of loading all channels."""
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.requeue_no_match_channels.return_value = 2
+        mock_get_orchestrator.return_value = mock_orchestrator
+        mock_run.return_value = {"channels_processed": 2, "channels_matched": 1, "channels_no_match": 0}
+
+        response = client.post(
+            "/api/ppv-enrichment/process",
+            json={"include_no_match": True},
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        mock_orchestrator.requeue_no_match_channels.assert_called_once_with(account_id=None)
+        mock_run.assert_called_once()
+        assert data["no_match_requeued"] == 2
 
     @patch("routes.ppv_enrichment.get_calendar_enrichment_service")
     def test_start_detail_thread(self, mock_get_service, client):

@@ -1,6 +1,6 @@
 # Harden PPV enrichment API routes
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P1  
 **Audit:** PPV audit, June 2026
 
@@ -39,10 +39,15 @@ In `get_enrichment_status`, orchestrator queue stats are wrapped in bare `except
 
 ## Acceptance criteria
 
-- [ ] All enrichment error responses use consistent JSON shape.
-- [ ] No code path loads unbounded channel lists by default.
-- [ ] Queue stats failures are logged.
-- [ ] Enhanced fallback threshold matches constants module.
+- [x] All enrichment error responses use consistent JSON shape.
+- [x] No code path loads unbounded channel lists by default.
+- [x] Queue stats failures are logged.
+- [x] Enhanced fallback threshold matches constants module.
+
+## Completion
+
+- **PR:** https://github.com/klopstack/iptv-proxy-v2/pull/16
+- **Branch:** `wave2/pr-g-59-route-hardening` (rebased on `main`)
 
 ## Test plan
 
