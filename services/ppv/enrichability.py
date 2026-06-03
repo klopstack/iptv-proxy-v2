@@ -109,8 +109,6 @@ def classify_ppv_enrichment(
 
     event_date = extraction.get("date")
     if isinstance(event_date, datetime):
-        if _is_stale_archive_date(event_date):
-            return "stale_archive"
         far_future_cutoff = _naive_utc_now() + timedelta(days=FAR_FUTURE_VISIBILITY_DAYS)
         if event_date.replace(tzinfo=None) > far_future_cutoff:
             return "far_future"
