@@ -62,6 +62,6 @@ npm run lint          # ESLint after phase 3
 
 ## Completion
 
-- **PR:** _(add link after merge)_
+- **PR #40:** https://github.com/klopstack/iptv-proxy-v2/pull/40
 - Migrated: `epg_sources_page.js`, `epg_mappings_page.js`, `epg_manual_mapping_page.js`, `match_rules_rulesets_page.js`, `match_rules_rules_page.js`
 - New lib helpers: `epg_dom_utils.js`, `epg_mappings_helpers.js`, `match_rules_rulesets_helpers.js`; `window.EpgManagementState` bridge in `epg_common.js`
