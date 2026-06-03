@@ -6,7 +6,24 @@ Uses shared fixtures from conftest.py for proper test isolation.
 
 from unittest.mock import Mock, patch
 
+import pytest
+
 from tests.conftest import api_data
+
+ADMIN_PAGES = [
+    "/",
+    "/accounts",
+    "/filters",
+    "/preview",
+    "/categories",
+    "/rulesets",
+    "/settings",
+    "/epg",
+    "/stations",
+    "/channel-health",
+    "/ppv",
+    "/xtream",
+]
 
 # client and sample_account fixtures are provided by conftest.py
 
@@ -129,29 +146,10 @@ class TestAccountRoutes:
 class TestWebUIRoutes:
     """Test web UI template routes"""
 
-    def test_index_page(self, client):
-        """Test index page loads"""
-        response = client.get("/")
-        assert response.status_code == 200
-
-    def test_accounts_page(self, client):
-        """Test accounts page loads"""
-        response = client.get("/accounts")
-        assert response.status_code == 200
-
-    def test_filters_page(self, client):
-        """Test filters page loads"""
-        response = client.get("/filters")
-        assert response.status_code == 200
-
-    def test_preview_channels_page(self, client):
-        """Test preview channels page loads"""
-        response = client.get("/preview")
-        assert response.status_code == 200
-
-    def test_rulesets_page(self, client):
-        """Test rulesets page loads"""
-        response = client.get("/rulesets")
+    @pytest.mark.parametrize("path", ADMIN_PAGES)
+    def test_admin_pages_return_200(self, client, path):
+        """All admin HTML pages return 200 on GET."""
+        response = client.get(path)
         assert response.status_code == 200
 
 

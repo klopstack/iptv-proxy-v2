@@ -12,26 +12,6 @@ from tests.conftest import api_data, api_mutation_data
 class TestAccounts:
     """Test account management"""
 
-    def test_create_account(self, client):
-        """Test creating an account"""
-        response = client.post(
-            "/api/accounts",
-            json={
-                "name": "My IPTV",
-                "server": "example.com",
-                "username": "user123",
-                "password": "pass123",
-                "enabled": True,
-            },
-        )
-
-        assert response.status_code == 201
-        data = api_mutation_data(response)
-        assert data["name"] == "My IPTV"
-        assert data["server"] == "example.com"
-        assert data["username"] == "user123"
-        assert "password" not in data  # Password should not be returned
-
     def test_list_accounts(self, client, sample_account):
         """Test listing accounts"""
         response = client.get("/api/accounts")
@@ -145,30 +125,6 @@ class TestFilters:
         # Verify it's gone
         response = client.get("/api/filters")
         assert len(api_data(response)) == 0
-
-
-class TestAPI:
-    """Test API endpoints"""
-
-    def test_index_page(self, client):
-        """Test home page loads"""
-        response = client.get("/")
-        assert response.status_code == 200
-
-    def test_accounts_page(self, client):
-        """Test accounts page loads"""
-        response = client.get("/accounts")
-        assert response.status_code == 200
-
-    def test_filters_page(self, client):
-        """Test filters page loads"""
-        response = client.get("/filters")
-        assert response.status_code == 200
-
-    def test_preview_channels_page(self, client):
-        """Test preview channels page loads"""
-        response = client.get("/preview")
-        assert response.status_code == 200
 
 
 def test_cache_service():

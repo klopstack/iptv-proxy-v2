@@ -1,6 +1,6 @@
 """Tests for parallel EPG sync orchestration (unit tests).
 
-Patches EpgSyncService.sync_source throughout. See test_epg_sync_integration.py
+Patches EpgSyncService.sync_source throughout. See tests/epg/test_integration.py
 for orchestrator + real service integration with mocked HTTP/disk.
 """
 
