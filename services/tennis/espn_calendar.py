@@ -27,9 +27,7 @@ CACHE_TTL_SECONDS = 3600
 REQUEST_TIMEOUT = 30
 
 ESPN_TENNIS_TOURS = ("wta", "atp")
-SCOREBOARD_URL_TEMPLATE = (
-    "https://site.api.espn.com/apis/site/v2/sports/tennis/{tour}/scoreboard?dates={date_yyyymmdd}"
-)
+SCOREBOARD_URL_TEMPLATE = "https://site.api.espn.com/apis/site/v2/sports/tennis/{tour}/scoreboard?dates={date_yyyymmdd}"
 
 _espn_cache: Dict[str, Tuple[List[CalendarEvent], float]] = {}
 
