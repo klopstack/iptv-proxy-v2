@@ -11,5 +11,7 @@ def _utc_now_naive() -> datetime:
 
 def _record_enrichment_attempt(channel: Channel) -> None:
     """Increment attempts and set last_attempt in the current session (no commit)."""
-    channel.ppv_enrichment_attempts = (channel.ppv_enrichment_attempts or 0) + 1
+    attempts = channel.ppv_enrichment_attempts
+    base = attempts if isinstance(attempts, int) else 0
+    channel.ppv_enrichment_attempts = base + 1
     channel.ppv_enrichment_last_attempt = _utc_now_naive()

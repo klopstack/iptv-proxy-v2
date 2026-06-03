@@ -3,8 +3,6 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from models import Account, Channel, db
 from services.ppv.enrichment import PPVCalendarEnrichmentService, _record_enrichment_attempt
 from services.ppv.enrichment.types import EnrichmentResult
@@ -175,7 +173,7 @@ class TestEnrichmentAttemptTracking:
             db.session.add(channel)
             db.session.commit()
 
-            orch = PPVEnrichmentOrchestrator(app)
+            PPVEnrichmentOrchestrator(app)
             from sqlalchemy import or_
 
             pending = or_(
@@ -269,7 +267,9 @@ class TestEnrichmentAttemptTracking:
                     service.match_pipeline.calendar_scraper, "get_events_for_date", return_value=[]
                 ), patch.object(service, "_extract_all_channels") as mock_extract, patch.object(
                     service, "_group_by_date"
-                ) as mock_group, patch.object(service, "_update_stats"), patch(
+                ) as mock_group, patch.object(
+                    service, "_update_stats"
+                ), patch(
                     "services.ppv.enrichment.sync_enrichment_status_from_links"
                 ), patch(
                     "services.ppv.enrichment.match_pipeline._record_enrichment_attempt"

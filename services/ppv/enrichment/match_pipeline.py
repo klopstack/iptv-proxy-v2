@@ -15,11 +15,11 @@ from services.ppv.constants import (
     MIN_MATCH_CONFIDENCE,
 )
 from services.ppv.enrichability import classify_ppv_enrichment, skip_error_message
+from services.ppv.enrichment.attempt_tracking import _record_enrichment_attempt
 from services.ppv.enrichment.types import DetailQueueItem, EnrichmentResult, calendar_event_source
 from services.ppv.extraction import PPVEventExtractor
 from services.ppv.matching.context import context_for_event, resolve_sport_league_context
 from services.ppv.matching.validation import competitors_match_event
-from services.ppv.enrichment.attempt_tracking import _record_enrichment_attempt
 from services.ppv.persistence import persist_match
 from services.reverse_event_matcher.orchestrator import ReverseEventMatcher
 from services.thesportsdb_calendar_scraper import CalendarEvent, get_calendar_scraper

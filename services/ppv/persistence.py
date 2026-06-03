@@ -7,9 +7,9 @@ from datetime import datetime, timezone
 from typing import Any, Iterable, Optional, Tuple
 
 from models import Channel, Event, EventChannelLink, db
-from services.ppv.enrichment.attempt_tracking import _record_enrichment_attempt
 from services.datetime_utils import to_naive_utc
 from services.ppv.constants import MAX_EVENT_AGE_DAYS, MAX_EVENT_FUTURE_DAYS
+from services.ppv.enrichment.attempt_tracking import _record_enrichment_attempt
 from services.thesportsdb_calendar_scraper import CalendarEvent
 
 logger = logging.getLogger(__name__)
