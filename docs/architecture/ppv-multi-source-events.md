@@ -121,3 +121,32 @@ Today sport-key routing is fragmented (see `ppv-sport-registry.md`).
 - **55** — schema + detail fetch (P0)
 - **57** — sport registry
 - **62** — MiLB integration test
+
+---
+
+## Unsupported calendar coverage (TODO 123, June 2026)
+
+### Track A — College WCWS / BTN+ (deferred)
+
+**Decision (June 2026):** No reliable NCAA softball or college baseball calendar API without a dedicated spike.
+
+| Source evaluated | Result |
+|----------------|--------|
+| TheSportsDB | No WCWS / NCAA baseball events in calendar or `eventsDay` |
+| sportsipy fork | Supports MLB, NBA, NFL, NHL, NCAAB, NCAAF — **no** softball or college baseball schedules |
+| NCAA official feeds | Not integrated; licensing/reliability unknown |
+
+**Implemented:** Enrichability marks WCWS and BTN+ channels `skipped` with reason `unsupported_sport` instead of perpetual `no_match`. Ranking prefixes (`#11 Texas Tech`) strip correctly in competitor extraction.
+
+**Future work:** Dedicated NCAA softball/baseball provider registered in calendar aggregation (same pattern as ESPN tennis / TODO 122). Requeue via [124](../todos/124-ppv-enrichment-attempt-tracking-and-requeue.md) after a source lands.
+
+**Still enrichable:** Generic college football/basketball (e.g. DISNEY+ `#22 GEORGIA TECH VS. #12 BYU`) — sportsipy NCAAF/NCAAB may match when schedules align.
+
+### Other tracks (123)
+
+| Category | Skip reason | Status |
+|----------|-------------|--------|
+| Boxing undated | `no_event_date` | Track C ✅ PR #61 |
+| Stale ESPN Play | `stale_archive` | Track D ✅ PR #59 |
+| Obscure DAZN leagues | `unsupported_league` | Track B (separate PR) |
+| English Championship playoffs | Remain enrichable | TSDB league 4399 configured; playoff fixtures absent from API |

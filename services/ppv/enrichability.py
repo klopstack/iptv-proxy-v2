@@ -16,6 +16,9 @@ PPV_SECTION_HEADER_PATTERN = re.compile(r"^#+\s*.+\s*#+\s*$", re.IGNORECASE)
 US_ARCHIVE_DATE_PATTERN = re.compile(r"(?:\||\s)(\d{1,2})-(\d{1,2})-(\d{4})\b")
 # Boxing PPV slot prefix, e.g. "Boxing 1 : Usyk vs Verhoeven"
 BOXING_CHANNEL_PATTERN = re.compile(r"\bBoxing\b", re.IGNORECASE)
+# College sports without calendar providers (TODO 123 track A)
+WCWS_PATTERN = re.compile(r"\bWCWS\b", re.IGNORECASE)
+BTN_PLUS_PATTERN = re.compile(r"BTN\+", re.IGNORECASE)
 
 _extractor = PPVEventExtractor()
 
@@ -54,6 +57,11 @@ def is_ppv_section_header(name: str) -> bool:
     return bool(PPV_SECTION_HEADER_PATTERN.match(stripped))
 
 
+def is_unsupported_college_sport_title(channel_name: str) -> bool:
+    """Return True for WCWS/BTN+ titles with no NCAA softball/baseball calendar."""
+    return bool(WCWS_PATTERN.search(channel_name) or BTN_PLUS_PATTERN.search(channel_name))
+
+
 def classify_ppv_enrichment(
     channel_name: str,
     extraction: Optional[dict] = None,
@@ -65,7 +73,7 @@ def classify_ppv_enrichment(
 
     Reasons align with enrichment filter keys: generic_name, placeholder_name,
     section_header, placeholder, inactive, no_competitors, date_but_no_competitors,
-    far_future, stale_archive, no_event_date.
+    far_future, stale_archive, no_event_date, unsupported_sport.
 
     When ``extraction`` is provided (e.g. from a prior ``extract_all`` call), it is
     used for competitor/date checks instead of re-extracting from the channel name.
@@ -94,6 +102,9 @@ def classify_ppv_enrichment(
     archive_date = stale_archive_date_from_title(channel_name)
     if archive_date and _is_stale_archive_date(archive_date):
         return "stale_archive"
+
+    if is_unsupported_college_sport_title(channel_name):
+        return "unsupported_sport"
 
     if cheap_only:
         return None
