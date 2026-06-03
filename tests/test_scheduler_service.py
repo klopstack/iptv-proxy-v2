@@ -45,10 +45,13 @@ class TestSchedulerJobRegistry:
 
     def test_build_scheduled_jobs_returns_expected_jobs(self):
         jobs = build_scheduled_jobs()
-        assert len(jobs) == 8
+        assert len(jobs) == 10
         assert all(isinstance(job, JobDefinition) for job in jobs)
         assert jobs[0].status_key == "accounts"
-        assert any(job.status_key == "fcc" for job in jobs)
+        status_keys = {job.status_key for job in jobs}
+        assert "fcc" in status_keys
+        assert "event_cleanup" in status_keys
+        assert "image_cache_cleanup" in status_keys
 
     @patch("services.scheduler_jobs.accounts.ChannelSyncService.sync_account")
     def test_registry_accounts_job_delegates_to_accounts_module(self, mock_sync_account, scheduler, app):
@@ -79,7 +82,7 @@ class TestSchedulerJobRegistry:
     ):
         with app.app_context():
             scheduler._check_and_sync()
-        assert mock_run_job_def.call_count == 8
+        assert mock_run_job_def.call_count == 10
         accounts_idx = next(
             i for i, call in enumerate(mock_run_job_def.call_args_list) if call[0][0].status_key == "accounts"
         )
