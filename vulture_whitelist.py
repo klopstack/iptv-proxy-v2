@@ -16,6 +16,11 @@ internal_error
 service_unavailable
 handle_db_error
 
+# SQLAlchemy event listener callback parameters (required signature)
+connection_record
+mapper
+connection
+
 # SQLAlchemy model columns/relationships - accessed by ORM
 parent_id
 matched_channels_json
