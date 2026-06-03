@@ -17,6 +17,7 @@ from typing import List, Optional
 
 from services.datetime_utils import parse_title_timezone
 from services.ppv.detection import is_generic_channel_name
+from services.ppv.matching.mlb_teams import expand_mlb_abbrevs_in_text
 from services.reverse_event_matcher.date_extractor import DateExtractor
 from services.reverse_event_matcher.event_index import EventIndex
 from services.reverse_event_matcher.match_filter import DateFilter, MatchFilter
@@ -206,6 +207,7 @@ class ReverseEventMatcher:
         channel_date: Optional[datetime] = None,
         channel_timezone: Optional[str] = None,
         date_tolerance_hours: Optional[int] = None,
+        category_name: Optional[str] = None,
     ) -> List[MatchResult]:
         """
         Find events that match the given channel name.
@@ -240,13 +242,18 @@ class ReverseEventMatcher:
             if resolved_date:
                 logger.debug(f"Extracted date from channel: {resolved_date}")
 
-        # Normalize channel name and extract significant words
-        normalized_channel = self._text_processor.normalize_text(channel_name)
-        channel_words = self._text_processor.extract_significant_words(normalized_channel)
-
         from services.ppv.matching.context import resolve_sport_league_context
 
-        sport_ctx = resolve_sport_league_context(channel_name)
+        sport_ctx = resolve_sport_league_context(channel_name, category_name)
+
+        # Normalize channel name and expand MLB abbrevs when context warrants
+        normalized_channel = self._text_processor.normalize_text(channel_name)
+        normalized_channel = expand_mlb_abbrevs_in_text(
+            normalized_channel,
+            sport_key=sport_ctx.primary_sport_key,
+        )
+        channel_words = self._text_processor.extract_significant_words(normalized_channel)
+
         pk = sport_ctx.primary_sport_key
         strategies = self._individual_sport_strategies if pk in ("tennis", "ufc") else self._default_strategies
 

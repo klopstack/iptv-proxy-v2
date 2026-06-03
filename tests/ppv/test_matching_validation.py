@@ -1,6 +1,9 @@
 """Tests for PPV competitor validation."""
 
+import pytest
+
 from services.ppv.matching.context import resolve_sport_league_context
+from services.ppv.matching.mlb_teams import resolve_mlb_abbrev
 from services.ppv.matching.validation import (
     competitors_match_event,
     is_weak_match_type,
@@ -8,6 +11,43 @@ from services.ppv.matching.validation import (
     team_names_match_for_event_validation,
 )
 from services.thesportsdb_calendar_scraper import CalendarEvent
+
+# All 30 MLB teams — Peacock / broadcast abbrev -> canonical name
+MLB_30_TEAM_ABBREVS = [
+    ("ARI", "Arizona Diamondbacks"),
+    ("AZ", "Arizona Diamondbacks"),
+    ("ATL", "Atlanta Braves"),
+    ("BAL", "Baltimore Orioles"),
+    ("BOS", "Boston Red Sox"),
+    ("CHC", "Chicago Cubs"),
+    ("CHW", "Chicago White Sox"),
+    ("CWS", "Chicago White Sox"),
+    ("CIN", "Cincinnati Reds"),
+    ("CLE", "Cleveland Guardians"),
+    ("COL", "Colorado Rockies"),
+    ("DET", "Detroit Tigers"),
+    ("HOU", "Houston Astros"),
+    ("KC", "Kansas City Royals"),
+    ("LAA", "Los Angeles Angels"),
+    ("LAD", "Los Angeles Dodgers"),
+    ("MIA", "Miami Marlins"),
+    ("MIL", "Milwaukee Brewers"),
+    ("MIN", "Minnesota Twins"),
+    ("NYM", "New York Mets"),
+    ("NYY", "New York Yankees"),
+    ("OAK", "Oakland Athletics"),
+    ("PHI", "Philadelphia Phillies"),
+    ("PIT", "Pittsburgh Pirates"),
+    ("SD", "San Diego Padres"),
+    ("SF", "San Francisco Giants"),
+    ("SFG", "San Francisco Giants"),
+    ("SEA", "Seattle Mariners"),
+    ("STL", "St. Louis Cardinals"),
+    ("TB", "Tampa Bay Rays"),
+    ("TEX", "Texas Rangers"),
+    ("TOR", "Toronto Blue Jays"),
+    ("WSH", "Washington Nationals"),
+]
 
 
 def _event(home, away, event_id="1"):
@@ -44,6 +84,28 @@ class TestCompetitorValidation:
     def test_team_names_match_mlb_abbreviations(self):
         assert team_names_match("D-backs", "Arizona Diamondbacks")
         assert team_names_match("Dbacks", "Arizona Diamondbacks")
+
+    @pytest.mark.parametrize("abbrev,full", MLB_30_TEAM_ABBREVS)
+    def test_mlb_abbrev_expansion(self, abbrev, full):
+        assert resolve_mlb_abbrev(abbrev) == full
+        assert team_names_match_for_event_validation(abbrev, full, sport_key="mlb")
+
+    def test_mlb_abbrev_does_not_match_without_sport_key(self):
+        assert not team_names_match("BAL", "Baltimore Orioles")
+        assert not team_names_match_for_event_validation("BAL", "Baltimore Orioles")
+
+    def test_competitors_match_mlb_abbrev_event(self):
+        event = CalendarEvent(
+            event_id="bal-bos",
+            event_name="Boston Red Sox vs Baltimore Orioles",
+            league_name="MLB",
+            time_utc="22:45",
+            date="2026-06-03",
+            home_team="Boston Red Sox",
+            away_team="Baltimore Orioles",
+        )
+        assert competitors_match_event(("BAL", "BOS"), event)
+        assert competitors_match_event(("BOS", "BAL"), event)
 
     def test_competitors_match_mlb_dbacks_mariners(self):
         event = _event("Seattle Mariners", "Arizona Diamondbacks")

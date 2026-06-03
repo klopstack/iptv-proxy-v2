@@ -10,6 +10,8 @@ Handles all text normalization and word extraction with optimization:
 import re
 from typing import Dict, Optional, Set
 
+from services.ppv.matching.mlb_teams import resolve_mlb_abbrev
+
 # Pre-compiled regex patterns for maximum performance
 _COMPILED_PATTERNS = {
     "start_timestamp": re.compile(r"start:\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}", re.IGNORECASE),
@@ -260,6 +262,20 @@ class TextProcessor:
             self._words_cache[cache_key] = significant
 
         return significant
+
+    def normalize_competitor(self, name: str, *, sport_key: Optional[str] = None) -> str:
+        """
+        Normalize a competitor name, expanding MLB abbreviations when in MLB context.
+
+        Prefers full canonical team names for matching against calendar events.
+        """
+        if not name:
+            return ""
+        if sport_key == "mlb":
+            expanded = resolve_mlb_abbrev(name)
+            if expanded:
+                return self.normalize_text(expanded)
+        return self.normalize_text(name)
 
     def clear_cache(self) -> None:
         """Clear all normalization caches."""

@@ -3,6 +3,7 @@
 from typing import Optional, Tuple
 
 from services.ppv.matching.context import SportLeagueContext, event_league_matches_context, sport_key_from_league_name
+from services.ppv.matching.mlb_teams import resolve_mlb_abbrev
 from services.reverse_event_matcher.match_strategy import MIN_TEAM_NAME_LENGTH
 from services.reverse_event_matcher.text_processor import TextProcessor
 from services.thesportsdb_calendar_scraper import CalendarEvent
@@ -121,6 +122,14 @@ def _sports_team_aliases_match(name_a: str, name_b: str, sport_key: str) -> bool
     return bool(abbrev_a and abbrev_b and abbrev_a == abbrev_b)
 
 
+def _mlb_abbrev_matches(short_name: str, full_name: str) -> bool:
+    """True when a two- or three-letter token is a known MLB code for the full team name."""
+    resolved = resolve_mlb_abbrev(short_name)
+    if not resolved:
+        return False
+    return team_names_match(resolved, full_name)
+
+
 def team_names_match(name_a: str, name_b: str) -> bool:
     """Return True when two team names refer to the same side."""
     if not name_a or not name_b:
@@ -187,6 +196,10 @@ def team_names_match_for_event_validation(
 
     if sport_key and _sports_team_aliases_match(name_a, name_b, sport_key):
         return True
+
+    if sport_key == "mlb":
+        if _mlb_abbrev_matches(name_a, name_b) or _mlb_abbrev_matches(name_b, name_a):
+            return True
 
     return False
 
