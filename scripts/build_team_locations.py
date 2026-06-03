@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import importlib.util
 import io
 import json
 import re
@@ -737,6 +738,17 @@ def _parse_stadium_location(location: Optional[str]) -> Tuple[Optional[str], Opt
     return city, country
 
 
+def _iana_for_city(city: Optional[str], country: Optional[str]) -> Optional[str]:
+    """Load city→IANA helper without importing services.ppv (heavy Flask deps)."""
+    path = ROOT / "services" / "ppv" / "city_timezone_map.py"
+    spec = importlib.util.spec_from_file_location("_city_timezone_map", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {path}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.iana_for_city(city, country)
+
+
 def _fb_iana_timezone(
     city: Optional[str],
     country: Optional[str],
@@ -747,10 +759,7 @@ def _fb_iana_timezone(
     tz = _iana_from_coords(lat, lon, tf)
     if tz:
         return tz
-    sys.path.insert(0, str(ROOT))
-    from services.ppv.city_timezone_map import iana_for_city
-
-    return iana_for_city(city, country)
+    return _iana_for_city(city, country)
 
 
 def _fb_team_aliases(team: Dict[str, Any]) -> List[str]:

@@ -163,6 +163,7 @@ Traefik static config (`traefik-static.yaml` in klopstack):
 4. Confirm `/api/accounts` (or `/settings`) redirects to Authentik when unauthenticated.
 5. Restrict or firewall host port `8000` when using `network_mode: host` without Traefik.
 6. Set a non-default `MEDIAFLOW_API_PASSWORD` in production when using the mediaflow backend.
+7. For automated PPV team-location registry updates, configure GitHub repository secret `THESPORTSDB_API_KEY` (premium V2 key). The weekly [build-team-locations workflow](https://github.com/klopstack/iptv-proxy-v2/blob/main/.github/workflows/build-team-locations.yml) needs `contents: write` on the default branch; WNBA coverage requires the premium key.
 
 **Note:** This app does not use Flask session cookies or `SECRET_KEY`. Admin auth is Traefik + Authentik only (see [architecture/admin-auth-and-deployment-security.md](architecture/admin-auth-and-deployment-security.md)).
 
