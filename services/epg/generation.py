@@ -209,6 +209,10 @@ def fetch_epg_from_source(
     """
     Get EPG data from a specific source, preferring cache.
 
+    .. deprecated::
+        No production call sites remain; EPG is DB-first via sync + generation.
+        Retained for test patching only (TODO 90 legacy audit).
+
     First tries to load from cache. If cache miss or use_cache=False,
     fetches from the external source.
 

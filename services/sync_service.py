@@ -8,7 +8,8 @@ from typing import Any, Dict, List, Optional, Set
 
 from sqlalchemy import delete, select
 
-from models import Account, Category, Channel, ChannelLink, ChannelTag, Settings, Tag, db
+from models import Account, Category, Channel, ChannelLink, ChannelTag, Tag, db
+from services.channel_sync_post_hooks import get_channel_sync_post_hooks
 from services.epg.constants import EAST_TAGS, WEST_TAGS
 from services.iptv_service import get_iptv_service_for_account
 from services.sync_lock import recover_stale_sync_locks as _recover_stale_sync_locks
@@ -66,13 +67,12 @@ class ChannelSyncService:
     """Service for synchronizing channels from IPTV providers"""
 
     @staticmethod
-    def sync_account(account_id: int, _force: bool = False) -> Dict:
+    def sync_account(account_id: int) -> Dict:
         """
         Sync channels and categories for a specific account
 
         Args:
             account_id: Account ID to sync
-            _force: Force sync even if recently synced (reserved for future use)
 
         Returns:
             Dict with sync statistics
@@ -152,58 +152,7 @@ class ChannelSyncService:
                 stats["channels_deactivated"] = deactivated
 
                 stats["channel_tags_pruned"] = ChannelSyncService.prune_inactive_channel_tags(account_id)
-
-                # Compute filter visibility after sync
-                try:
-                    from services.filter_service import FilterService
-
-                    filter_stats = FilterService.compute_visibility_for_account(account_id)
-                    stats["channels_visible"] = filter_stats.get("channels_visible", 0)
-                    stats["channels_hidden"] = filter_stats.get("channels_hidden", 0)
-                    logger.info(
-                        f"Filter visibility computed: {stats['channels_visible']} visible, {stats['channels_hidden']} hidden"
-                    )
-                except Exception as e:
-                    logger.error(f"Error computing filter visibility after sync: {e}")
-                    stats["errors"].append(f"Filter visibility error: {str(e)}")
-
-                requeue_ids = stats.get("ppv_requeue_ids") or []
-                if requeue_ids:
-                    try:
-                        from flask import current_app, has_app_context
-
-                        from services.ppv.enrichment import get_calendar_enrichment_service
-
-                        if has_app_context():
-                            channels = Channel.query.filter(Channel.id.in_(requeue_ids)).all()
-                            if channels:
-                                logger.info(
-                                    "Re-enriching %s PPV channel(s) after name/event change",
-                                    len(channels),
-                                )
-                                enrich_stats = get_calendar_enrichment_service(
-                                    current_app._get_current_object()  # type: ignore[attr-defined]
-                                ).enrich_channels(channels)
-                                stats["ppv_enrichment"] = enrich_stats
-                    except Exception as e:
-                        logger.error("PPV re-enrichment after sync failed: %s", e)
-                        stats["errors"].append(f"PPV re-enrichment error: {str(e)}")
-
-                if Settings.get("stream_fallback_auto_detect", "true") != "false":
-                    try:
-                        backup_stats = ChannelSyncService.detect_backup_pairs(account_id)
-                        stats["backup_pair_detection"] = backup_stats
-                    except Exception as e:
-                        logger.error("Backup pair detection after sync failed: %s", e)
-                        stats["errors"].append(f"Backup pair detection error: {str(e)}")
-
-                try:
-                    from services.icon_prefetch import prefetch_account_channel_icons
-
-                    stats["icon_prefetch"] = prefetch_account_channel_icons(account_id)
-                except Exception as e:
-                    logger.error("Icon prefetch after sync failed: %s", e)
-                    stats["errors"].append(f"Icon prefetch error: {str(e)}")
+                get_channel_sync_post_hooks().run(account_id, stats)
 
             logger.info(
                 f"Sync completed for account {account.name}: "
