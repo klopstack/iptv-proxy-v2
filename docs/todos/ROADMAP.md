@@ -3,14 +3,14 @@
 **Last updated:** June 2026  
 **Companion:** [README.md](./README.md) (per-item specs), [../architecture/](../architecture/) (design notes)
 
-This document groups **35 open TODOs** into execution **waves** and suggested **PR batches**. Individual acceptance criteria and test plans remain in each TODO file — implement from those, not from this summary alone.
+This document groups open TODOs into execution **waves** and suggested **PR batches**. Individual acceptance criteria and test plans remain in each TODO file — implement from those, not from this summary alone.
 
 ## Status snapshot
 
 | Track | Range | Open | Recently completed |
 |-------|-------|------|-------------------|
-| P5 — PPV | 52–67 | 16 | — |
-| P6 — App-wide | 68–94 | 18 | 68, 69, 70, 71, 74, 75, 84, **94** |
+| P5 — PPV | 52–67 | 15 | **67** (Wave 7 PR V) |
+| P6 — App-wide | 68–94 | 16 | 68, 69, 70, 71, 72, 73, 74, 75, 80, 81, 84, 86, **87**, **88**, **94** |
 
 Update [README.md](./README.md) status columns as work lands. Mark PR IDs in each TODO’s **Completion** section.
 
@@ -214,7 +214,7 @@ Update [README.md](./README.md) status columns as work lands. Mark PR IDs in eac
 | [88](./88-expand-ci-quality-gates.md) | After 80, 86 | vulture, Docker PR build, pre-commit |
 | [67](./67-ppv-misc-cleanup.md) | Anytime after Wave 2 | Constants, heuristics, docstrings |
 
-Wave 7 items: small PRs or folded into related waves (94 ships with Wave 3 **PR I**).
+**PR V (Wave 7):** [87](./87-fix-stale-documentation.md) + [88](./88-expand-ci-quality-gates.md) + [67](./67-ppv-misc-cleanup.md) — documentation sync, CI gates, PPV misc cleanup.
 
 ---
 

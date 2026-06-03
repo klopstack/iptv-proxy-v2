@@ -6,6 +6,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from services.ppv.constants import FAR_FUTURE_VISIBILITY_DAYS
 from services.ppv.detection import is_generic_channel_name, is_ppv_placeholder_name
 from services.ppv.extraction import PPVEventExtractor
 
@@ -76,7 +77,7 @@ def classify_ppv_enrichment(
 
     event_date = extraction.get("date")
     if isinstance(event_date, datetime):
-        far_future_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=31)
+        far_future_cutoff = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=FAR_FUTURE_VISIBILITY_DAYS)
         if event_date.replace(tzinfo=None) > far_future_cutoff:
             return "far_future"
 

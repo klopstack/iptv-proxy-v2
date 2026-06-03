@@ -16,7 +16,7 @@ This guide provides everything you need to develop, test, and contribute to IPTV
 ## Development Setup
 
 ### Prerequisites
-- Python 3.9+
+- Python 3.11 (matches CI and pre-commit)
 - SQLite 3
 - Docker (optional)
 
@@ -27,13 +27,9 @@ This guide provides everything you need to develop, test, and contribute to IPTV
 git clone https://github.com/klopstack/iptv-proxy-v2.git
 cd iptv-proxy-v2
 
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
+# Create virtual environment (Makefile uses venv/)
+make install   # install-py + install-js + pre-commit hooks
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Set environment variables
 export DATABASE_URL="sqlite:///$(pwd)/data/iptv_proxy.db"
@@ -90,7 +86,6 @@ make test  # Creates htmlcov/ directory
 - **`tests/test_app.py`**: API endpoints, filter logic, playlist generation
 - **`tests/test_tag_service.py`**: Tag extraction, pattern matching, ruleset logic
 - **`tests/test_rulesets_api.py`**: Ruleset and TagRule CRUD operations
-- **`test_tags.py`**: Standalone tag extraction validation (uses mock objects)
 - **`tests/test_stream_service_factory.py`**: `STREAM_BACKEND` selection (`ffmpeg` vs `mediaflow`)
 - **`tests/test_mediaflow_stream_service.py`**: MediaFlow proxy URL construction and streaming (mocked HTTP)
 - **`tests/test_ffmpeg_stream_service.py`**: FFmpeg stream service (skipped when `ffmpeg` binary absent)
@@ -156,14 +151,23 @@ def test_channel_filtering(client):
 
 Pre-commit hooks run the same linters as CI on every `git commit` (`make lint-py` and `make lint-js`). Install them once with `make install-hooks` (included in `make install`).
 
-⚠️ **ALWAYS run these commands before pushing** (hooks cover lint; tests are not in pre-commit):
+⚠️ **Run full CI parity before pushing** (pre-commit covers lint only; tests are not hooked):
 
 ```bash
-make lint    # Same checks as pre-commit / CI lint jobs
-make test    # Run full test suite with coverage
+make ci        # lint-py + lint-js + test-js + test (coverage ≥75%)
 ```
 
-Both commands must pass before considering changes complete.
+Individual targets:
+
+```bash
+make lint      # Python + JavaScript linters (same as pre-commit)
+make test-fast # pytest without coverage (quick local loop)
+make test      # pytest with coverage (matches CI test job)
+make vulture   # dead-code scan (CI vulture job, warn-only)
+make docker-build  # local image build (CI docker-build-smoke on PRs)
+```
+
+`make lint` and `make test` must pass before considering changes complete.
 
 ### Individual Quality Tools
 
@@ -759,7 +763,7 @@ If you see `malformed database schema`, leftover SQLite files (including `-wal`/
 **Import errors in tests**:
 ```bash
 # Make sure you're in virtual environment
-source .venv/bin/activate
+source venv/bin/activate
 pip install -r requirements-dev.txt
 ```
 

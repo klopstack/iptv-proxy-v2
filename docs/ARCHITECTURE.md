@@ -15,7 +15,7 @@ IPTV Proxy v2 is a Flask-based IPTV proxy that sits between Xtream Codes API ser
 │  │   Web UI     │     │   REST API   │      │    Playlist/EPG Endpoints    ││
 │  │  (Jinja2)    │───▶│  (Flask BP)  │────▶│   /playlist/<id>.m3u         ││
 │  │  templates/  │     │   routes/*   │      │   /epg/<id>.xml              ││
-│  └──────────────┘     └──────────────┘      │   /xtream-api/*              ││
+│  └──────────────┘     └──────────────┘      │   /player_api.php, /live/*   ││
 │         │                    │              └──────────────────────────────┘│
 │         │                    │                         │                    │
 │         ▼                    ▼                         ▼                    │
@@ -46,11 +46,14 @@ IPTV Proxy v2 is a Flask-based IPTV proxy that sits between Xtream Codes API ser
 - **`app.py`**: Clean entry point (~200 lines) with blueprint registration and scheduler setup
 
 ### Routes Layer
-- **`routes/`**: Flask blueprints organized by feature (17 blueprints)
+- **`routes/`**: Flask blueprints organized by feature (**23** registered in `app.py`)
   - `routes/web.py` - HTML page rendering
-  - `routes/accounts.py` - Account CRUD and credentials
-  - `routes/epg/` - EPG management (sources, channels, match_rules, etc.)
-  - `routes/xtream.py` - Xtream Codes API compatibility (TiviMate, IPTV Smarters)
+  - `routes/accounts.py`, `filters.py`, `rulesets.py`, `playlists.py` - Core admin CRUD
+  - `routes/api.py`, `settings.py`, `streams.py`, `config_transfer.py` - API, settings, streams, import/export
+  - `routes/epg/` - EPG sources, channels, match rules, Schedules Direct, XMLTV grabbers
+  - `routes/ppv_enrichment.py`, `ppv_epg.py` - PPV enrichment and event EPG
+  - `routes/xtream.py` - Xtream Codes API (`/player_api.php`, `/live/...`)
+  - `routes/channel_health.py`, `channel_links.py`, `stations.py`, `images.py`, `fcc_match_patterns.py`
 
 ### Business Logic
 - **`services/`**: Business logic services (66 Python modules, ~25,000 lines)

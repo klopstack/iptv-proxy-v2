@@ -131,11 +131,11 @@ Follow-up audit after TODOs 01–21. Focus: dead shims, test duplication, semant
 
 | # | Document | Status | Summary |
 |---|----------|--------|---------|
-| 35 | [35-referential-integrity-and-account-delete.md](./35-referential-integrity-and-account-delete.md) | ✅ | FK pragma, AccountDeleteService, model ondelete alignment |
-| 36 | [36-schema-lifecycle-and-migration-tracking.md](./36-schema-lifecycle-and-migration-tracking.md) | ✅ | schema_migrations table, create_all+migrate boot, playlist_configs migration |
-| 37 | [37-sync-lock-hardening.md](./37-sync-lock-hardening.md) | ✅ | Atomic sync lock, sync_started_at, stale lock recovery |
-| 38 | [38-data-retention-and-growth-control.md](./38-data-retention-and-growth-control.md) | ✅ | EPG/health cleanup scheduler, prune inactive channel_tags |
-| 39 | [39-indexing-test-parity-and-docs.md](./39-indexing-test-parity-and-docs.md) | ✅ | channel_tags index, schema parity tests, developer docs |
+| 35 | *(archived — spec removed after merge)* | ✅ | FK pragma, AccountDeleteService, model ondelete alignment |
+| 36 | *(archived — spec removed after merge)* | ✅ | schema_migrations table, create_all+migrate boot, playlist_configs migration |
+| 37 | *(archived — spec removed after merge)* | ✅ | Atomic sync lock, sync_started_at, stale lock recovery |
+| 38 | *(archived — spec removed after merge)* | ✅ | EPG/health cleanup scheduler, prune inactive channel_tags |
+| 39 | *(archived — spec removed after merge)* | ✅ | channel_tags index, schema parity tests, developer docs |
 
 ## P1–P2 — EPG sync orchestration follow-up (May 2026)
 
@@ -193,7 +193,7 @@ Full-stack review of PPV handling: enrichment pipeline, multi-source events (MiL
 | 64 | [64-consolidate-ppv-detection-tests.md](./64-consolidate-ppv-detection-tests.md) | ✅ | Deduplicate overlapping detection test modules ([PR #21](https://github.com/klopstack/iptv-proxy-v2/pull/21)) |
 | 65 | [65-refactor-enrichment-god-class.md](./65-refactor-enrichment-god-class.md) | ⬜ | Phased split of ~860-line enrichment service |
 | 66 | [66-detail-thread-and-epg-side-effect-decoupling.md](./66-detail-thread-and-epg-side-effect-decoupling.md) | ⬜ | Replace daemon detail thread; optional EPG hooks |
-| 67 | [67-ppv-misc-cleanup.md](./67-ppv-misc-cleanup.md) | ⬜ | Constants, heuristics validation, provider health, docstrings |
+| 67 | [67-ppv-misc-cleanup.md](./67-ppv-misc-cleanup.md) | ✅ | Constants, heuristics validation, provider health, docstrings |
 
 ### Recommended order for items 52–67
 
@@ -266,8 +266,8 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 | 84 | [84-docker-and-secrets-hardening.md](./84-docker-and-secrets-hardening.md) | ✅ | `.dockerignore`, non-root container, Flask sessions disabled (no SECRET_KEY) |
 | 85 | [85-frontend-deduplication-and-esm-migration.md](./85-frontend-deduplication-and-esm-migration.md) | 🟡 | Phase 1 done (PR T); tab ESM migration remains |
 | 86 | [86-web-smoke-tests-and-pytest-consolidation.md](./86-web-smoke-tests-and-pytest-consolidation.md) | ⬜ | Admin page smoke tests; duplicate pytest fixtures |
-| 87 | [87-fix-stale-documentation.md](./87-fix-stale-documentation.md) | ⬜ | API_REFERENCE auth/Xtream URLs; missing P4 todo files |
-| 88 | [88-expand-ci-quality-gates.md](./88-expand-ci-quality-gates.md) | ⬜ | vulture, Docker build on PR, pre-commit tests |
+| 87 | [87-fix-stale-documentation.md](./87-fix-stale-documentation.md) | ✅ | API_REFERENCE auth/Xtream URLs; missing P4 todo files |
+| 88 | [88-expand-ci-quality-gates.md](./88-expand-ci-quality-gates.md) | ✅ | vulture, Docker build on PR, pre-commit tests |
 | 89 | [89-refactor-scheduler-job-registry.md](./89-refactor-scheduler-job-registry.md) | ✅ | Scheduler job registry; coordinator < 400 lines |
 | 90 | [90-split-epg-programs-and-decouple-sync.md](./90-split-epg-programs-and-decouple-sync.md) | ⬜ | Split programs.py; decouple sync post-processing |
 | 92 | [92-cdn-script-sri-hardening.md](./92-cdn-script-sri-hardening.md) | ⬜ | CDN Subresource Integrity (deferred from 84) |

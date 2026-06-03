@@ -13,11 +13,13 @@ first called.
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from services.ppv.context.base import ContextDataProvider, DataType
 
 logger = logging.getLogger(__name__)
+
+_registration_failures: list[str] = []
 
 
 class ProviderRegistry:
@@ -126,6 +128,14 @@ class ProviderRegistry:
             "providers": providers_info,
             "by_sport": by_sport,
             "gaps": gaps,
+            "providers_failed": list(_registration_failures),
+        }
+
+    def health(self) -> Dict:
+        """Registry health for status APIs."""
+        return {
+            "registered_count": len(self._providers),
+            "providers_failed": list(_registration_failures),
         }
 
 
@@ -149,41 +159,50 @@ def reset_registry() -> None:
     """Reset the global registry (useful for testing)."""
     global _registry
     _registry = None
+    _registration_failures.clear()
+
+
+def _record_registration_failure(provider_name: str, exc: Exception) -> None:
+    if provider_name not in _registration_failures:
+        _registration_failures.append(provider_name)
+    logger.warning("Could not register %s provider: %s", provider_name, exc)
 
 
 def _register_builtin_providers(registry: ProviderRegistry) -> None:
     """Register the built-in provider implementations."""
+    _registration_failures.clear()
+
     try:
         from services.ppv.context.providers.espn import ESPNProvider
 
         registry.register(ESPNProvider())
     except Exception as exc:
-        logger.warning("Could not register ESPN provider: %s", exc)
+        _record_registration_failure("espn", exc)
 
     try:
         from services.ppv.context.providers.football_data import FootballDataProvider
 
         registry.register(FootballDataProvider())
     except Exception as exc:
-        logger.warning("Could not register football-data.org provider: %s", exc)
+        _record_registration_failure("football_data", exc)
 
     try:
         from services.ppv.context.providers.thesportsdb import TheSportsDBContextProvider
 
         registry.register(TheSportsDBContextProvider())
     except Exception as exc:
-        logger.warning("Could not register TheSportsDB context provider: %s", exc)
+        _record_registration_failure("thesportsdb", exc)
 
     try:
         from services.ppv.context.providers.mlb_stats import MlbStatsContextProvider
 
         registry.register(MlbStatsContextProvider())
     except Exception as exc:
-        logger.warning("Could not register MLB Stats context provider: %s", exc)
+        _record_registration_failure("mlb_stats", exc)
 
     try:
         from services.ppv.context.providers.sportsipy import SportsipyContextProvider
 
         registry.register(SportsipyContextProvider())
     except Exception as exc:
-        logger.warning("Could not register sportsipy context provider: %s", exc)
+        _record_registration_failure("sportsipy", exc)

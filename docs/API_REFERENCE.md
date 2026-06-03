@@ -110,60 +110,43 @@ Preview filtered channels without generating full playlist.
 
 ## Xtream Codes API
 
-IPTV Proxy v2 provides full Xtream Codes API compatibility for popular IPTV clients.
+IPTV Proxy v2 emulates Xtream Codes API endpoints at the **application root** (no `/xtream-api/{id}/` prefix). Clients use the **username and password** from an Xtream credential record created in the admin UI.
 
-### Base URL Format
+Canonical reference: **[XTREAM_CODES_API.md](XTREAM_CODES_API.md)**.
+
+### Server URL (IPTV client)
+
 ```
-http://your-server:port/xtream-api/{credential_id}/
+http://your-server:port
 ```
+
+Do not append `/player_api.php` in the server URL field — clients add paths automatically.
 
 ### Player API
 ```http
-GET /xtream-api/{credential_id}/player_api.php
+GET /player_api.php?username=user&password=pass
+GET /player_api.php?username=user&password=pass&action=get_live_streams
+GET /player_api.php?username=user&password=pass&action=get_live_categories
+GET /player_api.php?username=user&password=pass&action=get_live_stream_info&stream_id=12345
 ```
 
 **Parameters:**
 - `username`: Xtream credential username
 - `password`: Xtream credential password
-- `action`: API action (get_live_streams, get_live_categories, get_series, etc.)
-
-**Common Actions:**
-
-#### Authenticate
-```http
-GET /xtream-api/{credential_id}/player_api.php?username=user&password=pass
-```
-
-#### Get Live Streams
-```http
-GET /xtream-api/{credential_id}/player_api.php?username=user&password=pass&action=get_live_streams
-```
-
-#### Get Categories
-```http
-GET /xtream-api/{credential_id}/player_api.php?username=user&password=pass&action=get_live_categories
-```
-
-#### Get Stream Info
-```http
-GET /xtream-api/{credential_id}/player_api.php?username=user&password=pass&action=get_live_stream_info&stream_id=12345
-```
-
-### M3U Playlist (Xtream Format)
-```http
-GET /xtream-api/{credential_id}/get.php?username=user&password=pass&type=m3u_plus&output=ts
-```
+- `action`: API action (`get_live_streams`, `get_live_categories`, `get_short_epg`, etc.)
 
 ### XMLTV EPG (Xtream Format)
 ```http
-GET /xtream-api/{credential_id}/xmltv.php?username=user&password=pass
+GET /xmltv.php?username=user&password=pass
 ```
 
-### Stream Proxy
+### Stream URLs
 ```http
-GET /xtream-api/{credential_id}/{username}/{password}/{stream_id}
+GET /live/{username}/{password}/{stream_id}
+GET /live/{username}/{password}/{stream_id}.ts
 ```
-Direct stream URL with proxy multiplexing.
+
+Stream proxying and connection multiplexing are described in [XTREAM_CODES_API.md](XTREAM_CODES_API.md).
 
 ## EPG Endpoints
 
@@ -519,24 +502,13 @@ Optional top-level `"message"` for human-readable confirmation.
 - `RATE_LIMITED`: Too many requests (external API limits)
 - `VALIDATION_ERROR`: Request validation failed
 
-## Rate Limiting
+## Rate limiting (planned)
 
-### External API Limits
-- **Xtream Codes**: No rate limiting (provider dependent)
-- **Schedules Direct**: 500 requests per hour
-- **TheSportsDB**: 1000 requests per hour (free tier)
+IPTV Proxy v2 does **not** enforce request rate limits on its own HTTP API today. Upstream provider limits still apply (Schedules Direct, TheSportsDB, etc.). Reverse-proxy rate limiting may be added in a future release.
 
-### Best Practices
-- Cache responses when possible
-- Use batch operations for multiple items
-- Implement exponential backoff for retries
+## Webhooks and events (planned)
 
-## Webhooks and Events
-
-Currently not implemented. Future versions may include:
-- Channel sync completion events
-- EPG update notifications
-- Account health status changes
+Outbound webhooks (sync completion, EPG updates, health changes) are **not implemented**. Track future work in [docs/todos/ROADMAP.md](todos/ROADMAP.md).
 
 ## SDKs and Libraries
 

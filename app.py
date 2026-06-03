@@ -2,14 +2,8 @@
 """
 IPTV M3U Proxy v2 - Web UI for managing multiple IPTV services with filtering
 
-Application entry point with blueprint registration.
-All routes have been moved to blueprints:
-  - routes/web.py - Web UI pages
-  - routes/accounts.py - Account management
-  - routes/filters.py - Filter management
-  - routes/rulesets.py - Ruleset and tag rule management
-  - routes/playlists.py - Playlist generation
-  - routes/api.py - Misc API endpoints (sync, tags, cache)
+Application entry point: registers 23 Flask blueprints (see register_blueprint
+calls below) and starts the background sync scheduler.
 """
 
 import logging
@@ -173,6 +167,12 @@ def _run_startup_tasks():
         recovered_epg = recover_stale_epg_sync_locks()
         if recovered_epg:
             logger.info("Recovered %s stale EPG sync lock(s) on startup", recovered_epg)
+
+        from services.ppv.venue_inference import validate_neutral_site_heuristics
+
+        ok, message = validate_neutral_site_heuristics()
+        if not ok:
+            logger.error("PPV neutral-site heuristics check failed: %s", message)
     except Exception as e:
         logger.warning("Could not recover stale sync locks on startup: %s", e)
 

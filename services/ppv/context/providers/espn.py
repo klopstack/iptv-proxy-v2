@@ -107,15 +107,9 @@ class ESPNProvider(ContextDataProvider):
         standings = self.get_standings(sport, league)
         if not standings:
             return None, None
-        all_teams = standings.get("_all_teams", {})
-        # Try exact match, then partial
-        key = team_name.lower()
-        entry = all_teams.get(key)
-        if not entry:
-            for k, v in all_teams.items():
-                if key in k or k in key:
-                    entry = v
-                    break
+        from services.ppv.context.team_lookup import lookup_team_entry
+
+        entry = lookup_team_entry(standings.get("_all_teams", {}), team_name)
         if not entry:
             return None, None
         return entry.get("record"), entry.get("standing")

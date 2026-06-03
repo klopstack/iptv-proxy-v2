@@ -1,6 +1,25 @@
-# PPV Analysis Scripts
+# Scripts
 
-This folder contains scripts for analyzing PPV enrichment and matching performance.
+Operational utilities, offline data builds, and PPV analysis tools. All scripts use the same `DATABASE_URL` as the main app unless noted.
+
+## Operations and maintenance
+
+| Script | Purpose |
+|--------|---------|
+| `build_team_locations.py` | Rebuild `data/team_locations/registry.json` (TheSportsDB, MLB Stats, sportsipy); see `docs/ppv_timezone_analysis.md` |
+| `reset_fcc_match_patterns.py` | Reset FCC match patterns to migration defaults (also `flask reset-fcc-patterns`) |
+| `cleanup_old_events.py` | Remove stale PPV events from the database |
+| `cleanup_corrupt_ppv_data.py` | Repair inconsistent PPV enrichment rows |
+| `cleanup_ppv_enrichment_queue.py` | Reset or trim PPV enrichment queue state |
+| `cleanup_low_confidence_matches.py` | Drop low-confidence PPV channel–event links |
+| `clean_calendar_cache.py` | Clear TheSportsDB calendar scrape cache |
+| `test_epg_sync.py` | Manual EPG sync smoke test against configured sources |
+
+`requirements-build.txt` lists extra deps for offline registry builds (CI: `.github/workflows/build-team-locations.yml`).
+
+## PPV analysis
+
+Scripts below analyze PPV enrichment and matching performance.
 
 ## Scripts
 

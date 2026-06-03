@@ -8,7 +8,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from models import Event, EventChannelLink, db
-from services.ppv.constants import get_sport_grace_hours
+from services.ppv.constants import FAR_FUTURE_VISIBILITY_DAYS, get_sport_grace_hours
 from services.ppv.detection import is_generic_channel_name, is_ppv_placeholder_name
 from services.ppv.extraction import PPVEventExtractor
 
@@ -105,12 +105,12 @@ class PPVVisibilityService:
 
     @staticmethod
     def _is_far_future_channel(channel_name: str) -> bool:
-        """Return True if the channel name contains an explicit date more than 31 days away."""
+        """Return True if the channel name contains an explicit date beyond the visibility horizon."""
         extraction = PPVEventExtractor().extract_all(channel_name)
         event_date = extraction.get("date")
         if not isinstance(event_date, datetime):
             return False
-        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=31)
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=FAR_FUTURE_VISIBILITY_DAYS)
         return event_date.replace(tzinfo=None) > cutoff
 
     @staticmethod
@@ -209,7 +209,7 @@ class PPVVisibilityService:
 
             # Future event: show unless it's more than a month away
             if event.scheduled_at >= current_time:
-                far_future_cutoff = current_time + timedelta(days=31)
+                far_future_cutoff = current_time + timedelta(days=FAR_FUTURE_VISIBILITY_DAYS)
                 if event.scheduled_at > far_future_cutoff:
                     logger.debug(
                         f"Hiding far-future event (>1 month away): {channel.name[:60]} "

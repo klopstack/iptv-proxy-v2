@@ -25,14 +25,42 @@ class VenueInferenceMode:
     reason: str
 
 
+def validate_neutral_site_heuristics(path: Optional[Path] = None) -> tuple[bool, str]:
+    """
+    Validate neutral-site heuristics JSON exists and parses as an object.
+
+    Returns (ok, message). Call at startup; tests may point ``path`` at fixtures.
+    """
+    config_path = path or _CONFIG_PATH
+    if not config_path.is_file():
+        return False, f"neutral site heuristics file missing: {config_path}"
+
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        return False, f"invalid neutral site heuristics JSON: {exc}"
+
+    if not isinstance(data, dict):
+        return False, "neutral site heuristics must be a JSON object"
+
+    return True, "ok"
+
+
 @lru_cache(maxsize=1)
 def _load_heuristics() -> dict:
-    try:
-        with open(_CONFIG_PATH, encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, json.JSONDecodeError) as exc:
-        logger.warning("Could not load neutral site heuristics: %s", exc)
+    ok, message = validate_neutral_site_heuristics()
+    if not ok:
+        logger.error("Neutral site heuristics invalid: %s", message)
         return {}
+
+    with open(_CONFIG_PATH, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def clear_heuristics_cache() -> None:
+    """Clear cached heuristics (for tests)."""
+    _load_heuristics.cache_clear()
 
 
 def _text_has_keyword(text: str, keywords: list) -> Optional[str]:
