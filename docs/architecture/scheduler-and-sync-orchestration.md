@@ -32,8 +32,8 @@ flowchart TD
 | Account sync marked success when `stats.success=False` | 71 ✅ |
 | Job timestamps advance on failure | 71 ✅ |
 | Status API lacks per-job failure metadata | 91 ✅ |
-| Sequential blocking (slow EPG blocks PPV) | 89 |
-| God class (~676 lines) | 89 |
+| Sequential blocking (slow EPG blocks PPV) | 89 (registry split; parallel execution future) |
+| God class (~676 lines) | 89 ✅ |
 | Global vs per-source EPG `last_sync` dual tracking | 90 |
 
 ## Sync lock patterns

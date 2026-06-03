@@ -22,6 +22,7 @@ from services.scheduler import (
     SyncScheduler,
 )
 from services.scheduler_lock import SchedulerLock
+from services.scheduler_registry import JobDefinition, build_scheduled_jobs
 
 # app fixture is provided by conftest.py
 
@@ -37,6 +38,53 @@ def scheduler(app, tmp_path):
         sched.stop()
     if sched.thread and sched.thread.is_alive():
         sched.thread.join(timeout=1)
+
+
+class TestSchedulerJobRegistry:
+    """Declarative job registry (TODO 89)."""
+
+    def test_build_scheduled_jobs_returns_expected_jobs(self):
+        jobs = build_scheduled_jobs()
+        assert len(jobs) == 8
+        assert all(isinstance(job, JobDefinition) for job in jobs)
+        assert jobs[0].status_key == "accounts"
+        assert any(job.status_key == "fcc" for job in jobs)
+
+    @patch("services.scheduler_jobs.accounts.ChannelSyncService.sync_account")
+    def test_registry_accounts_job_delegates_to_accounts_module(self, mock_sync_account, scheduler, app):
+        mock_sync_account.return_value = {
+            "success": True,
+            "channels_added": 0,
+            "channels_updated": 0,
+            "channels_deactivated": 0,
+        }
+        with app.app_context():
+            account = Account(
+                name="Registry Account",
+                server="http://example.com",
+                username="u",
+                password="p",
+                enabled=True,
+            )
+            db.session.add(account)
+            db.session.commit()
+            assert scheduler._sync_accounts() is True
+            mock_sync_account.assert_called_once_with(account.id)
+
+    @patch.object(SyncScheduler, "_run_scheduled_job_def")
+    @patch.object(SyncScheduler, "_sync_epg_sources_if_due")
+    @patch.object(SyncScheduler, "_scan_channel_health")
+    def test_check_and_sync_uses_registry_and_runs_epg_after_accounts(
+        self, _mock_health, mock_epg, mock_run_job_def, scheduler, app
+    ):
+        with app.app_context():
+            scheduler._check_and_sync()
+        assert mock_run_job_def.call_count == 8
+        accounts_idx = next(
+            i for i, call in enumerate(mock_run_job_def.call_args_list) if call[0][0].status_key == "accounts"
+        )
+        assert mock_run_job_def.call_args_list[accounts_idx][0][0].status_key == "accounts"
+        mock_epg.assert_called_once()
 
 
 class TestSyncSchedulerInit:
@@ -332,7 +380,7 @@ class TestLoadInterval:
 class TestTriggerSync:
     """Test scheduler-driven EPG sync"""
 
-    @patch("services.scheduler.ChannelSyncService.sync_account")
+    @patch("services.scheduler_jobs.accounts.ChannelSyncService.sync_account")
     def test_sync_accounts_marks_success(self, mock_sync_account, scheduler, app):
         """Successful sync sets account last_sync_status to success."""
         mock_sync_account.return_value = {
@@ -356,7 +404,7 @@ class TestTriggerSync:
             db.session.refresh(account)
             assert account.last_sync_status == "success"
 
-    @patch("services.scheduler.ChannelSyncService.sync_account")
+    @patch("services.scheduler_jobs.accounts.ChannelSyncService.sync_account")
     def test_sync_accounts_marks_error_on_failure(self, mock_sync_account, scheduler, app):
         """Failed sync must not report success."""
         mock_sync_account.return_value = {

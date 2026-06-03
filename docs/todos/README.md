@@ -268,7 +268,7 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 | 86 | [86-web-smoke-tests-and-pytest-consolidation.md](./86-web-smoke-tests-and-pytest-consolidation.md) | ⬜ | Admin page smoke tests; duplicate pytest fixtures |
 | 87 | [87-fix-stale-documentation.md](./87-fix-stale-documentation.md) | ⬜ | API_REFERENCE auth/Xtream URLs; missing P4 todo files |
 | 88 | [88-expand-ci-quality-gates.md](./88-expand-ci-quality-gates.md) | ⬜ | vulture, Docker build on PR, pre-commit tests |
-| 89 | [89-refactor-scheduler-job-registry.md](./89-refactor-scheduler-job-registry.md) | ⬜ | Split 676-line scheduler god class |
+| 89 | [89-refactor-scheduler-job-registry.md](./89-refactor-scheduler-job-registry.md) | ✅ | Scheduler job registry; coordinator < 400 lines |
 | 90 | [90-split-epg-programs-and-decouple-sync.md](./90-split-epg-programs-and-decouple-sync.md) | ⬜ | Split programs.py; decouple sync post-processing |
 | 92 | [92-cdn-script-sri-hardening.md](./92-cdn-script-sri-hardening.md) | ⬜ | CDN Subresource Integrity (deferred from 84) |
 | 94 | [94-speed-up-thesportsdb-tests-no-live-http.md](./94-speed-up-thesportsdb-tests-no-live-http.md) | ✅ | Fix stale SDK mocks; stop live TheSportsDB retry loops in unit tests |
