@@ -211,7 +211,7 @@ class TestPPVEnrichmentRoutes:
     ):
         """include_no_match re-queues via bulk update instead of loading all channels."""
         mock_orchestrator = MagicMock()
-        mock_orchestrator.requeue_no_match_channels.return_value = 2
+        mock_orchestrator.requeue_no_match_channels.return_value = {"queued": 2, "dry_run": False}
         mock_get_orchestrator.return_value = mock_orchestrator
         mock_run.return_value = {"channels_processed": 2, "channels_matched": 1, "channels_no_match": 0}
 
@@ -225,6 +225,61 @@ class TestPPVEnrichmentRoutes:
         mock_orchestrator.requeue_no_match_channels.assert_called_once_with(account_id=None)
         mock_run.assert_called_once()
         assert data["no_match_requeued"] == 2
+
+    def test_queue_no_match_channels(self, client, app, test_account):
+        """POST /queue/no-match re-queues no_match PPV channels."""
+        with app.app_context():
+            for i, status in enumerate(["no_match", "no_match", "matched"]):
+                channel = Channel(
+                    account_id=test_account,
+                    stream_id=str(2000 + i),
+                    name=f"Tennis: Event {i}" if i < 2 else "Other Event",
+                    is_ppv=True,
+                    ppv_enrichment_status=status,
+                )
+                db.session.add(channel)
+            db.session.commit()
+
+        response = client.post(
+            "/api/ppv-enrichment/queue/no-match",
+            json={"prefix": "Tennis:"},
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["queued"] == 2
+        assert data["dry_run"] is False
+
+        with app.app_context():
+            queued = Channel.query.filter_by(ppv_enrichment_status="queued").count()
+            assert queued == 2
+
+    def test_queue_no_match_dry_run(self, client, app, test_account):
+        """Dry run reports count without mutating the database."""
+        with app.app_context():
+            channel = Channel(
+                account_id=test_account,
+                stream_id="3001",
+                name="Peacock: Fight Night",
+                is_ppv=True,
+                ppv_enrichment_status="no_match",
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+        response = client.post(
+            "/api/ppv-enrichment/queue/no-match",
+            json={"dry_run": True},
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["queued"] == 1
+        assert data["dry_run"] is True
+
+        with app.app_context():
+            refreshed = Channel.query.filter_by(stream_id="3001").first()
+            assert refreshed.ppv_enrichment_status == "no_match"
 
     @patch("routes.ppv_enrichment.get_calendar_enrichment_service")
     def test_start_detail_thread(self, mock_get_service, client):

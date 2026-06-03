@@ -20,6 +20,7 @@ from services.ppv.enrichment.service import (
 )
 from services.ppv.enrichment.side_effects import EnrichmentSideEffects
 from services.ppv.enrichment.types import DETAIL_FETCH_BATCH_SIZE, DETAIL_QUEUE_STOP, EnrichmentResult
+from services.ppv.enrichment.attempt_tracking import _record_enrichment_attempt
 from services.ppv.persistence import sync_enrichment_status_from_links
 
 __all__ = [
@@ -34,6 +35,7 @@ __all__ = [
     "enrich_ppv_channels_batch",
     "get_calendar_enrichment_service",
     "prune_orphan_ppv_events",
+    "_record_enrichment_attempt",
     "sync_enrichment_status_from_links",
     "sync_ppv_epg_after_enrichment",
 ]

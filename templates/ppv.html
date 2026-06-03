@@ -215,6 +215,10 @@
                             <i class="bi bi-plus-circle"></i> Queue All PPV Channels
                         </button>
 
+                        <button id="requeue-no-match-btn" class="btn btn-outline-warning ms-2">
+                            <i class="bi bi-arrow-repeat"></i> Re-queue no_match
+                        </button>
+
                         <div id="queue-processing-status" class="mt-3" style="display: none;"></div>
                     </div>
                 </div>
@@ -930,6 +934,49 @@ document.getElementById('queue-all-ppv-btn').addEventListener('click', async fun
         statusEl.innerHTML = `
             <i class="bi bi-check-circle"></i> Channels queued successfully!<br>
             <small>Queued: ${result.queued} | Already Matched: ${result.skipped_already_matched}</small>
+        `;
+        statusEl.style.display = 'block';
+
+        await loadQueueStatus();
+        await loadQueueStats();
+        if (previewState.initialized) await loadPreviewData();
+    } catch (error) {
+        statusEl.className = 'alert alert-danger';
+        statusEl.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Error: ${escapeHtml(error.message)}`;
+        statusEl.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+});
+
+document.getElementById('requeue-no-match-btn').addEventListener('click', async function () {
+    if (!confirm('Re-queue all no_match PPV channels for enrichment? Existing event links are kept.')) {
+        return;
+    }
+
+    const btn = this;
+    const statusEl = document.getElementById('queue-processing-status');
+    const originalText = btn.innerHTML;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Re-queuing...';
+    statusEl.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/ppv-enrichment/queue/no-match', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dry_run: false })
+        });
+
+        if (!response.ok) throw new Error('Failed to re-queue no_match channels');
+
+        const result = await response.json();
+        statusEl.className = 'alert alert-success';
+        statusEl.innerHTML = `
+            <i class="bi bi-check-circle"></i> no_match channels re-queued!<br>
+            <small>Queued: ${result.queued}</small>
         `;
         statusEl.style.display = 'block';
 
