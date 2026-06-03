@@ -169,9 +169,7 @@ class TestSelectEnrichableBatch:
         unexpected dirty state is left in the session.
         """
         with app.app_context():
-            account = Account(
-                name="DeferredWrites", server="http://t", username="u", password="p", enabled=True
-            )
+            account = Account(name="DeferredWrites", server="http://t", username="u", password="p", enabled=True)
             db.session.add(account)
             db.session.commit()
 
@@ -204,9 +202,7 @@ class TestSelectEnrichableBatch:
 
             # Expire all in-memory state and re-query to confirm persistence.
             db.session.expire_all()
-            persisted = Channel.query.filter_by(
-                account_id=account.id, ppv_enrichment_status="skipped"
-            ).count()
+            persisted = Channel.query.filter_by(account_id=account.id, ppv_enrichment_status="skipped").count()
             assert persisted == 12
 
 

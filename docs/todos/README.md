@@ -374,6 +374,36 @@ Phased remainders from TODOs 78, 85, 92, 95; PPV module splits from TODO 65 (102
 4. Run the test plan listed in the document.
 5. Mark the item ✅ in this index and note the commit/PR in the document's **Completion** section.
 
+---
+
+## Database Migration — SQLite → PostgreSQL
+
+Identified June 2026. Two series: **A (preparation, on SQLite)** and **B (switchover)**. Series A items can be worked in parallel with Wave 9–10. Series B items depend on Series A being complete and tested.
+
+### Series A — Preparation (do while still on SQLite)
+
+| # | Document | Status | Summary |
+|---|----------|--------|---------|
+| 111 | [111-pg-prep-raw-sqlite3-audit.md](./111-pg-prep-raw-sqlite3-audit.md) | ⬜ | Remove raw `sqlite3` usage from services and migration infrastructure |
+| 112 | [112-pg-prep-json-column-types.md](./112-pg-prep-json-column-types.md) | ⬜ | Replace `db.Text`-as-JSON columns with `db.JSON` and remove manual serialization |
+| 113 | [113-pg-prep-alembic-migration-system.md](./113-pg-prep-alembic-migration-system.md) | ⬜ | Replace bespoke SQLite migration runner with Alembic |
+| 114 | [114-pg-prep-test-db-hardening.md](./114-pg-prep-test-db-hardening.md) | ⬜ | Harden test DB fixtures for PostgreSQL compatibility (injectable `DATABASE_URL`, `sqlite_only` markers) |
+| 115 | [115-pg-prep-ci-docker-config.md](./115-pg-prep-ci-docker-config.md) | ⬜ | PostgreSQL in CI, Docker Compose service, dialect-aware engine config |
+
+### Series B — Switchover (after Series A complete)
+
+| # | Document | Status | Summary |
+|---|----------|--------|---------|
+| 116 | [116-pg-migration-data-export-tooling.md](./116-pg-migration-data-export-tooling.md) | ⬜ | Data migration tooling: pgloader + validation script |
+| 117 | [117-pg-migration-schema-creation.md](./117-pg-migration-schema-creation.md) | ⬜ | PostgreSQL schema creation via Alembic and parity validation |
+| 118 | [118-pg-migration-cutover-procedure.md](./118-pg-migration-cutover-procedure.md) | ⬜ | Cutover runbook, rollback plan, and acceptance criteria |
+| 119 | [119-pg-migration-cleanup-and-docs.md](./119-pg-migration-cleanup-and-docs.md) | ⬜ | Post-cutover: remove SQLite code paths, update all documentation |
+
+**Dependency order within Series A:** 111 and 112 (parallel) → 113 → 114 → 115  
+**Dependency order within Series B:** 117 (schema) → 116 (data tooling) → 118 (cutover) → 119 (cleanup)
+
+---
+
 ## Audit source
 
 These items were derived from full codebase reviews covering:

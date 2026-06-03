@@ -45,9 +45,19 @@ def _sync_ppv_epg_after_batch(results: Dict[str, Any]) -> None:
         prune_orphan_ppv_events()
 
 
+def _detect_languages_after_enrichment(results: Dict[str, Any]) -> None:
+    matched_channel_ids = results.get("matched_channel_ids") or []
+    if not matched_channel_ids:
+        return
+    from services.language_detection_service import detect_languages_for_channel_ids
+
+    results["language_detection"] = detect_languages_for_channel_ids(matched_channel_ids)
+
+
 def default_enrichment_post_hooks() -> EnrichmentPostHooks:
     hooks = EnrichmentPostHooks()
     hooks.register(_sync_ppv_epg_after_batch)
+    hooks.register(_detect_languages_after_enrichment)
     return hooks
 
 

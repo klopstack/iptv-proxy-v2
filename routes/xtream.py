@@ -85,6 +85,44 @@ def _validate_ppv_rename_timezone(tz):
     return tz
 
 
+def _validate_language_fallback(value):
+    from services.language_preference_service import VALID_FALLBACKS, normalize_language_fallback
+
+    fallback = normalize_language_fallback(value)
+    if value is not None and str(value).strip().lower() not in VALID_FALLBACKS:
+        raise ValueError(f"Invalid language_fallback: {value}. Must be one of: {', '.join(sorted(VALID_FALLBACKS))}")
+    return fallback
+
+
+def _validate_preferred_languages(value):
+    import json
+
+    from services.language_preference_service import parse_preferred_languages
+
+    langs = parse_preferred_languages(value)
+    return json.dumps(langs)
+
+
+def _serialize_xtream_credential(credential):
+    from services.language_preference_service import parse_preferred_languages
+
+    preferred = parse_preferred_languages(credential.preferred_languages)
+    return {
+        "id": credential.id,
+        "username": credential.username,
+        "account_id": credential.account_id,
+        "playlist_config_id": credential.playlist_config_id,
+        "use_filters": credential.use_filters,
+        "collapse_duplicates": credential.collapse_duplicates,
+        "ppv_rename_timezone": credential.ppv_rename_timezone,
+        "preferred_languages": preferred,
+        "language_fallback": credential.language_fallback or "unknown",
+        "enabled": credential.enabled,
+        "description": credential.description,
+        "created_at": serialize_utc_iso(credential.created_at) if hasattr(credential, "created_at") else None,
+    }
+
+
 def _utc_unix_timestamp(dt):
     """Return Unix timestamp seconds from a datetime interpreted as UTC."""
     aware = _as_utc_aware(dt)
@@ -731,23 +769,7 @@ def xtream_series_stream(username, password, stream_id, ext="mp4"):
 def list_xtream_credentials():
     """List all Xtream credentials"""
     credentials = XtreamCredential.query.order_by(XtreamCredential.created_at.desc()).all()
-    return jsonify(
-        [
-            {
-                "id": c.id,
-                "username": c.username,
-                "account_id": c.account_id,
-                "playlist_config_id": c.playlist_config_id,
-                "use_filters": c.use_filters,
-                "collapse_duplicates": c.collapse_duplicates,
-                "ppv_rename_timezone": c.ppv_rename_timezone,
-                "enabled": c.enabled,
-                "description": c.description,
-                "created_at": serialize_utc_iso(c.created_at),
-            }
-            for c in credentials
-        ]
-    )
+    return jsonify([_serialize_xtream_credential(c) for c in credentials])
 
 
 @xtream_bp.route("/api/xtream-credentials", methods=["POST"])
@@ -772,6 +794,8 @@ def create_xtream_credential():
     # Create credential
     try:
         ppv_rename_timezone = _validate_ppv_rename_timezone(data.get("ppv_rename_timezone"))
+        preferred_languages = _validate_preferred_languages(data.get("preferred_languages"))
+        language_fallback = _validate_language_fallback(data.get("language_fallback"))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 
@@ -783,6 +807,8 @@ def create_xtream_credential():
         use_filters=data.get("use_filters", True),
         collapse_duplicates=data.get("collapse_duplicates", False),
         ppv_rename_timezone=ppv_rename_timezone,
+        preferred_languages=preferred_languages,
+        language_fallback=language_fallback,
         enabled=data.get("enabled", True),
         description=data.get("description", ""),
     )
@@ -793,19 +819,7 @@ def create_xtream_credential():
     logger.info(f"Created Xtream credential: {credential.username}")
 
     return (
-        jsonify(
-            {
-                "id": credential.id,
-                "username": credential.username,
-                "account_id": credential.account_id,
-                "playlist_config_id": credential.playlist_config_id,
-                "use_filters": credential.use_filters,
-                "collapse_duplicates": credential.collapse_duplicates,
-                "ppv_rename_timezone": credential.ppv_rename_timezone,
-                "enabled": credential.enabled,
-                "description": credential.description,
-            }
-        ),
+        jsonify(_serialize_xtream_credential(credential)),
         201,
     )
 
@@ -837,22 +851,20 @@ def update_xtream_credential(credential_id):
             credential.ppv_rename_timezone = _validate_ppv_rename_timezone(data.get("ppv_rename_timezone"))
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
+    if "preferred_languages" in data:
+        try:
+            credential.preferred_languages = _validate_preferred_languages(data.get("preferred_languages"))
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+    if "language_fallback" in data:
+        try:
+            credential.language_fallback = _validate_language_fallback(data.get("language_fallback"))
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
 
     db.session.commit()
 
-    return jsonify(
-        {
-            "id": credential.id,
-            "username": credential.username,
-            "account_id": credential.account_id,
-            "playlist_config_id": credential.playlist_config_id,
-            "use_filters": credential.use_filters,
-            "collapse_duplicates": credential.collapse_duplicates,
-            "ppv_rename_timezone": credential.ppv_rename_timezone,
-            "enabled": credential.enabled,
-            "description": credential.description,
-        }
-    )
+    return jsonify(_serialize_xtream_credential(credential))
 
 
 @xtream_bp.route("/api/xtream-credentials/<int:credential_id>", methods=["DELETE"])

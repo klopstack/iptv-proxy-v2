@@ -70,6 +70,7 @@ class CalendarMatchPipeline:
             "calendar_requests_made": 0,
             "detail_queue_size": 0,
             "far_future_skipped": 0,
+            "matched_channel_ids": [],
         }
 
         extraction_results = extract_fn(channels)
@@ -145,6 +146,7 @@ class CalendarMatchPipeline:
 
                 if result.matched:
                     results["matched"] += 1
+                    results["matched_channel_ids"].append(channel.id)
 
                     if result.calendar_event:
                         event, was_created = persist_match(

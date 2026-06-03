@@ -98,13 +98,15 @@ class TestEnrichmentNoopPostHooks:
             set_enrichment_post_hooks(original)
 
     def test_default_hooks_invoke_epg_sync_when_matched(self, app):
+        from services.ppv.enrichment_post_hooks import default_enrichment_post_hooks
+
         with app.app_context():
             results = {"matched": 2, "processed": 2}
             with patch(
                 "services.ppv.cleanup.sync_ppv_epg_after_enrichment",
                 return_value={"epg_mappings": 1},
             ) as mock_sync:
-                get_enrichment_post_hooks().run(results)
+                default_enrichment_post_hooks().run(results)
             mock_sync.assert_called_once_with(2)
 
 

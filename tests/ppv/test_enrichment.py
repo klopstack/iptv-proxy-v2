@@ -840,31 +840,38 @@ class TestFarFutureEnrichmentFilter:
             service = PPVCalendarEnrichmentService(app)
             far_date = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=45)
 
-            # Patch the internal steps so we can inspect the valid_extractions list
-            from services.ppv.enrichment_post_hooks import EnrichmentPostHooks, set_enrichment_post_hooks
+            from services.ppv.enrichment_post_hooks import (
+                EnrichmentPostHooks,
+                get_enrichment_post_hooks,
+                set_enrichment_post_hooks,
+            )
 
-            set_enrichment_post_hooks(EnrichmentPostHooks.noop())
-            with patch.object(service, "_extract_all_channels") as mock_extract, patch.object(
-                service, "_group_by_date"
-            ) as mock_group, patch.object(service, "_update_stats"), patch(
-                "services.ppv.enrichment.sync_enrichment_status_from_links"
-            ):
-                ch = self._make_channel("UFC 405: Jones vs Smith")
-                mock_extract.return_value = [
-                    (
-                        ch,
-                        {
-                            "is_placeholder": False,
-                            "is_inactive": False,
-                            "competitors": ("Jones", "Smith"),
-                            "date": far_date,
-                        },
-                    )
-                ]
-                # Return an empty group so nothing tries to match
-                mock_group.return_value = {}
+            original_hooks = get_enrichment_post_hooks()
+            try:
+                set_enrichment_post_hooks(EnrichmentPostHooks.noop())
+                with patch.object(service, "_extract_all_channels") as mock_extract, patch.object(
+                    service, "_group_by_date"
+                ) as mock_group, patch.object(service, "_update_stats"), patch(
+                    "services.ppv.enrichment.sync_enrichment_status_from_links"
+                ):
+                    ch = self._make_channel("UFC 405: Jones vs Smith")
+                    mock_extract.return_value = [
+                        (
+                            ch,
+                            {
+                                "is_placeholder": False,
+                                "is_inactive": False,
+                                "competitors": ("Jones", "Smith"),
+                                "date": far_date,
+                            },
+                        )
+                    ]
+                    # Return an empty group so nothing tries to match
+                    mock_group.return_value = {}
 
-                result = service.enrich_channels([ch], fetch_details=False)
+                    result = service.enrich_channels([ch], fetch_details=False)
+            finally:
+                set_enrichment_post_hooks(original_hooks)
 
             # The channel was filtered out (counted as no_extraction, reason: far_future)
             assert result["no_extraction"] == 1
@@ -877,29 +884,37 @@ class TestFarFutureEnrichmentFilter:
             service = PPVCalendarEnrichmentService(app)
             near_date = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=20)
 
-            from services.ppv.enrichment_post_hooks import EnrichmentPostHooks, set_enrichment_post_hooks
+            from services.ppv.enrichment_post_hooks import (
+                EnrichmentPostHooks,
+                get_enrichment_post_hooks,
+                set_enrichment_post_hooks,
+            )
 
-            set_enrichment_post_hooks(EnrichmentPostHooks.noop())
-            with patch.object(service, "_extract_all_channels") as mock_extract, patch.object(
-                service, "_group_by_date"
-            ) as mock_group, patch.object(service, "_update_stats"), patch(
-                "services.ppv.enrichment.sync_enrichment_status_from_links"
-            ):
-                ch = self._make_channel("UFC 403: Brown vs White")
-                mock_extract.return_value = [
-                    (
-                        ch,
-                        {
-                            "is_placeholder": False,
-                            "is_inactive": False,
-                            "competitors": ("Brown", "White"),
-                            "date": near_date,
-                        },
-                    )
-                ]
-                mock_group.return_value = {}
+            original_hooks = get_enrichment_post_hooks()
+            try:
+                set_enrichment_post_hooks(EnrichmentPostHooks.noop())
+                with patch.object(service, "_extract_all_channels") as mock_extract, patch.object(
+                    service, "_group_by_date"
+                ) as mock_group, patch.object(service, "_update_stats"), patch(
+                    "services.ppv.enrichment.sync_enrichment_status_from_links"
+                ):
+                    ch = self._make_channel("UFC 403: Brown vs White")
+                    mock_extract.return_value = [
+                        (
+                            ch,
+                            {
+                                "is_placeholder": False,
+                                "is_inactive": False,
+                                "competitors": ("Brown", "White"),
+                                "date": near_date,
+                            },
+                        )
+                    ]
+                    mock_group.return_value = {}
 
-                result = service.enrich_channels([ch], fetch_details=False)
+                    result = service.enrich_channels([ch], fetch_details=False)
+            finally:
+                set_enrichment_post_hooks(original_hooks)
 
             # Channel was NOT filtered as far_future — it was accepted into valid_extractions
             assert result["no_extraction"] == 0
@@ -909,29 +924,37 @@ class TestFarFutureEnrichmentFilter:
         with app.app_context():
             service = PPVCalendarEnrichmentService(app)
 
-            from services.ppv.enrichment_post_hooks import EnrichmentPostHooks, set_enrichment_post_hooks
+            from services.ppv.enrichment_post_hooks import (
+                EnrichmentPostHooks,
+                get_enrichment_post_hooks,
+                set_enrichment_post_hooks,
+            )
 
-            set_enrichment_post_hooks(EnrichmentPostHooks.noop())
-            with patch.object(service, "_extract_all_channels") as mock_extract, patch.object(
-                service, "_group_by_date"
-            ) as mock_group, patch.object(service, "_update_stats"), patch(
-                "services.ppv.enrichment.sync_enrichment_status_from_links"
-            ):
-                ch = self._make_channel("UFC 404: Fighter vs Fighter")
-                mock_extract.return_value = [
-                    (
-                        ch,
-                        {
-                            "is_placeholder": False,
-                            "is_inactive": False,
-                            "competitors": ("Fighter A", "Fighter B"),
-                            "date": None,
-                        },
-                    )
-                ]
-                mock_group.return_value = {}
+            original_hooks = get_enrichment_post_hooks()
+            try:
+                set_enrichment_post_hooks(EnrichmentPostHooks.noop())
+                with patch.object(service, "_extract_all_channels") as mock_extract, patch.object(
+                    service, "_group_by_date"
+                ) as mock_group, patch.object(service, "_update_stats"), patch(
+                    "services.ppv.enrichment.sync_enrichment_status_from_links"
+                ):
+                    ch = self._make_channel("UFC 404: Fighter vs Fighter")
+                    mock_extract.return_value = [
+                        (
+                            ch,
+                            {
+                                "is_placeholder": False,
+                                "is_inactive": False,
+                                "competitors": ("Fighter A", "Fighter B"),
+                                "date": None,
+                            },
+                        )
+                    ]
+                    mock_group.return_value = {}
 
-                result = service.enrich_channels([ch], fetch_details=False)
+                    result = service.enrich_channels([ch], fetch_details=False)
+            finally:
+                set_enrichment_post_hooks(original_hooks)
 
             assert result["no_extraction"] == 0
 

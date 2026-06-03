@@ -209,6 +209,8 @@ def get_event_channels(event_id: int) -> List[Dict]:
                 "feed_type": link.feed_type,
                 "region": link.region,
                 "provider": link.provider,
+                "broadcast_language": channel.broadcast_language,
+                "language_source": channel.language_source,
             }
         )
 
