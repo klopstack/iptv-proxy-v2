@@ -251,6 +251,7 @@ W: 96 → 97
 X: 98 (after W recommended)
 Y: 99 (parallel with W/X if separate contributor)
 Z: 100 (last — stable suite before xdist CI)
+AB: 105 (pytest-randomly — after Z; pairs with xdist)
 AA: 102 (PPV module splits — 65 phases 2–3)
 ```
 
@@ -262,6 +263,7 @@ AA: 102 (PPV module splits — 65 phases 2–3)
 | 9d | [99](./99-esm-tab-migration-and-eslint.md) | 85 phases 2–3 | ESM tabs 1–3 ✅ PR #40 |
 | 9e | [103](./103-esm-tabs-4-6-migration.md) | 85 phase 3 | ESM tabs 4–6 + ESLint |
 | 9e | [100](./100-parallelize-pytest-xdist.md) | 95 | pytest-xdist per-worker DB |
+| 9g | [105](./105-randomize-pytest-order.md) | 100 | pytest-randomly (order-dependent failures) |
 | 9f | [102](./102-optional-ppv-module-splits.md) | 65 phases 2–3 | Split `epg.py`, `extraction.py` |
 
 ### PR batches — Wave 9
@@ -272,9 +274,10 @@ AA: 102 (PPV module splits — 65 phases 2–3)
 | **X** | 98 | FCC patterns split + CDN SRI | M |
 | **Y** | 99, 103 | ESM tab migration + ESLint | M–L (multi-PR OK) |
 | **Z** | 100 | Parallel pytest (pytest-xdist) | M |
+| **AB** | 105 | Randomize pytest order (pytest-randomly) | S |
 | **AA** | 102 | PPV module splits (`epg/`, `extraction/`) | L |
 
-**Suggested merge order:** **W** (96 → 97) → **X** → **Y** (can overlap **W**/**X**) → **Z** → **AA** if scheduled → then Wave 10.
+**Suggested merge order:** **W** (96 → 97) → **X** → **Y** (can overlap **W**/**X**) → **Z** → **AB** (105) → **AA** if scheduled → then Wave 10.
 
 ---
 
@@ -328,6 +331,7 @@ Quick reference for all suggested pull requests (A–AA + Wave 8 singles).
 | **Y** | 9 | 99 | M–L | ✅ PR #40 |
 | **Y** | 9 | 103 | M | 🟡 PR pending |
 | **Z** | 9 | 100 | M | ⬜ |
+| **AB** | 9 | 105 | S | ⬜ after **Z** |
 | **AA** | 9 | 102 | L | ✅ |
 | — | 10 | 101 | S | ⬜ after Wave 9 |
 
@@ -381,7 +385,8 @@ If resuming after Waves 1–8:
 2. **[97](./97-extract-config-transfer-routes.md)** — config transfer split (PR **W**, second)  
 3. **[98](./98-fcc-patterns-split-and-cdn-sri.md)** — FCC + CDN SRI (PR **X**)  
 4. **[99](./99-esm-tab-migration-and-eslint.md)** — ESM tabs + ESLint (PR **Y**; can parallelize with W/X)  
-5. **[100](./100-parallelize-pytest-xdist.md)** — pytest-xdist (PR **Z**; after suite stable)  
+5. **[100](./100-parallelize-pytest-xdist.md)** — pytest-xdist (PR **Z**; after suite stable)
+6. **[105](./105-randomize-pytest-order.md)** — pytest-randomly (PR **AB**; after **Z**)
 
 Then **[101](./101-final-documentation-review.md)** (Wave 10). **[102](./102-optional-ppv-module-splits.md)** (PR **AA**) complete — PPV `epg/` and `extraction/` package splits.
 

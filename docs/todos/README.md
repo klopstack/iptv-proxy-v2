@@ -304,6 +304,7 @@ Phased remainders from TODOs 78, 85, 92, 95; PPV module splits from TODO 65 (102
 | 99 | [99-esm-tab-migration-and-eslint.md](./99-esm-tab-migration-and-eslint.md) | ✅ | TODO 85 phases 2–3 tabs 1–3 (PR **Y** #40); tabs 4–6 → [103](./103-esm-tabs-4-6-migration.md) |
 | 103 | [103-esm-tabs-4-6-migration.md](./103-esm-tabs-4-6-migration.md) | 🟡 | TODO 85 phase 3 tabs 4–6 + ESLint (PR **Y** [#44](https://github.com/klopstack/iptv-proxy-v2/pull/44)) |
 | 100 | [100-parallelize-pytest-xdist.md](./100-parallelize-pytest-xdist.md) | 🟡 | TODO 95: pytest-xdist per-worker DB (PR **Z**, in PR) |
+| 105 | [105-randomize-pytest-order.md](./105-randomize-pytest-order.md) | ✅ | pytest-randomly for order-dependent failure detection ([PR #47](https://github.com/klopstack/iptv-proxy-v2/pull/47), batch **AB**) |
 | 102 | [102-optional-ppv-module-splits.md](./102-optional-ppv-module-splits.md) | ✅ | TODO 65 phases 2–3: `epg/`, `extraction/` packages (PR **AA**) |
 
 ### Wave 10 — Final documentation review

@@ -26,6 +26,8 @@ ensure_newline_before_comments = true
 indent = 4
 
 [tool.pytest.ini_options]
+# pytest-randomly (requirements-dev.txt) shuffles collection order by default.
+# Reproduce a failure: pytest ... --randomly-seed=<seed from output>
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 filterwarnings = [

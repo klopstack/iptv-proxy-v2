@@ -66,6 +66,15 @@ docker exec -it iptv-proxy-v2 pytest tests/
 
 Tests use **pytest-xdist** (`-n auto`) by default so each worker gets its own SQLite file (`instance/pytest_gw0.db`, …). Serial runs still use `instance/pytest.db`.
 
+**pytest-randomly** shuffles test collection order on every run (including parallel) to catch order-dependent failures. The first line of pytest output includes `Using --randomly-seed=…`; failed runs repeat the seed so you can reproduce:
+
+```bash
+make test-clean
+venv/bin/pytest tests/ -q --no-cov -n auto --randomly-seed=1234567890
+```
+
+To keep the same seed across multiple local runs while debugging, add `--randomly-dont-reset-seed`. To disable shuffling for one run: `--randomly-dont-shuffle`.
+
 ```bash
 # Run all tests with coverage (parallel; matches CI)
 make test
@@ -772,6 +781,8 @@ pytest tests/ -v
 If you see `malformed database schema`, leftover SQLite files (including `-wal`/`-shm` sidecars) from a prior run are the usual cause. `make test-clean` removes serial (`pytest.db`) and xdist worker files (`pytest_gw*.db`).
 
 **Parallel vs serial:** Default `make test` / `make test-fast` use `-n auto`. For a serial baseline or bisecting a flake, run `venv/bin/pytest tests/ -q --no-cov` after `make test-clean`.
+
+**Order-dependent flakes:** If a test passes alone but fails in the full suite, copy `--randomly-seed` from the failure banner and rerun with the same seed (see **pytest-randomly** above). Fix shared fixtures, module-level state, or DB cleanup rather than relying on discovery order.
 
 **Import errors in tests**:
 ```bash
