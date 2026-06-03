@@ -181,6 +181,28 @@
                             Override timezone for PPV channel <code>{start_time}</code> and <code>{date}</code> tokens.
                         </div>
                     </div>
+
+                    <div class="mb-3">
+                        <label for="credential-preferred-languages" class="form-label">Preferred Languages</label>
+                        <input type="text" class="form-control" id="credential-preferred-languages"
+                               placeholder="en, es, fr" value="en">
+                        <div class="form-text">
+                            Comma-separated ISO 639-1 codes in priority order (default: <code>en</code>).
+                            When multiple language feeds exist for the same PPV event, only the preferred feed is shown.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="credential-language-fallback" class="form-label">Language Fallback</label>
+                        <select class="form-select" id="credential-language-fallback">
+                            <option value="unknown" selected>Unknown — treat undetermined feeds as acceptable</option>
+                            <option value="hide">Hide — drop undetermined feeds when a known alternative exists</option>
+                            <option value="show_all">Show all — list every language feed</option>
+                        </select>
+                        <div class="form-text">
+                            Controls behavior when broadcast language cannot be detected or no preferred match exists.
+                        </div>
+                    </div>
                 </form>
                 <datalist id="xtream-timezone-options">
                     <option value="America/New_York"></option>
@@ -373,6 +395,8 @@ function saveCredential() {
     const enabled = document.getElementById('credential-enabled').checked;
     const description = document.getElementById('credential-description').value.trim();
     const ppvRenameTimezone = document.getElementById('credential-ppv-rename-timezone').value.trim();
+    const preferredLanguages = document.getElementById('credential-preferred-languages').value.trim();
+    const languageFallback = document.getElementById('credential-language-fallback').value;
     
     // Validation
     if (!username) {
@@ -400,6 +424,8 @@ function saveCredential() {
         enabled,
         description,
         ppv_rename_timezone: ppvRenameTimezone || null,
+        preferred_languages: preferredLanguages || 'en',
+        language_fallback: languageFallback,
     };
     
     // Only include password if it was provided
@@ -450,6 +476,11 @@ function editCredential(id) {
             document.getElementById('credential-enabled').checked = cred.enabled;
             document.getElementById('credential-description').value = cred.description || '';
             document.getElementById('credential-ppv-rename-timezone').value = cred.ppv_rename_timezone || '';
+            const langs = Array.isArray(cred.preferred_languages)
+                ? cred.preferred_languages.join(', ')
+                : (cred.preferred_languages || 'en');
+            document.getElementById('credential-preferred-languages').value = langs;
+            document.getElementById('credential-language-fallback').value = cred.language_fallback || 'unknown';
             
             // Set source type
             if (cred.account_id) {

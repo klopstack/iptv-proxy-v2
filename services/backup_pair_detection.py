@@ -215,6 +215,10 @@ def detect_event_multi_feed_pairs(channels: List[Channel], stats: Dict[str, Any]
         if any(ChannelLink.query.filter_by(channel_id=ch.id, link_type=LINK_TYPE_BACKUP).first() for ch, _ in active):
             continue
 
+        langs = {(ch.broadcast_language or "und").lower() for ch, _ in active}
+        if len(langs) > 1:
+            continue
+
         scored = sorted(
             active,
             key=lambda item: _channel_quality_score(item[0], tags_map.get(item[0].id, [])),

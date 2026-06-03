@@ -85,6 +85,8 @@ def list_ppv_enrichment_channels(
             "channel_name": channel.name,
             "account_id": channel.account_id,
             "account_name": account.name if account else None,
+            "broadcast_language": channel.broadcast_language,
+            "language_source": channel.language_source,
             "ppv_enrichment_status": channel.ppv_enrichment_status,
             "ppv_enrichment_attempts": channel.ppv_enrichment_attempts or 0,
             "ppv_enrichment_error": channel.ppv_enrichment_error,
