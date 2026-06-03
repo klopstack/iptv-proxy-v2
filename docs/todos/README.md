@@ -263,13 +263,14 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 | 81 | [81-model-fk-ondelete-alignment.md](./81-model-fk-ondelete-alignment.md) | ⬜ | FK ondelete drift; migration FK pragma |
 | 82 | [82-scheduled-data-retention.md](./82-scheduled-data-retention.md) | ⬜ | Events and cached images grow unbounded |
 | 83 | [83-xss-audit-legacy-frontend.md](./83-xss-audit-legacy-frontend.md) | ⬜ | innerHTML with API data in legacy JS + TagSelector |
-| 84 | [84-docker-and-secrets-hardening.md](./84-docker-and-secrets-hardening.md) | ⬜ | No `.dockerignore`; default SECRET_KEY; root container |
+| 84 | [84-docker-and-secrets-hardening.md](./84-docker-and-secrets-hardening.md) | ✅ | `.dockerignore`, non-root container, Flask sessions disabled (no SECRET_KEY) |
 | 85 | [85-frontend-deduplication-and-esm-migration.md](./85-frontend-deduplication-and-esm-migration.md) | ⬜ | escapeHtml/loadAccounts/datetime dupes; epg_management migration |
 | 86 | [86-web-smoke-tests-and-pytest-consolidation.md](./86-web-smoke-tests-and-pytest-consolidation.md) | ⬜ | Admin page smoke tests; duplicate pytest fixtures |
 | 87 | [87-fix-stale-documentation.md](./87-fix-stale-documentation.md) | ⬜ | API_REFERENCE auth/Xtream URLs; missing P4 todo files |
 | 88 | [88-expand-ci-quality-gates.md](./88-expand-ci-quality-gates.md) | ⬜ | vulture, Docker build on PR, pre-commit tests |
 | 89 | [89-refactor-scheduler-job-registry.md](./89-refactor-scheduler-job-registry.md) | ⬜ | Split 676-line scheduler god class |
 | 90 | [90-split-epg-programs-and-decouple-sync.md](./90-split-epg-programs-and-decouple-sync.md) | ⬜ | Split programs.py; decouple sync post-processing |
+| 92 | [92-cdn-script-sri-hardening.md](./92-cdn-script-sri-hardening.md) | ⬜ | CDN Subresource Integrity (deferred from 84) |
 
 ### Recommended order for items 68–90
 

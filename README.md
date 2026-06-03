@@ -21,7 +21,6 @@ docker run -d \
   --name iptv-proxy-v2 \
   -p 8889:8000 \
   -v ./data:/app/data \
-  -e SECRET_KEY=your-secret-key-here \
   ghcr.io/klopstack/iptv-proxy-v2:latest
 ```
 
@@ -62,9 +61,20 @@ services:
       - ./data:/app/data
     environment:
       PORT: "8000"
-      SECRET_KEY: "${SECRET_KEY:-change-me-in-production}"
       DEBUG: "False"
 ```
+
+## Deployment security
+
+Admin authentication is **not** implemented in Flask. Production stacks use **Traefik + Authentik** forward-auth for the web UI and `/api/*`; client paths (playlists, streams, Xtream) use provisioned credentials. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+| Topic | Guidance |
+|-------|----------|
+| **Flask sessions** | Disabled (`NullSessionInterface`). No `SECRET_KEY` is required or configured. |
+| **Secrets that matter** | `MEDIAFLOW_API_PASSWORD` when using the mediaflow backend; IPTV provider credentials stored in the database |
+| **Docker image** | `.dockerignore` excludes `.env`, test DBs, and local artifacts from `COPY . .` |
+| **Container user** | Runs as UID/GID 1000 by default; set `PUID`/`PGID` in compose and `chown` the `./data` volume |
+| **Host networking** | Default compose uses `network_mode: host` for IPTV stream compatibility — bind port 8000 is reachable on all host interfaces. Prefer routing admin traffic through Traefik + Authentik; restrict host firewall if the port must not be public |
 
 ## Usage
 
@@ -402,8 +412,9 @@ python app.py  # Will recreate database
 |----------|---------|-------------|
 | `DATABASE_URL` | `sqlite:////app/data/iptv_proxy.db` (Docker) or `sqlite:///data/iptv_proxy.db` (local) | Database connection string |
 | `PORT` | `8000` | Server port |
-| `SECRET_KEY` | `dev-secret-key...` | Flask secret key |
 | `DEBUG` | `False` | Enable debug mode |
+| `PUID` / `PGID` | `1000` | Container user for file ownership (Docker Compose) |
+| `MEDIAFLOW_API_PASSWORD` | _(empty)_ | MediaFlow proxy API password when `STREAM_BACKEND=mediaflow` |
 
 ## Project Structure
 

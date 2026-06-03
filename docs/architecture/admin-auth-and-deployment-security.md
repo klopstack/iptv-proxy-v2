@@ -58,15 +58,17 @@ The `8889:8000` mapping on the **gluetun** service is a host port forward into G
 
 - Flask-Login, session cookies for admin, or API keys on `/api/*`
 - Per-route `@login_required` (by design)
+- Flask `SECRET_KEY` / signed session cookies — sessions are disabled (`services/flask_session.py`); admin auth is entirely at the proxy layer
 
 ## Deployment hardening (still recommended)
 
 | Item | Reference |
 |------|-----------|
 | Traefik labels + path split | [DEPLOYMENT.md](../DEPLOYMENT.md) |
-| `.dockerignore`, `SECRET_KEY` | TODO 84 |
+| `.dockerignore`, non-root container | TODO 84 ✅ |
+| No Flask `SECRET_KEY` (sessions disabled) | TODO 84 ✅ — proxy auth only |
 | FCC reset over HTTP → CLI only | TODO 69 |
-| `/icon/fetch` SSRF allowlist | TODO 69 |
+| `/icon/` whitelist-only (sync prefetch) | TODO 69 |
 
 ## Related TODOs
 

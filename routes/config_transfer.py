@@ -182,6 +182,7 @@ def _serialize_fcc_strategy(model: FccMatchStrategy) -> dict:
 
 
 @config_transfer_bp.route("/api/config/export", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error exporting configuration bundle")
 def export_config_bundle():
     """Export a full configuration bundle as JSON."""
     include_accounts = _parse_bool(request.args.get("include_accounts"), default=True)

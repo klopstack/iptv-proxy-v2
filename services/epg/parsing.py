@@ -141,7 +141,7 @@ def sync_epg_source(source: EpgSource, xml_content: bytes) -> Dict[str, int]:
     Returns:
         Dict with sync statistics
     """
-    stats = {
+    stats: Dict[str, Any] = {
         "channels_added": 0,
         "channels_updated": 0,
         "channels_removed": 0,
@@ -272,6 +272,13 @@ def sync_epg_source(source: EpgSource, xml_content: bytes) -> Dict[str, int]:
     source.updated_at = now
 
     db.session.commit()
+
+    try:
+        from services.icon_prefetch import prefetch_epg_source_icons
+
+        stats["icon_prefetch"] = prefetch_epg_source_icons(source.id)
+    except Exception as e:
+        logger.error("Icon prefetch after XMLTV sync failed for source %s: %s", source.id, e)
 
     logger.info(
         f"EPG sync for source {source.id} ({source.name}): "

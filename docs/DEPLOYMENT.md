@@ -161,8 +161,10 @@ Traefik static config (`traefik-static.yaml` in klopstack):
 2. Create Authentik application for `https://iptv.${CLOUDFLARE_DNS_ZONE}/` with Traefik forward-auth outpost.
 3. Confirm client paths (e.g. `/player_api.php`) work **without** Authentik session cookies.
 4. Confirm `/api/accounts` (or `/settings`) redirects to Authentik when unauthenticated.
-5. Restrict or firewall Gluetun port `8889` if not needed locally.
-6. Set a strong `SECRET_KEY` and non-default `MEDIAFLOW_API_PASSWORD` in production.
+5. Restrict or firewall host port `8000` when using `network_mode: host` without Traefik.
+6. Set a non-default `MEDIAFLOW_API_PASSWORD` in production when using the mediaflow backend.
+
+**Note:** This app does not use Flask session cookies or `SECRET_KEY`. Admin auth is Traefik + Authentik only (see [architecture/admin-auth-and-deployment-security.md](architecture/admin-auth-and-deployment-security.md)).
 
 ## Related documentation
 

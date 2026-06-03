@@ -202,7 +202,6 @@ mypy app.py models/ services/  # Type checking
 **Running Locally:**
 ```bash
 export DATABASE_URL="sqlite:////app/data/iptv_proxy.db"
-export SECRET_KEY="dev-key"
 python app.py  # Runs on port 8000 by default
 # Or: make run
 ```

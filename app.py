@@ -20,13 +20,15 @@ from flask_cors import CORS
 
 from error_handling import register_error_handlers
 from models import SyncMetadata, db  # noqa: F401 - imported for db.create_all()
+from services.flask_session import disable_flask_sessions
 from services.scheduler import SyncScheduler
 
 # Initialize Flask app
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:////app/data/iptv_proxy.db")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+# No SECRET_KEY: admin auth is Traefik + Authentik; Flask sessions are disabled.
+disable_flask_sessions(app)
 
 # SQLite configuration for better concurrency with background scheduler
 # - timeout: Wait up to 60 seconds for locks (increased from 30)
