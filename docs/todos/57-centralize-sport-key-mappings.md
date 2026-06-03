@@ -1,6 +1,6 @@
 # Centralize sport-key mapping tables
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P1  
 **Audit:** PPV audit, June 2026
 
@@ -36,9 +36,15 @@ Adding a sport (e.g. WNBA, MiLB) requires touching multiple files; mismatches ca
 
 ## Acceptance criteria
 
-- [ ] Single module defines canonical sport keys and alias resolution.
-- [ ] All four consumer modules use registry helpers.
-- [ ] Existing timezone and context tests pass without behavior change.
+- [x] Single module defines canonical sport keys and alias resolution.
+- [x] All four consumer modules use registry helpers.
+- [x] Existing timezone and context tests pass without behavior change.
+
+## Completion
+
+- **PR:** [#15 — Wave 2F: Sport registry + team validation](https://github.com/klopstack/iptv-proxy-v2/pull/15)
+- **Module:** `services/ppv/sport_registry.py`
+- **Tests:** `tests/ppv/test_sport_registry.py`
 
 ## Test plan
 

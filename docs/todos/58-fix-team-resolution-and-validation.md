@@ -1,6 +1,6 @@
 # Fix team resolution and validation consistency
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P1  
 **Audit:** PPV audit, June 2026
 
@@ -40,9 +40,14 @@ Short or generic keys (e.g. "United", "City") can match the wrong team when spor
 
 ## Acceptance criteria
 
-- [ ] No false-positive team resolution in parametrized edge cases ("United", "City FC").
-- [ ] WNBA appears in `SportsTeam.SPORTS` and refresh enumeration.
-- [ ] Validation accepts/rejects same pairs as matcher for recorded fixture set.
+- [x] No false-positive team resolution in parametrized edge cases ("United", "City FC").
+- [x] WNBA appears in `SportsTeam.SPORTS` and refresh enumeration.
+- [x] Validation accepts/rejects same pairs as matcher for recorded fixture set.
+
+## Completion
+
+- **PR:** [#15 — Wave 2F: Sport registry + team validation](https://github.com/klopstack/iptv-proxy-v2/pull/15)
+- **Tests:** `tests/ppv/test_sports_team_resolve.py`, `tests/ppv/test_matching_validation.py`
 
 ## Test plan
 

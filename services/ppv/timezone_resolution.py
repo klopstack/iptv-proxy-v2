@@ -10,12 +10,12 @@ from zoneinfo import ZoneInfo
 
 from services.datetime_utils import parse_title_timezone
 from services.ppv.city_timezone_map import iana_for_team_city
+from services.ppv.constants import COUNTRY_PREFIX_TZ, PROVIDER_SUFFIX_TZ, US_STYLE_REGION_CODES
 from services.ppv.extraction import MatchupInfo, PPVEventExtractor
+from services.ppv.sport_registry import normalize_sport_key
 from services.ppv.venue_inference import VenueInferenceMode, detect_venue_inference_mode
 
 logger = logging.getLogger(__name__)
-
-from services.ppv.constants import COUNTRY_PREFIX_TZ, PROVIDER_SUFFIX_TZ, US_STYLE_REGION_CODES
 
 
 @dataclass
@@ -144,7 +144,7 @@ def _home_team_timezone(
     try:
         from models.ppv import SportsTeam
 
-        sport_key = _sport_to_team_key(sport)
+        sport_key = normalize_sport_key(sport)
         if sport_key in ("fb", "wnba", "milb") and home_team_id:
             from services.team_location_registry import lookup
 
@@ -177,7 +177,7 @@ def _home_team_timezone(
             return None
         return iana_for_team_city(home_team)
     except Exception:
-        sk = _sport_to_team_key(sport)
+        sk = normalize_sport_key(sport)
         if sk in ("fb", "wnba", "milb"):
             return None
         return iana_for_team_city(home_team)
@@ -189,41 +189,13 @@ def _resolve_sport_key_for_channel(
     category_name: Optional[str] = None,
 ) -> Optional[str]:
     """Sport key for timezone rules, from explicit sport or channel/category hints."""
-    key = _sport_to_team_key(sport)
+    key = normalize_sport_key(sport)
     if key:
         return key
     from services.ppv.matching.context import resolve_sport_league_context
 
     ctx = resolve_sport_league_context(channel_name, category_name)
     return ctx.primary_sport_key
-
-
-def _sport_to_team_key(sport: Optional[str]) -> Optional[str]:
-    if not sport:
-        return None
-    s = sport.lower()
-    mapping = {
-        "baseball": "mlb",
-        "mlb": "mlb",
-        "milb": "milb",
-        "minor league baseball": "milb",
-        "basketball": "nba",
-        "nba": "nba",
-        "wnba": "wnba",
-        "ice hockey": "nhl",
-        "hockey": "nhl",
-        "nhl": "nhl",
-        "american football": "nfl",
-        "nfl": "nfl",
-        "ncaa football": "ncaaf",
-        "college football": "ncaaf",
-        "soccer": "fb",
-        "football": "fb",
-    }
-    for key, val in mapping.items():
-        if key in s:
-            return val
-    return None
 
 
 def resolve_channel_datetime_utc(

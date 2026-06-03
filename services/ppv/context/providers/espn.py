@@ -21,53 +21,14 @@ import requests
 
 from services.ppv.context.base import ContextDataProvider, DataType
 from services.ppv.context.cache import get_cache, make_h2h_key, make_notes_key, make_standings_key
+from services.ppv.sport_registry import espn_paths
 
 logger = logging.getLogger(__name__)
 
 _REQUEST_TIMEOUT = 15
 _BASE = "https://site.api.espn.com/apis/site/v2/sports"
 
-# ESPN sport/league URL path segments.
-# Key: normalised sport name (lower) -> (sport_path, league_path)
-_ESPN_PATHS: Dict[str, Tuple[str, str]] = {
-    "american football": ("football", "nfl"),
-    "nfl": ("football", "nfl"),
-    "basketball": ("basketball", "nba"),
-    "nba": ("basketball", "nba"),
-    "wnba": ("basketball", "wnba"),
-    "ice hockey": ("hockey", "nhl"),
-    "nhl": ("hockey", "nhl"),
-    "baseball": ("baseball", "mlb"),
-    "mlb": ("baseball", "mlb"),
-    "soccer": ("soccer", "usa.1"),  # MLS default; overridden per league
-    "mls": ("soccer", "usa.1"),
-    "boxing": ("boxing", "boxing"),
-    "mma": ("mma", "ufc"),
-    "ufc": ("mma", "ufc"),
-    "fighting": ("mma", "ufc"),
-    "tennis": ("tennis", "atp"),
-    "atp": ("tennis", "atp"),
-    "wta": ("tennis", "wta"),
-}
-
-# League name overrides for ESPN soccer league paths
-_ESPN_SOCCER_LEAGUES: Dict[str, str] = {
-    "premier league": "eng.1",
-    "english premier league": "eng.1",
-    "la liga": "esp.1",
-    "spanish la liga": "esp.1",
-    "serie a": "ita.1",
-    "italian serie a": "ita.1",
-    "bundesliga": "ger.1",
-    "german bundesliga": "ger.1",
-    "ligue 1": "fra.1",
-    "french ligue 1": "fra.1",
-    "champions league": "uefa.champions",
-    "uefa champions league": "uefa.champions",
-    "europa league": "uefa.europa",
-    "mls": "usa.1",
-    "major league soccer": "usa.1",
-}
+# League name overrides for ESPN soccer league paths — see sport_registry.ESPN_SOCCER_LEAGUES
 
 _SUPPORTED_SPORTS: Set[str] = {
     "American Football",
@@ -93,24 +54,7 @@ _SUPPORTED_SPORTS: Set[str] = {
 
 def _espn_paths(sport: str, league: str) -> Optional[Tuple[str, str]]:
     """Resolve (sport_path, league_path) for ESPN URL, or None if not mapped."""
-    s = sport.lower()
-    lg = league.lower()
-
-    # Soccer leagues need special handling
-    if s in ("soccer", "football") or "soccer" in s:
-        league_path = _ESPN_SOCCER_LEAGUES.get(lg)
-        if league_path:
-            return ("soccer", league_path)
-        return ("soccer", "usa.1")
-
-    paths = _ESPN_PATHS.get(s)
-    if not paths:
-        # Try partial match
-        for key, val in _ESPN_PATHS.items():
-            if key in s or s in key:
-                paths = val
-                break
-    return paths
+    return espn_paths(sport, league)
 
 
 class ESPNProvider(ContextDataProvider):

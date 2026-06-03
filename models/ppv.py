@@ -193,6 +193,7 @@ class SportsTeam(db.Model):  # type: ignore[name-defined]
     SPORT_NCAAF = "ncaaf"
     SPORT_NFL = "nfl"
     SPORT_NHL = "nhl"
+    SPORT_WNBA = "wnba"
     SPORT_MILB = "milb"
 
     SPORTS = [
@@ -200,6 +201,7 @@ class SportsTeam(db.Model):  # type: ignore[name-defined]
         SPORT_MLB,
         SPORT_MILB,
         SPORT_NBA,
+        SPORT_WNBA,
         SPORT_NCAAB,
         SPORT_NCAAF,
         SPORT_NFL,
@@ -318,7 +320,8 @@ class SportsTeam(db.Model):  # type: ignore[name-defined]
                 return team
             if key in team.get_aliases():
                 return team
-            if key in team.name.lower() or team.name.lower() in key:
+            # Legacy substring match: sport-scoped and min length aligned with reverse matcher
+            if sport and len(key) >= 5 and (key in team.name.lower() or team.name.lower() in key):
                 return team
         return None
 

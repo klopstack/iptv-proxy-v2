@@ -3,6 +3,7 @@
 from typing import Optional, Tuple
 
 from services.ppv.matching.context import SportLeagueContext, event_league_matches_context, sport_key_from_league_name
+from services.reverse_event_matcher.match_strategy import MIN_TEAM_NAME_LENGTH
 from services.reverse_event_matcher.text_processor import TextProcessor
 from services.thesportsdb_calendar_scraper import CalendarEvent
 
@@ -134,7 +135,7 @@ def team_names_match(name_a: str, name_b: str) -> bool:
         return True
 
     shorter, longer = (na, nb) if len(na) <= len(nb) else (nb, na)
-    if shorter in longer:
+    if len(shorter) >= MIN_TEAM_NAME_LENGTH and shorter in longer:
         shorter_words = set(shorter.split())
         if shorter_words <= AMBIGUOUS_TEAM_WORDS:
             return False
