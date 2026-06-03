@@ -62,7 +62,7 @@ make test-fast
 
 ## Completion
 
-- **PR:** _(link added after merge)_
+- **PR:** https://github.com/klopstack/iptv-proxy-v2/pull/41
 - `routes/fcc_match_patterns.py` 801 → 128 lines (−84%) via `FccMatchPatternsService` + `register_json_crud_routes`
 - Shared serializers for country suffix / quality / country / callsign entities in `services/serializers/fcc.py`
 - Bootstrap CDN SRI on `templates/base.html`; bump procedure in `docs/DEPLOYMENT.md`
