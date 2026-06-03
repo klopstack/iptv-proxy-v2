@@ -51,8 +51,7 @@ from services.tag_service import TagService
 logger = logging.getLogger(__name__)
 
 DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
 
 SPECIAL_TAGS = frozenset({"__CLEANUP__", "__LOCATION__", "__CALLSIGN__", "__CAPTURE__"})
@@ -278,9 +277,7 @@ class ConfigTransferService:
         db.session.flush()
 
         rulesets_by_name = ConfigTransferService._import_rulesets(data, overwrite, stats)
-        ConfigTransferService._import_filters(
-            data, overwrite, create_missing_accounts, account_payload_by_name, stats
-        )
+        ConfigTransferService._import_filters(data, overwrite, create_missing_accounts, account_payload_by_name, stats)
         ConfigTransferService._import_account_ruleset_assignments(
             data, overwrite, create_missing_accounts, account_payload_by_name, rulesets_by_name, stats
         )
@@ -600,7 +597,9 @@ class ConfigTransferService:
                 account_payload_by_name,
             )
             ruleset_name = assignment_data.get("ruleset_name")
-            ruleset = epg_rulesets_by_name.get(ruleset_name) or EpgMatchRuleSet.query.filter_by(name=ruleset_name).first()
+            ruleset = (
+                epg_rulesets_by_name.get(ruleset_name) or EpgMatchRuleSet.query.filter_by(name=ruleset_name).first()
+            )
 
             if not account or not ruleset:
                 stats["account_epg_match_ruleset_assignments"]["skipped"] += 1
@@ -674,7 +673,9 @@ class ConfigTransferService:
                 stats["epg_channel_name_mappings"]["skipped"] += 1
                 continue
 
-            existing = EpgChannelNameMapping.query.filter_by(name=key_name, old_name=old_name, new_name=new_name).first()
+            existing = EpgChannelNameMapping.query.filter_by(
+                name=key_name, old_name=old_name, new_name=new_name
+            ).first()
 
             if existing:
                 if not overwrite:
