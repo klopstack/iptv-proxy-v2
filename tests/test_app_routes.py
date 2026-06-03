@@ -31,7 +31,7 @@ ADMIN_PAGES = [
 class TestAccountRoutes:
     """Test account-related routes"""
 
-    @patch("routes.accounts.IPTVService")
+    @patch("services.account_admin_service.IPTVService")
     def test_test_account_success(self, mock_iptv_service, client, sample_account):
         """Test account connection test - success"""
         mock_service = Mock()
@@ -60,7 +60,7 @@ class TestAccountRoutes:
         assert "connection_status" in data
         assert "credentials" in data
 
-    @patch("routes.accounts.IPTVService")
+    @patch("services.account_admin_service.IPTVService")
     def test_test_account_failure(self, mock_iptv_service, client, sample_account):
         """Test account connection test - failure"""
         mock_service = Mock()
@@ -74,8 +74,8 @@ class TestAccountRoutes:
         assert data["success"] is False
         assert "error" in data
 
-    @patch("routes.accounts.get_iptv_service_for_account")
-    @patch("routes.accounts.cache_service")
+    @patch("services.account_admin_service.get_iptv_service_for_account")
+    @patch("services.account_admin_service.cache_service")
     def test_get_account_categories(self, mock_cache, mock_get_service, client, sample_account):
         """Test fetching account categories from cache without upstream call"""
         mock_cache.get_cached_categories.return_value = [
@@ -91,7 +91,7 @@ class TestAccountRoutes:
         assert data[0]["category_name"] == "Sports"
         mock_get_service.assert_not_called()
 
-    @patch("routes.accounts.get_iptv_service_for_account")
+    @patch("services.account_admin_service.get_iptv_service_for_account")
     def test_sync_account_categories_error(self, mock_get_service, client, sample_account):
         """Test syncing account categories - upstream error"""
         mock_service = Mock()
@@ -104,8 +104,8 @@ class TestAccountRoutes:
         data = response.json
         assert "error" in data
 
-    @patch("routes.accounts.get_iptv_service_for_account")
-    @patch("routes.accounts.cache_service")
+    @patch("services.account_admin_service.get_iptv_service_for_account")
+    @patch("services.account_admin_service.cache_service")
     def test_get_account_stats(self, mock_cache, mock_get_service, client, sample_account):
         """Test fetching account statistics"""
         mock_service = Mock()
@@ -129,7 +129,7 @@ class TestAccountRoutes:
         assert data["total_categories"] == 2
         assert "category_counts" in data
 
-    @patch("routes.accounts.get_iptv_service_for_account")
+    @patch("services.account_admin_service.get_iptv_service_for_account")
     def test_get_account_stats_error(self, mock_get_service, client, sample_account):
         """Test fetching account stats - error"""
         mock_service = Mock()
@@ -196,12 +196,12 @@ class TestAccountFiltersRoute:
 
 
 class TestProcessTagsHelper:
-    """Test _process_tags_for_account helper function"""
+    """Test AccountAdminService._process_extraction_tags helper"""
 
-    @patch("routes.accounts.TagService")
-    def test_process_tags_helper(self, mock_tag_service, client, sample_account):
+    @patch("services.account_admin_service.TagService")
+    def test_process_tags_helper(self, mock_tag_service, app, sample_account):
         """Test tag processing helper function"""
-        from routes.accounts import _process_tags_for_account
+        from services.account_admin_service import AccountAdminService
 
         mock_tag_service.get_rules_for_account.return_value = []
         mock_tag_service.extract_tags.return_value = ({"US", "HD"}, "ESPN", "Sports", "keep")
@@ -210,5 +210,5 @@ class TestProcessTagsHelper:
         streams = [{"stream_id": "101", "name": "US| ESPN HD", "category_id": "1"}]
         categories = [{"category_id": "1", "category_name": "Sports"}]
 
-        # Should not raise
-        _process_tags_for_account(sample_account["id"], streams, categories)
+        with app.app_context():
+            AccountAdminService._process_extraction_tags(sample_account["id"], streams, categories)

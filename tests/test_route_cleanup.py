@@ -22,8 +22,8 @@ class TestAccountCategoriesSemantics:
         response = client.get("/api/accounts/999/categories")
         assert response.status_code == 404
 
-    @patch("routes.accounts.get_iptv_service_for_account")
-    @patch("routes.accounts.cache_service")
+    @patch("services.account_admin_service.get_iptv_service_for_account")
+    @patch("services.account_admin_service.cache_service")
     def test_get_categories_from_cache_no_upstream(self, mock_cache, mock_get_service, app, client, test_account):
         mock_cache.get_cached_categories.return_value = [{"category_id": "1", "category_name": "Cached Category"}]
 
@@ -33,8 +33,8 @@ class TestAccountCategoriesSemantics:
         assert response.json == [{"category_id": "1", "category_name": "Cached Category"}]
         mock_get_service.assert_not_called()
 
-    @patch("routes.accounts.get_iptv_service_for_account")
-    @patch("routes.accounts.cache_service")
+    @patch("services.account_admin_service.get_iptv_service_for_account")
+    @patch("services.account_admin_service.cache_service")
     def test_get_categories_empty_without_upstream(self, mock_cache, mock_get_service, app, client, test_account):
         mock_cache.get_cached_categories.return_value = None
 
@@ -44,8 +44,8 @@ class TestAccountCategoriesSemantics:
         assert response.json == []
         mock_get_service.assert_not_called()
 
-    @patch("routes.accounts.get_iptv_service_for_account")
-    @patch("routes.accounts.cache_service")
+    @patch("services.account_admin_service.get_iptv_service_for_account")
+    @patch("services.account_admin_service.cache_service")
     def test_get_categories_from_database(self, mock_cache, mock_get_service, app, client, test_account):
         from models import Category, db
 
@@ -69,9 +69,9 @@ class TestAccountCategoriesSemantics:
         assert response.json[0]["category_name"] == "DB Sports"
         mock_get_service.assert_not_called()
 
-    @patch("routes.accounts._process_tags_for_account")
-    @patch("routes.accounts.get_iptv_service_for_account")
-    @patch("routes.accounts.cache_service")
+    @patch("services.account_admin_service.AccountAdminService._process_extraction_tags")
+    @patch("services.account_admin_service.get_iptv_service_for_account")
+    @patch("services.account_admin_service.cache_service")
     def test_sync_categories_calls_upstream(
         self, mock_cache, mock_get_service, mock_process_tags, app, client, test_account
     ):

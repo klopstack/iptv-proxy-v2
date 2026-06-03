@@ -132,7 +132,7 @@ class AccountAdminService:
             except ValueError as e:
                 logger.warning("Could not refresh XMLTV EPG URL for account %s: %s", account_id, e)
 
-        return AccountAdminService.serialize_credential(credential)
+        return serialize_credential(credential)
 
     @staticmethod
     def delete_credential(account: Account, credential: Credential) -> Optional[str]:
