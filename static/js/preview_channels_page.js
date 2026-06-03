@@ -9,7 +9,6 @@ import {
 } from './preview_channels.js';
 import { formatLocalDateTime } from './lib/epg_datetime.js';
 import { escapeHtml, parseUrlParams } from './utils.js';
-import { unwrapData, unwrapMutation } from './lib/api_contract.js';
 
 let accounts = [];
 let currentAccountId = null;
@@ -22,7 +21,7 @@ let tagSelector = null;
 
 async function loadAccounts() {
     const response = await fetch('/api/accounts');
-    accounts = unwrapData(await response.json());
+    accounts = await response.json();
 
     const select = document.getElementById('testAccountId');
     select.innerHTML = '<option value="">Select an account...</option>';
@@ -30,7 +29,10 @@ async function loadAccounts() {
 
     for (const account of accounts) {
         if (account.enabled) {
-            select.innerHTML += `<option value="${account.id}">${account.name}</option>`;
+            const option = document.createElement('option');
+            option.value = account.id;
+            option.textContent = account.name;
+            select.appendChild(option);
         }
     }
 
@@ -226,7 +228,7 @@ async function loadMoreChannels() {
                 : '';
 
             const cleanedNameHtml = channel.cleaned_name && channel.cleaned_name !== channel.name
-                ? `<div class="text-muted small">${channel.cleaned_name}</div>`
+                ? `<div class="text-muted small">${escapeHtml(channel.cleaned_name)}</div>`
                 : '';
 
             html += `
@@ -234,7 +236,7 @@ async function loadMoreChannels() {
                     data-account-id="${channel.account_id}"
                     data-stream-id="${channel.stream_id}"
                     title="Click for details">
-                    <td>${channel.icon ? `<img src="${channel.icon}" width="40" height="30" onerror="this.style.display='none'">` : ''}</td>
+                    <td>${channel.icon ? `<img src="${escapeHtml(channel.icon)}" width="40" height="30" onerror="this.style.display='none'">` : ''}</td>
                     <td>
                         ${escapeHtml(channel.name)}${duplicateBadge}
                         ${cleanedNameHtml}
@@ -280,7 +282,7 @@ async function loadMoreChannels() {
     } catch (error) {
         document.getElementById('previewResult').innerHTML = `
             <div class="alert alert-danger">
-                Error loading channels: ${error.message}
+                Error loading channels: ${escapeHtml(error.message)}
             </div>
         `;
     }
@@ -617,7 +619,7 @@ async function loadActiveFilters(accountId) {
             document.getElementById('activeFilters').innerHTML = '<p class="text-muted">Viewing all accounts - filters vary by account</p>';
         } else {
             const filtersResponse = await fetch(`/api/accounts/${accountId}/filters`);
-            const filters = unwrapData(await filtersResponse.json());
+            const filters = await filtersResponse.json();
 
             let filtersHtml = '';
             if (filters.length === 0) {

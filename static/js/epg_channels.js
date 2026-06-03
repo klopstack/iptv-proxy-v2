@@ -89,16 +89,16 @@ async function loadEpgChannels() {
         tableContainer.addEventListener('scroll', handleEpgChannelsScroll);
         
     } catch (error) {
-        container.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        container.innerHTML = `<div class="alert alert-danger">Error: ${escapeHtml(error.message)}</div>`;
     }
 }
 
 function renderEpgChannelRow(ch) {
     return `
         <tr>
-            <td><code>${ch.channel_id}</code></td>
-            <td>${ch.display_name || '-'}</td>
-            <td>${ch.icon_url ? `<img src="${ch.icon_url}" style="max-height: 24px;">` : '-'}</td>
+            <td><code>${escapeHtml(ch.channel_id)}</code></td>
+            <td>${escapeHtml(ch.display_name || '-')}</td>
+            <td>${ch.icon_url ? `<img src="${escapeHtml(ch.icon_url)}" style="max-height: 24px;">` : '-'}</td>
             <td>${ch.program_count || 0}</td>
             <td>${ch.mapping_count || 0}</td>
         </tr>

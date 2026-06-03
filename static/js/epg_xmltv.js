@@ -26,17 +26,18 @@ async function loadXmltvGrabbers() {
         
         for (const grabber of xmltvGrabbers) {
             const caps = (grabber.capabilities || []).slice(0, 3).join(', ');
+            const grabberNameJs = escapeJsSingleQuoted(grabber.name);
             html += `
                 <tr>
-                    <td><code>${grabber.name}</code></td>
-                    <td>${grabber.description || '-'}</td>
-                    <td><small class="text-muted">${caps}</small></td>
+                    <td><code>${escapeHtml(grabber.name)}</code></td>
+                    <td>${escapeHtml(grabber.description || '-')}</td>
+                    <td><small class="text-muted">${escapeHtml(caps)}</small></td>
                     <td>
                         <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-info" onclick="viewGrabberChannels('${grabber.name}')" title="List Channels">
+                            <button class="btn btn-outline-info" onclick="viewGrabberChannels('${grabberNameJs}')" title="List Channels">
                                 <i class="bi bi-list"></i>
                             </button>
-                            <button class="btn btn-outline-primary" onclick="quickCreateGrabberSource('${grabber.name}')" title="Create Source">
+                            <button class="btn btn-outline-primary" onclick="quickCreateGrabberSource('${grabberNameJs}')" title="Create Source">
                                 <i class="bi bi-plus"></i>
                             </button>
                         </div>
@@ -49,7 +50,7 @@ async function loadXmltvGrabbers() {
         container.innerHTML = html;
         
     } catch (error) {
-        container.innerHTML = `<div class="alert alert-danger">Error loading grabbers: ${error.message}</div>`;
+        container.innerHTML = `<div class="alert alert-danger">Error loading grabbers: ${escapeHtml(error.message)}</div>`;
     }
 }
 
@@ -68,7 +69,10 @@ async function populateGrabberSelect() {
     
     select.innerHTML = '<option value="">Select a grabber...</option>';
     for (const grabber of xmltvGrabbers) {
-        select.innerHTML += `<option value="${grabber.name}">${grabber.name} - ${grabber.description || 'No description'}</option>`;
+        const option = document.createElement('option');
+        option.value = grabber.name;
+        option.textContent = `${grabber.name} - ${grabber.description || 'No description'}`;
+        select.appendChild(option);
     }
 }
 
@@ -90,10 +94,10 @@ async function loadXmltvConfigs() {
             html += `
                 <div class="list-group-item d-flex justify-content-between align-items-center">
                     <div>
-                        <strong>${config.name}</strong>
+                        <strong>${escapeHtml(config.name)}</strong>
                         <br><small class="text-muted">Modified: ${formatLocalDateTime(config.modified)}</small>
                     </div>
-                    <button class="btn btn-outline-danger btn-sm" onclick="deleteXmltvConfig('${config.name}')">
+                    <button class="btn btn-outline-danger btn-sm" onclick="deleteXmltvConfig('${escapeJsSingleQuoted(config.name)}')">
                         <i class="bi bi-trash"></i>
                     </button>
                 </div>
@@ -103,7 +107,7 @@ async function loadXmltvConfigs() {
         container.innerHTML = html;
         
     } catch (error) {
-        container.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        container.innerHTML = `<div class="alert alert-danger">Error: ${escapeHtml(error.message)}</div>`;
     }
 }
 
@@ -159,12 +163,12 @@ async function testGrabber() {
         } else {
             resultDiv.innerHTML = `
                 <div class="alert alert-danger">
-                    <i class="bi bi-x-circle"></i> Test failed: ${result.message}
+                    <i class="bi bi-x-circle"></i> Test failed: ${escapeHtml(result.message)}
                 </div>
             `;
         }
     } catch (error) {
-        resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${escapeHtml(error.message)}</div>`;
     } finally {
         btn.disabled = false;
         btn.innerHTML = originalHtml;

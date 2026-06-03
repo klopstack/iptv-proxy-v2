@@ -71,10 +71,10 @@ async function testSdCredentials() {
                 </div>
             `;
         } else {
-            resultDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle"></i> ${result.error || 'Invalid credentials'}</div>`;
+            resultDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle"></i> ${escapeHtml(result.error || 'Invalid credentials')}</div>`;
         }
     } catch (error) {
-        resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        resultDiv.innerHTML = `<div class="alert alert-danger">Error: ${escapeHtml(error.message)}</div>`;
     }
 }
 
@@ -102,7 +102,7 @@ async function loadSdLineups() {
         const result = await response.json();
         
         if (result.error || result.success === false) {
-            container.innerHTML = `<div class="alert alert-danger">${result.error || 'Failed to load lineups'}</div>`;
+            container.innerHTML = `<div class="alert alert-danger">${escapeHtml(result.error || 'Failed to load lineups')}</div>`;
             if (searchBtn) searchBtn.disabled = true;
             return;
         }
@@ -177,7 +177,7 @@ async function loadSdLineups() {
         html += '</div>';
         container.innerHTML = html;
     } catch (error) {
-        container.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        container.innerHTML = `<div class="alert alert-danger">Error: ${escapeHtml(error.message)}</div>`;
     }
 }
 
@@ -204,7 +204,7 @@ async function searchLineups() {
         const result = await response.json();
         
         if (!result.success) {
-            container.innerHTML = `<div class="alert alert-danger">${result.error || 'Search failed'}</div>`;
+            container.innerHTML = `<div class="alert alert-danger">${escapeHtml(result.error || 'Search failed')}</div>`;
             return;
         }
         
@@ -233,7 +233,7 @@ async function searchLineups() {
         html += '</div>';
         container.innerHTML = html;
     } catch (error) {
-        container.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        container.innerHTML = `<div class="alert alert-danger">Error: ${escapeHtml(error.message)}</div>`;
     }
 }
 
@@ -341,7 +341,7 @@ async function viewStations(lineupId, lineupName) {
         currentStations = data.stations || [];
         renderStations(currentStations);
     } catch (error) {
-        container.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        container.innerHTML = `<div class="alert alert-danger">Error: ${escapeHtml(error.message)}</div>`;
     }
 }
 

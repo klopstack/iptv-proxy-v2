@@ -1,6 +1,6 @@
 # XSS audit and hardening of legacy frontend JavaScript
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done (Wave 6 PR S)  
 **Priority:** P1  
 **Audit:** Application-wide audit, June 2026
 
@@ -30,9 +30,9 @@ Tested ESM helpers in `static/js/lib/` and `utils.js` have `escapeHtml`, but leg
 
 ## Acceptance criteria
 
-- [ ] No unescaped provider/account/tag/error strings in innerHTML
-- [ ] TagSelector renders tag names safely
-- [ ] Document pattern in `docs/FRONTEND_JS.md`
+- [x] No unescaped provider/account/tag/error strings in innerHTML
+- [x] TagSelector renders tag names safely
+- [x] Document pattern in `docs/FRONTEND_JS.md`
 
 ## Test plan
 
@@ -42,3 +42,10 @@ Tested ESM helpers in `static/js/lib/` and `utils.js` have `escapeHtml`, but leg
 ## Dependencies
 
 - TODO 84 (shared escapeHtml) reduces duplication long-term
+
+## Implementation notes (PR S)
+
+- `TagSelector` in `base.html`: DOM APIs for search dropdown; `escapeHtml` for selected badges/`data-tag-name`.
+- Legacy EPG bundles (`epg_sources`, `epg_mappings`, `epg_manual_mapping`, `epg_channels`, `epg_xmltv`, `epg_schedules_direct`): API strings escaped; account/source `<option>` lists use `textContent`.
+- `preview_channels_page.js`: account options via DOM; channel rows/errors escaped.
+- `epg_common.js`: `escapeJsSingleQuoted()` for safe `onclick` string literals.

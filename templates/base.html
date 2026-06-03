@@ -427,7 +427,11 @@
                                 item.href = '#';
                                 item.className = 'list-group-item list-group-item-action';
                                 item.style.cssText = 'border: none; border-bottom: 1px solid #f0f0f0;';
-                                item.innerHTML = `${tag.name} <span class="badge bg-secondary">${tag.channel_count}</span>`;
+                                item.appendChild(document.createTextNode(tag.name + ' '));
+                                const badge = document.createElement('span');
+                                badge.className = 'badge bg-secondary';
+                                badge.textContent = tag.channel_count;
+                                item.appendChild(badge);
                                 item.onmousedown = (e) => {
                                     e.preventDefault();  // Prevent blur
                                     this.addTag(tag);
@@ -487,10 +491,10 @@
                     const countDisplay = tag.channel_count !== null ? ` (${tag.channel_count})` : '';
                     return `
                     <span class="badge ${this.badgeClass} me-1 mb-1" style="font-size: 0.9rem; padding: 0.5rem 0.75rem;">
-                        ${tag.name}${countDisplay}
+                        ${escapeHtml(tag.name)}${countDisplay}
                         <button type="button" class="btn-close btn-close-white ms-1 tag-remove-btn" 
                                 style="font-size: 0.6rem; padding: 0; margin: 0; width: 0.6rem; height: 0.6rem;" 
-                                data-tag-name="${tag.name}" aria-label="Remove"></button>
+                                data-tag-name="${escapeHtml(tag.name)}" aria-label="Remove"></button>
                     </span>
                 `;
                 }).join('');

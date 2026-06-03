@@ -27,6 +27,11 @@ let nameMappingModal;
 
 // escapeHtml: canonical implementation in static/js/lib/escape_html.js (window bridge)
 
+/** Escape a string embedded in a single-quoted JS literal inside an HTML onclick attribute. */
+function escapeJsSingleQuoted(text) {
+    return String(text ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {

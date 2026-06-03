@@ -67,7 +67,7 @@ async function loadAccountRulesetInfo(accountId) {
         const data = await response.json();
         
         if (Array.isArray(data) && data.length > 0) {
-            const rulesetNames = data.map(r => r.ruleset_name).join(', ');
+            const rulesetNames = data.map(r => escapeHtml(r.ruleset_name)).join(', ');
             infoText.innerHTML = `<i class="bi bi-list-check text-success"></i> <strong>Rule-based matching enabled:</strong> ${rulesetNames}`;
         } else {
             const defaultResponse = await fetch('/api/epg-match-rules/rulesets?is_default=true');
@@ -75,7 +75,7 @@ async function loadAccountRulesetInfo(accountId) {
             
             const defaultRulesets = Array.isArray(defaultData) ? defaultData : (defaultData.rulesets || []);
             if (defaultRulesets.length > 0) {
-                const defaultNames = defaultRulesets.map(r => r.name).join(', ');
+                const defaultNames = defaultRulesets.map(r => escapeHtml(r.name)).join(', ');
                 infoText.innerHTML = `<i class="bi bi-info-circle"></i> <strong>Using default rulesets:</strong> ${defaultNames}`;
             } else {
                 infoText.innerHTML = `<i class="bi bi-exclamation-triangle text-warning"></i> No EPG match rules configured. <a href="/epg-match-rules">Create rules</a> for better matching.`;
@@ -103,7 +103,7 @@ async function loadCategoriesForAccount(accountId) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        const categories = apiUnwrapData(response, await response.json());
+        const categories = await response.json();
         
         if (!Array.isArray(categories)) {
             throw new Error('Categories response is not an array');
@@ -191,13 +191,12 @@ async function loadMappings(reset = true) {
         if (mappingsState.offset === 0 && data.total === 0) {
             let message = 'No channels found with current filters.';
             if (viewMode === 'unmapped') {
-                message = '<i class="bi bi-check-circle"></i> All channels have EPG mappings!';
-                container.innerHTML = `<div class="alert alert-success">${message}</div>`;
+                container.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle"></i> All channels have EPG mappings!</div>';
             } else if (viewMode === 'mapped') {
                 message = 'No channel mappings found. Run auto-match or create manual mappings.';
-                container.innerHTML = `<div class="alert alert-info">${message}</div>`;
+                container.innerHTML = `<div class="alert alert-info">${escapeHtml(message)}</div>`;
             } else {
-                container.innerHTML = `<div class="alert alert-info">${message}</div>`;
+                container.innerHTML = `<div class="alert alert-info">${escapeHtml(message)}</div>`;
             }
             return;
         }
@@ -261,7 +260,7 @@ async function loadMappings(reset = true) {
         
     } catch (error) {
         if (mappingsState.offset === 0) {
-            container.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+            container.innerHTML = `<div class="alert alert-danger">Error: ${escapeHtml(error.message)}</div>`;
         }
         console.error('Error loading mappings:', error);
     } finally {
@@ -318,7 +317,7 @@ function renderMappingRow(item, viewMode) {
             const liveTag = currentProgram.is_live ? '<span class="badge bg-danger ms-1">LIVE</span>' : '';
             programInfo = `<div class="small text-primary mt-1"><i class="bi bi-play-circle"></i> ${escapeHtml(currentProgram.title)}${liveTag}</div>`;
         }
-        mappingCell = `<span class="text-success">${mapping.epg_display_name || 'EPG #' + mapping.epg_channel_id}</span>${programInfo}`;
+        mappingCell = `<span class="text-success">${escapeHtml(mapping.epg_display_name || `EPG #${mapping.epg_channel_id}`)}</span>${programInfo}`;
         
         const typeBadge = mapping.mapping_type === 'manual' 
             ? '<span class="badge bg-primary">Manual</span>'
@@ -332,7 +331,7 @@ function renderMappingRow(item, viewMode) {
             ? '<span class="badge bg-warning">PPV Event</span>'
             : mapping.mapping_type?.includes('auto')
             ? '<span class="badge bg-info">Auto</span>'
-            : `<span class="badge bg-secondary">${mapping.mapping_type || 'Unknown'}</span>`;
+            : `<span class="badge bg-secondary">${escapeHtml(mapping.mapping_type || 'Unknown')}</span>`;
         
         const confidencePercent = Math.round((mapping.confidence || 0) * 100);
         const overrideIcon = mapping.is_override ? ' <i class="bi bi-pin-fill text-warning" title="Override"></i>' : '';
@@ -365,8 +364,8 @@ function renderMappingRow(item, viewMode) {
     
     return `
         <tr data-channel-id="${channelId}">
-            <td${tooltip}>${channelName}${filteredBadge}</td>
-            <td><small class="text-muted">${categoryName}</small></td>
+            <td${tooltip}>${escapeHtml(channelName)}${filteredBadge}</td>
+            <td><small class="text-muted">${escapeHtml(categoryName)}</small></td>
             <td>${mappingCell}</td>
             <td>${matchInfoCell}</td>
             <td><div class="btn-group btn-group-sm">${actions}</div></td>
@@ -516,7 +515,7 @@ async function runAutoMatch() {
             alertDiv.classList.add('alert-danger');
             const contentDiv = document.getElementById('autoMatchResultsContent');
             if (contentDiv) {
-                contentDiv.innerHTML = `<strong><i class="bi bi-x-circle"></i> Error:</strong> ${errorMsg}`;
+                contentDiv.innerHTML = `<strong><i class="bi bi-x-circle"></i> Error:</strong> ${escapeHtml(errorMsg)}`;
             }
         } else {
             showToast(errorMsg, 'error');
@@ -610,7 +609,7 @@ async function rematchAutoMatches() {
             alertDiv.classList.add('alert-danger');
             const contentDiv = document.getElementById('autoMatchResultsContent');
             if (contentDiv) {
-                contentDiv.innerHTML = `<strong><i class="bi bi-x-circle"></i> Error:</strong> ${errorMsg}`;
+                contentDiv.innerHTML = `<strong><i class="bi bi-x-circle"></i> Error:</strong> ${escapeHtml(errorMsg)}`;
             }
         } else {
             showToast(errorMsg, 'error');

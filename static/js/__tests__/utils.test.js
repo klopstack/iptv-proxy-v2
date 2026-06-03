@@ -10,6 +10,10 @@ describe('escapeHtml', () => {
         expect(escapeHtml('Tom & Jerry')).toBe('Tom &amp; Jerry');
     });
 
+    it('escapes single and double quotes', () => {
+        expect(escapeHtml(`"onload='alert(1)'"`)).toBe('&quot;onload=&#039;alert(1)&#039;&quot;');
+    });
+
     it('returns empty string for nullish values', () => {
         expect(escapeHtml(null)).toBe('');
         expect(escapeHtml(undefined)).toBe('');

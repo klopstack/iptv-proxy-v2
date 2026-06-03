@@ -47,9 +47,19 @@ Load order for pages with legacy globals: classic `<script src>` bundles first, 
 - **Do not** add `eslint-disable-next-script` for module imports; use external bootstrap files instead.
 - Legacy non-module bundles (`epg_common.js`, etc.) are not ESLint module targets until migrated.
 
+## Escaping API data in `innerHTML`
+
+Legacy admin scripts build HTML with template literals. **Any string from the API** (account/channel/tag names, EPG titles, error messages, URLs in attributes) must be escaped before interpolation:
+
+- Prefer **`textContent`** or **`document.createElement('option')`** for simple text (account `<select>` options, tag dropdown rows).
+- Otherwise use **`escapeHtml()`** from `static/js/utils.js` (ES modules) or the same helper in `epg_common.js` / `templates/base.html` (classic globals on EPG pages).
+- For values passed into **`onclick="fn('…')"`** attributes, also use **`escapeJsSingleQuoted()`** from `epg_common.js` so quotes and backslashes cannot break out of the JS literal.
+
+Static markup (spinners, icons, fixed labels) does not need escaping. Do not run `escapeHtml` over strings that intentionally contain HTML markup.
+
 ## Tests
 
-Pure helpers in `static/js/lib/` and URL builders are covered by Vitest in `static/js/__tests__/`. Run `npm test`.
+Pure helpers in `static/js/lib/` and URL builders are covered by Vitest in `static/js/__tests__/`. Run `npm test`. `escapeHtml` edge cases (`<script>`, quotes) are in `utils.test.js`.
 
 ## Future direction
 
