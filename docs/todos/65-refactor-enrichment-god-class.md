@@ -70,7 +70,7 @@ Do **not** big-bang rewrite — each phase must keep tests green.
 ## Completion
 
 - **Phase 1 — PR #35:** `enrichment/` package (`match_pipeline`, `detail_fetch`, `side_effects`, `service` coordinator)
-- **Phases 2–3 — PR batch AA:** [102-optional-ppv-module-splits.md](./102-optional-ppv-module-splits.md) — `epg/` and `extraction/` packages
+- **Phases 2–3 — PR #45 (batch AA):** [102-optional-ppv-module-splits.md](./102-optional-ppv-module-splits.md) — `epg/` and `extraction/` packages
 
 ## Dependencies
 

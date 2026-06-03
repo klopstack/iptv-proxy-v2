@@ -65,4 +65,4 @@ venv/bin/pytest tests/ppv/ -q --no-cov
 
 ## Completion
 
-_(Add PR link when merged.)_
+- **PR #45:** `epg/` and `extraction/` package splits (Wave 9 batch **AA**)
