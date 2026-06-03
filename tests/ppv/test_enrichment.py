@@ -17,6 +17,7 @@ from services.ppv.enrichment import (
     enrich_ppv_channels_batch,
     get_calendar_enrichment_service,
 )
+from services.ppv.persistence import create_or_update_event, link_channel_to_event
 from services.thesportsdb_calendar_scraper import CalendarEvent
 
 
@@ -445,14 +446,12 @@ class TestMatchChannelToCalendar:
 
 
 class TestCreateOrUpdateEvent:
-    """Tests for _create_or_update_event method."""
+    """Tests for create_or_update_event persistence helper."""
 
     def test_creates_new_event(self, app, db):
         """Test creating a new event from calendar data."""
 
         with app.app_context():
-            service = PPVCalendarEnrichmentService(app)
-
             calendar_event = CalendarEvent(
                 event_id="12345",
                 event_name="Fighter A vs Fighter B",
@@ -462,11 +461,11 @@ class TestCreateOrUpdateEvent:
                 home_team="Fighter A",
                 away_team="Fighter B",
             )
-            # Note: scheduled_at is a computed property based on date and time_utc
 
-            event = service._create_or_update_event(calendar_event)
+            event, was_created = create_or_update_event(calendar_event)
 
             assert event is not None
+            assert was_created is True
             assert event.external_id == "12345"
             assert event.home_team_name == "Fighter A"
             assert event.away_team_name == "Fighter B"
@@ -491,8 +490,6 @@ class TestCreateOrUpdateEvent:
             db.session.add(existing)
             db.session.commit()
 
-            service = PPVCalendarEnrichmentService(app)
-
             calendar_event = CalendarEvent(
                 event_id="12345",
                 event_name="Fighter A vs Fighter B",
@@ -503,9 +500,12 @@ class TestCreateOrUpdateEvent:
                 away_team="Fighter B",
             )
 
-            event = service._create_or_update_event(calendar_event)
+            event, was_created = create_or_update_event(calendar_event)
 
+            assert event is not None
+            assert was_created is False
             assert event.id == existing.id
+            assert Event.query.filter_by(external_id="12345").count() == 1
 
 
 class TestLinkChannelToEvent:
@@ -547,8 +547,7 @@ class TestLinkChannelToEvent:
             db.session.add(event)
             db.session.commit()
 
-            service = PPVCalendarEnrichmentService(app)
-            service._link_channel_to_event(channel, event, 0.85, "calendar_high_confidence")
+            link_channel_to_event(channel, event, 0.85, "calendar_high_confidence")
             db.session.commit()
 
             link = EventChannelLink.query.filter_by(channel_id=channel.id, event_id=event.id).first()
@@ -603,8 +602,7 @@ class TestLinkChannelToEvent:
             db.session.add(existing_link)
             db.session.commit()
 
-            service = PPVCalendarEnrichmentService(app)
-            service._link_channel_to_event(channel, event, 0.9, "calendar_high_confidence")
+            link_channel_to_event(channel, event, 0.9, "calendar_high_confidence")
             db.session.commit()
 
             link = EventChannelLink.query.filter_by(channel_id=channel.id, event_id=event.id).first()
@@ -1017,10 +1015,70 @@ class TestRefreshUpcomingEventTimes:
                     "strTime": "22:00:00",
                     "strStatus": "In Progress",
                 }
-                service._fetch_event_details("99999", force_refresh=True)
+                service._fetch_event_details("99999", Event.SOURCE_THESPORTSDB, force_refresh=True)
 
             db.session.refresh(event)
             assert event.status == Event.STATUS_LIVE
+
+    def test_successful_detail_fetch_increments_cumulative_stat(self, app, db):
+        from models import Event, SyncMetadata
+        from services.ppv.constants import METADATA_KEY_DETAILS_FETCHED
+
+        with app.app_context():
+            event = Event(
+                external_id="55555",
+                source=Event.SOURCE_THESPORTSDB,
+                home_team_id="1",
+                home_team_name="Home",
+                away_team_id="2",
+                away_team_name="Away",
+                scheduled_at=datetime(2026, 1, 5, 22, 0),
+                status=Event.STATUS_SCHEDULED,
+                data_completeness="basic",
+            )
+            db.session.add(event)
+            db.session.commit()
+
+            service = PPVCalendarEnrichmentService(app)
+            with patch.object(service.thesportsdb, "get_event_by_id") as mock_api:
+                mock_api.return_value = {
+                    "strHomeTeam": "Home",
+                    "strAwayTeam": "Away",
+                    "idHomeTeam": "1",
+                    "idAwayTeam": "2",
+                    "strTimestamp": "2026-01-05T22:00:00Z",
+                    "dateEvent": "2026-01-05",
+                    "strTime": "22:00:00",
+                    "strStatus": "Scheduled",
+                }
+                service._fetch_event_details("55555", Event.SOURCE_THESPORTSDB)
+
+            assert SyncMetadata.get(METADATA_KEY_DETAILS_FETCHED, "0") == "1"
+
+    def test_milb_detail_fetch_skips_without_not_found_warning(self, app, db, caplog):
+        from models import Event
+
+        with app.app_context():
+            event = Event(
+                external_id="777777",
+                source=Event.SOURCE_MLB_STATS,
+                home_team_id="1",
+                home_team_name="Home",
+                away_team_id="2",
+                away_team_name="Away",
+                scheduled_at=datetime(2026, 1, 5, 22, 0),
+                status=Event.STATUS_SCHEDULED,
+                data_completeness="basic",
+            )
+            db.session.add(event)
+            db.session.commit()
+
+            service = PPVCalendarEnrichmentService(app)
+            with patch.object(service.thesportsdb, "get_event_by_id") as mock_api:
+                service._fetch_event_details("777777", Event.SOURCE_MLB_STATS)
+                mock_api.assert_not_called()
+
+            assert not any("not found in database" in rec.message for rec in caplog.records)
 
 
 class TestMetadataUtcRenameDisplay:

@@ -33,7 +33,7 @@ import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from queue import Empty, Queue
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from flask import Flask
 
@@ -52,7 +52,7 @@ from services.ppv.enrichability import classify_ppv_enrichment, skip_error_messa
 from services.ppv.extraction import PPVEventExtractor
 from services.ppv.matching.context import context_for_event, resolve_sport_league_context
 from services.ppv.matching.validation import competitors_match_event
-from services.ppv.persistence import create_or_update_event, link_channel_to_event, sync_enrichment_status_from_links
+from services.ppv.persistence import persist_match, sync_enrichment_status_from_links
 from services.reverse_event_matcher.orchestrator import ReverseEventMatcher
 from services.thesportsdb_calendar_scraper import CalendarEvent, get_calendar_scraper
 from services.thesportsdb_service import TheSportsDBService, get_thesportsdb_api_request_interval
@@ -64,6 +64,15 @@ API_REQUESTS_PER_MINUTE = 30  # default for free tier; paid key uses 100/min via
 
 # Processing configuration
 DETAIL_FETCH_BATCH_SIZE = 25
+
+DetailQueueItem = Tuple[str, str]  # (external_id, source)
+
+
+def _calendar_event_source(calendar_event: CalendarEvent) -> str:
+    source = getattr(calendar_event, "source", None) or Event.SOURCE_THESPORTSDB
+    if source == "mlb_stats_api":
+        return Event.SOURCE_MLB_STATS
+    return source
 
 
 class EnrichmentResult:
@@ -112,8 +121,8 @@ class PPVCalendarEnrichmentService:
         self.thesportsdb = TheSportsDBService()
 
         # Queue for events needing detail fetch (secondary thread)
-        self._detail_queue: Queue[str] = Queue()  # Queue of event_ids
-        self._refresh_queue: Queue[str] = Queue()  # Force-refresh event_ids (bypass completeness skip)
+        self._detail_queue: Queue[DetailQueueItem] = Queue()
+        self._refresh_queue: Queue[DetailQueueItem] = Queue()
         self._detail_thread: Optional[threading.Thread] = None
         self._stop_detail_thread = threading.Event()
 
@@ -213,7 +222,7 @@ class PPVCalendarEnrichmentService:
             )
 
             # Step 5: Match channels to calendar events
-            event_ids_to_fetch = set()
+            event_ids_to_fetch: Set[DetailQueueItem] = set()
             match_failure_reasons: Dict[str, int] = defaultdict(int)
 
             for date_str, channel_extractions in channels_by_date.items():
@@ -238,12 +247,22 @@ class PPVCalendarEnrichmentService:
                         results["matched"] += 1
 
                         if result.calendar_event:
-                            event = self._create_or_update_event(result.calendar_event)
+                            event, was_created = persist_match(
+                                channel,
+                                result.calendar_event,
+                                result.confidence,
+                                result.match_method,
+                            )
                             if event:
-                                results["events_created"] += 1
-                                self._link_channel_to_event(channel, event, result.confidence, result.match_method)
-                                event_ids_to_fetch.add(result.calendar_event.event_id)
-                                channel.ppv_enrichment_status = "matched"
+                                if was_created:
+                                    results["events_created"] += 1
+                                else:
+                                    results["events_updated"] += 1
+                                event_source = _calendar_event_source(result.calendar_event)
+                                if event_source == Event.SOURCE_THESPORTSDB:
+                                    event_ids_to_fetch.add((result.calendar_event.event_id, event_source))
+                            elif channel.ppv_enrichment_status == "retry_pending":
+                                results["errors"] += 1
                         else:
                             channel.ppv_enrichment_status = "no_match"
                     else:
@@ -277,8 +296,8 @@ class PPVCalendarEnrichmentService:
 
             # Step 6: Queue events for detail fetching (if requested)
             if fetch_details and event_ids_to_fetch:
-                for event_id in event_ids_to_fetch:
-                    self._detail_queue.put(event_id)
+                for external_id, source in event_ids_to_fetch:
+                    self._detail_queue.put((external_id, source))
 
                 logger.info(f"Queued {len(event_ids_to_fetch)} events for detail fetching")
 
@@ -529,23 +548,6 @@ class PPVCalendarEnrichmentService:
             extraction_result=extraction,
         )
 
-    def _create_or_update_event(self, calendar_event: CalendarEvent) -> Optional[Event]:
-        """Create or update an Event record from calendar data."""
-        return create_or_update_event(calendar_event)
-
-    def _link_channel_to_event(
-        self,
-        channel: Channel,
-        event: Event,
-        confidence: float,
-        match_method: str,
-    ) -> None:
-        """Create a link between a channel and an event."""
-        try:
-            link_channel_to_event(channel, event, confidence, match_method)
-        except Exception as e:
-            logger.error("Error linking channel %s to event %s: %s", channel.id, event.id, e)
-
     # =========================================================================
     # Secondary Thread: API Detail Fetching
     # =========================================================================
@@ -589,16 +591,16 @@ class PPVCalendarEnrichmentService:
             while not self._stop_detail_thread.is_set():
                 force_refresh = False
                 try:
-                    event_id = self._refresh_queue.get_nowait()
+                    external_id, source = self._refresh_queue.get_nowait()
                     force_refresh = True
                 except Empty:
                     try:
-                        event_id = self._detail_queue.get(timeout=5.0)
+                        external_id, source = self._detail_queue.get(timeout=5.0)
                     except Empty:
                         continue
 
                 try:
-                    self._fetch_event_details(event_id, force_refresh=force_refresh)
+                    self._fetch_event_details(external_id, source, force_refresh=force_refresh)
 
                     # Rate limit: wait between requests (paid API keys allow higher throughput)
                     time.sleep(get_thesportsdb_api_request_interval())
@@ -616,37 +618,45 @@ class PPVCalendarEnrichmentService:
 
         logger.info("Detail fetch loop stopped")
 
-    def _fetch_event_details(self, event_id: str, force_refresh: bool = False) -> None:
+    def _fetch_event_details(self, external_id: str, source: str, force_refresh: bool = False) -> None:
         """
-        Fetch full event details from TheSportsDB API.
+        Fetch full event details from the appropriate source API.
 
         Note: This method must be called within an app context.
 
         Args:
-            event_id: TheSportsDB event ID
+            external_id: Event ID from the source API
+            source: Event source constant (thesportsdb, mlb_stats_api, etc.)
             force_refresh: Re-fetch even when data_completeness is full/enriched
         """
+        if source != Event.SOURCE_THESPORTSDB:
+            logger.debug(
+                "Skipping detail fetch for %s event %s (source uses basic completeness)",
+                source,
+                external_id,
+            )
+            return
+
         try:
-            # Find the event in our database
             event = Event.query.filter_by(
-                external_id=event_id,
-                source=Event.SOURCE_THESPORTSDB,
+                external_id=external_id,
+                source=source,
             ).first()
 
             if not event:
-                logger.warning(f"Event {event_id} not found in database")
+                logger.warning("Event %s (%s) not found in database", external_id, source)
                 return
 
             # Skip if already has full details (unless periodic refresh)
             if not force_refresh and event.data_completeness in ("full", "enriched"):
-                logger.debug(f"Event {event_id} already has full details")
+                logger.debug("Event %s already has full details", external_id)
                 return
 
             # Fetch from API
-            api_data = self.thesportsdb.get_event_by_id(event_id)
+            api_data = self.thesportsdb.get_event_by_id(external_id)
 
             if not api_data:
-                logger.warning(f"No API data returned for event {event_id}")
+                logger.warning(f"No API data returned for event {external_id}")
                 return
 
             # Update event with full details
@@ -654,8 +664,11 @@ class PPVCalendarEnrichmentService:
             if changed:
                 self._sync_epg_for_event(event)
 
-            logger.info(f"Fetched full details for event {event_id}")
+            logger.info(f"Fetched full details for event {external_id}")
             self._stats["api_requests"] += 1
+
+            details_fetched = int(SyncMetadata.get(METADATA_KEY_DETAILS_FETCHED, "0"))
+            SyncMetadata.set(METADATA_KEY_DETAILS_FETCHED, str(details_fetched + 1))
 
             # ------------------------------------------------------------------
             # LLM-based EPG description enrichment (optional, feature-flagged)
@@ -675,10 +688,10 @@ class PPVCalendarEnrichmentService:
                         event.data_completeness = "enriched"
                         db.session.commit()
             except Exception as llm_exc:
-                logger.warning(f"LLM description enrichment failed for event {event_id}: {llm_exc}")
+                logger.warning(f"LLM description enrichment failed for event {external_id}: {llm_exc}")
 
         except Exception as e:
-            logger.error(f"Error fetching details for event {event_id}: {e}")
+            logger.error(f"Error fetching details for event {external_id}: {e}")
             try:
                 db.session.rollback()
             except Exception:
@@ -778,7 +791,7 @@ class PPVCalendarEnrichmentService:
             )
 
             for event in events:
-                self._refresh_queue.put(event.external_id)
+                self._refresh_queue.put((event.external_id, event.source))
 
             if events and (not self._detail_thread or not self._detail_thread.is_alive()):
                 self.start_detail_fetcher()
@@ -815,11 +828,13 @@ class PPVCalendarEnrichmentService:
             "session_stats": self._stats.copy(),
         }
 
-    def queue_event_detail(self, event_id: str) -> None:
-        """Queue a matched event for TheSportsDB detail fetch."""
+    def queue_event_detail(self, event_id: str, source: str = Event.SOURCE_THESPORTSDB) -> None:
+        """Queue a matched event for detail fetch from its source API."""
         if not event_id:
             return
-        self._detail_queue.put(str(event_id))
+        if source != Event.SOURCE_THESPORTSDB:
+            return
+        self._detail_queue.put((str(event_id), source))
         if not self._detail_thread or not self._detail_thread.is_alive():
             self.start_detail_fetcher()
 

@@ -36,7 +36,9 @@ class Event(db.Model):  # type: ignore[name-defined]
     id = db.Column(db.Integer, primary_key=True)
 
     # Event identification
-    external_id = db.Column(db.String(50), nullable=False, unique=True, index=True)  # TheSportsDB event ID
+    external_id = db.Column(
+        db.String(50), nullable=False, index=True
+    )  # ID from source API (TheSportsDB, MLB Stats, etc.)
     source = db.Column(db.String(20), default=SOURCE_THESPORTSDB, nullable=False)  # Where this event came from
 
     # Event basics
@@ -102,6 +104,7 @@ class Event(db.Model):  # type: ignore[name-defined]
     )
 
     __table_args__ = (
+        db.UniqueConstraint("external_id", "source", name="uq_event_external_id_source"),
         db.Index("idx_event_scheduled", "scheduled_at"),
         db.Index("idx_event_teams", "home_team_id", "away_team_id"),
         db.Index("idx_event_league", "league_id"),

@@ -234,10 +234,10 @@ class PPVEnrichmentOrchestrator:
                 try:
                     result = matcher.find_match(channel.name)
                     if result and result.event and result.confidence >= 0.35:
-                        event, ok = persist_enhanced_match(channel, result)
-                        if ok and event:
+                        event, _was_created = persist_enhanced_match(channel, result)
+                        if event:
                             matched += 1
-                            self._get_enrichment_service().queue_event_detail(event.external_id)
+                            self._get_enrichment_service().queue_event_detail(event.external_id, event.source)
                             db.session.commit()
                 except Exception as e:
                     logger.warning("Enhanced match failed for '%s': %s", channel.name, e)

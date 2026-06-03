@@ -1,6 +1,6 @@
 # Fix `details_fetched` cumulative stat never incremented
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done (PR #13)  
 **Priority:** P0  
 **Audit:** PPV audit, June 2026
 
@@ -25,9 +25,13 @@ Operators see a permanently stale or zero metric, undermining trust in enrichmen
 
 ## Acceptance criteria
 
-- [ ] Processing one new event through the detail queue increases `cumulative_stats.details_fetched` by 1.
-- [ ] Skipped/already-complete events do not increment the counter.
-- [ ] Status API and UI show a non-zero value after detail fetches in integration tests.
+- [x] Processing one new event through the detail queue increases `cumulative_stats.details_fetched` by 1.
+- [x] Skipped/already-complete events do not increment the counter.
+- [x] Status API and UI show a non-zero value after detail fetches in integration tests.
+
+## Completion
+
+- PR #13 — https://github.com/klopstack/iptv-proxy-v2/pull/13
 
 ## Test plan
 

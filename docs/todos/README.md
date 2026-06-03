@@ -178,10 +178,10 @@ Full-stack review of PPV handling: enrichment pipeline, multi-source events (MiL
 
 | # | Document | Status | Summary |
 |---|----------|--------|---------|
-| 52 | [52-fix-details-fetched-stat.md](./52-fix-details-fetched-stat.md) | ⬜ | `details_fetched` cumulative stat is never incremented |
+| 52 | [52-fix-details-fetched-stat.md](./52-fix-details-fetched-stat.md) | ✅ | `details_fetched` cumulative stat is never incremented |
 | 53 | [53-unify-ppv-detection-modules.md](./53-unify-ppv-detection-modules.md) | ⬜ | Consolidate `services/epg/ppv.py` and `services/ppv/detection.py` |
-| 54 | [54-route-enrichment-through-persist-match.md](./54-route-enrichment-through-persist-match.md) | ⬜ | Calendar path bypasses `persist_match`; fix counters and link errors |
-| 55 | [55-multi-source-events-schema-and-detail-fetch.md](./55-multi-source-events-schema-and-detail-fetch.md) | ⬜ | Composite `(external_id, source)` unique; MiLB detail fetch |
+| 54 | [54-route-enrichment-through-persist-match.md](./54-route-enrichment-through-persist-match.md) | ✅ | Calendar path bypasses `persist_match`; fix counters and link errors |
+| 55 | [55-multi-source-events-schema-and-detail-fetch.md](./55-multi-source-events-schema-and-detail-fetch.md) | ✅ | Composite `(external_id, source)` unique; MiLB detail fetch |
 | 56 | [56-eliminate-double-enrichment-classification.md](./56-eliminate-double-enrichment-classification.md) | ⬜ | Stop running `classify_ppv_enrichment` + `extract_all` twice per channel |
 | 57 | [57-centralize-sport-key-mappings.md](./57-centralize-sport-key-mappings.md) | ⬜ | Single sport registry for timezone, context, matching |
 | 58 | [58-fix-team-resolution-and-validation.md](./58-fix-team-resolution-and-validation.md) | ⬜ | Substring team matching, WNBA in SPORTS, validation alignment |

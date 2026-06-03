@@ -58,7 +58,7 @@ def test_ppv_category_detection_and_visibility(app, ppv_account):
             home_team="Jones",
             away_team="Miocic",
         )
-        event = create_or_update_event(cal)
+        event, _ = create_or_update_event(cal)
         assert event is not None
         event.scheduled_at = datetime.now(timezone.utc) + timedelta(hours=2)
         event.status = Event.STATUS_SCHEDULED

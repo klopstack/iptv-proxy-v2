@@ -1,6 +1,6 @@
 # Route calendar enrichment writes through `persist_match`
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done (PR #13)  
 **Priority:** P0  
 **Audit:** PPV audit, June 2026
 
@@ -40,10 +40,14 @@ This split means calendar matches can persist events that enhanced matching woul
 
 ## Acceptance criteria
 
-- [ ] Calendar and enhanced paths both use `persist_match`.
-- [ ] `events_created` counts only new `Event` rows; add `events_updated` if useful.
-- [ ] Persist failures surface as `retry_pending`, not silent partial state.
-- [ ] Age-rejected calendar events do not link channels.
+- [x] Calendar and enhanced paths both use `persist_match`.
+- [x] `events_created` counts only new `Event` rows; add `events_updated` if useful.
+- [x] Persist failures surface as `retry_pending`, not silent partial state.
+- [x] Age-rejected calendar events do not link channels.
+
+## Completion
+
+- PR #13 — https://github.com/klopstack/iptv-proxy-v2/pull/13
 
 ## Test plan
 
