@@ -130,25 +130,10 @@ class PPVEventExtractor:
             return None
 
     def infer_date_from_time(self, hour: int, minute: int, ampm: Optional[str] = None) -> datetime:
-        hour = int(hour)
-        minute = int(minute)
+        from services.ppv.extraction.date_anchor import apply_ampm
 
-        if ampm:
-            ampm = ampm.lower()
-            if ampm == "pm" and hour != 12:
-                hour = hour + 12
-            elif ampm == "am" and hour == 12:
-                hour = 0
-
-        hour = hour % 24
-        minute = minute % 60
-
-        candidate = self.current_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
-
-        if candidate < self.current_date:
-            candidate = candidate + timedelta(days=1)
-
-        return candidate
+        hour, minute = apply_ampm(int(hour), int(minute), ampm)
+        return self.current_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
     def infer_date_from_weekday(self, weekday: str) -> Optional[datetime]:
         weekday = weekday.lower()

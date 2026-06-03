@@ -52,6 +52,26 @@ Used **as a library** by calendar enrichment, not as the top-level orchestrator 
 
 ---
 
+## Date extraction
+
+Channel titles are parsed by **`PPVEventExtractor.extract_date()`** (enrichment, enrichability) and **`DateExtractor.extract_date()`** (reverse matching). Both use the same ordered strategy chain in `services/ppv/extraction/date_strategies/` and shared anchoring in `services/ppv/extraction/date_anchor.py`, with an injectable **reference datetime** (UTC “now” in production, pinned in tests).
+
+**Precedence (first match wins):**
+
+1. Parenthetical / pipe / inline ISO timestamps (`(2026-06-03 18:30:00)`, `start:…`)
+2. European `DD/MM` (or `DD-MM`) with optional `am/pm`
+3. Pipe weekday lines (`| Sat 03 Jan 17:15`)
+4. Explicit anchors: `Jun 4 01:55`, `@ Jun 3 11:00 AM`, or `28 Dec 8:00pm`
+5. Month/day without time (`Oct 18`, `December 28`)
+6. Trailing clock time only → **reference calendar day** (e.g. `… 12:30pm` on 2026-06-03 → `2026-06-03 12:30`, no next-day rollover)
+7. Guarded `dateparser` fallback for remaining natural-language fragments (only when the title has a plausible date signal)
+
+**Year selection:** Month/day anchors pick the nearest occurrence within ±1 year of the reference; same calendar day as reference is preferred (so `@ Jun 3` on 2026-06-03 stays 2026, not 2027).
+
+**Rejection:** Parses more than ~365 days beyond the reference, placeholder years (≥2098), or titles with no date signal return `None` (no spurious default date for boxing-style names).
+
+---
+
 ## EnhancedPPVMatcher (fallback)
 
 `services/ppv/matching/enhanced.py` (~690 lines):

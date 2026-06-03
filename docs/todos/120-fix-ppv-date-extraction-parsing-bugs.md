@@ -1,6 +1,6 @@
 # Fix PPV date extraction parsing bugs
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P1  
 **Audit:** Production matching analysis, June 2026 (`docker.klopnet.com`)
 
@@ -75,13 +75,20 @@ A fix in only one path will leave enrichment grouping and reverse matching out o
 
 ## Acceptance criteria
 
-- [ ] Production fixture set (below) passes in both extractors with `reference = 2026-06-03 18:00 UTC`.
+- [x] Production fixture set (below) passes in both extractors with `reference = 2026-06-03 18:00 UTC`.
 - [ ] `show_unmatched_channels.py --reason no-match` count drops for date-related failures (measure on staging/production after requeue).
-- [ ] No regression on existing `tests/test_ppv_extraction.py` and `tests/ppv/test_channel_matching.py`.
-- [ ] Charlton/Leicester channel resolves to **2026-06-03** (or `None` if only time — then combined with provider date metadata if available); must **not** produce 2027-01-03.
-- [ ] WCWS channel resolves to **2026-06-04**, not 2026-11-03.
-- [ ] Tennis `@ Jun 3` resolves to **2026-06-03**, not 2027-06-03.
-- [ ] Channels with no date signal return `None`, not a spurious default date.
+- [x] No regression on existing `tests/test_ppv_extraction.py` and `tests/ppv/test_channel_matching.py`.
+- [x] Charlton/Leicester channel resolves to **2026-06-03** (or `None` if only time — then combined with provider date metadata if available); must **not** produce 2027-01-03.
+- [x] WCWS channel resolves to **2026-06-04**, not 2026-11-03.
+- [x] Tennis `@ Jun 3` resolves to **2026-06-03**, not 2027-06-03.
+- [x] Channels with no date signal return `None`, not a spurious default date.
+
+## Completion
+
+- PR: https://github.com/klopstack/iptv-proxy-v2/pull/52
+- Shared module: `services/ppv/extraction/date_anchor.py`
+- Tests: `tests/ppv/test_date_extraction_production_fixtures.py`
+- Docs: `docs/architecture/ppv-matching-strategies.md` (Date extraction section)
 
 ## Test plan
 
