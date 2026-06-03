@@ -460,3 +460,32 @@ class TestChannelSyncService:
             assert updated_channel.name == "ESPN 4K"
             assert updated_channel.ppv_enrichment_status == "matched"
             assert updated_channel.ppv_enrichment_queue_id == "queue_999"
+
+    @patch("services.sync_service.get_iptv_service_for_account")
+    def test_sync_with_noop_post_hooks_skips_side_effects(self, mock_iptv_class, app):
+        from services.channel_sync_post_hooks import (
+            ChannelSyncPostHooks,
+            get_channel_sync_post_hooks,
+            set_channel_sync_post_hooks,
+        )
+
+        original_hooks = get_channel_sync_post_hooks()
+        try:
+            set_channel_sync_post_hooks(ChannelSyncPostHooks.noop())
+            with app.app_context():
+                account = Account(
+                    name="Test Account", server="test.com:8080", username="test", password="test", enabled=True
+                )
+                db.session.add(account)
+                db.session.commit()
+                mock_service = Mock()
+                mock_service.get_live_categories.return_value = []
+                mock_service.get_live_streams.return_value = [{"stream_id": 101, "name": "ESPN", "category_id": "1"}]
+                mock_iptv_class.return_value = mock_service
+                with patch("services.filter_service.FilterService.compute_visibility_for_account") as mock_filter:
+                    result = ChannelSyncService.sync_account(account.id)
+                assert result["success"] is True
+                mock_filter.assert_not_called()
+                assert "channels_visible" not in result
+        finally:
+            set_channel_sync_post_hooks(original_hooks)
