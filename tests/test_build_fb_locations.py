@@ -56,6 +56,7 @@ class TestBuildFbEntries:
         monkeypatch.setattr(build, "TSDB_RAW_DIR", raw_dir)
         monkeypatch.setattr(build, "FB_LEAGUES_PATH", fb_leagues)
         monkeypatch.setattr(build, "ROOT", ROOT)
+        monkeypatch.setattr(build, "_tsdb_uses_v2_api", lambda _key: True)
 
         entries = build._build_tsdb_league_entries(refresh=False, tf=None)
         assert len(entries) == 1

@@ -1,0 +1,172 @@
+# Deployment
+
+Production deployments of IPTV Proxy v2 in this project’s stack use **Traefik** as the reverse proxy and **Authentik** for admin authentication. The Flask app does not implement login (`POST /login` does not exist).
+
+Canonical wiring lives in the sibling **[klopstack](https://github.com/klopstack/klopstack)** repository (`../klopstack` relative to this repo). This document summarizes how that stack protects IPTV Proxy v2.
+
+## Authentication model
+
+| Traffic | Host (example) | Traefik | App-level auth |
+|---------|----------------|---------|----------------|
+| **Admin** — web UI, `/api/*` | `iptv.${CLOUDFLARE_DNS_ZONE}` | `authentik-forwardauth@file` | None (proxy only) |
+| **Client** — playlists, EPG, streams, Xtream | `iptv.${CLOUDFLARE_DNS_ZONE}` | Public router (higher priority), no forward-auth | Xtream username/password on client paths |
+| **Authentik UI** | `auth.${CLOUDFLARE_DNS_ZONE}` | `security-headers@file` only — **no** forward-auth | Authentik’s own login |
+
+Replace `${CLOUDFLARE_DNS_ZONE}` with your registered domain (e.g. `stonecrusher.us` in the reference stack).
+
+## Authentik forward-auth middleware
+
+Defined in klopstack `traefik-dynamic.yaml` (file provider mounted at `/etc/traefik`):
+
+```yaml
+http:
+  middlewares:
+    authentik-forwardauth:
+      forwardAuth:
+        address: http://authentik:9000/outpost.goauthentik.io/auth/traefik
+        trustForwardHeader: true
+        authResponseHeaders:
+          - X-authentik-username
+          - X-authentik-groups
+          - X-authentik-email
+          - X-authentik-name
+          - X-authentik-uid
+          - X-authentik-jwt
+          - X-authentik-meta-jwks
+          - X-authentik-meta-outpost
+          - X-authentik-meta-provider
+          - X-authentik-meta-app
+          - X-authentik-meta-version
+```
+
+Requirements:
+
+- Traefik and Authentik on the same Docker network (`mediastack` in klopstack).
+- An Authentik **Traefik forward-auth outpost** configured for application URLs under `https://iptv.${CLOUDFLARE_DNS_ZONE}/`.
+- Do **not** attach `authentik-forwardauth` to the Authentik router itself (see comment on `authentik` service labels in klopstack `docker-compose.yaml`).
+
+## IPTV Proxy v2 — Traefik Docker labels
+
+From klopstack `docker-compose.yaml` service `iptvproxy` (`container_name: iptv-proxy-v2`). Two routers share one backend service on port **8000**:
+
+### 1. Client router (public, priority 100)
+
+No Authentik. Matches **only** these path prefixes on `iptv.${CLOUDFLARE_DNS_ZONE}`:
+
+```yaml
+traefik.http.routers.iptv-streams.rule: >-
+  Host(`iptv.${CLOUDFLARE_DNS_ZONE}`) && (
+    PathPrefix(`/playlist`) ||
+    PathPrefix(`/epg`) ||
+    PathPrefix(`/stream`) ||
+    PathPrefix(`/image`) ||
+    PathPrefix(`/icon`) ||
+    PathPrefix(`/player_api.php`) ||
+    PathPrefix(`/xmltv.php`) ||
+    PathPrefix(`/ppv-epg`) ||
+    PathPrefix(`/live/`) ||
+    PathPrefix(`/movie/`) ||
+    PathPrefix(`/series/`)
+  )
+traefik.http.routers.iptv-streams.entrypoints: secureweb
+traefik.http.routers.iptv-streams.tls.certResolver: letsencrypt
+traefik.http.routers.iptv-streams.middlewares: security-headers@file
+traefik.http.routers.iptv-streams.priority: "100"
+```
+
+**Typical client paths in iptv-proxy-v2:**
+
+| Prefix | Purpose |
+|--------|---------|
+| `/playlist/` | M3U playlists (`/playlist/<account_id>.m3u`, `/playlist/config/<slug>.m3u`) |
+| `/epg/` | Account/config XMLTV EPG |
+| `/stream/` | Stream proxy (HLS/MPEG-TS) |
+| `/image/`, `/icon/` | Channel icons |
+| `/player_api.php` | Xtream Codes API |
+| `/xmltv.php` | Xtream-style XMLTV (if enabled) |
+| `/live/`, `/movie/`, `/series/` | Xtream stream URLs |
+| `/ppv-epg` | Reserved in stack for PPV XMLTV-style URLs (admin API is under `/api/ppv-epg`) |
+
+Client routes use **provisioned Xtream credentials** (or playlist/EPG URL tokens), not Authentik.
+
+### 2. Admin router (Authentik, priority 1)
+
+Catch-all on the same host for everything **not** matched by the higher-priority client router:
+
+```yaml
+traefik.http.routers.iptv-proxy-v2.rule: Host(`iptv.${CLOUDFLARE_DNS_ZONE}`)
+traefik.http.routers.iptv-proxy-v2.entrypoints: secureweb
+traefik.http.routers.iptv-proxy-v2.middlewares: authentik-forwardauth@file,security-headers@file
+traefik.http.routers.iptv-proxy-v2.priority: "1"
+```
+
+**Protected by Authentik (examples):**
+
+- `/` — admin HTML pages (`/settings`, `/accounts`, `/ppv`, …)
+- `/api/*` — REST management (accounts, EPG config, PPV enrichment, scheduler, …)
+
+### Backend service
+
+```yaml
+traefik.http.services.iptv-proxy-v2.loadbalancer.server.scheme: http
+traefik.http.services.iptv-proxy-v2.loadbalancer.server.port: "8000"
+```
+
+## Gluetun and port `8889` (often misunderstood)
+
+klopstack lists **`8889:8000`** under the **gluetun** service with a comment “IPTV Proxy v2”. That pattern is used for apps that run with `network_mode: service:gluetun` (e.g. qBittorrent, SABnzbd): the app listens inside Gluetun’s network namespace, and the host port forwards to it.
+
+**In the current `iptvproxy` service definition, IPTV Proxy v2 does not use `network_mode: service:gluetun`.** It joins the `mediastack` Docker network like Traefik and is reached at `iptv-proxy-v2:8000` for routing. Admin UI traffic normally goes **Traefik → Authentik → app**, not through the Gluetun port map.
+
+So:
+
+| Question | Answer |
+|----------|--------|
+| Is the unauthenticated UI exposed **to remote Gluetun VPN users**? | **Not by default.** `8889:8000` is a **Docker host** port publish, not “inside the VPN” for clients. Remote VPN peers do not automatically get access to host port 8889 unless you separately forward/firewall for that. |
+| Does `8889` bypass Authentik today? | **Usually no** — with the current compose file, nothing in the Gluetun namespace is listening on 8000 for iptv-proxy, so `http://host:8889/` may not even reach the app (connection refused or wrong process). |
+| What is Gluetun for here? | VPN egress for **other** stack services that share its network; Gluetun also exposes an HTTP proxy on **8888** (`HTTPPROXY=on`). `iptvproxy` only `depends_on` Gluetun for startup ordering; outbound provider traffic from the app container uses normal Docker routing unless you add proxy env vars. |
+
+If you **did** switch iptv-proxy to `network_mode: service:gluetun` (to force provider API/stream egress through the VPN), then `8889:8000` would expose the **full** Flask app on the host **without** Traefik/Authentik — including unauthenticated admin UI. That would be a deliberate tradeoff; prefer keeping the app on `mediastack` and routing admin traffic only through Traefik.
+
+Prefer admin access via `https://iptv.${CLOUDFLARE_DNS_ZONE}/` through Traefik.
+
+## Container environment (klopstack reference)
+
+```yaml
+environment:
+  - GUNICORN_WORKERS=10
+  - PORT=8000
+  - DEBUG=False
+  - STREAM_BACKEND=mediaflow
+  - MEDIAFLOW_PROXY_URL=http://mediaflow-proxy:8888
+  - MEDIAFLOW_API_PASSWORD=${MEDIAFLOW_API_PASSWORD}
+volumes:
+  - ${FOLDER_FOR_DATA}/iptv-proxy-v2:/app/data
+networks:
+  - mediastack
+```
+
+VPN egress: `iptvproxy` runs behind **gluetun** (`depends_on: gluetun`) so upstream IPTV provider traffic uses the VPN tunnel.
+
+## TLS and entrypoints
+
+Traefik static config (`traefik-static.yaml` in klopstack):
+
+- Entrypoint `secureweb` on `:443` with Let’s Encrypt (DNS challenge via Cloudflare).
+- HTTP `:80` redirects to HTTPS.
+
+## Operator checklist
+
+1. Deploy Traefik + Authentik from klopstack (or equivalent labels/middleware).
+2. Create Authentik application for `https://iptv.${CLOUDFLARE_DNS_ZONE}/` with Traefik forward-auth outpost.
+3. Confirm client paths (e.g. `/player_api.php`) work **without** Authentik session cookies.
+4. Confirm `/api/accounts` (or `/settings`) redirects to Authentik when unauthenticated.
+5. Restrict or firewall Gluetun port `8889` if not needed locally.
+6. Set a strong `SECRET_KEY` and non-default `MEDIAFLOW_API_PASSWORD` in production.
+
+## Related documentation
+
+- [architecture/admin-auth-and-deployment-security.md](architecture/admin-auth-and-deployment-security.md)
+- [API_REFERENCE.md — Authentication](API_REFERENCE.md#authentication)
+- [XTREAM_CODES_API.md](XTREAM_CODES_API.md) — client API
+- klopstack: `docker-compose.yaml` (service `iptvproxy`), `traefik-dynamic.yaml`, `traefik-static.yaml`

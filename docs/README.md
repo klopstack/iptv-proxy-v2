@@ -50,7 +50,17 @@ User-friendly guide for the Xtream Codes API feature:
 ### [todos/](todos/README.md)
 **For: Maintainers, Active Development**
 
-Post-restructuring work backlog from the May 2026 codebase audit. Sixteen prioritized items (P0–P3) with detailed problem statements, proposed solutions, acceptance criteria, and test plans. Work through [todos/README.md](todos/README.md) in order.
+Work backlog from codebase audits (May–June 2026). Prioritized items (P0–P6) with problem statements, proposed solutions, acceptance criteria, and test plans. Work through [todos/README.md](todos/README.md) in order.
+
+### [DEPLOYMENT.md](DEPLOYMENT.md)
+**For: Operators**
+
+Traefik + Authentik forward-auth for admin vs client paths. Derived from the [klopstack](https://github.com/klopstack/klopstack) stack (`iptvproxy` service labels).
+
+### [architecture/](architecture/)
+**For: Maintainers, Architecture Review**
+
+Draft architecture documents from June 2026 audits — PPV pipeline, auth/security, API contracts, EPG/sync, frontend debt, schema lifecycle. Review before large refactors. See also [PPV_ARCHITECTURE.md](PPV_ARCHITECTURE.md) for a quick PPV entry point.
 
 ## Quick Navigation
 
@@ -77,8 +87,11 @@ Post-restructuring work backlog from the May 2026 codebase audit. Sixteen priori
 **Run tests and check code quality**
 → Use commands in [DEVELOPER_GUIDE.md#testing](DEVELOPER_GUIDE.md#testing)
 
-**See planned fixes after the restructuring**
+**See planned fixes and audit backlog**
 → Start with [todos/README.md](todos/README.md)
+
+**Review architecture before large refactors**
+→ See [architecture/](architecture/)
 
 ## Changelog
 

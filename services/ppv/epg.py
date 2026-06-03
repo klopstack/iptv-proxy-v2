@@ -81,12 +81,8 @@ class PPVEpgService:
 
         filtered_channels: List[Tuple[Channel, EventChannelLink, Event]] = []
         for acc_id, channels in channels_by_account.items():
-            # Extract just the Channel objects for filtering
             channel_objs = [ch for ch, _, _ in channels]
-            # Apply FilterService
-            FilterService.apply_filters_to_channels(channel_objs, acc_id)
-            # Keep only visible channels
-            visible_ids = {ch.id for ch in channel_objs if ch.is_visible}
+            visible_ids = {ch.id for ch in FilterService.apply_filters_to_channels(channel_objs, acc_id)}
             filtered_channels.extend((ch, link, evt) for ch, link, evt in channels if ch.id in visible_ids)
 
         if not filtered_channels:

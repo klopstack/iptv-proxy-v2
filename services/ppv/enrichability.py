@@ -24,13 +24,19 @@ def is_ppv_section_header(name: str) -> bool:
     return bool(PPV_SECTION_HEADER_PATTERN.match(stripped))
 
 
-def classify_ppv_enrichment(channel_name: str) -> Optional[str]:
+def classify_ppv_enrichment(
+    channel_name: str,
+    extraction: Optional[dict] = None,
+) -> Optional[str]:
     """
     Return a skip reason if the channel cannot be calendar-enriched, else None.
 
     Reasons align with enrichment filter keys: generic_name, placeholder_name,
     section_header, placeholder, inactive, no_competitors, date_but_no_competitors,
     far_future.
+
+    When ``extraction`` is provided (e.g. from a prior ``extract_all`` call), it is
+    used for competitor/date checks instead of re-extracting from the channel name.
     """
     if not channel_name or not channel_name.strip():
         return "inactive"
@@ -50,7 +56,8 @@ def classify_ppv_enrichment(channel_name: str) -> Optional[str]:
     if _extractor.is_inactive_channel(channel_name):
         return "inactive"
 
-    extraction = _extractor.extract_all(channel_name)
+    if extraction is None:
+        extraction = _extractor.extract_all(channel_name)
 
     if extraction.get("inferred_how") == "date_too_far_future":
         return "far_future"

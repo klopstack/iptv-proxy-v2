@@ -16,12 +16,21 @@ This document provides comprehensive reference for all API endpoints in IPTV Pro
 
 ## Authentication
 
-Most API endpoints require authentication. The proxy supports session-based authentication via the web UI.
+IPTV Proxy v2 is an **administrative application**. Authentication is split by surface:
 
-### Session Management
-- Login: `POST /login`
-- Logout: `POST /logout`
-- Sessions managed via Flask sessions
+### Admin UI and management API
+
+Admin HTML pages and `/api/*` management endpoints (accounts, settings, EPG configuration, PPV enrichment, etc.) are **not** authenticated inside Flask. In production they are protected by **Traefik** and **Authentik** forward-auth in front of the application.
+
+There is **no** `POST /login` or in-app session login on this service. Do not expect Flask session cookies for admin access.
+
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for Traefik router labels, path split (admin vs client), and the reference configuration in the [klopstack](https://github.com/klopstack/klopstack) stack.
+
+### Client-facing endpoints (Xtream, EPG, streams)
+
+The only non-administrative traffic is **client delivery**: Xtream Codes API, playlist/M3U, XMLTV/EPG output, and stream proxy paths. These use **provisioned client credentials** (Xtream username/password per credential record), not Authentik.
+
+Details: [XTREAM_CODES_API.md](XTREAM_CODES_API.md).
 
 ## Datetime Semantics
 

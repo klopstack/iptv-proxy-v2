@@ -326,26 +326,26 @@ class SyncScheduler:
             # Check if account/channel sync is needed
             if self._needs_sync(SYNC_KEY_LAST_ACCOUNT_SYNC, self._account_interval_hours):
                 logger.info(f"Account sync due (interval: {self._account_interval_hours} hours)")
-                self._sync_accounts()
-                self._set_last_sync_time(SYNC_KEY_LAST_ACCOUNT_SYNC)
-                self._touch_heartbeat()
+                if self._sync_accounts():
+                    self._set_last_sync_time(SYNC_KEY_LAST_ACCOUNT_SYNC)
+                    self._touch_heartbeat()
 
             self._sync_epg_sources_if_due()
 
             # Check if FCC sync is needed (configurable, default weekly)
             if self._needs_sync(SYNC_KEY_LAST_FCC_SYNC, self._fcc_interval_hours):
                 logger.info(f"FCC sync due (interval: {self._fcc_interval_hours} hours)")
-                self._sync_fcc_data()
-                self._set_last_sync_time(SYNC_KEY_LAST_FCC_SYNC)
-                self._touch_heartbeat()
+                if self._sync_fcc_data():
+                    self._set_last_sync_time(SYNC_KEY_LAST_FCC_SYNC)
+                    self._touch_heartbeat()
 
             # Check if PPV event pre-fetch is needed (every 6 hours)
             # This loads event data for dates found in channels + 30 days ahead
             if self._needs_sync(SYNC_KEY_LAST_PPV_PREFETCH, DEFAULT_PPV_PREFETCH_INTERVAL_HOURS):
                 logger.info("PPV event pre-fetch due (6 hour schedule)")
-                self._prefetch_ppv_events()
-                self._set_last_sync_time(SYNC_KEY_LAST_PPV_PREFETCH)
-                self._touch_heartbeat()
+                if self._prefetch_ppv_events():
+                    self._set_last_sync_time(SYNC_KEY_LAST_PPV_PREFETCH)
+                    self._touch_heartbeat()
 
             # Check if PPV enrichment is needed (hourly; each run drains the queue in a loop)
             if self._needs_sync(SYNC_KEY_LAST_PPV_ENRICHMENT, DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS):
@@ -360,75 +360,85 @@ class SyncScheduler:
                     int(DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS * 60),
                     _queue.get("queued_count", "?"),
                 )
-                self._enrich_ppv_events()
-                self._set_last_sync_time(SYNC_KEY_LAST_PPV_ENRICHMENT)
-                self._touch_heartbeat()
+                if self._enrich_ppv_events():
+                    self._set_last_sync_time(SYNC_KEY_LAST_PPV_ENRICHMENT)
+                    self._touch_heartbeat()
 
             if self._needs_sync(SYNC_KEY_LAST_PPV_TIME_REFRESH, DEFAULT_PPV_TIME_REFRESH_INTERVAL_HOURS):
                 logger.info("PPV near-term event time refresh due (hourly schedule)")
-                self._refresh_ppv_event_times()
-                self._set_last_sync_time(SYNC_KEY_LAST_PPV_TIME_REFRESH)
-                self._touch_heartbeat()
+                if self._refresh_ppv_event_times():
+                    self._set_last_sync_time(SYNC_KEY_LAST_PPV_TIME_REFRESH)
+                    self._touch_heartbeat()
 
             # Check if sportsipy team data refresh is needed (weekly)
             if self._needs_sync(SYNC_KEY_LAST_SPORTSIPY_REFRESH, DEFAULT_SPORTSIPY_REFRESH_INTERVAL_HOURS):
                 logger.info("Sportsipy team data refresh due (weekly schedule)")
-                self._refresh_sportsipy_teams()
-                self._set_last_sync_time(SYNC_KEY_LAST_SPORTSIPY_REFRESH)
-                self._touch_heartbeat()
+                if self._refresh_sportsipy_teams():
+                    self._set_last_sync_time(SYNC_KEY_LAST_SPORTSIPY_REFRESH)
+                    self._touch_heartbeat()
 
             # Expired EPG program cleanup (daily)
             if self._needs_sync(SYNC_KEY_LAST_EPG_PROGRAM_CLEANUP, DEFAULT_EPG_PROGRAM_CLEANUP_INTERVAL_HOURS):
                 logger.info("EPG program cleanup due (daily schedule)")
-                self._cleanup_epg_programs()
-                self._set_last_sync_time(SYNC_KEY_LAST_EPG_PROGRAM_CLEANUP)
-                self._touch_heartbeat()
+                if self._cleanup_epg_programs():
+                    self._set_last_sync_time(SYNC_KEY_LAST_EPG_PROGRAM_CLEANUP)
+                    self._touch_heartbeat()
 
             # Health check history cleanup (weekly)
             if self._needs_sync(SYNC_KEY_LAST_HEALTH_CHECK_CLEANUP, DEFAULT_HEALTH_CHECK_CLEANUP_INTERVAL_HOURS):
                 logger.info("Health check history cleanup due (weekly schedule)")
-                self._cleanup_health_checks()
-                self._set_last_sync_time(SYNC_KEY_LAST_HEALTH_CHECK_CLEANUP)
-                self._touch_heartbeat()
+                if self._cleanup_health_checks():
+                    self._set_last_sync_time(SYNC_KEY_LAST_HEALTH_CHECK_CLEANUP)
+                    self._touch_heartbeat()
 
             self._touch_heartbeat()
 
-    def _sync_accounts(self):
-        """Sync all enabled accounts and process their tags"""
+    def _sync_accounts(self) -> bool:
+        """Sync all enabled accounts and process their tags.
+
+        Returns:
+            True if every enabled account synced successfully; False if any failed.
+        """
         from models import db
 
         accounts = Account.query.filter_by(enabled=True).all()
         logger.info(f"Syncing {len(accounts)} enabled account(s)")
+        all_ok = True
 
         for account in accounts:
             try:
                 self._touch_heartbeat()
                 logger.info(f"Syncing account: {account.name}")
                 stats = ChannelSyncService.sync_account(account.id)
+                success = bool(stats.get("success"))
+                if not success:
+                    all_ok = False
                 logger.info(
                     f"Account {account.name} synced: "
-                    f"{stats['channels_added']} added, "
-                    f"{stats['channels_updated']} updated, "
-                    f"{stats['channels_deactivated']} deactivated"
+                    f"{stats.get('channels_added', 0)} added, "
+                    f"{stats.get('channels_updated', 0)} updated, "
+                    f"{stats.get('channels_deactivated', 0)} deactivated, "
+                    f"success={success}"
                 )
 
                 # Process tag extraction for this account
                 self._process_account_tags(account)
 
-                # Update account's last sync time
                 account.last_sync = datetime.now(timezone.utc)
-                account.last_sync_status = "success"
+                account.last_sync_status = "success" if success else "error"
                 db.session.commit()
 
             except Exception as e:
+                all_ok = False
                 logger.error(f"Error syncing account {account.name}: {e}")
-                # Update account's sync status to error
                 try:
                     account.last_sync = datetime.now(timezone.utc)
                     account.last_sync_status = "error"
                     db.session.commit()
                 except Exception:
                     db.session.rollback()
+
+        return all_ok
 
     def _process_account_tags(self, account):
         """Process tag extraction for an account after channel sync"""
@@ -456,8 +466,8 @@ class SyncScheduler:
         except Exception as e:
             logger.error("Error in channel health scanning: %s", e)
 
-    def _sync_fcc_data(self):
-        """Sync FCC facility data (runs weekly)"""
+    def _sync_fcc_data(self) -> bool:
+        """Sync FCC facility data (runs weekly). Returns True on success."""
         try:
             from services.fcc_facility_service import FccFacilityService
 
@@ -469,10 +479,12 @@ class SyncScheduler:
                     f"FCC data synced: {stats.get('added', 0)} added, "
                     f"{stats.get('updated', 0)} updated, {stats.get('total', 0)} total"
                 )
-            else:
-                logger.warning(f"FCC sync issue: {result.get('message', 'Unknown error')}")
+                return True
+            logger.warning(f"FCC sync issue: {result.get('message', 'Unknown error')}")
+            return False
         except Exception as e:
             logger.error(f"Error syncing FCC data: {e}")
+            return False
 
     def _apply_fcc_enrichment(self, account):
         """Apply FCC-based tag enrichment to an account"""
@@ -516,7 +528,7 @@ class SyncScheduler:
         except Exception as e:
             logger.error("Error in EPG source sync: %s", e)
 
-    def _prefetch_ppv_events(self):
+    def _prefetch_ppv_events(self) -> bool:
         """
         Pre-fetch event data for PPV matching.
 
@@ -538,11 +550,13 @@ class SyncScheduler:
                 f"{stats.get('already_cached', 0)} already cached, "
                 f"{stats.get('total_events', 0)} total events"
             )
+            return True
 
         except Exception as e:
             logger.error(f"Error pre-fetching PPV events: {e}", exc_info=True)
+            return False
 
-    def _enrich_ppv_events(self):
+    def _enrich_ppv_events(self) -> bool:
         """
         Enrich PPV events using calendar-based scraping.
 
@@ -557,7 +571,7 @@ class SyncScheduler:
             total_stats = run_ppv_enrichment(self.app)
 
             if total_stats.get("skipped"):
-                return
+                return True
 
             logger.info(
                 "PPV enrichment complete: %s batches, %s processed, %s matched, %s no_match",
@@ -566,11 +580,13 @@ class SyncScheduler:
                 total_stats.get("channels_matched", 0),
                 total_stats.get("channels_no_match", 0),
             )
+            return True
 
         except Exception as e:
             logger.error(f"Error enriching PPV events: {e}", exc_info=True)
+            return False
 
-    def _refresh_ppv_event_times(self):
+    def _refresh_ppv_event_times(self) -> bool:
         """Refresh TheSportsDB times/status for matched events starting within 48 hours."""
         try:
             from services.ppv.enrichment import get_calendar_enrichment_service
@@ -579,10 +595,12 @@ class SyncScheduler:
             service = get_calendar_enrichment_service(self.app)
             stats = service.refresh_upcoming_event_times()
             logger.info("PPV time refresh queued %s events", stats.get("queued", 0))
+            return True
         except Exception as e:
             logger.error(f"Error refreshing PPV event times: {e}", exc_info=True)
+            return False
 
-    def _refresh_sportsipy_teams(self):
+    def _refresh_sportsipy_teams(self) -> bool:
         """
         Refresh sports team data from sportsipy.
 
@@ -610,67 +628,75 @@ class SyncScheduler:
                 sports=["mlb", "nba", "ncaab", "ncaaf", "nfl", "nhl"],
             )
 
-            if result.get("success"):
-                logger.info(
-                    f"Sportsipy refresh complete: "
-                    f"{result.get('teams_added', 0)} added, "
-                    f"{result.get('teams_updated', 0)} updated, "
-                    f"sports: {result.get('sports_processed', [])}"
-                )
-
-                from services.milb_team_service import refresh_milb_teams_from_mlb_api
-
-                milb_result = refresh_milb_teams_from_mlb_api()
-                if milb_result.get("success"):
-                    logger.info(
-                        "MiLB team refresh complete: %s added, %s updated, total=%s",
-                        milb_result.get("teams_added", 0),
-                        milb_result.get("teams_updated", 0),
-                        milb_result.get("total_teams", 0),
-                    )
-                else:
-                    logger.warning("MiLB team refresh failed: %s", milb_result.get("error"))
-
-                tsdb_result = refresh_tsdb_registry_teams(sports=("fb", "wnba"))
-                if tsdb_result.get("success"):
-                    logger.info(
-                        "TheSportsDB registry refresh complete: %s added, %s updated, " "%s removed, sports=%s",
-                        tsdb_result.get("teams_added", 0),
-                        tsdb_result.get("teams_updated", 0),
-                        tsdb_result.get("teams_removed", 0),
-                        tsdb_result.get("sports_processed", []),
-                    )
-                else:
-                    logger.warning(
-                        "TheSportsDB registry refresh had issues: %s",
-                        tsdb_result.get("errors", []),
-                    )
-
-                # Reload team data in service
-                service = get_sportsipy_service()
-                service.reload_team_data()
-            else:
+            if not result.get("success"):
                 logger.warning(f"Sportsipy refresh had issues: {result.get('errors', [])}")
+                return False
+
+            logger.info(
+                f"Sportsipy refresh complete: "
+                f"{result.get('teams_added', 0)} added, "
+                f"{result.get('teams_updated', 0)} updated, "
+                f"sports: {result.get('sports_processed', [])}"
+            )
+
+            from services.milb_team_service import refresh_milb_teams_from_mlb_api
+
+            milb_result = refresh_milb_teams_from_mlb_api()
+            if milb_result.get("success"):
+                logger.info(
+                    "MiLB team refresh complete: %s added, %s updated, total=%s",
+                    milb_result.get("teams_added", 0),
+                    milb_result.get("teams_updated", 0),
+                    milb_result.get("total_teams", 0),
+                )
+            else:
+                logger.warning("MiLB team refresh failed: %s", milb_result.get("error"))
+                return False
+
+            tsdb_result = refresh_tsdb_registry_teams(sports=("fb", "wnba"))
+            if tsdb_result.get("success"):
+                logger.info(
+                    "TheSportsDB registry refresh complete: %s added, %s updated, %s removed, sports=%s",
+                    tsdb_result.get("teams_added", 0),
+                    tsdb_result.get("teams_updated", 0),
+                    tsdb_result.get("teams_removed", 0),
+                    tsdb_result.get("sports_processed", []),
+                )
+            else:
+                logger.warning(
+                    "TheSportsDB registry refresh had issues: %s",
+                    tsdb_result.get("errors", []),
+                )
+                return False
+
+            service = get_sportsipy_service()
+            service.reload_team_data()
+            return True
 
         except Exception as e:
             logger.error(f"Error refreshing sportsipy teams: {e}", exc_info=True)
+            return False
 
-    def _cleanup_epg_programs(self):
+    def _cleanup_epg_programs(self) -> bool:
         """Remove expired rows from epg_programs."""
         try:
             from services.epg.programs import cleanup_expired_programs
 
             deleted = cleanup_expired_programs(days_old=DEFAULT_EPG_PROGRAM_RETENTION_DAYS)
             logger.info("EPG program cleanup removed %s row(s)", deleted)
+            return True
         except Exception as e:
             logger.error("Error during EPG program cleanup: %s", e, exc_info=True)
+            return False
 
-    def _cleanup_health_checks(self):
+    def _cleanup_health_checks(self) -> bool:
         """Remove old channel_health_checks rows."""
         try:
             from services.channel_health_service import cleanup_old_health_checks
 
             deleted = cleanup_old_health_checks()
             logger.info("Health check cleanup removed %s row(s)", deleted)
+            return True
         except Exception as e:
             logger.error("Error during health check cleanup: %s", e, exc_info=True)
+            return False

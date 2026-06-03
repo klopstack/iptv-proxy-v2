@@ -193,10 +193,9 @@ class OrchestratorMixin:
             query = query.filter_by(category_id=category_id)
         all_channels = query.all()
 
-        # Apply FilterService to determine visibility if needed
+        # Apply live account filters (do not use cached is_visible — see FilterService docs)
         if not include_filtered:
-            FilterService.apply_filters_to_channels(all_channels, account_id)
-            channels = [ch for ch in all_channels if ch.is_visible]
+            channels = FilterService.apply_filters_to_channels(all_channels, account_id)
         else:
             channels = all_channels
 

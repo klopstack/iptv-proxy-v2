@@ -621,6 +621,71 @@ def test_playlist_reflects_filter_change_without_manual_recompute(app, client, f
         assert "Showtime Cinema" in restored_playlist
 
 
+def test_stale_is_visible_does_not_block_epg_channel_selection(app, filter_test_account, test_channels):
+    """EPG matching must use live filters, not cached is_visible (orchestrator path)."""
+    with app.app_context():
+        filter_obj = Filter(
+            account_id=filter_test_account.id,
+            name="Sports Only",
+            filter_type="category",
+            filter_action="whitelist",
+            filter_value="Sports",
+            enabled=True,
+        )
+        db.session.add(filter_obj)
+        db.session.commit()
+        FilterService.compute_visibility_for_account(filter_test_account.id)
+
+        # Simulate stale admin cache: sports channels marked hidden though filters allow them.
+        sports_ids = {"1001", "1002"}
+        for channel in test_channels:
+            if channel.stream_id in sports_ids:
+                channel.is_visible = False
+        db.session.commit()
+
+        all_channels = Channel.query.filter_by(
+            account_id=filter_test_account.id,
+            is_active=True,
+        ).all()
+        visible = FilterService.apply_filters_to_channels(all_channels, filter_test_account.id)
+        visible_ids = {ch.stream_id for ch in visible}
+
+        assert visible_ids == sports_ids
+        stale_visible = {ch.stream_id for ch in all_channels if ch.is_visible}
+        assert sports_ids.isdisjoint(stale_visible)
+
+
+def test_stale_is_visible_true_does_not_include_filtered_out_channels(app, filter_test_account, test_channels):
+    """Live filters must exclude channels even when is_visible cache says True."""
+    with app.app_context():
+        filter_obj = Filter(
+            account_id=filter_test_account.id,
+            name="Sports Only",
+            filter_type="category",
+            filter_action="whitelist",
+            filter_value="Sports",
+            enabled=True,
+        )
+        db.session.add(filter_obj)
+        db.session.commit()
+
+        # Stale cache: movie channels still marked visible.
+        for channel in test_channels:
+            channel.is_visible = True
+        db.session.commit()
+
+        all_channels = Channel.query.filter_by(
+            account_id=filter_test_account.id,
+            is_active=True,
+        ).all()
+        visible = FilterService.apply_filters_to_channels(all_channels, filter_test_account.id)
+        visible_ids = {ch.stream_id for ch in visible}
+
+        assert visible_ids == {"1001", "1002"}
+        stale_included = {ch.stream_id for ch in all_channels if ch.is_visible}
+        assert {"2001", "2002"}.issubset(stale_included)
+
+
 def test_stale_is_visible_does_not_block_playlist(app, client, filter_test_account, test_channels):
     """Stale is_visible=False must not hide channels when live filters would include them."""
     with app.app_context():

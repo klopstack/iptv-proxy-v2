@@ -5,7 +5,7 @@ Uses shared fixtures from conftest.py for proper test isolation.
 """
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from models import Account, Category, Channel, Event, EventChannelLink, db
 from services.sync_service import ChannelSyncService
@@ -312,9 +312,14 @@ class TestChannelSyncService:
             assert "Account3" in synced_names
             assert "Account2" not in synced_names
 
+    @patch("services.ppv.enrichment.get_calendar_enrichment_service")
     @patch("services.sync_service.get_iptv_service_for_account")
-    def test_ppv_channel_name_change_resets_enrichment(self, mock_iptv_class, app):
+    def test_ppv_channel_name_change_resets_enrichment(self, mock_iptv_class, mock_get_service, app):
         """Test that PPV channel name change resets enrichment status and removes event links"""
+        mock_enrich_service = MagicMock()
+        mock_enrich_service.enrich_channels.return_value = {}
+        mock_get_service.return_value = mock_enrich_service
+
         with app.app_context():
             account = Account(
                 name="Test Account", server="test.com:8080", username="test", password="test", enabled=True

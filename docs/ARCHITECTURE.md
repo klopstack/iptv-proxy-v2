@@ -269,6 +269,17 @@ ChannelEpgMapping:
 
 **Future**: Converting to native SQLAlchemy JSON type will eliminate all json.loads()/json.dumps() calls.
 
+## Security and authentication
+
+IPTV Proxy v2 is an **administrative application**. The Flask app does not implement admin login (`POST /login` does not exist).
+
+| Traffic | Authentication |
+|---------|----------------|
+| Admin UI and `/api/*` management | **Traefik + Authentik** (reverse-proxy forward-auth) in production |
+| Xtream API, live streams, client EPG/M3U | **Provisioned Xtream credentials** per client record |
+
+Do not expose the application bind address to untrusted networks without proxy auth. See [DEPLOYMENT.md](DEPLOYMENT.md) (Traefik + Authentik labels from klopstack), [architecture/admin-auth-and-deployment-security.md](architecture/admin-auth-and-deployment-security.md), and [API_REFERENCE.md](API_REFERENCE.md#authentication).
+
 ## Deployment
 
 ### Docker (Recommended)

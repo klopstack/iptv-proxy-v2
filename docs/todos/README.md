@@ -168,6 +168,149 @@ Audit of parallel EPG sync + per-source progress (orchestrator, `EpgSyncProgress
 
 **Highest impact first:** 40 → 41 → 48 (correct retry + honest status) → 42 → 43 (safe concurrent sync + unified entry points).
 
+---
+
+## P5 — PPV audit (June 2026)
+
+Full-stack review of PPV handling: enrichment pipeline, multi-source events (MiLB), context providers, tests, and documentation. Architectural findings live in [`docs/architecture/`](../architecture/) for separate review.
+
+| # | Document | Status | Summary |
+|---|----------|--------|---------|
+| 52 | [52-fix-details-fetched-stat.md](./52-fix-details-fetched-stat.md) | ⬜ | `details_fetched` cumulative stat is never incremented |
+| 53 | [53-unify-ppv-detection-modules.md](./53-unify-ppv-detection-modules.md) | ⬜ | Consolidate `services/epg/ppv.py` and `services/ppv/detection.py` |
+| 54 | [54-route-enrichment-through-persist-match.md](./54-route-enrichment-through-persist-match.md) | ⬜ | Calendar path bypasses `persist_match`; fix counters and link errors |
+| 55 | [55-multi-source-events-schema-and-detail-fetch.md](./55-multi-source-events-schema-and-detail-fetch.md) | ⬜ | Composite `(external_id, source)` unique; MiLB detail fetch |
+| 56 | [56-eliminate-double-enrichment-classification.md](./56-eliminate-double-enrichment-classification.md) | ⬜ | Stop running `classify_ppv_enrichment` + `extract_all` twice per channel |
+| 57 | [57-centralize-sport-key-mappings.md](./57-centralize-sport-key-mappings.md) | ⬜ | Single sport registry for timezone, context, matching |
+| 58 | [58-fix-team-resolution-and-validation.md](./58-fix-team-resolution-and-validation.md) | ⬜ | Substring team matching, WNBA in SPORTS, validation alignment |
+| 59 | [59-harden-ppv-enrichment-routes.md](./59-harden-ppv-enrichment-routes.md) | ⬜ | Error handling, memory footgun, queue stats logging |
+| 60 | [60-add-persistence-unit-tests.md](./60-add-persistence-unit-tests.md) | ⬜ | Unit tests for `services/ppv/persistence.py` |
+| 61 | [61-add-channel-matching-tests.md](./61-add-channel-matching-tests.md) | ⬜ | Unit tests for UTC calendar-day grouping |
+| 62 | [62-add-milb-ppv-integration-test.md](./62-add-milb-ppv-integration-test.md) | ⬜ | End-to-end MiLB channel → Event with `mlb_stats_api` source |
+| 63 | [63-expand-ppv-test-coverage.md](./63-expand-ppv-test-coverage.md) | ⬜ | Orchestrator, cleanup, football-data provider, integration |
+| 64 | [64-consolidate-ppv-detection-tests.md](./64-consolidate-ppv-detection-tests.md) | ⬜ | Deduplicate overlapping detection test modules |
+| 65 | [65-refactor-enrichment-god-class.md](./65-refactor-enrichment-god-class.md) | ⬜ | Phased split of ~860-line enrichment service |
+| 66 | [66-detail-thread-and-epg-side-effect-decoupling.md](./66-detail-thread-and-epg-side-effect-decoupling.md) | ⬜ | Replace daemon detail thread; optional EPG hooks |
+| 67 | [67-ppv-misc-cleanup.md](./67-ppv-misc-cleanup.md) | ⬜ | Constants, heuristics validation, provider health, docstrings |
+
+### Recommended order for items 52–67
+
+```
+52-details-stat ──► 54-persist-match ──► 60-persistence-tests
+53-detection-unify ──► 64-test-dedup
+55-multi-source ──► 62-milb-e2e
+56-no-double-classify
+57-sport-registry ──► 58-team-validation
+59-route-hardening
+61-channel-matching-tests
+63-test-expansion
+65-god-class-split ──► 66-detail-thread-decouple
+67-misc-cleanup (anytime)
+```
+
+**Architecture review (before large refactors):** [ppv-pipeline-and-module-map.md](../architecture/ppv-pipeline-and-module-map.md), [ppv-matching-strategies.md](../architecture/ppv-matching-strategies.md), [ppv-multi-source-events.md](../architecture/ppv-multi-source-events.md), [ppv-module-coupling.md](../architecture/ppv-module-coupling.md), [ppv-sport-registry.md](../architecture/ppv-sport-registry.md), [ppv-documentation-gaps.md](../architecture/ppv-documentation-gaps.md)
+
+**Highest impact first:** 52 → 55 → 54 → 53 → 60 → 62 (correct metrics, multi-source correctness, unified persistence, then tests).
+
+### P5 findings summary
+
+**Bugs / misleading behavior:**
+- `details_fetched` stat never written (52)
+- `events_created` counts updates (54)
+- Detail fetch TSDB-only; MiLB events orphaned in detail queue (55)
+- Possible `external_id` global unique vs multi-source (55)
+
+**Structural debt:**
+- Duplicate PPV detection modules (53)
+- Calendar enrichment bypasses `persist_match` (54)
+- Double extraction/classification per channel (56)
+- Sport keys duplicated in 4+ modules (57)
+- ~860-line enrichment god class (65)
+- Three overlapping matching pipelines (architecture doc)
+
+**Test gaps:**
+- No tests for `persistence.py`, `channel_matching.py` (60, 61)
+- No MiLB PPV E2E (62)
+- Heavy mock reliance in enrichment tests (63)
+
+**Documentation:**
+- `PPV_ARCHITECTURE.md` ~20 lines; API reference incomplete (see architecture/ppv-documentation-gaps.md)
+
+---
+
+## P6 — Application-wide audit (June 2026)
+
+Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and non-PPV documentation. Architectural findings in [`docs/architecture/`](../architecture/).
+
+| # | Document | Status | Summary |
+|---|----------|--------|---------|
+| 68 | [68-document-proxy-authentication-model.md](./68-document-proxy-authentication-model.md) | ✅ | Document Traefik + Authentik auth (klopstack); remove fictitious `/login` |
+| 69 | [69-lock-down-destructive-admin-endpoints.md](./69-lock-down-destructive-admin-endpoints.md) | ⬜ | App-level hardening: FCC reset CLI-only, SSRF, import validation (not Flask auth) |
+| 70 | [70-fix-is-visible-epg-matching-bug.md](./70-fix-is-visible-epg-matching-bug.md) | ✅ | EPG matching uses stale `is_visible` instead of live filters |
+| 71 | [71-fix-scheduler-sync-status-semantics.md](./71-fix-scheduler-sync-status-semantics.md) | ✅ | Account sync always "success"; job timestamps advance on failure |
+| 91 | [91-scheduler-status-api-failure-metadata.md](./91-scheduler-status-api-failure-metadata.md) | ⬜ | Status API + SyncMetadata for per-job scheduler failures (deferred from 71) |
+| 72 | [72-standardize-api-error-handling.md](./72-standardize-api-error-handling.md) | ⬜ | `@handle_errors` on ~30–40% of routes; extends TODO 33 |
+| 73 | [73-standardize-api-response-shapes.md](./73-standardize-api-response-shapes.md) | ⬜ | Inconsistent success/error JSON envelopes |
+| 74 | [74-remove-dead-routes-and-dangerous-patterns.md](./74-remove-dead-routes-and-dangerous-patterns.md) | ⬜ | Dead blueprint, duplicate FCC/categories endpoints |
+| 75 | [75-fix-side-effect-get-account-categories.md](./75-fix-side-effect-get-account-categories.md) | ⬜ | GET categories triggers upstream IPTV fetch |
+| 76 | [76-deduplicate-epg-sync-infrastructure.md](./76-deduplicate-epg-sync-infrastructure.md) | ⬜ | Program persistence, sync locks, EAST/WEST constants |
+| 77 | [77-centralize-tag-loading-and-category-sync-policy.md](./77-centralize-tag-loading-and-category-sync-policy.md) | ⬜ | Tag loader N+1; category sync failure policy |
+| 78 | [78-split-fat-route-modules.md](./78-split-fat-route-modules.md) | ⬜ | Phased extraction from 500–1500 line route files |
+| 79 | [79-extract-shared-route-serializers.md](./79-extract-shared-route-serializers.md) | ⬜ | Shared CRUD serializers and Marshmallow schemas |
+| 80 | [80-align-test-db-with-production-schema.md](./80-align-test-db-with-production-schema.md) | ⬜ | pytest `create_all` skips migration-only indexes |
+| 81 | [81-model-fk-ondelete-alignment.md](./81-model-fk-ondelete-alignment.md) | ⬜ | FK ondelete drift; migration FK pragma |
+| 82 | [82-scheduled-data-retention.md](./82-scheduled-data-retention.md) | ⬜ | Events and cached images grow unbounded |
+| 83 | [83-xss-audit-legacy-frontend.md](./83-xss-audit-legacy-frontend.md) | ⬜ | innerHTML with API data in legacy JS + TagSelector |
+| 84 | [84-docker-and-secrets-hardening.md](./84-docker-and-secrets-hardening.md) | ⬜ | No `.dockerignore`; default SECRET_KEY; root container |
+| 85 | [85-frontend-deduplication-and-esm-migration.md](./85-frontend-deduplication-and-esm-migration.md) | ⬜ | escapeHtml/loadAccounts/datetime dupes; epg_management migration |
+| 86 | [86-web-smoke-tests-and-pytest-consolidation.md](./86-web-smoke-tests-and-pytest-consolidation.md) | ⬜ | Admin page smoke tests; duplicate pytest fixtures |
+| 87 | [87-fix-stale-documentation.md](./87-fix-stale-documentation.md) | ⬜ | API_REFERENCE auth/Xtream URLs; missing P4 todo files |
+| 88 | [88-expand-ci-quality-gates.md](./88-expand-ci-quality-gates.md) | ⬜ | vulture, Docker build on PR, pre-commit tests |
+| 89 | [89-refactor-scheduler-job-registry.md](./89-refactor-scheduler-job-registry.md) | ⬜ | Split 676-line scheduler god class |
+| 90 | [90-split-epg-programs-and-decouple-sync.md](./90-split-epg-programs-and-decouple-sync.md) | ⬜ | Split programs.py; decouple sync post-processing |
+
+### Recommended order for items 68–90
+
+```
+70-is-visible-bug ──► 71-scheduler-semantics ──► 91-scheduler-failure-status-api
+68-doc-proxy-auth ✅ (see DEPLOYMENT.md)
+69-destructive-endpoint-hardening (parallel with 68)
+84-docker-secrets
+72-errors ──► 73-response-shapes
+76-epg-dedup ──► 77-tag-loading
+80-schema-test-parity ──► 81-fk-alignment
+83-xss ──► 85-frontend-dedup
+87-docs-sync
+89-scheduler-refactor ──► 90-epg-split (architecture review first)
+78-fat-routes ──► 79-serializers
+```
+
+**Architecture review:** [admin-auth-and-deployment-security.md](../architecture/admin-auth-and-deployment-security.md), [api-contract-errors-and-responses.md](../architecture/api-contract-errors-and-responses.md), [channel-visibility-is-visible.md](../architecture/channel-visibility-is-visible.md), [scheduler-and-sync-orchestration.md](../architecture/scheduler-and-sync-orchestration.md), [epg-service-architecture.md](../architecture/epg-service-architecture.md), [frontend-architecture-debt.md](../architecture/frontend-architecture-debt.md), [schema-lifecycle-and-test-parity.md](../architecture/schema-lifecycle-and-test-parity.md), [api-layer-and-fat-routes.md](../architecture/api-layer-and-fat-routes.md)
+
+**Highest impact first:** 70 → 71 → 69 (operator safety). Auth docs: ✅ 68 + [DEPLOYMENT.md](../DEPLOYMENT.md).
+
+### P6 findings summary
+
+**Critical bugs:**
+- EPG auto-matching ignores live filter return value (70)
+- Scheduler marks failed syncs success; timestamps advance on failure (71)
+
+**Security:**
+- Admin auth via Traefik + Authentik — documented in [DEPLOYMENT.md](../DEPLOYMENT.md) (TODO 68 ✅)
+- Destructive HTTP endpoints including DROP TABLE — harden in 69 even behind proxy
+- XSS in legacy frontend (83)
+- Docker secrets/build context (84)
+
+**Structural debt:**
+- Fat route modules up to 1500 lines (78)
+- Scheduler + programs.py + ChannelQueryService god classes (89, 90)
+- Duplicate EPG sync infrastructure (76)
+- Test DB diverges from production schema (80)
+
+**Documentation:**
+- API_REFERENCE fictitious auth and wrong Xtream URLs (87)
+- README links to missing P4 todo files 35–39
+
 ## How to use these documents
 
 1. Open the next ⬜ item in order (or pick one explicitly).
@@ -181,6 +324,9 @@ Audit of parallel EPG sync + per-source progress (orchestrator, `EpgSyncProgress
 These items were derived from full codebase reviews covering:
 - **First pass (TODOs 01–21):** EPG/M3U/preview divergence, parity tests, deduplication, UI/nav cleanup
 - **Second pass (TODOs 22–34):** Dead shims, test monoliths, MediaFlow gaps, `is_visible` semantics, provider EPG UI drift, silent error handling
+- **Third pass (TODOs 40–51):** EPG sync orchestration, failure semantics, progress UI
+- **Fourth pass (TODOs 52–67):** PPV enrichment pipeline, multi-source events, test gaps, documentation (June 2026)
+- **Fifth pass (TODOs 68–90):** Auth/security, EPG matching bug, scheduler semantics, API consistency, EPG/sync dedup, schema parity, frontend/CI (June 2026)
 
 ### Second-pass findings summary (healthy vs debt)
 

@@ -691,8 +691,7 @@ def rematch_auto_mappings():
 
     channels = query.all()
     if not include_filtered:
-        FilterService.apply_filters_to_channels(channels, account_id)
-        channels = [ch for ch in channels if ch.is_visible]
+        channels = FilterService.apply_filters_to_channels(channels, account_id)
 
     channel_ids = [ch.id for ch in channels]
     deleted_count = 0

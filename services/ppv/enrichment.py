@@ -162,7 +162,7 @@ class PPVCalendarEnrichmentService:
             valid_extractions = []
 
             for ch, ex in extraction_results:
-                skip_reason = classify_ppv_enrichment(ch.name)
+                skip_reason = classify_ppv_enrichment(ch.name, ex)
                 if skip_reason is not None:
                     filter_reasons[skip_reason] += 1
                     if ch.ppv_enrichment_status in (None, "queued", "retry_pending"):

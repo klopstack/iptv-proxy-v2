@@ -77,32 +77,32 @@ class TestPPVEnrichmentRoutes:
         data = response.get_json()
         assert "error" in data
 
-    @patch("routes.ppv_enrichment.get_calendar_enrichment_service")
-    def test_process_enrichment(self, mock_get_service, client, test_account, test_ppv_channels):
+    @patch("services.jobs.ppv_enrichment.run_ppv_enrichment")
+    def test_process_enrichment(self, mock_run, client, test_account, test_ppv_channels):
         """Test processing enrichment."""
-        mock_service = MagicMock()
-        mock_service.enrich_channels.return_value = {
-            "processed": 2,
-            "matched": 1,
-            "no_match": 1,
+        mock_run.return_value = {
+            "channels_processed": 2,
+            "channels_matched": 1,
+            "channels_no_match": 1,
+            "batches_run": 1,
         }
-        mock_get_service.return_value = mock_service
 
         response = client.post("/api/ppv-enrichment/process", json={}, content_type="application/json")
         assert response.status_code == 200
         data = response.get_json()
-        assert "processed" in data
+        assert "channels_processed" in data
 
-    @patch("routes.ppv_enrichment.get_calendar_enrichment_service")
-    def test_process_with_account_id(self, mock_get_service, client, test_account, test_ppv_channels):
+    @patch("services.ppv.orchestrator.get_ppv_orchestrator")
+    def test_process_with_account_id(self, mock_get_orchestrator, client, test_account, test_ppv_channels):
         """Test processing with account_id parameter."""
-        mock_service = MagicMock()
-        mock_service.enrich_channels.return_value = {
-            "processed": 3,
-            "matched": 2,
-            "no_match": 1,
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.enrich_pending_channels.return_value = {
+            "channels_processed": 3,
+            "channels_matched": 2,
+            "channels_no_match": 1,
         }
-        mock_get_service.return_value = mock_service
+        mock_orchestrator.get_queue_stats.return_value = {"queued_count": 0}
+        mock_get_orchestrator.return_value = mock_orchestrator
 
         response = client.post(
             "/api/ppv-enrichment/process",
@@ -111,7 +111,7 @@ class TestPPVEnrichmentRoutes:
         )
         assert response.status_code == 200
         data = response.get_json()
-        assert "processed" in data
+        assert "channels_processed" in data
 
     def test_get_enrichment_settings(self, client):
         """Test getting enrichment settings."""
@@ -157,12 +157,10 @@ class TestPPVEnrichmentRoutes:
         data = response.get_json()
         assert "error" in data
 
-    @patch("routes.ppv_enrichment.get_calendar_enrichment_service")
-    def test_process_error_handling(self, mock_get_service, client, test_account, test_ppv_channels):
+    @patch("services.jobs.ppv_enrichment.run_ppv_enrichment")
+    def test_process_error_handling(self, mock_run, client, test_account, test_ppv_channels):
         """Test error handling when processing fails."""
-        mock_service = MagicMock()
-        mock_service.enrich_channels.side_effect = Exception("Test error")
-        mock_get_service.return_value = mock_service
+        mock_run.side_effect = Exception("Test error")
 
         response = client.post("/api/ppv-enrichment/process", json={}, content_type="application/json")
         assert response.status_code == 500

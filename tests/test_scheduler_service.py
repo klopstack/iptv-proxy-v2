@@ -9,13 +9,14 @@ from unittest.mock import patch
 
 import pytest
 
-from models import EpgSource, SyncMetadata, db
+from models import Account, EpgSource, SyncMetadata, db
 from services.scheduler import (
     DEFAULT_EPG_INTERVAL_HOURS,
     DEFAULT_FCC_INTERVAL_HOURS,
     SCHEDULER_HEARTBEAT_TIMEOUT_SECONDS,
     SYNC_KEY_ACCOUNT_INTERVAL,
     SYNC_KEY_LAST_ACCOUNT_SYNC,
+    SYNC_KEY_LAST_FCC_SYNC,
     SYNC_KEY_SCHEDULER_HEARTBEAT,
     SyncScheduler,
 )
@@ -242,13 +243,94 @@ class TestLoadInterval:
 class TestTriggerSync:
     """Test scheduler-driven EPG sync"""
 
-    @patch("services.scheduler.SyncScheduler._sync_accounts")
-    def test_sync_accounts_invokes_channel_sync(self, mock_sync, scheduler, app):
-        """Scheduler account pass calls ChannelSyncService per enabled account."""
-        mock_sync.return_value = {"channels_added": 0, "channels_updated": 0, "channels_deactivated": 0}
+    @patch("services.scheduler.ChannelSyncService.sync_account")
+    def test_sync_accounts_marks_success(self, mock_sync_account, scheduler, app):
+        """Successful sync sets account last_sync_status to success."""
+        mock_sync_account.return_value = {
+            "success": True,
+            "channels_added": 0,
+            "channels_updated": 0,
+            "channels_deactivated": 0,
+        }
         with app.app_context():
-            scheduler._sync_accounts()
-            assert mock_sync.called
+            account = Account(
+                name="Scheduler Sync OK",
+                server="http://example.com",
+                username="u",
+                password="p",
+                enabled=True,
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            assert scheduler._sync_accounts() is True
+            db.session.refresh(account)
+            assert account.last_sync_status == "success"
+
+    @patch("services.scheduler.ChannelSyncService.sync_account")
+    def test_sync_accounts_marks_error_on_failure(self, mock_sync_account, scheduler, app):
+        """Failed sync must not report success."""
+        mock_sync_account.return_value = {
+            "success": False,
+            "channels_added": 0,
+            "channels_updated": 0,
+            "channels_deactivated": 0,
+            "errors": ["Channels sync error: timeout"],
+        }
+        with app.app_context():
+            account = Account(
+                name="Scheduler Sync Fail",
+                server="http://example.com",
+                username="u",
+                password="p",
+                enabled=True,
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            assert scheduler._sync_accounts() is False
+            db.session.refresh(account)
+            assert account.last_sync_status == "error"
+
+    @patch("services.scheduler.SyncScheduler._sync_fcc_data", return_value=False)
+    def test_check_and_sync_skips_fcc_timestamp_on_failure(self, _mock_fcc, scheduler, app):
+        """Failed FCC sync must not advance last_fcc_sync metadata."""
+        with app.app_context():
+            old = datetime.now(timezone.utc) - timedelta(hours=200)
+            SyncMetadata.set(SYNC_KEY_LAST_FCC_SYNC, old.isoformat())
+            db.session.commit()
+
+            def needs_fcc_only(key, _interval_hours):
+                return key == SYNC_KEY_LAST_FCC_SYNC
+
+            with patch.object(scheduler, "_needs_sync", side_effect=needs_fcc_only):
+                with patch.object(scheduler, "_scan_channel_health"):
+                    with patch.object(scheduler, "_sync_epg_sources_if_due"):
+                        scheduler._check_and_sync()
+
+            result = scheduler._get_last_sync_time(SYNC_KEY_LAST_FCC_SYNC)
+            assert result is not None
+            assert abs((result - old).total_seconds()) < 2
+
+    @patch("services.scheduler.SyncScheduler._sync_fcc_data", return_value=True)
+    def test_check_and_sync_advances_fcc_timestamp_on_success(self, _mock_fcc, scheduler, app):
+        """Successful FCC sync advances last_fcc_sync metadata."""
+        with app.app_context():
+            old = datetime.now(timezone.utc) - timedelta(hours=200)
+            SyncMetadata.set(SYNC_KEY_LAST_FCC_SYNC, old.isoformat())
+            db.session.commit()
+
+            def needs_fcc_only(key, _interval_hours):
+                return key == SYNC_KEY_LAST_FCC_SYNC
+
+            with patch.object(scheduler, "_needs_sync", side_effect=needs_fcc_only):
+                with patch.object(scheduler, "_scan_channel_health"):
+                    with patch.object(scheduler, "_sync_epg_sources_if_due"):
+                        scheduler._check_and_sync()
+
+            result = scheduler._get_last_sync_time(SYNC_KEY_LAST_FCC_SYNC)
+            assert result is not None
+            assert result > old
 
     @patch("services.epg_sync_orchestrator.EpgSyncOrchestrator.sync_due_sources")
     def test_sync_epg_sources_if_due_calls_orchestrator(self, mock_sync_due, scheduler, app):
