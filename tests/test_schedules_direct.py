@@ -168,16 +168,23 @@ class TestRateLimiting:
         """Test throttling between regular requests"""
         client = SchedulesDirectClient("testuser", "testpass")
 
-        # Reset class-level rate limiting
-        SchedulesDirectClient._last_request_time = time.time()
+        # Simulate a prior request long ago — no sleep required
+        SchedulesDirectClient._last_request_time = 0.0
 
-        # This should wait if called immediately after
         start = time.time()
         client._throttle(is_image=False)
         elapsed = time.time() - start
 
-        # Should have waited some time (may be 0 if enough time passed)
-        assert elapsed >= 0
+        assert elapsed < 0.05
+
+    def test_throttle_waits_when_called_too_soon(self):
+        """Verify throttle sleeps when the minimum interval has not elapsed."""
+        client = SchedulesDirectClient("testuser", "testpass")
+        SchedulesDirectClient._last_request_time = time.time()
+
+        with patch("services.schedules_direct.time.sleep") as mock_sleep:
+            client._throttle(is_image=False)
+        mock_sleep.assert_called_once()
 
     def test_check_rate_limit_error_5002(self):
         """Test detection of subscriber rate limit error"""
@@ -889,6 +896,11 @@ class TestProgramDataclass:
 
 class TestGetProgramsWithParse:
     """Tests for get_programs with parse parameter"""
+
+    @pytest.fixture(autouse=True)
+    def _skip_request_throttle(self):
+        with patch.object(SchedulesDirectClient, "_throttle"):
+            yield
 
     def test_get_programs_without_parse(self):
         """Test get_programs returns raw dicts by default"""

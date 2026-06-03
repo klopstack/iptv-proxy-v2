@@ -463,11 +463,11 @@ class MediaFlowStreamService:
             except Exception as e:
                 logger.error(f"Error in cleanup loop: {e}")
 
-            # Sleep in small increments to allow quick shutdown
+            # Sleep in small increments to allow quick shutdown (~1s between cleanups)
             for _ in range(10):
                 if self._shutdown:
                     break
-                time.sleep(1)
+                time.sleep(0.1)
 
     def _cleanup_idle_streams(self) -> None:
         """Close streams that have been idle (no subscribers) for too long."""

@@ -91,4 +91,14 @@ Compare slowest durations before and after; attach timings in the PR description
 - Added `network` pytest marker in `pyproject.toml`.
 
 **Before:** `tests/test_thesportsdb*.py` ~288s (five tests ~60s each).  
-**After:** same set **0.18s** (`--no-cov`). Full suite **2548 passed** in ~154s.
+**After:** same set **0.18s** (`--no-cov`).
+
+**Follow-up (same PR batch):** additional ~40s suite savings from non-TheSportsDB sleeps:
+
+| Area | Cause | Fix |
+|------|-------|-----|
+| PPV detail fetcher tests | `queue.get(timeout=5)` on stop | Stop sentinel + 1s idle timeout |
+| Scheduler start/stop tests | 30× `sleep(1)` startup loop | Patch `_run` in `TestStartStop` |
+| FFmpeg/MediaFlow teardown | `sleep(1)` in cleanup loop | 0.1s poll slices (faster shutdown) |
+| MLB retry test | Real backoff sleeps | Patch `time.sleep` |
+| Schedules Direct | `_throttle` waited 0.5s | Autouse throttle skip + separate sleep assertion |
