@@ -404,7 +404,34 @@ POST /api/accounts/{account_id}/categories/sync
 
 Fetches live categories from upstream, updates cache, and runs tag extraction when streams are cached.
 
-### FCC Facility Sync (canonical)
+### Configuration export and import
+
+Full configuration backup and restore (rulesets, EPG match rules, FCC patterns, settings, etc.). Handlers in `routes/config_transfer.py` delegate to `ConfigTransferService`.
+
+```http
+GET /api/config/export
+```
+
+**Query parameters:** `include_accounts` (optional boolean, default true) — when false, account credentials and channel rows are omitted from the bundle
+
+**Response:** JSON bundle (`application/json` download).
+
+```http
+POST /api/config/import
+```
+
+**Request:** JSON body (same shape as export). Validates structure before applying; may partially apply depending on bundle contents.
+
+**Security:** Import validation and destructive FCC reset are hardened per operator runbook — see [DEPLOYMENT.md](DEPLOYMENT.md). FCC factory reset is **CLI only** (`flask reset-fcc-patterns`), not an HTTP endpoint.
+
+### EPG match rules API
+
+CRUD and preview endpoints for global EPG match rules live under the `epg_match_rules` blueprint (`/api/epg-match-rules/...`). Per-account ruleset assignment uses `/api/accounts/<account_id>/epg-match-rulesets`. Route handlers delegate orchestration to `EpgMatchRulesRouteService` and existing `services/epg/match_rules/` services (Wave 9, PR #42).
+
+### FCC match patterns and facility sync
+
+FCC pattern CRUD uses `routes/fcc_match_patterns.py` with `FccMatchPatternsService` and shared serializers (`services/serializers/fcc.py`). Facility sync:
+
 ```http
 POST /api/fcc/facilities/sync
 ```

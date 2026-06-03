@@ -1,6 +1,6 @@
 # ESM tab migration and ESLint (TODO 85 phases 2–3)
 
-**Status:** ✅ Complete (tabs 1–3 PR #40; tabs 4–6 → [103](./103-esm-tabs-4-6-migration.md))  
+**Status:** ✅ Done (tabs 1–3 PR #40; tabs 4–6 → [103](./103-esm-tabs-4-6-migration.md) PR #44)  
 **Priority:** P2  
 **Parent:** [85-frontend-deduplication-and-esm-migration.md](./85-frontend-deduplication-and-esm-migration.md) (phase 1 ✅ PR #33)  
 **Roadmap:** [ROADMAP.md](./ROADMAP.md) — Wave 9, PR batch **Y**

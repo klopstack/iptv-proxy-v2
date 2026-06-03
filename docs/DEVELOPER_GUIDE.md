@@ -88,8 +88,9 @@ make test-fast
 make test-clean
 venv/bin/pytest tests/ -q --no-cov
 
-# Explicit parallel without Make
+# Explicit parallel without Make (same as make test-fast / make test-parallel)
 venv/bin/pytest tests/ -q --no-cov -n auto
+make test-parallel   # alias for test-fast
 
 # Run specific test file
 pytest tests/test_tag_service.py -v --no-cov
@@ -404,6 +405,37 @@ for i in range(0, len(stream_ids), batch_size):
 - Current TTL: 3600 seconds
 
 ## Common Patterns
+
+### Route extraction services (Wave 9)
+
+Large route modules from TODO 78 now follow **parse request → call service → serialize response**:
+
+| Route module | Service | Notes |
+|--------------|---------|-------|
+| `routes/accounts.py` | `AccountAdminService` | Phase 1, PR #36 |
+| `routes/config_transfer.py` | `ConfigTransferService` | Export/import bundle, PR #39 |
+| `routes/epg/match_rules.py` | `EpgMatchRulesRouteService` | Preview/rematch orchestration, PR #42 |
+| `routes/fcc_match_patterns.py` | `FccMatchPatternsService` | CRUD via `register_json_crud_routes`, PR #41 |
+
+Shared entity serialization: `services/serializers/` (TODO 79). When adding endpoints to these areas, extend the service and tests first, then thin the route handler.
+
+### PPV package layout (TODO 102)
+
+After Wave 9 batch **AA** (PR #45), monolithic `services/ppv/epg.py` and `extraction.py` are packages:
+
+| Package / module | Role |
+|------------------|------|
+| `services/ppv/epg/xmltv.py` | XMLTV builder |
+| `services/ppv/epg/queries.py` | Event listing and detail queries |
+| `services/ppv/epg/sync.py` | EpgSource / EpgChannel sync helpers |
+| `services/ppv/epg/service.py` | `PPVEpgService` coordinator |
+| `services/ppv/extraction/patterns.py` | Regex constants |
+| `services/ppv/extraction/competitors.py` | Team/matchup extraction |
+| `services/ppv/extraction/date_strategies/` | Per-format date parsers |
+| `services/ppv/extraction/extractor.py` | `PPVEventExtractor` coordinator |
+| `services/ppv/enrichment/` | Calendar enrichment pipeline (TODO 65 phase 1) |
+
+Public imports remain stable at package boundaries (`from services.ppv.epg import PPVEpgService`, etc.).
 
 ### Service Import Paths
 

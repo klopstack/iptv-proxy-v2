@@ -65,4 +65,4 @@ venv/bin/pytest tests/ppv/ -q --no-cov
 
 ## Completion
 
-- **PR #45:** `epg/` and `extraction/` package splits (Wave 9 batch **AA**)
+- **PR #45:** https://github.com/klopstack/iptv-proxy-v2/pull/45 — `epg/` and `extraction/` package splits (Wave 9 batch **AA**)

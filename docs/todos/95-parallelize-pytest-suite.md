@@ -1,6 +1,6 @@
 # Parallelize pytest suite (pytest-xdist)
 
-**Status:** 🟡 Implemented in [100-parallelize-pytest-xdist.md](./100-parallelize-pytest-xdist.md) (PR batch **Z**)  
+**Status:** ✅ Done — implemented in [100-parallelize-pytest-xdist.md](./100-parallelize-pytest-xdist.md) ([PR #43](https://github.com/klopstack/iptv-proxy-v2/pull/43))  
 **Priority:** P2  
 **Audit:** Test runtime review, June 2026
 
@@ -86,3 +86,7 @@ Re-run the parallel spike that currently fails (shared `pytest.db`) and confirm 
 - [80](./80-align-test-db-with-production-schema.md) — optional; migration fixture changes should be re-validated under xdist.
 - [88](./88-expand-ci-quality-gates.md) — natural place to wire CI once local parallel is stable.
 - Complements [86](./86-web-smoke-tests-and-pytest-consolidation.md) (fewer redundant tests → faster parallel runs).
+
+## Completion
+
+Implemented in [100-parallelize-pytest-xdist.md](./100-parallelize-pytest-xdist.md) — **PR #43:** https://github.com/klopstack/iptv-proxy-v2/pull/43

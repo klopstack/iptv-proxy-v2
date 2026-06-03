@@ -1,6 +1,6 @@
 # Parallelize pytest suite with pytest-xdist (TODO 95)
 
-**Status:** 🟡 In PR  
+**Status:** ✅ Done  
 **Priority:** P2  
 **Parent:** [95-parallelize-pytest-suite.md](./95-parallelize-pytest-suite.md)  
 **Roadmap:** [ROADMAP.md](./ROADMAP.md) — Wave 9, PR batch **Z**

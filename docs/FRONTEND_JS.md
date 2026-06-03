@@ -10,7 +10,7 @@ This app mixes legacy inline/classic scripts in Jinja templates with newer ES mo
 | Page bootstrap (attach libs to `window`) | `static/js/pages/{page}_bootstrap.js` | `<script type="module" src="{{ url_for('static', filename='js/pages/…') }}">` |
 | Full page logic (preferred for new work) | `static/js/pages/*.js` or top-level `static/js/*_page.js` | module `src` only |
 | EPG management tab modules (ESM) | `static/js/pages/epg_*_page.js`, `static/js/pages/match_rules_*_page.js` | `<script type="module">` after `epg_management_bootstrap.js` |
-| Legacy EPG / match-rules bundles | `static/js/epg_common.js` only | classic `<script src>` (shared state + modals) |
+| Legacy EPG shared state | `static/js/epg_common.js` only | classic `<script src>` (modals, `window.EpgManagementState`; all six EPG management tabs use ESM `pages/*_page.js`) |
 
 ## Page bootstrap pattern
 
