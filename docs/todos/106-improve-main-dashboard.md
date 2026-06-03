@@ -235,7 +235,18 @@ Server-side HTML render is cheap; **latency is API-shaped**, not Jinja.
 
 - Stack **A + C + B**: `GET /api/dashboard/summary`, removed blocking per-account stats, parallel deferred sections.
 - Stream metrics: `active_sessions` = `ActiveStream` count; `shared_upstream` / `subscribers` from multiplexer when FFmpeg backend.
-- Phase 3 hardening (SQL account visible counts, overview caching) deferred.
+- **PR:** [#48](https://github.com/klopstack/iptv-proxy-v2/pull/48) (`feature/dashboard-106`)
+
+## Deferred
+
+Tracked as follow-up TODOs (planning docs on PR branch):
+
+| # | Document | Scope |
+|---|----------|-------|
+| 107 | [107-dashboard-stats-performance-hardening.md](./107-dashboard-stats-performance-hardening.md) | Phase 3: SQL visible counts for `get_account_stats`, overview stats caching/optimization, dashboard summary timing logs |
+| 108 | [108-migrate-overview-stats-api-envelope.md](./108-migrate-overview-stats-api-envelope.md) | `GET /api/overview/stats` → `data_response` envelope (TODO 73 parity with summary endpoint) |
+| 109 | [109-update-smoke-test-dashboard-checks.md](./109-update-smoke-test-dashboard-checks.md) | Phase 4: `docs/SMOKE_TEST_POST_MERGE.md` §1 / §7 dashboard checks |
+| 110 | [110-dashboard-optional-ux-follow-ups.md](./110-dashboard-optional-ux-follow-ups.md) | P3 optional: lazy per-account cards, server-rendered Tier-1 |
 
 ## Test plan
 
