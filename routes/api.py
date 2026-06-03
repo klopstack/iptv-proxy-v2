@@ -546,6 +546,117 @@ def start_scheduler():
 # ============================================================================
 
 
+def _build_scheduler_overview_stats(accounts_stats):
+    """Scheduler subsection shared by overview and dashboard summary."""
+    if not _scheduler:
+        return {"running": False}
+
+    scheduler_status = _scheduler.get_status()
+    syncs = scheduler_status.get("syncs", {})
+    failed_jobs = [
+        {
+            "job": job_name,
+            "last_error": info.get("last_error"),
+            "last_failure_at": info.get("last_failure_at"),
+            "last_run_status": info.get("last_run_status"),
+        }
+        for job_name, info in syncs.items()
+        if info.get("last_run_status") == "error"
+    ]
+    return {
+        "running": scheduler_status.get("running", False),
+        "intervals": {
+            "accounts": syncs.get("accounts", {}).get("interval_hours"),
+            "epg": syncs.get("epg", {}).get("interval_hours"),
+            "fcc": syncs.get("fcc", {}).get("interval_hours"),
+        },
+        "next_syncs": {
+            "accounts": syncs.get("accounts", {}).get("next_sync"),
+            "epg": syncs.get("epg", {}).get("next_sync"),
+        },
+        "last_syncs": {
+            "accounts": syncs.get("accounts", {}).get("last_sync"),
+            "epg": syncs.get("epg", {}).get("last_sync"),
+        },
+        "failed_jobs": failed_jobs,
+        "has_sync_issues": bool(failed_jobs) or accounts_stats.get("failed_sync_count", 0) > 0,
+    }
+
+
+def _build_dashboard_overview_slim():
+    """Accounts + scheduler for dashboard Tier-1 (sync alerts)."""
+    failed_sync_accounts = (
+        Account.query.filter_by(enabled=True, last_sync_status="error")
+        .order_by(Account.last_sync.desc())
+        .limit(20)
+        .all()
+    )
+    accounts = {
+        "total": Account.query.count(),
+        "enabled": Account.query.filter_by(enabled=True).count(),
+        "synced": Account.query.filter(Account.last_sync.isnot(None), Account.last_sync_status == "success").count(),
+        "failed_sync_count": Account.query.filter_by(enabled=True, last_sync_status="error").count(),
+        "failed_sync_accounts": [
+            {"id": account.id, "name": account.name, "last_sync": serialize_utc_iso(account.last_sync)}
+            for account in failed_sync_accounts
+        ],
+    }
+    return {"accounts": accounts, "scheduler": _build_scheduler_overview_stats(accounts)}
+
+
+def _build_dashboard_stream_stats():
+    """Active sessions and optional multiplexer totals (FFmpeg backend)."""
+    from flask import current_app
+
+    from models import ActiveStream
+    from services.stream_service_factory import get_stream_backend_name, get_stream_service
+
+    active_sessions = ActiveStream.query.count()
+    backend = get_stream_backend_name()
+    shared_upstream = 0
+    subscribers = 0
+
+    stream_service = get_stream_service(app=current_app._get_current_object())  # type: ignore[attr-defined]
+    get_stats = getattr(stream_service, "get_stats", None)
+    if get_stats is not None:
+        mux_stats = get_stats()
+        shared_upstream = mux_stats.get("active_streams", 0)
+        subscribers = mux_stats.get("total_subscribers", 0)
+
+    return {
+        "active_sessions": active_sessions,
+        "shared_upstream": shared_upstream,
+        "subscribers": subscribers,
+        "backend": backend,
+    }
+
+
+@api_bp.route("/api/dashboard/summary", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error fetching dashboard summary")
+def get_dashboard_summary():
+    """
+    Fast dashboard aggregate: channel health, live streams, slim overview.
+
+    Intended as the primary landing-page API call (TODO 106).
+    """
+    from datetime import datetime, timezone
+
+    from services.channel_health_service import ChannelHealthService
+
+    health_report = ChannelHealthService.get_health_summary()
+
+    from services.ppv.dashboard_stats import build_dashboard_ppv_stats
+
+    payload = {
+        "channel_health": health_report["summary"],
+        "streams": _build_dashboard_stream_stats(),
+        "overview": _build_dashboard_overview_slim(),
+        "ppv": build_dashboard_ppv_stats(),
+        "generated_at": serialize_utc_iso(datetime.now(timezone.utc)),
+    }
+    return data_response(payload)
+
+
 @api_bp.route("/api/overview/stats", methods=["GET"])
 @handle_errors(return_json=True, default_message="Error fetching overview stats")
 def get_overview_stats():
@@ -624,8 +735,8 @@ def get_overview_stats():
     epg_coverage_error = None
     try:
         coverage_stats = get_epg_coverage_stats()
-        epg_coverage_pct = coverage_stats.get("coverage_percentage", 0)
-        mapped_channels = coverage_stats.get("channels_with_epg", 0)
+        epg_coverage_pct = coverage_stats.get("coverage_percent", 0)
+        mapped_channels = coverage_stats.get("channels_with_epg_mapping", 0)
     except Exception as e:
         logger.warning("Failed to load EPG coverage stats for overview: %s", e, exc_info=True)
         epg_coverage_pct = 0
@@ -646,40 +757,7 @@ def get_overview_stats():
         },
     }
 
-    # Scheduler stats
-    if _scheduler:
-        scheduler_status = _scheduler.get_status()
-        syncs = scheduler_status.get("syncs", {})
-        failed_jobs = [
-            {
-                "job": job_name,
-                "last_error": info.get("last_error"),
-                "last_failure_at": info.get("last_failure_at"),
-                "last_run_status": info.get("last_run_status"),
-            }
-            for job_name, info in syncs.items()
-            if info.get("last_run_status") == "error"
-        ]
-        stats["scheduler"] = {
-            "running": scheduler_status.get("running", False),
-            "intervals": {
-                "accounts": syncs.get("accounts", {}).get("interval_hours"),
-                "epg": syncs.get("epg", {}).get("interval_hours"),
-                "fcc": syncs.get("fcc", {}).get("interval_hours"),
-            },
-            "next_syncs": {
-                "accounts": syncs.get("accounts", {}).get("next_sync"),
-                "epg": syncs.get("epg", {}).get("next_sync"),
-            },
-            "last_syncs": {
-                "accounts": syncs.get("accounts", {}).get("last_sync"),
-                "epg": syncs.get("epg", {}).get("last_sync"),
-            },
-            "failed_jobs": failed_jobs,
-            "has_sync_issues": bool(failed_jobs) or stats["accounts"].get("failed_sync_count", 0) > 0,
-        }
-    else:
-        stats["scheduler"] = {"running": False}
+    stats["scheduler"] = _build_scheduler_overview_stats(stats["accounts"])
 
     # Sync metadata (additional context)
     try:

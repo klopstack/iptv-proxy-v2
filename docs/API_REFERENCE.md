@@ -433,6 +433,25 @@ Each entry under `syncs` (accounts, epg, fcc, ppv_prefetch, ppv_enrichment, ppv_
 
 Failure metadata is stored in `sync_metadata` as `{last_*_sync}_failure_at` and `{last_*_sync}_error`.
 
+### Dashboard Summary (landing page)
+```http
+GET /api/dashboard/summary
+```
+
+Response envelope: `{ "data": { ... } }`.
+
+| Field | Description |
+|-------|-------------|
+| `channel_health` | Same `summary` shape as `GET /api/channel-health/summary` (playlist-visible channels) |
+| `streams.active_sessions` | Count of `ActiveStream` rows (proxied client sessions / upstream slots) |
+| `streams.shared_upstream` | FFmpeg multiplexer shared upstream count (`get_stats().active_streams`); 0 when backend lacks `get_stats` |
+| `streams.subscribers` | Multiplex viewer count (`total_subscribers`) when FFmpeg backend |
+| `streams.backend` | `ffmpeg` or `mediaflow` from `STREAM_BACKEND` |
+| `overview.accounts` | Slim account counts + `failed_sync_accounts` for alerts |
+| `overview.scheduler` | Running flag, intervals, `has_sync_issues`, `failed_jobs` |
+| `ppv` | PPV at-a-glance: upcoming event counts (24h/48h), unlinked upcoming events, channel link total, enrichment queue/no-match/recent counts, `has_issues` |
+| `generated_at` | UTC ISO timestamp |
+
 ### Overview Stats (sync failures)
 ```http
 GET /api/overview/stats

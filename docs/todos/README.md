@@ -313,6 +313,16 @@ Phased remainders from TODOs 78, 85, 92, 95; PPV module splits from TODO 65 (102
 |---|----------|--------|---------|
 | 101 | [101-final-documentation-review.md](./101-final-documentation-review.md) | ⬜ | Sync README, ROADMAP, API_REFERENCE, DEVELOPER_GUIDE, TODO index (after Wave 9) |
 
+### Operator UX — post-merge smoke test (June 2026)
+
+| # | Document | Status | Summary |
+|---|----------|--------|---------|
+| 106 | [106-improve-main-dashboard.md](./106-improve-main-dashboard.md) | ✅ | Landing dashboard: channel health + live stream/client counts; fix slow N× account stats load ([PR #48](https://github.com/klopstack/iptv-proxy-v2/pull/48)) |
+| 107 | [107-dashboard-stats-performance-hardening.md](./107-dashboard-stats-performance-hardening.md) | ⬜ | TODO 106 phase 3: SQL account visible counts, overview caching, summary timing logs |
+| 108 | [108-migrate-overview-stats-api-envelope.md](./108-migrate-overview-stats-api-envelope.md) | ⬜ | `GET /api/overview/stats` → `data_response` (deferred from 106 / PR #48) |
+| 109 | [109-update-smoke-test-dashboard-checks.md](./109-update-smoke-test-dashboard-checks.md) | ⬜ | TODO 106 phase 4: post-merge smoke doc dashboard §1 / §7 |
+| 110 | [110-dashboard-optional-ux-follow-ups.md](./110-dashboard-optional-ux-follow-ups.md) | ⬜ | P3 optional: lazy account cards on `/`, server-rendered Tier-1 |
+
 ### Recommended order for items 68–90 (historical)
 
 ```

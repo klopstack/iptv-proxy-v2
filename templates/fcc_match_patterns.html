@@ -710,7 +710,7 @@ function renderChannelPatterns(patterns) {
             <tr>
                 <td>${pattern.priority}</td>
                 <td><strong>${pattern.name}</strong></td>
-                <td><code class="small">${escapeHtml(pattern.pattern)}</code></td>
+                <td>${renderPatternCode(pattern.pattern)}</td>
                 <td>${pattern.capture_group}</td>
                 <td>${networkBadges}</td>
                 <td><span class="badge ${pattern.enabled ? 'bg-success' : 'bg-secondary'}">${pattern.enabled ? 'Yes' : 'No'}</span></td>
@@ -850,7 +850,7 @@ function renderLocationPatterns(patterns) {
             <tr>
                 <td>${pattern.priority}</td>
                 <td><strong>${pattern.name}</strong></td>
-                <td><code class="small">${escapeHtml(pattern.pattern)}</code></td>
+                <td>${renderPatternCode(pattern.pattern)}</td>
                 <td>${extracts.join(', ') || 'None'}</td>
                 <td>City: ${pattern.city_group}, State: ${pattern.state_group}</td>
                 <td><span class="badge ${pattern.enabled ? 'bg-success' : 'bg-secondary'}">${pattern.enabled ? 'Yes' : 'No'}</span></td>
@@ -1141,6 +1141,12 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+/** Truncate long regex/SQL patterns in tables; full value in native tooltip. */
+function renderPatternCode(text) {
+    const escaped = escapeHtml(text);
+    return `<code class="small text-truncate d-inline-block" style="max-width: 300px;" title="${escaped}">${escaped}</code>`;
 }
 </script>
 {% endblock %}

@@ -60,7 +60,7 @@ Traefik + Authentik forward-auth for admin vs client paths. Derived from the [kl
 ### [architecture/](architecture/)
 **For: Maintainers, Architecture Review**
 
-Draft architecture documents from June 2026 audits — PPV pipeline, auth/security, API contracts, EPG/sync, frontend debt, schema lifecycle. Review before large refactors. See also [PPV_ARCHITECTURE.md](PPV_ARCHITECTURE.md) for a quick PPV entry point.
+Draft architecture documents from June 2026 audits — PPV pipeline, auth/security, API contracts, EPG/sync, frontend debt, schema lifecycle, language/country preferences (post-MVP). Review before large refactors. See also [PPV_ARCHITECTURE.md](PPV_ARCHITECTURE.md) for a quick PPV entry point.
 
 ## Quick Navigation
 
