@@ -16,6 +16,68 @@ PPV_SECTION_HEADER_PATTERN = re.compile(r"^#+\s*.+\s*#+\s*$", re.IGNORECASE)
 US_ARCHIVE_DATE_PATTERN = re.compile(r"(?:\||\s)(\d{1,2})-(\d{1,2})-(\d{4})\b")
 # Boxing PPV slot prefix, e.g. "Boxing 1 : Usyk vs Verhoeven"
 BOXING_CHANNEL_PATTERN = re.compile(r"\bBoxing\b", re.IGNORECASE)
+# DAZN obscure leagues: "| Premier League - Sierra Leone"
+LEAGUE_REGION_SUFFIX_PATTERN = re.compile(r"\|\s*(?P<suffix>.+?\s-\s.+?)\s*$", re.IGNORECASE)
+# Regions where TheSportsDB / football-data.org calendar coverage exists
+_MAJOR_FOOTBALL_REGION_TOKENS = frozenset(
+    {
+        "england",
+        "english",
+        "uk",
+        "scotland",
+        "wales",
+        "spain",
+        "spanish",
+        "italy",
+        "italian",
+        "germany",
+        "german",
+        "france",
+        "french",
+        "netherlands",
+        "dutch",
+        "portugal",
+        "portuguese",
+        "belgium",
+        "belgian",
+        "usa",
+        "us",
+        "united states",
+        "mls",
+        "canada",
+        "canadian",
+        "brazil",
+        "brazilian",
+        "argentina",
+        "mexico",
+        "mexican",
+        "uefa",
+        "europe",
+        "european",
+        "turkey",
+        "turkish",
+        "greece",
+        "greek",
+        "poland",
+        "polish",
+        "austria",
+        "austrian",
+        "switzerland",
+        "swiss",
+        "denmark",
+        "sweden",
+        "norway",
+        "finland",
+        "japan",
+        "japanese",
+        "korea",
+        "korean",
+        "australia",
+        "australian",
+        "ireland",
+        "irish",
+    }
+)
 
 _extractor = PPVEventExtractor()
 
@@ -54,6 +116,21 @@ def is_ppv_section_header(name: str) -> bool:
     return bool(PPV_SECTION_HEADER_PATTERN.match(stripped))
 
 
+def is_unsupported_league_title(channel_name: str) -> bool:
+    """Return True when the title names a regional league outside calendar coverage."""
+    match = LEAGUE_REGION_SUFFIX_PATTERN.search(channel_name)
+    if not match:
+        return False
+    suffix = match.group("suffix")
+    if " - " not in suffix:
+        return False
+    _, region_part = suffix.rsplit(" - ", 1)
+    region = region_part.strip().lower()
+    if not region or len(region) < 3:
+        return False
+    return not any(token in region for token in _MAJOR_FOOTBALL_REGION_TOKENS)
+
+
 def classify_ppv_enrichment(
     channel_name: str,
     extraction: Optional[dict] = None,
@@ -65,7 +142,7 @@ def classify_ppv_enrichment(
 
     Reasons align with enrichment filter keys: generic_name, placeholder_name,
     section_header, placeholder, inactive, no_competitors, date_but_no_competitors,
-    far_future, stale_archive, no_event_date.
+    far_future, stale_archive, no_event_date, unsupported_league.
 
     When ``extraction`` is provided (e.g. from a prior ``extract_all`` call), it is
     used for competitor/date checks instead of re-extracting from the channel name.
@@ -94,6 +171,9 @@ def classify_ppv_enrichment(
     archive_date = stale_archive_date_from_title(channel_name)
     if archive_date and _is_stale_archive_date(archive_date):
         return "stale_archive"
+
+    if is_unsupported_league_title(channel_name):
+        return "unsupported_league"
 
     if cheap_only:
         return None

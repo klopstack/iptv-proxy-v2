@@ -1,0 +1,25 @@
+[
+  {
+    "id": "charlton_leicester",
+    "name": "Live Football 01: Charlton Athletic vs Leicester City 12:30pm",
+    "expect_skip": false,
+    "note": "English Championship playoff; TSDB league 4399 configured but fixture absent from eventsDay"
+  },
+  {
+    "id": "sierra_leone_premier",
+    "name": "UK: DAZN PPV 4 - FC Kallon vs Old Edwardians FC | Premier League - Sierra Leone",
+    "expect_skip": true,
+    "expect_reason": "unsupported_league"
+  },
+  {
+    "id": "aruba_league",
+    "name": "NL: DAZN PPV 2 - Team A vs Team B | Division di Honor - Aruba",
+    "expect_skip": true,
+    "expect_reason": "unsupported_league"
+  },
+  {
+    "id": "english_premier_not_skipped",
+    "name": "UK: DAZN PPV 1 - Arsenal vs Brighton | Premier League - England",
+    "expect_skip": false
+  }
+]

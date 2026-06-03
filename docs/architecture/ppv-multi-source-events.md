@@ -121,3 +121,19 @@ Today sport-key routing is fragmented (see `ppv-sport-registry.md`).
 - **55** — schema + detail fetch (P0)
 - **57** — sport registry
 - **62** — MiLB integration test
+
+---
+
+## Unsupported calendar coverage (TODO 123, June 2026)
+
+Some PPV categories parse correctly but have **no calendar provider** today. Enrichability marks these `skipped` (not perpetual `no_match`) where the gap is permanent without a new API.
+
+| Category | Example | Action | Skip reason |
+|----------|---------|--------|-------------|
+| Obscure DAZN regional leagues | `\| Premier League - Sierra Leone` | `unsupported_league` | No TSDB / football-data coverage |
+| English Championship playoffs | Charlton vs Leicester (Jun 2026) | **Remain enrichable** | TSDB league ID 4399 configured; playoff fixture absent from `eventsDay` — requeue when TSDB adds data |
+| WCWS / BTN+ college | See Track A (TODO 123) | `unsupported_sport` (Track A) | No NCAA softball/baseball calendar yet |
+| Boxing undated | Usyk vs Verhoeven | `no_event_date` | Track C ✅ |
+| Stale ESPN Play archive | `\| 11-09-2023` | `stale_archive` | Track D ✅ |
+
+**Investigation notes (Track B):** TheSportsDB `LEAGUE_ID_MAP` already includes `"Championship": "4399"`. Verified via public API (June 2026): `eventsseason.php?id=4399` returns 15 season events with **zero** Charlton/Leicester rows; `eventsday.php?d=2026-06-03&s=Soccer` also empty for that fixture. football-data.org provider covers PL/La Liga only — not EFL Championship. No scraper config change fixes this; a dedicated EFL source would be required.
