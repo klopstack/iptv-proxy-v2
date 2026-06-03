@@ -1,6 +1,6 @@
 # Centralize tag loading and fix N+1 in channel link detection
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P1  
 **Audit:** Application-wide audit, June 2026
 
@@ -28,9 +28,16 @@ Also: category sync failure in `ChannelSyncService.sync_account` logs error but 
 
 ## Acceptance criteria
 
-- [ ] `detect_channel_links` uses O(1) tag queries per batch, not per channel
-- [ ] Category fetch failure policy documented and tested
-- [ ] Single tag loader used by filter and CQS
+- [x] `detect_channel_links` uses O(1) tag queries per batch, not per channel
+- [x] Category fetch failure policy documented and tested
+- [x] Single tag loader used by filter and CQS
+
+## Category sync failure policy
+
+When `get_live_categories()` fails, `sync_account` sets `stats["success"] = False` and
+records the error. Channel sync still runs so stream rows can update, but post-sync
+steps (deactivation, filter visibility, PPV re-enrichment, backup detection, icon
+prefetch) are skipped because they are gated on `stats["success"]`.
 
 ## Test plan
 

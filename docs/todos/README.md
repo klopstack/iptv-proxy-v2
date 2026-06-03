@@ -2,7 +2,7 @@
 
 This directory contains detailed work items identified during the post-restructuring codebase audit (May 2026). Each document is self-contained: problem statement, affected files, proposed solution, acceptance criteria, and test plan.
 
-**Open backlog (35 items):** see **[ROADMAP.md](./ROADMAP.md)** for waves, PR batches (A–U), dependencies, and parallel workstreams. Per-item specs stay in the linked TODO files below.
+**Open backlog (36 items):** see **[ROADMAP.md](./ROADMAP.md)** for waves, PR batches (A–U), dependencies, and parallel workstreams. Per-item specs stay in the linked TODO files below.
 
 **Work through items in roadmap order** (or pick one explicitly). Later items may depend on earlier ones (especially P0 channel-selection unification — now ✅).
 
@@ -256,7 +256,7 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 | 74 | [74-remove-dead-routes-and-dangerous-patterns.md](./74-remove-dead-routes-and-dangerous-patterns.md) | ✅ | Dead blueprint, duplicate FCC/categories endpoints |
 | 75 | [75-fix-side-effect-get-account-categories.md](./75-fix-side-effect-get-account-categories.md) | ✅ | GET categories triggers upstream IPTV fetch |
 | 76 | [76-deduplicate-epg-sync-infrastructure.md](./76-deduplicate-epg-sync-infrastructure.md) | ⬜ | Program persistence, sync locks, EAST/WEST constants |
-| 77 | [77-centralize-tag-loading-and-category-sync-policy.md](./77-centralize-tag-loading-and-category-sync-policy.md) | ⬜ | Tag loader N+1; category sync failure policy |
+| 77 | [77-centralize-tag-loading-and-category-sync-policy.md](./77-centralize-tag-loading-and-category-sync-policy.md) | ✅ | Tag loader N+1; category sync failure policy |
 | 78 | [78-split-fat-route-modules.md](./78-split-fat-route-modules.md) | ⬜ | Phased extraction from 500–1500 line route files |
 | 79 | [79-extract-shared-route-serializers.md](./79-extract-shared-route-serializers.md) | ⬜ | Shared CRUD serializers and Marshmallow schemas |
 | 80 | [80-align-test-db-with-production-schema.md](./80-align-test-db-with-production-schema.md) | ⬜ | pytest `create_all` skips migration-only indexes |
@@ -272,6 +272,7 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 | 90 | [90-split-epg-programs-and-decouple-sync.md](./90-split-epg-programs-and-decouple-sync.md) | ⬜ | Split programs.py; decouple sync post-processing |
 | 92 | [92-cdn-script-sri-hardening.md](./92-cdn-script-sri-hardening.md) | ⬜ | CDN Subresource Integrity (deferred from 84) |
 | 94 | [94-speed-up-thesportsdb-tests-no-live-http.md](./94-speed-up-thesportsdb-tests-no-live-http.md) | ✅ | Fix stale SDK mocks; stop live TheSportsDB retry loops in unit tests |
+| 95 | [95-parallelize-pytest-suite.md](./95-parallelize-pytest-suite.md) | ⬜ | pytest-xdist with per-worker DB paths; faster local/CI runs |
 
 ### Recommended order for items 68–90
 

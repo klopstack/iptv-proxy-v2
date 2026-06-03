@@ -6,7 +6,7 @@ import logging
 import re
 from typing import Dict, List, Optional
 
-from models import Account, Channel, ChannelTag, Filter, Tag, db
+from models import Account, Channel, Filter, db
 
 logger = logging.getLogger(__name__)
 
@@ -72,23 +72,9 @@ class FilterService:
             channel_tag_map: dict = {}
 
             if has_tag_filters:
-                # Load tags for all channels in batches
-                stream_ids = [ch.stream_id for ch in channels]
-                batch_size = 1000
+                from services.channel_tags import load_tag_names_for_account
 
-                for i in range(0, len(stream_ids), batch_size):
-                    batch = stream_ids[i : i + batch_size]
-                    tags_query = (
-                        db.session.query(ChannelTag.stream_id, Tag.name)
-                        .join(Tag)
-                        .filter(ChannelTag.account_id == account_id, ChannelTag.stream_id.in_(batch))
-                        .all()
-                    )
-
-                    for stream_id, tag_name in tags_query:
-                        if stream_id not in channel_tag_map:
-                            channel_tag_map[stream_id] = []
-                        channel_tag_map[stream_id].append(tag_name)
+                channel_tag_map = load_tag_names_for_account(account_id, channels)
 
             # Apply filters to each channel
             for channel in channels:
@@ -264,24 +250,9 @@ class FilterService:
         # Check if we need to load tags
         has_tag_filters = any(f.filter_type == "tag" for f in filters)
         if has_tag_filters and channel_tags_map is None:
-            # Load tags for all channels in batches
-            channel_tags_map = {}
-            stream_ids = [ch.stream_id for ch in channels]
-            batch_size = 1000
+            from services.channel_tags import load_tag_names_for_account
 
-            for i in range(0, len(stream_ids), batch_size):
-                batch = stream_ids[i : i + batch_size]
-                tags_query = (
-                    db.session.query(ChannelTag.stream_id, Tag.name)
-                    .join(Tag)
-                    .filter(ChannelTag.account_id == account_id, ChannelTag.stream_id.in_(batch))
-                    .all()
-                )
-
-                for stream_id, tag_name in tags_query:
-                    if stream_id not in channel_tags_map:
-                        channel_tags_map[stream_id] = []
-                    channel_tags_map[stream_id].append(tag_name)
+            channel_tags_map = load_tag_names_for_account(account_id, channels)
 
         # Apply filters to each channel
         filtered_channels = []

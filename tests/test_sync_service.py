@@ -88,7 +88,7 @@ class TestChannelSyncService:
 
             result = ChannelSyncService.sync_account(account_id)
 
-            # Should still succeed but with errors noted
+            assert result["success"] is False
             assert "Categories sync error" in str(result.get("errors", []))
 
     @patch("services.sync_service.get_iptv_service_for_account")
