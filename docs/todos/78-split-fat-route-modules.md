@@ -64,3 +64,4 @@ Routes become: parse request → call service → serialize response.
 ## Completion
 
 - **Phase 1 — PR #36:** `AccountAdminService`; `accounts.py` 1,381 → 932 lines (−32%); `tests/test_account_admin_service.py`
+- **Phase 3 — PR #39:** `ConfigTransferService`; `config_transfer.py` 954 → 71 lines (−93%); `tests/test_config_transfer_service.py`
