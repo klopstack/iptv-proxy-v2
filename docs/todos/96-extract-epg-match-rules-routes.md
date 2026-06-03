@@ -1,6 +1,6 @@
 # Extract EPG match rules routes (TODO 78 phase 2)
 
-**Status:** ⬜ Not started  
+**Status:** 🟡 In review  
 **Priority:** P2  
 **Parent:** [78-split-fat-route-modules.md](./78-split-fat-route-modules.md) (phase 1 ✅ PR #36)  
 **Roadmap:** [ROADMAP.md](./ROADMAP.md) — Wave 9, PR batch **W**
@@ -28,9 +28,9 @@ Move preview/rematch orchestration and heavy inline logic out of `routes/epg/mat
 
 ## Acceptance criteria
 
-- [ ] `routes/epg/match_rules.py` line count reduced by ≥30% vs pre-extraction baseline
-- [ ] No behavior change; existing route test suite passes
-- [ ] Extracted logic covered by service-level unit tests (no Flask request context required)
+- [x] `routes/epg/match_rules.py` line count reduced by ≥30% vs pre-extraction baseline (1,444 → 294, −80%)
+- [x] No behavior change; existing route test suite passes
+- [x] Extracted logic covered by service-level unit tests (no Flask request context required)
 
 ## Test plan
 

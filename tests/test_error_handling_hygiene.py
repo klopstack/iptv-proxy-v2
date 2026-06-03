@@ -109,7 +109,7 @@ class TestMatchRulesPreviewErrorHandling:
 
     def test_preview_rule_pattern_query_failure_returns_error_json(self, app, client):
         with patch(
-            "routes.epg.match_rules.db.session.query",
+            "services.epg.match_rules.route_service.db.session.query",
             side_effect=RuntimeError("rules preview failed"),
         ):
             response = client.post(
@@ -123,7 +123,7 @@ class TestMatchRulesPreviewErrorHandling:
 
     def test_preview_exclusion_pattern_query_failure_returns_error_json(self, app, client):
         with patch(
-            "routes.epg.match_rules.db.session.query",
+            "services.epg.match_rules.route_service.db.session.query",
             side_effect=RuntimeError("exclusion preview failed"),
         ):
             response = client.post(
