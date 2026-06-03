@@ -20,6 +20,15 @@ describe('fetchAccounts', () => {
         await expect(fetchAccounts()).resolves.toEqual([{ id: 1, name: 'Main' }]);
     });
 
+    it('unwraps data envelope responses', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ data: [{ id: 2, name: 'Sports' }] }),
+        }));
+
+        await expect(fetchAccounts()).resolves.toEqual([{ id: 2, name: 'Sports' }]);
+    });
+
     it('throws when response is not an array', async () => {
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
             ok: true,

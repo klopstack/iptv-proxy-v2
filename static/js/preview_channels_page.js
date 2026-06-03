@@ -7,6 +7,8 @@ import {
     getTagBadgeColorClass,
     normalizeTag,
 } from './preview_channels.js';
+import { fetchAccounts } from './lib/account_select.js';
+import { unwrapData } from './lib/api_contract.js';
 import { formatLocalDateTime } from './lib/epg_datetime.js';
 import { escapeHtml, parseUrlParams } from './utils.js';
 
@@ -20,12 +22,10 @@ let hasMore = true;
 let tagSelector = null;
 
 async function loadAccounts() {
-    const response = await fetch('/api/accounts');
-    accounts = await response.json();
+    accounts = await fetchAccounts();
 
     const select = document.getElementById('testAccountId');
-    select.innerHTML = '<option value="">Select an account...</option>';
-    select.innerHTML += '<option value="all">All Accounts</option>';
+    select.innerHTML = '<option value="all">All Accounts</option>';
 
     for (const account of accounts) {
         if (account.enabled) {
@@ -50,6 +50,9 @@ async function loadAccounts() {
         } else {
             await loadPreview();
         }
+    } else {
+        select.value = 'all';
+        await loadPreview();
     }
 }
 
@@ -619,7 +622,7 @@ async function loadActiveFilters(accountId) {
             document.getElementById('activeFilters').innerHTML = '<p class="text-muted">Viewing all accounts - filters vary by account</p>';
         } else {
             const filtersResponse = await fetch(`/api/accounts/${accountId}/filters`);
-            const filters = await filtersResponse.json();
+            const filters = unwrapData(await filtersResponse.json());
 
             let filtersHtml = '';
             if (filters.length === 0) {

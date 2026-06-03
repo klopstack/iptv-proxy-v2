@@ -1,6 +1,7 @@
 /**
  * Manual EPG mapping modal (ESM).
  */
+import { unwrapData } from '../lib/api_contract.js';
 import { parseUTCDateTime } from '../lib/epg_datetime.js';
 import { escapeHtml } from '../lib/escape_html.js';
 let epgSearchState = { search: '', offset: 0, hasMore: true, loading: false };
@@ -65,8 +66,10 @@ async function populateEpgSourcesForManualMapping() {
     
     try {
         const response = await fetch('/api/epg/sources');
-        const sourcesData = await response.json();
-        const sourcesList = Array.isArray(sourcesData) ? sourcesData : (sourcesData.sources || []);
+        const sourcesList = unwrapData(await response.json());
+        if (!Array.isArray(sourcesList)) {
+            throw new Error('Invalid response from server');
+        }
         
         sourceSelect.innerHTML = '<option value="">All Sources</option>';
         for (const source of sourcesList) {

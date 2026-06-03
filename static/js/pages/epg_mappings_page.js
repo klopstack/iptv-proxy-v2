@@ -1,6 +1,7 @@
 /**
  * Channel EPG mappings tab (ESM).
  */
+import { unwrapData } from '../lib/api_contract.js';
 import { escapeHtml } from '../lib/escape_html.js';
 import { escapeJsSingleQuoted } from '../lib/epg_dom_utils.js';
 import { formatMappingConfidencePercent } from '../lib/epg_mappings_helpers.js';
@@ -105,7 +106,7 @@ async function loadCategoriesForAccount(accountId) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        const categories = await response.json();
+        const categories = unwrapData(await response.json());
         
         if (!Array.isArray(categories)) {
             throw new Error('Categories response is not an array');
