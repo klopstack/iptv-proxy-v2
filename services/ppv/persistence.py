@@ -50,6 +50,8 @@ def create_or_update_event(calendar_event: CalendarEvent) -> Tuple[Optional[Even
             event_source = Event.SOURCE_MLB_STATS
         elif event_source == "espn":
             event_source = Event.SOURCE_ESPN
+        elif event_source == "sofascore":
+            event_source = Event.SOURCE_SOFASCORE
 
         event = Event.query.filter_by(
             external_id=calendar_event.event_id,

@@ -21,10 +21,18 @@ class Event(db.Model):  # type: ignore[name-defined]
     SOURCE_THESPORTSDB = "thesportsdb"
     SOURCE_MLB_STATS = "mlb_stats_api"
     SOURCE_ESPN = "espn"
+    SOURCE_SOFASCORE = "sofascore"
     SOURCE_MANUAL = "manual"
     SOURCE_IMPORT = "import"
 
-    SOURCE_TYPES = [SOURCE_THESPORTSDB, SOURCE_MLB_STATS, SOURCE_ESPN, SOURCE_MANUAL, SOURCE_IMPORT]
+    SOURCE_TYPES = [
+        SOURCE_THESPORTSDB,
+        SOURCE_MLB_STATS,
+        SOURCE_ESPN,
+        SOURCE_SOFASCORE,
+        SOURCE_MANUAL,
+        SOURCE_IMPORT,
+    ]
 
     # Event status
     STATUS_SCHEDULED = "scheduled"
