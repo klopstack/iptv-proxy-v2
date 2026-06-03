@@ -66,7 +66,7 @@ async function populateEpgSourcesForManualMapping() {
     
     try {
         const response = await fetch('/api/epg/sources');
-        const sourcesData = apiUnwrapData(response, await response.json());
+        const sourcesData = await response.json();
         const sourcesList = Array.isArray(sourcesData) ? sourcesData : (sourcesData.sources || []);
         
         sourceSelect.innerHTML = '<option value="">All Sources</option>';
@@ -222,7 +222,7 @@ async function loadEpgSchedule(epgChannelId, offsetHours = 0) {
         const data = await response.json();
         
         if (!response.ok) {
-            scheduleContent.innerHTML = `<div class="list-group-item text-danger">${data.error || 'Error loading schedule'}</div>`;
+            scheduleContent.innerHTML = `<div class="list-group-item text-danger">${escapeHtml(data.error || 'Error loading schedule')}</div>`;
             return;
         }
         
@@ -764,7 +764,7 @@ async function saveManualMapping() {
             if (row) {
                 const cells = row.querySelectorAll('td');
                 if (cells.length >= 4) {
-                    cells[2].innerHTML = `<span class="text-success">${mapping.epg_display_name || 'EPG #' + epgChannelId}</span>`;
+                    cells[2].innerHTML = `<span class="text-success">${escapeHtml(mapping.epg_display_name || `EPG #${epgChannelId}`)}</span>`;
                     cells[3].innerHTML = '<span class="badge bg-primary">Manual</span> 100%';
                 }
                 const actionsDiv = cells[4]?.querySelector('.btn-group');

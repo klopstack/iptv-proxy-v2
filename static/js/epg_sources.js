@@ -34,7 +34,7 @@ async function loadAccounts() {
 async function loadSources() {
     try {
         const response = await fetch('/api/epg/sources');
-        const data = apiUnwrapData(response, await response.json());
+        const data = await response.json();
         
         if (!response.ok || !Array.isArray(data)) {
             throw new Error(data.error || 'Invalid response from server');
@@ -46,7 +46,7 @@ async function loadSources() {
         refreshSourceRowProgress();
     } catch (error) {
         document.getElementById('sources-list').innerHTML = `
-            <div class="alert alert-danger">Error loading EPG sources: ${error.message}</div>
+            <div class="alert alert-danger">Error loading EPG sources: ${escapeHtml(error.message)}</div>
         `;
     }
 }
@@ -59,7 +59,11 @@ function populateSourceSelects() {
             const firstOption = select.options[0].outerHTML;
             select.innerHTML = firstOption;
             sources.forEach(s => {
-                select.innerHTML += `<option value="${s.id}" data-source-type="${s.source_type}">${s.name} (${s.source_type})</option>`;
+                const option = document.createElement('option');
+                option.value = s.id;
+                option.dataset.sourceType = s.source_type;
+                option.textContent = `${s.name} (${s.source_type})`;
+                select.appendChild(option);
             });
             select.dispatchEvent(new Event('change'));
         }
@@ -112,7 +116,6 @@ function renderSourceStatusCell(source) {
     return `<span class="badge bg-secondary">${escapeHtml(source.last_sync_status)}</span>`;
 }
 
-
 function renderSources() {
     const container = document.getElementById('sources-list');
     
@@ -148,18 +151,18 @@ function renderSources() {
         const statusBadge = renderSourceStatusCell(source);
 
         const sourceInfo = source.source_type === 'provider' 
-            ? (source.account_name || 'Account ' + source.account_id)
+            ? escapeHtml(source.account_name || `Account ${source.account_id}`)
             : source.source_type === 'xmltv_url'
-            ? '<small class="text-muted">' + (source.url?.substring(0, 40) || 'No URL') + '...</small>'
+            ? `<small class="text-muted">${escapeHtml((source.url?.substring(0, 40) || 'No URL') + '...')}</small>`
             : source.source_type === 'schedules_direct'
             ? '<i class="bi bi-broadcast-pin"></i> SD'
             : source.source_type === 'xmltv_grabber'
-            ? '<i class="bi bi-terminal"></i> ' + (source.xmltv_grabber || 'Grabber')
+            ? `<i class="bi bi-terminal"></i> ${escapeHtml(source.xmltv_grabber || 'Grabber')}`
             : '-';
 
         const usedCount = source.used_mapping_count || 0;
         const inUseHtml = usedCount > 0
-            ? `<a href="#" onclick="showSourceMappings(${source.id}, '${source.name.replace(/'/g, "\\'")}'); return false;" class="text-decoration-none">
+            ? `<a href="#" onclick="showSourceMappings(${source.id}, '${escapeJsSingleQuoted(source.name)}'); return false;" class="text-decoration-none">
                 <span class="badge bg-primary">${usedCount}</span>
                </a>`
             : '<span class="badge bg-secondary">0</span>';
@@ -167,12 +170,12 @@ function renderSources() {
         html += `
             <tr data-epg-source-id="${source.id}">
                 <td>
-                    ${source.name}
+                    ${escapeHtml(source.name)}
                     ${!source.enabled ? '<span class="badge bg-secondary ms-2">Disabled</span>' : ''}
                     ${source.source_type === 'schedules_direct' ? '<button class="btn btn-sm btn-link p-0 ms-2" onclick="toggleSdLineups(' + source.id + ')" title="Show/Hide Lineups" id="sd-toggle-' + source.id + '"><i class="bi bi-chevron-down"></i></button>' : ''}
                 </td>
                 <td>
-                    <span class="badge bg-info">${source.source_type}</span>
+                    <span class="badge bg-info">${escapeHtml(source.source_type)}</span>
                     ${isLegacyProvider ? '<span class="badge bg-warning text-dark ms-1">Legacy</span>' : ''}
                 </td>
                 <td>${sourceInfo}</td>
@@ -405,7 +408,7 @@ async function loadSdLineupsInline(sourceId) {
         const result = await response.json();
         
         if (result.error || result.success === false) {
-            container.innerHTML = `<div class="alert alert-sm alert-danger mb-0">${result.error || 'Failed to load lineups'}</div>`;
+            container.innerHTML = `<div class="alert alert-sm alert-danger mb-0">${escapeHtml(result.error || 'Failed to load lineups')}</div>`;
             return;
         }
         
@@ -456,13 +459,13 @@ async function loadSdLineupsInline(sourceId) {
             html += `
                 <div class="list-group-item px-3 py-2 d-flex justify-content-between align-items-center">
                     <div>
-                        <strong>${lineup.name || lineup.lineup_id}</strong>${badge}
-                        ${lineup.location ? '<br><small class="text-muted">' + lineup.location + '</small>' : ''}
+                        <strong>${escapeHtml(lineup.name || lineup.lineup_id)}</strong>${badge}
+                        ${lineup.location ? `<br><small class="text-muted">${escapeHtml(lineup.location)}</small>` : ''}
                         <br><small class="text-muted">${lineup.channel_count || 0} channels</small>${detail}
                         ${lineup.last_sync ? '<small class="text-muted"> | Last sync: ' + formatLocalDateTime(lineup.last_sync) + '</small>' : ''}
                     </div>
                     <div class="btn-group btn-group-sm">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="viewStations(${lineup.id}, '${escapeHtml(lineup.name || lineup.lineup_id)}')" title="View stations">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="viewStations(${lineup.id}, '${escapeJsSingleQuoted(lineup.name || lineup.lineup_id)}')" title="View stations">
                             <i class="bi bi-list"></i>
                         </button>
                         <button class="btn btn-sm btn-outline-primary" onclick="syncSdLineupInline(${lineup.id}, ${sourceId})" title="Sync lineup">
@@ -475,7 +478,7 @@ async function loadSdLineupsInline(sourceId) {
         html += '</div>';
         container.innerHTML = html;
     } catch (error) {
-        container.innerHTML = `<div class="alert alert-sm alert-danger mb-0">Error: ${error.message}</div>`;
+        container.innerHTML = `<div class="alert alert-sm alert-danger mb-0">Error: ${escapeHtml(error.message)}</div>`;
     }
 }
 
@@ -564,7 +567,7 @@ async function loadSourceMappingsPage() {
         renderSourceMappings(data);
         updateMappingsPagination(data.total, data.offset, data.limit);
     } catch (error) {
-        container.innerHTML = `<div class="alert alert-danger">Error: ${error.message}</div>`;
+        container.innerHTML = `<div class="alert alert-danger">Error: ${escapeHtml(error.message)}</div>`;
     }
 }
 
@@ -595,24 +598,24 @@ function renderSourceMappings(data) {
         const confidencePct = Math.round(m.confidence * 100);
         
         const channelIcon = m.channel_icon 
-            ? `<img src="${m.channel_icon}" style="max-height: 20px; max-width: 30px; margin-right: 5px;" onerror="this.style.display='none'">`
+            ? `<img src="${escapeHtml(m.channel_icon)}" style="max-height: 20px; max-width: 30px; margin-right: 5px;" onerror="this.style.display='none'">`
             : '';
         const epgIcon = m.epg_channel_icon
-            ? `<img src="${m.epg_channel_icon}" style="max-height: 20px; max-width: 30px; margin-right: 5px;" onerror="this.style.display='none'">`
+            ? `<img src="${escapeHtml(m.epg_channel_icon)}" style="max-height: 20px; max-width: 30px; margin-right: 5px;" onerror="this.style.display='none'">`
             : '';
         
         html += `
             <tr>
                 <td>
                     ${channelIcon}
-                    <span title="${m.channel_name}">${m.channel_clean_name || m.channel_name}</span>
+                    <span title="${escapeHtml(m.channel_name)}">${escapeHtml(m.channel_clean_name || m.channel_name)}</span>
                 </td>
                 <td>
                     ${epgIcon}
-                    <span title="XMLTV ID: ${m.epg_channel_xmltv_id}">${m.epg_channel_name || m.epg_channel_xmltv_id}</span>
+                    <span title="XMLTV ID: ${escapeHtml(m.epg_channel_xmltv_id)}">${escapeHtml(m.epg_channel_name || m.epg_channel_xmltv_id)}</span>
                 </td>
-                <td><small class="text-muted">${m.category_name || '-'}</small></td>
-                <td><span class="badge bg-secondary">${m.mapping_type}</span></td>
+                <td><small class="text-muted">${escapeHtml(m.category_name || '-')}</small></td>
+                <td><span class="badge bg-secondary">${escapeHtml(m.mapping_type)}</span></td>
                 <td><span class="${confidenceClass}">${confidencePct}%</span></td>
             </tr>
         `;
@@ -644,7 +647,7 @@ async function loadCoverage() {
     
     try {
         const response = await fetch('/api/epg/coverage');
-        const stats = apiUnwrapData(response, await response.json());
+        const stats = await response.json();
         
         const coveragePercent = stats.total_channels > 0 
             ? ((stats.channels_with_epg_mapping / stats.total_channels) * 100).toFixed(1)
@@ -674,6 +677,6 @@ async function loadCoverage() {
             </div>
         `;
     } catch (error) {
-        content.innerHTML = `<div class="alert alert-danger">Error loading coverage: ${error.message}</div>`;
+        content.innerHTML = `<div class="alert alert-danger">Error loading coverage: ${escapeHtml(error.message)}</div>`;
     }
 }
