@@ -66,4 +66,4 @@ npm run lint          # ESLint on migrated pages/
 
 ## Completion
 
-- **PR _(pending)_:** Wave 9 TODO 103 — ESM tabs 4–6 + ESLint; retires 8 legacy bundles; adds `lib/epg_preview_helpers.js`, `lib/epg_channels_helpers.js`, `lib/match_rules_reference_helpers.js`
+- **PR #44:** https://github.com/klopstack/iptv-proxy-v2/pull/44 — Wave 9 TODO 103; retires 8 legacy bundles; adds `lib/epg_preview_helpers.js`, `lib/epg_channels_helpers.js`, `lib/match_rules_reference_helpers.js`
