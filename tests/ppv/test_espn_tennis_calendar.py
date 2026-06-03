@@ -43,11 +43,7 @@ class TestParseScoreboardFixture:
         assert "Aryna Sabalenka" in names
         assert "Diana Shnaider" in names
 
-        kalinskaya = next(
-            e
-            for e in events
-            if {e.home_team, e.away_team} == {"Anna Kalinskaya", "Maja Chwalinska"}
-        )
+        kalinskaya = next(e for e in events if {e.home_team, e.away_team} == {"Anna Kalinskaya", "Maja Chwalinska"})
         assert kalinskaya.event_id == "175549"
         assert kalinskaya.source == EVENT_SOURCE_ESPN
         assert kalinskaya.time_utc == "09:10"
@@ -57,11 +53,7 @@ class TestParseScoreboardFixture:
     def test_parses_doubles_with_roster_display_name(self):
         payload = _load_fixture("espn_tennis_scoreboard_20260603_wta.json")
         events = parse_scoreboard_payload(payload, tour="wta", fallback_date="2026-06-03")
-        doubles = [
-            e
-            for e in events
-            if (e.home_team and "/" in e.home_team) or (e.away_team and "/" in e.away_team)
-        ]
+        doubles = [e for e in events if (e.home_team and "/" in e.home_team) or (e.away_team and "/" in e.away_team)]
         assert len(doubles) >= 1
         d = doubles[0]
         assert d.event_id == "175912"

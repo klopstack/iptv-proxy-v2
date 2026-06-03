@@ -782,10 +782,16 @@ class TestIntegration:
         scraper.get_events_for_date("2024-03-01", force_refresh=True)
         assert mock_fetch.call_count == 2
 
+    @patch(
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_espn_tennis_events_for_date",
+        return_value=[],
+    )
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_milb_events_for_date")
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_api_events_for_date")
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_calendar_page")
-    def test_get_events_merges_html_and_api(self, mock_fetch, mock_api_fetch, mock_milb_fetch, scraper):
+    def test_get_events_merges_html_and_api(
+        self, mock_fetch, mock_api_fetch, mock_milb_fetch, mock_espn_tennis_fetch, scraper
+    ):
         """API supplement events are merged with HTML calendar events."""
         mock_milb_fetch.return_value = []
         mock_fetch.return_value = [
