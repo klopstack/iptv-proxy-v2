@@ -14,7 +14,7 @@ from schemas import (
     TagRuleUpdateSchema,
     validate_request_data,
 )
-from services.cache_service import CacheService
+from services.cache_service import cache_service
 from services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
@@ -23,9 +23,6 @@ logger = logging.getLogger(__name__)
 rulesets_bp = Blueprint("rulesets", __name__)
 
 # Initialize cache service
-cache_service = CacheService()
-
-
 # ============================================================================
 # API Routes - Ruleset CRUD
 # ============================================================================

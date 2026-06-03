@@ -1,6 +1,6 @@
 # Remove dead routes and dangerous HTTP patterns
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Complete  
 **Priority:** P1  
 **Audit:** Application-wide audit, June 2026
 
@@ -42,9 +42,9 @@ No centralized `register_routes(app)` — 22+ blueprints imported inline in `app
 
 ## Acceptance criteria
 
-- [ ] No registered blueprints with zero routes
-- [ ] One canonical FCC sync API path documented
-- [ ] Category endpoints documented with distinct names/purposes
+- [x] No registered blueprints with zero routes
+- [x] One canonical FCC sync API path documented
+- [x] Category endpoints documented with distinct names/purposes
 
 ## Test plan
 

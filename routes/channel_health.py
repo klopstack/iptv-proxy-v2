@@ -159,8 +159,10 @@ def get_channels_paginated():
 @channel_health_bp.route("/api/channel-health/categories", methods=["GET"])
 @handle_errors(return_json=True, default_message="Error fetching categories")
 def get_categories():
-    """
-    Get list of categories for filtering.
+    """Channel-health filter dropdown: DB categories with playlist-visible channels.
+
+    Distinct from GET /api/categories (browse with counts/EPG stats) and
+    GET /api/accounts/<id>/categories (upstream-shaped list for account admin).
 
     Only returns categories with at least one playlist-visible channel
     (account filters plus PPV visibility), matching M3U output.

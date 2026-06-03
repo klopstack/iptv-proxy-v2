@@ -42,14 +42,13 @@ from models import (
     TagRule,
     db,
 )
-from services.cache_service import CacheService
+from services.cache_service import cache_service
 from services.epg.match_rules import clear_fcc_pattern_cache
 from services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
 
 config_transfer_bp = Blueprint("config_transfer", __name__)
-cache_service = CacheService()
 
 
 def _parse_bool(value: str | None, default: bool = False) -> bool:

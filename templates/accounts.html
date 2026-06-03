@@ -125,6 +125,9 @@
                 </div>
             </div>
             <div class="modal-footer">
+                <button type="button" class="btn btn-outline-primary" id="refreshCategoriesBtn" style="display: none;">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh from provider
+                </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
@@ -211,6 +214,125 @@ let accounts = [];
 let currentCredentialsAccountId = null;
 const modal = new bootstrap.Modal(document.getElementById('accountModal'));
 const categoriesModal = new bootstrap.Modal(document.getElementById('categoriesModal'));
+const refreshCategoriesBtn = document.getElementById('refreshCategoriesBtn');
+let categoriesModalAccountId = null;
+
+async function loadAccountCategories(accountId, accountName, { syncFromProvider = false } = {}) {
+    const content = document.getElementById('categoriesContent');
+    content.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    `;
+
+    if (syncFromProvider) {
+        const syncResponse = await fetch(`/api/accounts/${accountId}/categories/sync`, { method: 'POST' });
+        if (!syncResponse.ok) {
+            const err = await syncResponse.json().catch(() => ({}));
+            throw new Error(err.error || 'Failed to sync categories from provider');
+        }
+    }
+
+    const response = await fetch(`/api/accounts/${accountId}/categories`);
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to load categories');
+    }
+    const categories = await response.json();
+
+    document.getElementById('categoriesModalLabel').textContent =
+        `Categories - ${accountName || 'Account'} (${categories.length} total)`;
+
+    let html = `
+        <div class="alert alert-info mb-3">
+            <i class="bi bi-info-circle"></i>
+            <strong>Tip:</strong> Use <a href="/filters" class="alert-link">Filters</a> to show/hide specific categories or channels.
+            ${syncFromProvider ? '<br><small class="text-muted">Refreshed from upstream provider.</small>' : ''}
+        </div>
+        <div class="mb-3">
+            <input type="text" class="form-control" id="categorySearch" placeholder="Search categories...">
+        </div>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th style="width: 100px;">ID</th>
+                        <th>Category Name</th>
+                        <th style="width: 80px;" class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="categoriesTableBody">
+    `;
+
+    for (const cat of categories) {
+        const displayName = (cat.cleaned_name || cat.category_name || '').replace(/'/g, "\\'");
+        html += `
+            <tr class="category-row" data-category-name="${((cat.cleaned_name || cat.category_name) || '').toLowerCase()}">
+                <td>${cat.category_id || 'N/A'}</td>
+                <td>${cat.cleaned_name || cat.category_name || 'Unnamed'}</td>
+                <td class="text-end">
+                    <button class="btn btn-sm btn-outline-secondary"
+                            onclick="addCategoryFilter(${accountId}, '${displayName}')"
+                            title="Add as filter">
+                        <i class="bi bi-funnel-fill"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }
+
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    if (categories.length === 0) {
+        html = `
+            <div class="alert alert-info">
+                No categories in cache or database.
+                Click <strong>Refresh from provider</strong> to fetch from the IPTV API.
+            </div>
+        `;
+    }
+
+    content.innerHTML = html;
+
+    const searchInput = document.getElementById('categorySearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            document.querySelectorAll('.category-row').forEach(row => {
+                const categoryName = row.dataset.categoryName;
+                row.style.display = categoryName.includes(searchTerm) ? '' : 'none';
+            });
+        });
+    }
+}
+
+refreshCategoriesBtn.addEventListener('click', async function() {
+    if (!categoriesModalAccountId) return;
+    const account = accounts.find(a => a.id === categoriesModalAccountId);
+    const btn = this;
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Syncing...';
+    try {
+        await loadAccountCategories(categoriesModalAccountId, account?.name, { syncFromProvider: true });
+    } catch (error) {
+        document.getElementById('categoriesContent').innerHTML = `
+            <div class="alert alert-danger">
+                <strong>Error refreshing categories:</strong> ${error.message}
+            </div>
+        `;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    }
+});
+
 const credentialsModal = new bootstrap.Modal(document.getElementById('credentialsModal'));
 const credentialEditModal = new bootstrap.Modal(document.getElementById('credentialEditModal'));
 
@@ -657,81 +779,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 case 'view-categories':
                     try {
-                        document.getElementById('categoriesContent').innerHTML = `
-                            <div class="text-center">
-                                <div class="spinner-border" role="status">
-                                    <span class="visually-hidden">Loading...</span>
-                                </div>
-                            </div>
-                        `;
+                        categoriesModalAccountId = accountId;
+                        refreshCategoriesBtn.style.display = 'inline-block';
                         categoriesModal.show();
-                        
-                        const response = await fetch(`/api/accounts/${accountId}/categories`);
-                        const categories = await response.json();
-                        
-                        document.getElementById('categoriesModalLabel').textContent = 
-                            `Categories - ${account ? account.name : 'Account'} (${categories.length} total)`;
-                        
-                        let html = `
-                            <div class="alert alert-info mb-3">
-                                <i class="bi bi-info-circle"></i>
-                                <strong>Tip:</strong> Use <a href="/filters" class="alert-link">Filters</a> to show/hide specific categories or channels.
-                            </div>
-                            <div class="mb-3">
-                                <input type="text" class="form-control" id="categorySearch" placeholder="Search categories...">
-                            </div>
-                            <div class="table-responsive">
-                                <table class="table table-striped table-hover table-sm">
-                                    <thead>
-                                        <tr>
-                                            <th style="width: 100px;">ID</th>
-                                            <th>Category Name</th>
-                                            <th style="width: 80px;" class="text-end">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="categoriesTableBody">
-                        `;
-                        
-                        for (const cat of categories) {
-                            html += `
-                                <tr class="category-row" data-category-name="${((cat.cleaned_name || cat.category_name) || '').toLowerCase()}">
-                                    <td>${cat.category_id || 'N/A'}</td>
-                                    <td>${cat.cleaned_name || cat.category_name || 'Unnamed'}</td>
-                                    <td class="text-end">
-                                        <button class="btn btn-sm btn-outline-secondary" 
-                                                onclick="addCategoryFilter(${accountId}, '${cat.cleaned_name || cat.category_name}')"
-                                                title="Add as filter">
-                                            <i class="bi bi-funnel-fill"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                            `;
-                        }
-                        
-                        html += `
-                                    </tbody>
-                                </table>
-                            </div>
-                        `;
-                        
-                        if (categories.length === 0) {
-                            html = '<div class="alert alert-info">No categories found for this account.</div>';
-                        }
-                        
-                        document.getElementById('categoriesContent').innerHTML = html;
-                        
-                        // Add search functionality
-                        const searchInput = document.getElementById('categorySearch');
-                        if (searchInput) {
-                            searchInput.addEventListener('input', (e) => {
-                                const searchTerm = e.target.value.toLowerCase();
-                                const rows = document.querySelectorAll('.category-row');
-                                rows.forEach(row => {
-                                    const categoryName = row.dataset.categoryName;
-                                    row.style.display = categoryName.includes(searchTerm) ? '' : 'none';
-                                });
-                            });
-                        }
+                        await loadAccountCategories(accountId, account?.name);
                     } catch (error) {
                         document.getElementById('categoriesContent').innerHTML = `
                             <div class="alert alert-danger">

@@ -22,7 +22,9 @@ stations_bp = Blueprint("stations", __name__)
 @stations_bp.route("/api/fcc/facilities/sync", methods=["POST"])
 @handle_errors(return_json=True, default_message="Error syncing FCC facility data")
 def sync_fcc_facilities():
-    """Download and sync FCC TV facility data.
+    """Download and sync FCC TV facility data (canonical FCC sync API).
+
+    Canonical path: POST /api/fcc/facilities/sync (replaces legacy POST /api/sync/fcc).
 
     This downloads the latest facility.dat from the FCC LMS database
     and syncs TV station records to the local database.

@@ -269,6 +269,7 @@ POST /api/accounts/<id>/test
 
 # Get categories
 GET /api/accounts/<id>/categories
+POST /api/accounts/<id>/categories/sync
 
 # Get statistics
 GET /api/accounts/<id>/stats

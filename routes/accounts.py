@@ -15,7 +15,7 @@ from services.account_epg_source_service import (
     serialize_account_xmltv_epg_source,
     upsert_account_xmltv_epg_source,
 )
-from services.cache_service import CacheService
+from services.cache_service import cache_service
 from services.channel_query_service import ChannelQueryService
 from services.connection_manager import ConnectionManager
 from services.datetime_utils import DEFAULT_DISPLAY_TIMEZONE, serialize_utc_iso
@@ -26,9 +26,6 @@ logger = logging.getLogger(__name__)
 
 # Create blueprint
 accounts_bp = Blueprint("accounts", __name__)
-
-# Initialize cache service
-cache_service = CacheService()
 
 
 def credential_to_dict(cred):
@@ -409,30 +406,57 @@ def test_account(account_id):
     )
 
 
+def _account_categories_payload(account_id):
+    """Categories from in-memory cache or DB — no upstream IPTV call."""
+    cached = cache_service.get_cached_categories(account_id)
+    if cached is not None:
+        return cached
+
+    rows = Category.query.filter_by(account_id=account_id, is_active=True).order_by(Category.category_name).all()
+    if rows:
+        return [
+            {
+                "category_id": row.category_id,
+                "category_name": row.category_name,
+                **({"cleaned_name": row.cleaned_name} if row.cleaned_name else {}),
+            }
+            for row in rows
+        ]
+
+    return []
+
+
 @accounts_bp.route("/api/accounts/<int:account_id>/categories", methods=["GET"])
+@handle_errors(return_json=True, default_message="Error fetching account categories")
 def get_account_categories(account_id):
-    """Get categories for account"""
+    """Return cached or DB-backed upstream-style category list (idempotent GET).
+
+    For upstream refresh and tag extraction, use POST .../categories/sync.
+    Distinct from GET /api/categories (DB browse with counts) and
+    GET /api/channel-health/categories (health filter dropdown).
+    """
+    Account.query.get_or_404(account_id)
+    return jsonify(_account_categories_payload(account_id))
+
+
+@accounts_bp.route("/api/accounts/<int:account_id>/categories/sync", methods=["POST"])
+@handle_errors(return_json=True, default_message="Error syncing account categories")
+def sync_account_categories(account_id):
+    """Fetch categories from upstream IPTV, update cache, and process extraction tags."""
     account = Account.query.get_or_404(account_id)
 
-    try:
-        service = get_iptv_service_for_account(account)
-        categories = service.get_live_categories()
+    service = get_iptv_service_for_account(account)
+    categories = service.get_live_categories()
+    cache_service.cache_categories(account_id, categories)
 
-        # Cache it
-        cache_service.cache_categories(account_id, categories)
+    streams = cache_service.get_cached_streams(account_id)
+    if streams:
+        try:
+            _process_tags_for_account(account_id, streams, categories)
+        except Exception as tag_error:
+            logger.warning(f"Error auto-processing tags for account {account_id}: {tag_error}")
 
-        # Trigger tag processing in background if streams are cached
-        streams = cache_service.get_cached_streams(account_id)
-        if streams:
-            try:
-                _process_tags_for_account(account_id, streams, categories)
-            except Exception as tag_error:
-                logger.warning(f"Error auto-processing tags for account {account_id}: {tag_error}")
-
-        return jsonify(categories)
-    except Exception as e:
-        logger.error(f"Error fetching categories for account {account_id}: {e}")
-        return jsonify({"error": str(e)}), 400
+    return jsonify({"success": True, "categories": categories, "count": len(categories)})
 
 
 def _process_tags_for_account(account_id, streams, categories):

@@ -407,10 +407,26 @@ GET /api/channels/{account_id}/{stream_id}
 }
 ```
 
-### Get Categories
+### Get Categories (cached / DB)
 ```http
 GET /api/accounts/{account_id}/categories
 ```
+
+Returns upstream-shaped category objects from in-memory cache or synced database rows. Does **not** call the IPTV provider.
+
+### Sync Categories from Provider
+```http
+POST /api/accounts/{account_id}/categories/sync
+```
+
+Fetches live categories from upstream, updates cache, and runs tag extraction when streams are cached.
+
+### FCC Facility Sync (canonical)
+```http
+POST /api/fcc/facilities/sync
+```
+
+Downloads and syncs FCC TV facility data. Legacy `POST /api/sync/fcc` was removed.
 
 ## Error Handling
 

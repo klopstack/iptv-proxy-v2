@@ -253,8 +253,8 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 | 91 | [91-scheduler-status-api-failure-metadata.md](./91-scheduler-status-api-failure-metadata.md) | ⬜ | Status API + SyncMetadata for per-job scheduler failures (deferred from 71) |
 | 72 | [72-standardize-api-error-handling.md](./72-standardize-api-error-handling.md) | ⬜ | `@handle_errors` on ~30–40% of routes; extends TODO 33 |
 | 73 | [73-standardize-api-response-shapes.md](./73-standardize-api-response-shapes.md) | ⬜ | Inconsistent success/error JSON envelopes |
-| 74 | [74-remove-dead-routes-and-dangerous-patterns.md](./74-remove-dead-routes-and-dangerous-patterns.md) | ⬜ | Dead blueprint, duplicate FCC/categories endpoints |
-| 75 | [75-fix-side-effect-get-account-categories.md](./75-fix-side-effect-get-account-categories.md) | ⬜ | GET categories triggers upstream IPTV fetch |
+| 74 | [74-remove-dead-routes-and-dangerous-patterns.md](./74-remove-dead-routes-and-dangerous-patterns.md) | ✅ | Dead blueprint, duplicate FCC/categories endpoints |
+| 75 | [75-fix-side-effect-get-account-categories.md](./75-fix-side-effect-get-account-categories.md) | ✅ | GET categories triggers upstream IPTV fetch |
 | 76 | [76-deduplicate-epg-sync-infrastructure.md](./76-deduplicate-epg-sync-infrastructure.md) | ⬜ | Program persistence, sync locks, EAST/WEST constants |
 | 77 | [77-centralize-tag-loading-and-category-sync-policy.md](./77-centralize-tag-loading-and-category-sync-policy.md) | ⬜ | Tag loader N+1; category sync failure policy |
 | 78 | [78-split-fat-route-modules.md](./78-split-fat-route-modules.md) | ⬜ | Phased extraction from 500–1500 line route files |
@@ -290,7 +290,7 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 
 **Architecture review:** [admin-auth-and-deployment-security.md](../architecture/admin-auth-and-deployment-security.md), [api-contract-errors-and-responses.md](../architecture/api-contract-errors-and-responses.md), [channel-visibility-is-visible.md](../architecture/channel-visibility-is-visible.md), [scheduler-and-sync-orchestration.md](../architecture/scheduler-and-sync-orchestration.md), [epg-service-architecture.md](../architecture/epg-service-architecture.md), [frontend-architecture-debt.md](../architecture/frontend-architecture-debt.md), [schema-lifecycle-and-test-parity.md](../architecture/schema-lifecycle-and-test-parity.md), [api-layer-and-fat-routes.md](../architecture/api-layer-and-fat-routes.md)
 
-**Highest impact first (open work):** see [ROADMAP.md](./ROADMAP.md) — Wave 1 (69, 84, 75) → Wave 2 PPV (52–55) → 91. Auth docs: ✅ 68 + [DEPLOYMENT.md](../DEPLOYMENT.md). Scheduler semantics: ✅ 71.
+**Highest impact first (open work):** see [ROADMAP.md](./ROADMAP.md) — Wave 2 PPV (52–55) → 91. Wave 1 complete (69, 84, 75, 74). Auth docs: ✅ 68 + [DEPLOYMENT.md](../DEPLOYMENT.md). Scheduler semantics: ✅ 71.
 
 ### P6 findings summary
 
