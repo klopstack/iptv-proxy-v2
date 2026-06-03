@@ -1,6 +1,6 @@
 # Deduplicate EPG program persistence and sync infrastructure
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Complete  
 **Priority:** P1  
 **Audit:** Application-wide audit, June 2026
 
@@ -33,9 +33,9 @@ SD program update always overwrites; XMLTV path tracks dirty fields — divergen
 
 ## Acceptance criteria
 
-- [ ] Single program persistence module used by both sync paths
-- [ ] One sync lock helper used by account and EPG source sync
-- [ ] No duplicate EAST/WEST constants
+- [x] Single program persistence module used by both sync paths
+- [x] One sync lock helper used by account and EPG source sync
+- [x] No duplicate EAST/WEST constants
 
 ## Test plan
 
