@@ -1176,7 +1176,6 @@
 
 <!-- EPG Management Scripts -->
 <script src="{{ url_for('static', filename='js/mpegts.min.js') }}"></script>
-<script type="module" src="{{ url_for('static', filename='js/pages/epg_management_bootstrap.js') }}"></script>
 <script src="{{ url_for('static', filename='js/epg_common.js') }}"></script>
 <script src="{{ url_for('static', filename='js/epg_sources.js') }}"></script>
 <script src="{{ url_for('static', filename='js/epg_channels.js') }}"></script>
@@ -1193,10 +1192,11 @@
 <script src="{{ url_for('static', filename='js/match_rules_exclusions.js') }}"></script>
 <script src="{{ url_for('static', filename='js/match_rules_name_mappings.js') }}"></script>
 <script src="{{ url_for('static', filename='js/match_rules_reference.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/pages/epg_management_bootstrap.js') }}"></script>
 
 <script>
 /* global
-    bootstrap, accounts, sources, matchTypes, debounce, escapeHtml, showToast, initializeBootstrapModals,
+    bootstrap, accounts, sources, matchTypes, debounce, escapeHtml, AccountSelect, showToast, initializeBootstrapModals,
     loadAccounts, loadSources, loadMatchTypes, loadEpgChannels, loadMappings, loadMoreMappings,
     loadCategoriesForAccount, updateAutoMatchButton, runAutoMatch, rematchAutoMatches, clearCategoryMappings,
     mappingsState, onSourceTypeChange, saveSource, testSdCredentials, loadCoverage,

@@ -1,6 +1,6 @@
 # Frontend helper deduplication and ESM migration plan
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Phase 1 complete (PR T)  
 **Priority:** P2  
 **Audit:** Application-wide audit, June 2026
 
@@ -27,27 +27,46 @@ Legacy frontend has significant duplication untested by Vitest:
 
 ## Proposed solution
 
-**Phase 1 — Dedup without migration:**
-- Single `escapeHtml` export; legacy pages load via existing bootstrap
-- Shared `lib/account_select.js`
-- Replace `base.html` inline datetime with `epg_datetime.js`
+**Phase 1 — Dedup without migration:** ✅ PR T
+- Single `escapeHtml` in `lib/escape_html.js`; legacy pages via `base_bootstrap.js` / `epg_management_bootstrap.js`
+- Shared `lib/account_select.js` for EPG management account fetch/populate
+- `base.html` datetime via `epg_datetime.js` + `base_bootstrap.js`
 
 **Phase 2 — Migrate epg_management tabs to ESM `pages/` modules** (one tab per PR)
 
 **Phase 3 — Extend ESLint to migrated code only**
 
+### Phase 2 tab migration order (priority)
+
+| Order | Tab / area | Legacy bundle(s) | Notes |
+|-------|------------|------------------|-------|
+| 1 | EPG Sources | `epg_sources.js` | Sync progress already in `lib/`; good first ESM page module |
+| 2 | Channel mappings | `epg_mappings.js`, `epg_manual_mapping.js` | Heavy `innerHTML`; pairs with TODO 83 |
+| 3 | Match rules — rulesets & rules | `match_rules_rulesets.js`, `match_rules_rules.js` | Shares helpers already on `window` |
+| 4 | Match rules — exclusions & name mappings | `match_rules_exclusions.js`, `match_rules_name_mappings.js` | |
+| 5 | EPG channels / preview / XMLTV / Schedules Direct | `epg_channels.js`, `epg_preview.js`, `epg_xmltv.js`, `epg_schedules_direct.js` | |
+| 6 | Reference data | `match_rules_reference.js` | Lowest churn |
+
+### Template inline `escapeHtml` (Phase 2+)
+
+Per-page inline copies remain in `index.html`, `ppv.html`, `stations.html`, etc. Consolidate when each page gets a `pages/*_bootstrap.js`.
+
 ## Acceptance criteria
 
-- [ ] One canonical `escapeHtml` used by migrated call sites
-- [ ] `base.html` datetime uses tested module
-- [ ] Migration plan documented with tab priority order
+- [x] One canonical `escapeHtml` used by migrated call sites (lib + window bridge; legacy EPG/match-rules deduped)
+- [x] `base.html` datetime uses tested module (`parseUtcTimestamp` / `formatUtcTimestamp` via `base_bootstrap.js`)
+- [x] Migration plan documented with tab priority order (above)
 
 ## Test plan
 
-- Existing Vitest suite passes
-- Add tests for any new shared modules
+- [x] Existing Vitest suite passes
+- [x] Tests for new shared modules: `escape_html.test.js`, `account_select.test.js`, `formatUtcTimestamp` / `parseUtcTimestamp` in `epg_common.test.js`
 
 ## Dependencies
 
-- TODO 83 (XSS) should use shared escapeHtml
+- TODO 83 (XSS) should use shared escapeHtml — Phase 1 provides canonical `lib/escape_html.js`; PR S can fix call sites without redefining the helper
 - See `docs/architecture/frontend-architecture-debt.md`
+
+## Completion
+
+- **PR T (Wave 6):** Phase 1 — `lib/escape_html.js`, `lib/account_select.js`, `base_bootstrap.js`, bootstrap load-order fix, dedupe in `epg_common.js`, `match_rules_common.js`, `epg_sources.js`, `epg_sync_progress.js`

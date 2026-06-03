@@ -2,6 +2,8 @@
  * Shared EPG sync progress rendering (settings + EPG sources page).
  */
 
+import { escapeHtml } from './escape_html.js';
+
 export const PHASE_LABEL = {
     idle: 'Idle',
     queued: 'Queued',
@@ -15,14 +17,6 @@ export const PHASE_LABEL = {
 
 const ACTIVE_PHASES = new Set(['queued', 'fetching', 'channels', 'programs']);
 
-export function escapeHtml(text) {
-    if (text === null || text === undefined) return '';
-    return String(text)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
 
 /**
  * @param {object} src - Row from GET /api/sync/epg/status

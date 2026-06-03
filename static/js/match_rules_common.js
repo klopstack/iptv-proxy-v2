@@ -3,17 +3,11 @@
 // ============================================================================
 // Note: accounts and matchTypes are declared globally in epg_common.js
 
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
+/* global escapeHtml, AccountSelect */
 
 async function loadAccounts() {
     try {
-        const response = await fetch('/api/accounts');
-        accounts = apiUnwrapData(response, await response.json());
+        accounts = await AccountSelect.fetchAccounts();
     } catch (error) {
         console.error('Error loading accounts:', error);
     }
