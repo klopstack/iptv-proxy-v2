@@ -119,7 +119,7 @@ class TestMilbEnrichmentIntegration:
                 ),
                 patch("services.mlb_stats_calendar._is_date_in_milb_window", return_value=True),
                 patch("services.mlb_stats_calendar.get_mlb_stats_client") as mock_client,
-                patch("services.ppv.enrichment.sync_ppv_epg_after_enrichment", return_value={}),
+                patch("services.ppv.cleanup.sync_ppv_epg_after_enrichment", return_value={}),
             ):
                 mock_client.return_value.get_milb_schedule_for_date.return_value = milb_schedule_games
                 stats = service.enrich_channels([channel], fetch_details=True)

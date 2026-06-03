@@ -122,10 +122,19 @@ def test_enrichment_pipeline_with_real_reverse_matcher(app, ppv_account):
 
         service = get_calendar_enrichment_service(app)
 
-        with patch.object(service.calendar_scraper, "get_events_for_date", return_value=[calendar_event]), patch(
-            "services.ppv.enrichment.sync_ppv_epg_after_enrichment", return_value={}
-        ), patch("services.ppv.enrichment.prune_orphan_ppv_events", return_value=0):
-            stats = service.enrich_channels([channel], fetch_details=False)
+        from services.ppv.enrichment_post_hooks import (
+            EnrichmentPostHooks,
+            get_enrichment_post_hooks,
+            set_enrichment_post_hooks,
+        )
+
+        original_hooks = get_enrichment_post_hooks()
+        set_enrichment_post_hooks(EnrichmentPostHooks.noop())
+        try:
+            with patch.object(service.calendar_scraper, "get_events_for_date", return_value=[calendar_event]):
+                stats = service.enrich_channels([channel], fetch_details=False)
+        finally:
+            set_enrichment_post_hooks(original_hooks)
 
         assert stats["matched"] >= 1
         db.session.refresh(channel)

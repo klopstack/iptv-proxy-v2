@@ -77,13 +77,15 @@ ORM models should not call service layers at runtime. This prevents testing mode
 
 ## Threading and Flask lifecycle
 
-Detail fetch daemon thread holds one `app_context` for process lifetime. Conflicts with:
+**Implemented (TODO 66):** `DetailFetchWorker` (`services/ppv/detail_fetch_worker.py`) runs in a daemon thread (same model as `SyncScheduler`, not APScheduler/RQ). Each queue item uses its own `app.app_context()` and `db.session.remove()` — no long-lived ORM session on the worker thread.
 
-- SQLAlchemy scoped session in web workers
-- Graceful shutdown
-- Multi-worker deployments (duplicate detail threads per worker)
+- TheSportsDB detail fetches are rate-limited on the API queue.
+- LLM description enrichment is queued separately and runs only when API queues are idle, with a per-call timeout so LLM latency does not block detail fetches.
+- `atexit` and dev-server shutdown call `stop_detail_fetcher()` to join the worker.
 
-**Recommendation:** Scheduler/job queue per TODO 66; single worker owns detail fetch OR use distributed lock.
+Post-enrichment EPG sync and orphan prune use `EnrichmentPostHooks` (`services/ppv/enrichment_post_hooks.py`); tests use `EnrichmentPostHooks.noop()` instead of patching cleanup functions.
+
+**Remaining:** Multi-worker deployments may still run duplicate detail workers (one per gunicorn worker). A distributed lock or dedicated worker process is future work.
 
 ---
 

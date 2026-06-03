@@ -192,7 +192,7 @@ Full-stack review of PPV handling: enrichment pipeline, multi-source events (MiL
 | 63 | [63-expand-ppv-test-coverage.md](./63-expand-ppv-test-coverage.md) | ✅ | Orchestrator, cleanup, football-data provider, integration ([PR #21](https://github.com/klopstack/iptv-proxy-v2/pull/21)) |
 | 64 | [64-consolidate-ppv-detection-tests.md](./64-consolidate-ppv-detection-tests.md) | ✅ | Deduplicate overlapping detection test modules ([PR #21](https://github.com/klopstack/iptv-proxy-v2/pull/21)) |
 | 65 | [65-refactor-enrichment-god-class.md](./65-refactor-enrichment-god-class.md) | ⬜ | Phased split of ~860-line enrichment service |
-| 66 | [66-detail-thread-and-epg-side-effect-decoupling.md](./66-detail-thread-and-epg-side-effect-decoupling.md) | ⬜ | Replace daemon detail thread; optional EPG hooks |
+| 66 | [66-detail-thread-and-epg-side-effect-decoupling.md](./66-detail-thread-and-epg-side-effect-decoupling.md) | ✅ | Replace daemon detail thread; optional EPG hooks |
 | 67 | [67-ppv-misc-cleanup.md](./67-ppv-misc-cleanup.md) | ✅ | Constants, heuristics validation, provider health, docstrings |
 
 ### Recommended order for items 52–67
