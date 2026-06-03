@@ -42,7 +42,7 @@ TEST_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 # Import app and models AFTER setting environment
 import app as app_module
-from models import Account, Category, Channel, Credential
+from models import Account, Category, Channel, Credential, EpgSource
 from models import db as _db
 
 
@@ -196,3 +196,19 @@ def sample_account(client):
         },
     )
     return api_mutation_data(response)
+
+
+@pytest.fixture
+def test_epg_source(app, test_account):
+    """Create a baseline XMLTV URL EPG source (returns source id)."""
+    with app.app_context():
+        source = EpgSource(
+            name="Test EPG Source",
+            source_type="xmltv_url",
+            url="http://example.com/epg.xml",
+            priority=100,
+            enabled=True,
+        )
+        _db.session.add(source)
+        _db.session.commit()
+        yield source.id

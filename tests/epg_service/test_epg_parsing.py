@@ -430,7 +430,7 @@ class TestSyncEpgSource:
 
         with app.app_context():
             # Refresh source from db
-            source = db.session.get(EpgSource, test_epg_source.id)
+            source = db.session.get(EpgSource, test_epg_source)
             stats = sync_epg_source(source, xml_content)
 
             assert stats["channels_added"] == 2
@@ -444,7 +444,7 @@ class TestSyncEpgSource:
         """Test that sync updates existing EPG channels"""
         with app.app_context():
             # Create existing channel
-            source = db.session.get(EpgSource, test_epg_source.id)
+            source = db.session.get(EpgSource, test_epg_source)
             existing = EpgChannel(
                 source_id=source.id,
                 channel_id="ESPN.us",
@@ -463,7 +463,7 @@ class TestSyncEpgSource:
         """
 
         with app.app_context():
-            source = db.session.get(EpgSource, test_epg_source.id)
+            source = db.session.get(EpgSource, test_epg_source)
             stats = sync_epg_source(source, xml_content)
 
             assert stats["channels_added"] == 0
@@ -491,7 +491,7 @@ class TestSyncEpgSource:
         """
 
         with app.app_context():
-            source = db.session.get(EpgSource, test_epg_source.id)
+            source = db.session.get(EpgSource, test_epg_source)
             stats = sync_epg_source(source, xml_content)
 
             assert stats["total_programs"] == 2
@@ -510,10 +510,10 @@ class TestSyncEpgSource:
         """
 
         with app.app_context():
-            source = db.session.get(EpgSource, test_epg_source.id)
+            source = db.session.get(EpgSource, test_epg_source)
             sync_epg_source(source, xml_content)
 
-            source = db.session.get(EpgSource, test_epg_source.id)
+            source = db.session.get(EpgSource, test_epg_source)
             assert source.last_sync is not None
             assert source.last_sync_status == "success"
             assert source.channel_count == 1
@@ -523,12 +523,12 @@ class TestSyncEpgSource:
         xml_content = b"<invalid xml"
 
         with app.app_context():
-            source = db.session.get(EpgSource, test_epg_source.id)
+            source = db.session.get(EpgSource, test_epg_source)
             with pytest.raises(ValueError):
                 sync_epg_source(source, xml_content)
 
             # Verify source status was updated to error without advancing last_sync
-            source = db.session.get(EpgSource, test_epg_source.id)
+            source = db.session.get(EpgSource, test_epg_source)
             assert source.last_sync_status == "error"
             assert source.last_sync is None
 
@@ -557,7 +557,7 @@ class TestSyncEpgSource:
         """
 
         with app.app_context():
-            source = db.session.get(EpgSource, test_epg_source.id)
+            source = db.session.get(EpgSource, test_epg_source)
             stats = sync_epg_source(source, xml_content)
 
             # Should only create 2 unique channels (Cinemax.hu merged, HBO.hu separate)

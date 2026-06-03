@@ -6,22 +6,6 @@ from models import Channel, ChannelEpgMapping, EpgChannel, EpgSource, SdLineup, 
 
 
 @pytest.fixture
-def test_epg_source(app, test_account):
-    """Create a baseline XMLTV URL EPG source."""
-    with app.app_context():
-        source = EpgSource(
-            name="Test EPG Source",
-            source_type="xmltv_url",
-            url="http://example.com/epg.xml",
-            priority=100,
-            enabled=True,
-        )
-        db.session.add(source)
-        db.session.commit()
-        yield source.id
-
-
-@pytest.fixture
 def test_xmltv_url_source(app):
     """Create an XMLTV URL type EPG source."""
     with app.app_context():
