@@ -26,6 +26,7 @@ __all__ = [
     "DEFAULT_SPORT_GRACE_HOURS",
     "get_sport_grace_hours",
     "SETTING_PPV_ENRICHMENT_ENABLED",
+    "SETTING_PPV_SOFASCORE_CALENDAR_ENABLED",
     "METADATA_KEY_CALENDAR_PROCESSED",
     "METADATA_KEY_CALENDAR_MATCHED",
     "METADATA_KEY_DETAILS_FETCHED",
@@ -169,6 +170,7 @@ def get_sport_grace_hours(sport_name: Optional[str]) -> int:
 
 # Scheduler / settings keys
 SETTING_PPV_ENRICHMENT_ENABLED = "ppv_enrichment_enabled"
+SETTING_PPV_SOFASCORE_CALENDAR_ENABLED = "ppv_sofascore_calendar_enabled"
 METADATA_KEY_CALENDAR_PROCESSED = "ppv_calendar_processed_count"
 METADATA_KEY_CALENDAR_MATCHED = "ppv_calendar_matched_count"
 METADATA_KEY_DETAILS_FETCHED = "ppv_details_fetched_count"

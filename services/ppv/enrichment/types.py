@@ -22,6 +22,8 @@ def calendar_event_source(calendar_event: CalendarEvent) -> str:
         return Event.SOURCE_MLB_STATS
     if source == "espn":
         return Event.SOURCE_ESPN
+    if source == "sofascore":
+        return Event.SOURCE_SOFASCORE
     return source
 
 
