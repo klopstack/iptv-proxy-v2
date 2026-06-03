@@ -1,4 +1,4 @@
-.PHONY: help install install-js install-hooks test test-js test-fast test-parallel test-clean lint lint-py lint-js format clean run debug docker-build docker-run venv vulture vulture-all
+.PHONY: help install install-js install-hooks test test-js test-fast test-parallel test-clean lint lint-py lint-py-ci lint-js format clean run debug docker-build docker-run venv vulture vulture-all
 
 VENV = venv
 PYTHON = $(VENV)/bin/python
@@ -50,12 +50,15 @@ test-fast: install test-clean ## Run tests without coverage in venv (parallel)
 
 test-parallel: test-fast ## Alias for parallel no-coverage run
 
-lint-py: install ## Run Python linting checks in venv
+lint-py: venv ## Run Python linting checks in venv (run make install-py once after clone)
 	$(FLAKE8) . --count --select=E9,F63,F7,F82 --show-source --statistics
 	$(FLAKE8) . --count --exit-zero --statistics
 	$(BLACK) --check .
 	$(ISORT) --check-only .
 	$(MYPY) app.py $(MYPY_MODELS) services/ routes/
+
+lint-py-ci: install-py ## CI: install Python deps then lint (not for pre-commit hooks)
+	$(MAKE) lint-py
 
 vulture: install ## Find dead code with vulture
 	$(VULTURE) app.py $(VULTURE_MODELS) services/ routes/ schemas.py error_handling.py vulture_whitelist.py --min-confidence 80
