@@ -984,9 +984,11 @@ class TestRefreshUpcomingEventTimes:
             db.session.commit()
 
             service = PPVCalendarEnrichmentService(app)
-            stats = service.refresh_upcoming_event_times(hours_ahead=48)
-
-            assert stats["queued"] == 1
+            try:
+                stats = service.refresh_upcoming_event_times(hours_ahead=48)
+                assert stats["queued"] == 1
+            finally:
+                service.stop_detail_fetcher()
 
     def test_force_refresh_bypasses_completeness_skip(self, app, db):
         from models import Event
@@ -1028,6 +1030,8 @@ class TestRefreshUpcomingEventTimes:
         from services.ppv.constants import METADATA_KEY_DETAILS_FETCHED
 
         with app.app_context():
+            before = int(SyncMetadata.get(METADATA_KEY_DETAILS_FETCHED, "0"))
+
             event = Event(
                 external_id="55555",
                 source=Event.SOURCE_THESPORTSDB,
@@ -1056,7 +1060,8 @@ class TestRefreshUpcomingEventTimes:
                 }
                 service._fetch_event_details("55555", Event.SOURCE_THESPORTSDB)
 
-            assert SyncMetadata.get(METADATA_KEY_DETAILS_FETCHED, "0") == "1"
+            after = int(SyncMetadata.get(METADATA_KEY_DETAILS_FETCHED, "0"))
+            assert after == before + 1
 
     def test_milb_detail_fetch_skips_without_not_found_warning(self, app, db, caplog):
         from models import Event
