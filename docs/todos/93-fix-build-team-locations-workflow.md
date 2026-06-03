@@ -90,4 +90,4 @@ Registry output drops **fb** (and **wnba**) coverage (~344 entries vs ~5541 with
 
 ## Completion
 
-_(PR link when merged)_
+https://github.com/klopstack/iptv-proxy-v2/pull/18
