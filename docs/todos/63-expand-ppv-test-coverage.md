@@ -1,6 +1,6 @@
 # Expand PPV test coverage for orchestrator, cleanup, and providers
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done ([PR #21](https://github.com/klopstack/iptv-proxy-v2/pull/21))  
 **Priority:** P2  
 **Audit:** PPV audit, June 2026
 
@@ -35,8 +35,12 @@ Additionally, enrichment tests (`tests/ppv/test_enrichment.py`) rely heavily on 
 
 ## Acceptance criteria
 
-- [ ] Each listed module has at least one behavior test (not import smoke).
-- [ ] Integration test runs orchestrator → enrichment → persist without patching core matchers.
+- [x] Each listed module has at least one behavior test (not import smoke).
+- [x] Integration test runs orchestrator → enrichment → persist without patching core matchers.
+
+## Completion
+
+Implemented in [PR #21](https://github.com/klopstack/iptv-proxy-v2/pull/21): added `test_orchestrator.py`, `test_queue_cleanup.py`, `test_cleanup.py`, `test_football_data_provider.py`, `test_preview.py`; extended `test_ppv_integration.py` with `test_enrichment_pipeline_with_real_reverse_matcher` (real `ReverseEventMatcher`, mocked calendar HTTP only).
 
 ## Test plan
 
