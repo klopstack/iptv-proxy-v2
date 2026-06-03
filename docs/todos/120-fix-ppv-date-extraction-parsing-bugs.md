@@ -85,7 +85,7 @@ A fix in only one path will leave enrichment grouping and reverse matching out o
 
 ## Completion
 
-- PR: _(pending)_
+- PR: https://github.com/klopstack/iptv-proxy-v2/pull/52
 - Shared module: `services/ppv/extraction/date_anchor.py`
 - Tests: `tests/ppv/test_date_extraction_production_fixtures.py`
 - Docs: `docs/architecture/ppv-matching-strategies.md` (Date extraction section)
