@@ -109,7 +109,9 @@ class TestApiContractCategoriesAndStats:
     def test_overview_stats_data_envelope(self, client):
         response = client.get("/api/overview/stats")
         assert response.status_code == 200
-        stats = api_data(response)
+        payload = response.get_json()
+        assert "data" in payload
+        stats = payload["data"]
         assert "accounts" in stats
         assert "channels" in stats
 

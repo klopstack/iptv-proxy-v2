@@ -672,6 +672,41 @@ class ChannelQueryService:
         return {acc_id: ChannelQueryService.visible_channel_set_for_account(acc_id) for acc_id in account_ids}
 
     @staticmethod
+    def _active_channels_query_for_account(account_id: int):
+        """Base query for active account channels (no ordering — callers add as needed)."""
+        return (
+            db.session.query(Channel)
+            .filter(Channel.account_id == account_id, Channel.is_active.is_(True))
+            .join(Category, Channel.category_id == Category.id, isouter=True)
+        )
+
+    @staticmethod
+    def count_channels_for_account(
+        account_id: int,
+        *,
+        apply_filters: bool = True,
+        apply_ppv_visibility: bool = True,
+        preferred_languages: Optional[Union[str, List[str]]] = None,
+        language_fallback: str = "unknown",
+    ) -> int:
+        """Playlist-visible channel count (same semantics as channels_for_account)."""
+        account = db.session.get(Account, account_id)
+        if not account:
+            return 0
+
+        channels = ChannelQueryService._active_channels_query_for_account(account_id).all()
+        filtered = ChannelQueryService.channels_for_account_candidates(
+            account_id,
+            channels,
+            apply_filters=apply_filters,
+            apply_ppv_visibility=apply_ppv_visibility,
+            exclude_linked_backups=True,
+            preferred_languages=preferred_languages,
+            language_fallback=language_fallback,
+        )
+        return len(filtered)
+
+    @staticmethod
     def channels_for_account(
         account_id: int,
         *,
@@ -685,13 +720,7 @@ class ChannelQueryService:
         if not account:
             return []
 
-        channels = (
-            db.session.query(Channel)
-            .filter(Channel.account_id == account_id, Channel.is_active.is_(True))
-            .join(Category, Channel.category_id == Category.id, isouter=True)
-            .order_by(Channel.name)
-            .all()
-        )
+        channels = ChannelQueryService._active_channels_query_for_account(account_id).order_by(Channel.name).all()
 
         return ChannelQueryService.channels_for_account_candidates(
             account_id,

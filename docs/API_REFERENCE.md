@@ -479,14 +479,20 @@ Response envelope: `{ "data": { ... } }`.
 | `ppv` | PPV at-a-glance: upcoming event counts (24h/48h), unlinked upcoming events, channel link total, enrichment queue/no-match/recent counts, `has_issues` |
 | `generated_at` | UTC ISO timestamp |
 
+Set `LOG_DASHBOARD_TIMING=true` or run with Flask debug to emit per-section timing logs at DEBUG level.
+
 ### Overview Stats (sync failures)
 ```http
 GET /api/overview/stats
 ```
 
-`accounts.failed_sync_count` and `accounts.failed_sync_accounts` list enabled accounts with `last_sync_status == "error"`.
+Returns `{ "data": { "accounts", "channels", "epg", "tags", "scheduler", "last_full_sync" } }` (same envelope as dashboard summary).
 
-`scheduler.failed_jobs` lists jobs whose `last_run_status` is `error`. `scheduler.has_sync_issues` is true when any failed job or failed account exists.
+`data.accounts.failed_sync_count` and `data.accounts.failed_sync_accounts` list enabled accounts with `last_sync_status == "error"`.
+
+`data.scheduler.failed_jobs` lists jobs whose `last_run_status` is `error`. `data.scheduler.has_sync_issues` is true when any failed job or failed account exists.
+
+EPG program count and coverage fields may be up to **45 seconds stale** (in-process TTL cache).
 
 ## Error Handling
 

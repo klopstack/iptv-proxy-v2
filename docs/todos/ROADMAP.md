@@ -13,11 +13,11 @@ This document groups open TODOs into execution **waves** and suggested **PR batc
 | P6 — App-wide | 68–95 | **0** | Waves 1–8 ✅; parents **78**, **85**, **92**, **95** fully complete |
 | **Wave 9** | 96–100, 102, 103, 105 | **0** | PRs #39–47 (route splits, ESM, xdist, PPV packages) |
 | **Wave 10** | 101 | **0** | Final doc review ✅ |
-| **Dashboard follow-ups** | 107–110 | **4** | Post–[106](./106-improve-main-dashboard.md) (PR #48) |
+| **Dashboard follow-ups** | 107–110 | **0** | 107–109 ✅; [110](./110-dashboard-optional-ux-follow-ups.md) won't do |
 | **Wave 11 — DB migration** | 111–119 | **9** | SQLite → PostgreSQL; Series A + Series B |
 | **Wave 12 — PPV matching gaps** | 120–124 | **5** | Production audit on `docker.klopnet.com`, June 2026 |
 
-**Total open (required):** 18 (107–110, 111–119, 120–124).
+**Total open (required):** 15 (111–119, 120–124).
 
 Waves **1–10** ✅ (PRs #10–51). Next work: **Wave 12** (PPV matching) and/or **Wave 11** (PostgreSQL prep), in parallel if desired.
 
@@ -416,7 +416,7 @@ If resuming after Waves 1–10:
 2. **[120](./120-fix-ppv-date-extraction-parsing-bugs.md)** — date extraction parity (batch **AD**)  
 3. **[121](./121-mlb-team-abbreviation-resolution.md)** — MLB abbrev resolution (batch **AE**)  
 4. **[111](./111-pg-prep-raw-sqlite3-audit.md)** — PostgreSQL prep: raw sqlite3 audit (batch **PG-A1**, parallel with PPV)  
-5. **[107](./107-dashboard-stats-performance-hardening.md)** — dashboard SQL/caching (TODO 106 phase 3)
+5. ~~**[107](./107-dashboard-stats-performance-hardening.md)** — dashboard SQL/caching (TODO 106 phase 3)~~ ✅
 
 Optional spikes: **[122](./122-tennis-calendar-event-source.md)** (AF), **[123](./123-extended-calendar-coverage-college-obscure-sports.md)** (AG).
 

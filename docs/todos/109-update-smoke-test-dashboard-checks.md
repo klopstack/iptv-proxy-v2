@@ -1,6 +1,6 @@
 # Update post-merge smoke test for dashboard (TODO 106 phase 4)
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P2  
 **Deferred from:** [106-improve-main-dashboard.md](./106-improve-main-dashboard.md) (Phase 4) — [PR #48](https://github.com/klopstack/iptv-proxy-v2/pull/48)  
 **Related:** [86-web-smoke-tests-and-pytest-consolidation.md](./86-web-smoke-tests-and-pytest-consolidation.md) ✅
@@ -59,11 +59,11 @@ Add checklist bullets for DevTools verification and optional link to `/channel-h
 
 ## Acceptance criteria
 
-- [ ] Smoke doc §1 and §7 describe post–TODO 106 dashboard behavior accurately
-- [ ] Checklist includes first-paint network verification (summary only, no per-account stats storm)
-- [ ] Channel health and stream/client widgets have explicit expected results
-- [ ] Overview stats step matches actual API envelope after [108](./108-migrate-overview-stats-api-envelope.md) or documents interim `unwrapData` tolerance
-- [ ] Linked from [106](./106-improve-main-dashboard.md) deferred/completion section
+- [x] Smoke doc §1 and §7 describe post–TODO 106 dashboard behavior accurately
+- [x] Checklist includes first-paint network verification (summary only, no per-account stats storm)
+- [x] Channel health and stream/client widgets have explicit expected results
+- [x] Overview stats step matches actual API envelope after [108](./108-migrate-overview-stats-api-envelope.md) or documents interim `unwrapData` tolerance
+- [x] Linked from [106](./106-improve-main-dashboard.md) deferred/completion section
 
 ## Test plan
 

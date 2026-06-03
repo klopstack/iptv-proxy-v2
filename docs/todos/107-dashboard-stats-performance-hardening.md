@@ -1,6 +1,6 @@
 # Dashboard stats performance hardening (TODO 106 phase 3)
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P2  
 **Deferred from:** [106-improve-main-dashboard.md](./106-improve-main-dashboard.md) (Phase 3) — [PR #48](https://github.com/klopstack/iptv-proxy-v2/pull/48)  
 **Audit:** Operator UX / landing-page review, June 2026
@@ -54,11 +54,11 @@ Remaining hotspots:
 
 ## Acceptance criteria
 
-- [ ] `get_account_stats` visible channel count does not load full channel objects for synced accounts
-- [ ] Count semantics match playlist-visible CQS output (parity test vs `channels_for_account` sample)
-- [ ] `get_overview_stats` measurably faster or cached on deferred dashboard load (before/after note in PR or comment)
-- [ ] `get_dashboard_summary` emits timing logs suitable for slow-deployment diagnosis
-- [ ] No regression to [106](./106-improve-main-dashboard.md) Tier-1 behavior or [PR #48](https://github.com/klopstack/iptv-proxy-v2/pull/48) dashboard tests
+- [x] `get_account_stats` visible channel count does not load full channel objects for synced accounts
+- [x] Count semantics match playlist-visible CQS output (parity test vs `channels_for_account` sample)
+- [x] `get_overview_stats` measurably faster or cached on deferred dashboard load (before/after note in PR or comment)
+- [x] `get_dashboard_summary` emits timing logs suitable for slow-deployment diagnosis
+- [x] No regression to [106](./106-improve-main-dashboard.md) Tier-1 behavior or [PR #48](https://github.com/klopstack/iptv-proxy-v2/pull/48) dashboard tests
 
 ## Test plan
 

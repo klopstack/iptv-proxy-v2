@@ -397,6 +397,46 @@ def test_visible_channel_set_for_account_matches_channels_for_account(app):
         assert keys == {(account.id, "reg")}
 
 
+def test_count_channels_for_account_matches_channels_for_account(app):
+    """count_channels_for_account matches len(channels_for_account) with PPV filters."""
+    with app.app_context():
+        account = Account(
+            name="Count Test",
+            server="s",
+            username="u",
+            password="p",
+            enabled=True,
+            ppv_visibility="hide_all",
+        )
+        db.session.add(account)
+        db.session.commit()
+
+        db.session.add_all(
+            [
+                Channel(
+                    account_id=account.id,
+                    stream_id="reg",
+                    name="Regular",
+                    is_active=True,
+                    is_ppv=False,
+                ),
+                Channel(
+                    account_id=account.id,
+                    stream_id="ppv",
+                    name="PPV",
+                    is_active=True,
+                    is_ppv=True,
+                ),
+            ]
+        )
+        db.session.commit()
+
+        channels = ChannelQueryService.channels_for_account(account.id)
+        count = ChannelQueryService.count_channels_for_account(account.id)
+        assert count == len(channels)
+        assert count == 1
+
+
 def test_channels_for_account_candidates_applies_filters(app):
     """Candidate helper applies account filters to a pre-narrowed list."""
     with app.app_context():

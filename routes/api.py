@@ -2,8 +2,9 @@
 Additional API routes for sync, tags, and cache management
 """
 import logging
+import time
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from api_responses import data_response
 from error_handling import handle_errors
@@ -20,6 +21,10 @@ api_bp = Blueprint("api", __name__)
 
 # Store scheduler reference (set by app.py)
 _scheduler = None
+
+# Short TTL cache for expensive overview EPG fields (programs count, coverage join).
+_OVERVIEW_EPG_CACHE_TTL_SECONDS = 45
+_overview_epg_cache = {"expires_at": 0.0, "programs": 0, "coverage": None, "coverage_error": None}
 
 
 def set_scheduler(scheduler):
@@ -583,31 +588,87 @@ def _build_scheduler_overview_stats(accounts_stats):
     }
 
 
-def _build_dashboard_overview_slim():
-    """Accounts + scheduler for dashboard Tier-1 (sync alerts)."""
+def _build_overview_accounts_stats():
+    """Account counts shared by dashboard summary and overview stats."""
+    total_accounts = Account.query.count()
+    enabled_accounts = Account.query.filter_by(enabled=True).count()
+    failed_sync_count = Account.query.filter_by(enabled=True, last_sync_status="error").count()
     failed_sync_accounts = (
         Account.query.filter_by(enabled=True, last_sync_status="error")
         .order_by(Account.last_sync.desc())
         .limit(20)
         .all()
     )
-    accounts = {
-        "total": Account.query.count(),
-        "enabled": Account.query.filter_by(enabled=True).count(),
+    return {
+        "total": total_accounts,
+        "enabled": enabled_accounts,
         "synced": Account.query.filter(Account.last_sync.isnot(None), Account.last_sync_status == "success").count(),
-        "failed_sync_count": Account.query.filter_by(enabled=True, last_sync_status="error").count(),
+        "disabled": total_accounts - enabled_accounts,
+        "failed_sync_count": failed_sync_count,
         "failed_sync_accounts": [
             {"id": account.id, "name": account.name, "last_sync": serialize_utc_iso(account.last_sync)}
             for account in failed_sync_accounts
         ],
     }
+
+
+def _build_dashboard_overview_slim():
+    """Accounts + scheduler for dashboard Tier-1 (sync alerts)."""
+    accounts = _build_overview_accounts_stats()
     return {"accounts": accounts, "scheduler": _build_scheduler_overview_stats(accounts)}
+
+
+def _get_cached_overview_epg_fields():
+    """Return (program_count, coverage_stats, coverage_error) with short TTL."""
+    from models import EpgProgram
+    from services.epg.coverage import get_epg_coverage_stats
+
+    def _load():
+        programs = EpgProgram.query.count()
+        coverage = None
+        coverage_error = None
+        try:
+            coverage = get_epg_coverage_stats()
+        except Exception as exc:
+            logger.warning("Failed to load EPG coverage stats for overview: %s", exc, exc_info=True)
+            coverage_error = str(exc)
+        return programs, coverage, coverage_error
+
+    if current_app.config.get("TESTING"):
+        return _load()
+
+    now = time.monotonic()
+    if now < _overview_epg_cache["expires_at"]:
+        return (
+            _overview_epg_cache["programs"],
+            _overview_epg_cache["coverage"],
+            _overview_epg_cache["coverage_error"],
+        )
+
+    programs, coverage, coverage_error = _load()
+    _overview_epg_cache["programs"] = programs
+    _overview_epg_cache["coverage"] = coverage
+    _overview_epg_cache["coverage_error"] = coverage_error
+    _overview_epg_cache["expires_at"] = now + _OVERVIEW_EPG_CACHE_TTL_SECONDS
+    return programs, coverage, coverage_error
+
+
+def _log_dashboard_summary_timings(timings: dict) -> None:
+    """Emit structured timing logs when debug or LOG_DASHBOARD_TIMING is enabled."""
+    if not (current_app.debug or current_app.config.get("LOG_DASHBOARD_TIMING")):
+        return
+    logger.debug(
+        "dashboard summary timings: total=%.3fs channel_health=%.3fs streams=%.3fs overview=%.3fs ppv=%.3fs",
+        timings["total"],
+        timings["channel_health"],
+        timings["streams"],
+        timings["overview"],
+        timings["ppv"],
+    )
 
 
 def _build_dashboard_stream_stats():
     """Active sessions and optional multiplexer totals (FFmpeg backend)."""
-    from flask import current_app
-
     from models import ActiveStream
     from services.stream_service_factory import get_stream_backend_name, get_stream_service
 
@@ -642,16 +703,35 @@ def get_dashboard_summary():
     from datetime import datetime, timezone
 
     from services.channel_health_service import ChannelHealthService
-
-    health_report = ChannelHealthService.get_health_summary()
-
     from services.ppv.dashboard_stats import build_dashboard_ppv_stats
+
+    t0 = time.perf_counter()
+    timings = {}
+
+    t_step = time.perf_counter()
+    health_report = ChannelHealthService.get_health_summary()
+    timings["channel_health"] = time.perf_counter() - t_step
+
+    t_step = time.perf_counter()
+    streams = _build_dashboard_stream_stats()
+    timings["streams"] = time.perf_counter() - t_step
+
+    t_step = time.perf_counter()
+    overview = _build_dashboard_overview_slim()
+    timings["overview"] = time.perf_counter() - t_step
+
+    t_step = time.perf_counter()
+    ppv = build_dashboard_ppv_stats()
+    timings["ppv"] = time.perf_counter() - t_step
+
+    timings["total"] = time.perf_counter() - t0
+    _log_dashboard_summary_timings(timings)
 
     payload = {
         "channel_health": health_report["summary"],
-        "streams": _build_dashboard_stream_stats(),
-        "overview": _build_dashboard_overview_slim(),
-        "ppv": build_dashboard_ppv_stats(),
+        "streams": streams,
+        "overview": overview,
+        "ppv": ppv,
         "generated_at": serialize_utc_iso(datetime.now(timezone.utc)),
     }
     return data_response(payload)
@@ -670,33 +750,11 @@ def get_overview_stats():
     - Tags (total, usage)
     - Scheduler (sync status and intervals)
     """
-    from models import EpgChannel, EpgProgram, EpgSource, SyncMetadata
-    from services.epg.coverage import get_epg_coverage_stats
+    from models import EpgChannel, EpgSource, SyncMetadata
 
     stats = {}
 
-    # Account stats
-    total_accounts = Account.query.count()
-    enabled_accounts = Account.query.filter_by(enabled=True).count()
-    synced_accounts = Account.query.filter(Account.last_sync.isnot(None), Account.last_sync_status == "success").count()
-    failed_sync_accounts = (
-        Account.query.filter_by(enabled=True, last_sync_status="error")
-        .order_by(Account.last_sync.desc())
-        .limit(20)
-        .all()
-    )
-
-    stats["accounts"] = {
-        "total": total_accounts,
-        "enabled": enabled_accounts,
-        "synced": synced_accounts,
-        "disabled": total_accounts - enabled_accounts,
-        "failed_sync_count": Account.query.filter_by(enabled=True, last_sync_status="error").count(),
-        "failed_sync_accounts": [
-            {"id": account.id, "name": account.name, "last_sync": serialize_utc_iso(account.last_sync)}
-            for account in failed_sync_accounts
-        ],
-    }
+    stats["accounts"] = _build_overview_accounts_stats()
 
     # Channel stats
     total_channels = Channel.query.filter_by(is_active=True).count()
@@ -725,23 +783,18 @@ def get_overview_stats():
         "tagged_channels": tagged_channels,
     }
 
-    # EPG stats
+    # EPG stats (expensive fields cached briefly)
     total_epg_sources = EpgSource.query.count()
     enabled_epg_sources = EpgSource.query.filter_by(enabled=True).count()
     total_epg_channels = EpgChannel.query.count()
-    total_epg_programs = EpgProgram.query.count()
+    total_epg_programs, cached_coverage, epg_coverage_error = _get_cached_overview_epg_fields()
 
-    # EPG coverage
-    epg_coverage_error = None
-    try:
-        coverage_stats = get_epg_coverage_stats()
-        epg_coverage_pct = coverage_stats.get("coverage_percent", 0)
-        mapped_channels = coverage_stats.get("channels_with_epg_mapping", 0)
-    except Exception as e:
-        logger.warning("Failed to load EPG coverage stats for overview: %s", e, exc_info=True)
+    if cached_coverage is not None:
+        epg_coverage_pct = cached_coverage.get("coverage_percent", 0)
+        mapped_channels = cached_coverage.get("channels_with_epg_mapping", 0)
+    else:
         epg_coverage_pct = 0
         mapped_channels = 0
-        epg_coverage_error = str(e)
 
     stats["epg"] = {
         "sources": {
@@ -775,4 +828,4 @@ def get_overview_stats():
             "error": str(e),
         }
 
-    return jsonify(stats)
+    return data_response(stats)
