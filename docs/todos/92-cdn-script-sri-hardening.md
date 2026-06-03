@@ -1,6 +1,6 @@
 # CDN script Subresource Integrity (SRI)
 
-**Status:** ⬜ Continued in Wave 9 — [98-fcc-patterns-split-and-cdn-sri.md](./98-fcc-patterns-split-and-cdn-sri.md) (PR batch **X**)  
+**Status:** ✅ Done — completed in [98-fcc-patterns-split-and-cdn-sri.md](./98-fcc-patterns-split-and-cdn-sri.md)  
 **Priority:** P3  
 **Deferred from:** [84-docker-and-secrets-hardening.md](./84-docker-and-secrets-hardening.md) (June 2026)
 
@@ -16,8 +16,8 @@
 
 ## Acceptance criteria
 
-- [ ] All external `<script>` / `<link>` tags in admin templates have SRI or are self-hosted
-- [ ] Document CDN update procedure when bumping versions
+- [x] All external `<script>` / `<link>` tags in admin templates have SRI or are self-hosted
+- [x] Document CDN update procedure when bumping versions
 
 ## Dependencies
 

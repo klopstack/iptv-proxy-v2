@@ -188,6 +188,34 @@ These routes are behind Traefik + Authentik but can still cause outages or data 
 
 **Removed for security:** `POST /api/fcc-match-patterns/reset-defaults` (DROP TABLE), `POST /icon/fetch` (SSRF). Icons are prefetched during provider/EPG sync only.
 
+## Admin CDN assets (Subresource Integrity)
+
+The admin UI loads Bootstrap and Bootstrap Icons from jsDelivr in `templates/base.html`. Each external `<link>` / `<script>` uses a pinned version URL plus `integrity` (sha384) and `crossorigin="anonymous"` so a compromised CDN cannot silently replace admin JavaScript.
+
+Current pinned versions:
+
+| Asset | URL path |
+|-------|----------|
+| Bootstrap CSS | `bootstrap@5.3.0/dist/css/bootstrap.min.css` |
+| Bootstrap Icons CSS | `bootstrap-icons@1.11.0/font/bootstrap-icons.css` |
+| Bootstrap JS bundle | `bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js` |
+
+### Bumping CDN versions
+
+1. Update the version segment in each URL in `templates/base.html`.
+2. Download each file and compute a new sha384 hash:
+
+   ```bash
+   curl -fsSL 'https://cdn.jsdelivr.net/npm/<package>@<version>/<path>' \
+     | openssl dgst -sha384 -binary | openssl base64 -A
+   ```
+
+3. Replace the `integrity="sha384-…"` value on the matching tag and keep `crossorigin="anonymous"`.
+4. Load an admin page (e.g. `/settings`) and confirm the browser console shows no SRI failures.
+5. Run `pytest tests/test_cdn_sri.py -q`.
+
+Alternatively vendor the files under `static/vendor/` and serve them locally (no SRI required for same-origin assets).
+
 ## Related documentation
 
 - [architecture/admin-auth-and-deployment-security.md](architecture/admin-auth-and-deployment-security.md)

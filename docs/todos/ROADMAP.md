@@ -323,7 +323,7 @@ Quick reference for all suggested pull requests (A–AA + Wave 8 singles).
 | — | 8 | 78 phase 1 | **L** | ✅ #36 |
 | — | 8 | 79 | M | ✅ #38 |
 | **W** | 9 | 96, 97 | M | ⬜ |
-| **X** | 9 | 98 | M | ⬜ |
+| **X** | 9 | 98 | M | 🟡 PR open |
 | **Y** | 9 | 99 | M–L | ⬜ |
 | **Z** | 9 | 100 | M | ⬜ |
 | **AA** | 9 | 102 (opt) | L | ⬜ optional |

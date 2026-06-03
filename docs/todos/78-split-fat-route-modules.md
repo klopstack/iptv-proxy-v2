@@ -1,6 +1,6 @@
 # Split fat route modules (phased extraction)
 
-**Status:** 🟡 Phase 1 complete; phases 2–4 → Wave 9 ([96](./96-extract-epg-match-rules-routes.md)–[98](./98-fcc-patterns-split-and-cdn-sri.md))  
+**Status:** 🟡 Phase 1 complete; phases 2–3 → Wave 9 ([96](./96-extract-epg-match-rules-routes.md)–[97](./97-extract-config-transfer-routes.md)); phase 4 → [98](./98-fcc-patterns-split-and-cdn-sri.md) ✅  
 **Priority:** P2  
 **Audit:** Application-wide audit, June 2026
 
@@ -39,6 +39,7 @@ Routes become: parse request → call service → serialize response.
 ## Acceptance criteria
 
 - [x] Phase 1 (`accounts.py`): reduced 1,381 → 932 lines (−32%) via `AccountAdminService`
+- [x] Phase 4 (`fcc_match_patterns.py`): reduced 801 → 128 lines (−84%) via `FccMatchPatternsService` + shared CRUD helper (PR batch **X**)
 - [ ] Each remaining phase reduces target route file by ≥30% without behavior change
 - [x] Extracted logic has unit tests independent of Flask request context (`tests/test_account_admin_service.py`)
 - [x] No regression in existing route test suites (`tests/test_accounts_routes.py`)
