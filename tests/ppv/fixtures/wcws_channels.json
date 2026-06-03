@@ -1,0 +1,21 @@
+[
+  {
+    "id": "wcws_texas_tech",
+    "name": "#11 Texas Tech vs #2 Texas (WCWS Finals Game 1) @ Jun 4 01:55",
+    "expect_skip": true,
+    "expect_reason": "unsupported_sport",
+    "expect_competitors": ["Texas Tech", "Texas"]
+  },
+  {
+    "id": "btn_plus_baseball",
+    "name": "(US) (BTN+ 001) | Baseball: Michigan Wolverines Vs. Washington Huskies",
+    "expect_skip": true,
+    "expect_reason": "unsupported_sport"
+  },
+  {
+    "id": "ncaa_football_still_enrichable",
+    "name": "BR: DISNEY PLUS BR PPV 6 - #22 GEORGIA TECH VS. #12 BYU | Sat 28 Dec 01:31",
+    "expect_skip": false,
+    "note": "College football remains enrichable; sportsipy NCAAF may match in future"
+  }
+]
