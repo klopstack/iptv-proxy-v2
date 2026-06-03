@@ -14,6 +14,7 @@ This document groups open TODOs into execution **waves** and suggested **PR batc
 | **Wave 9** | 96–100 | **5** | Route splits, frontend ESM, parallel pytest |
 | **Wave 10** | 101 | **1** | Final doc review (after Wave 9) |
 | **Wave 9 (cont.)** | 102 | **0** | PPV `epg/` / `extraction/` package splits (PR **AA**) |
+| **Wave 11 — DB migration** | 111–119 | **9** | SQLite → PostgreSQL; Series A (prep, safe on SQLite) + Series B (cutover) |
 
 **Total open (required):** 6 (TODOs 96–101). **102** complete in Wave 9 batch **AA**.
 
@@ -291,6 +292,39 @@ AA: 102 (PPV module splits — 65 phases 2–3)
 | [101](./101-final-documentation-review.md) | README, ROADMAP, API_REFERENCE, DEVELOPER_GUIDE, TODO index, Completion links |
 
 Closes residual drift from ongoing wave merges (extends [87](./87-fix-stale-documentation.md) ✅).
+
+---
+
+## Wave 11 — PostgreSQL migration track
+
+**Goal:** Replace SQLite with PostgreSQL as the production database backend.  
+**Gate:** Can be started in parallel with Wave 9–10; Series B (switchover) requires all Series A items complete.  
+**Effort:** Series A ~3–4 weeks (can overlap). Series B: 1–2 weeks + maintenance window.
+
+This track is **independent** of Waves 9–10 and can be assigned to a separate contributor or deferred until after Wave 10 merges. The Series A preparation items (111–115) carry no production risk — they harden the codebase while remaining fully SQLite-compatible.
+
+### Series A — Preparation (safe to run on SQLite, no risk)
+
+| PR | TODO | Summary | Size |
+|----|------|---------|------|
+| **PG-A1** | [111](./111-pg-prep-raw-sqlite3-audit.md) | Remove raw `sqlite3` from `fcc_pattern_reset.py` and gate migration tests | S |
+| **PG-A1** | [112](./112-pg-prep-json-column-types.md) | `db.Text` → `db.JSON` for six JSON columns; remove manual serialization | M |
+| **PG-A2** | [113](./113-pg-prep-alembic-migration-system.md) | Replace custom migration runner with Alembic; archive legacy files | **L** |
+| **PG-A3** | [114](./114-pg-prep-test-db-hardening.md) | Injectable `DATABASE_URL` in conftest; `sqlite_only` markers | M |
+| **PG-A3** | [115](./115-pg-prep-ci-docker-config.md) | PostgreSQL CI job, Docker Compose service, dialect-aware `app.py` | M |
+
+111 and 112 can merge together (PR **PG-A1**). 113 is a large standalone PR (**PG-A2**). 114 and 115 follow together (**PG-A3**).
+
+### Series B — Switchover (after Series A complete)
+
+| PR | TODO | Summary | Size |
+|----|------|---------|------|
+| **PG-B1** | [117](./117-pg-migration-schema-creation.md) | Alembic upgrade head on PostgreSQL; schema parity validation | M |
+| **PG-B1** | [116](./116-pg-migration-data-export-tooling.md) | pgloader script + Python validation script | M |
+| **PG-B2** | [118](./118-pg-migration-cutover-procedure.md) | Execute cutover runbook; verify; update `DATABASE_URL` in prod | **L** |
+| **PG-B3** | [119](./119-pg-migration-cleanup-and-docs.md) | Remove SQLite code paths; update docs; transactional test isolation | M |
+
+117 and 116 can be developed together (**PG-B1**). 118 is the production execution event (**PG-B2**). 119 is the post-cutover cleanup (**PG-B3**).
 
 ---
 

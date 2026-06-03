@@ -46,11 +46,15 @@ class TestMigrationRunner:
             Path(path).unlink(missing_ok=True)
 
     def test_migration_chain_after_create_all(self, temp_db):
+        original_db_url = os.environ.get("DATABASE_URL")
         os.environ["DATABASE_URL"] = f"sqlite:///{temp_db}"
         try:
             assert run_migrations(temp_db) is True
         finally:
-            os.environ.pop("DATABASE_URL", None)
+            if original_db_url is not None:
+                os.environ["DATABASE_URL"] = original_db_url
+            else:
+                os.environ.pop("DATABASE_URL", None)
 
         conn = sqlite3.connect(temp_db)
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
@@ -78,6 +82,7 @@ class TestMigrationRunner:
         assert len(applied) >= 40
 
     def test_second_run_skips_tracked_migrations(self, temp_db):
+        original_db_url = os.environ.get("DATABASE_URL")
         os.environ["DATABASE_URL"] = f"sqlite:///{temp_db}"
         try:
             assert run_migrations(temp_db) is True
@@ -85,7 +90,10 @@ class TestMigrationRunner:
             assert run_migrations(temp_db) is True
             applied_second = len(get_applied_migrations(temp_db))
         finally:
-            os.environ.pop("DATABASE_URL", None)
+            if original_db_url is not None:
+                os.environ["DATABASE_URL"] = original_db_url
+            else:
+                os.environ.pop("DATABASE_URL", None)
 
         assert applied_first == applied_second
         assert applied_first > 0
