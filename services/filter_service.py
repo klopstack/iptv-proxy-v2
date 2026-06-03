@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def _is_ppv_placeholder_name(channel_name: str) -> bool:
     """Lazy import to avoid circular import via services.epg package init."""
-    from services.epg.ppv import is_ppv_placeholder_name
+    from services.ppv.detection import is_ppv_placeholder_name
 
     return is_ppv_placeholder_name(channel_name)
 

@@ -374,7 +374,7 @@ from services.epg.generation import generate_epg_for_channels
 from services.epg.parsing import sync_epg_source, parse_xmltv
 from services.epg.coverage import get_epg_coverage_stats
 from services.epg.match_rules import EpgMatchRulesService
-from services.epg.ppv import is_ppv_channel, is_ppv_category, is_ppv_placeholder_name
+from services.ppv.detection import is_ppv_channel, is_ppv_category, is_ppv_placeholder_name
 from services.epg.utils import normalize_xmltv_url, make_sd_xmltv_id
 
 # PPV

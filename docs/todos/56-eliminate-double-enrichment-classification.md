@@ -1,6 +1,6 @@
 # Eliminate double `classify_ppv_enrichment` and redundant extraction
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done ([PR #14](https://github.com/klopstack/iptv-proxy-v2/pull/14))  
 **Priority:** P1  
 **Audit:** PPV audit, June 2026
 
@@ -30,9 +30,13 @@ Additionally, `enrich_channels` runs `_extract_all_channels` **before** the clas
 
 ## Acceptance criteria
 
-- [ ] `extract_all` runs at most once per channel per enrichment batch.
-- [ ] Skip reasons and counts unchanged vs current behavior (regression test).
+- [x] `extract_all` runs at most once per channel per enrichment batch.
+- [x] Skip reasons and counts unchanged vs current behavior (regression test).
 - [ ] Measurable reduction in CPU time for large batches (optional benchmark in test comment).
+
+## Completion
+
+Implemented in [PR #14](https://github.com/klopstack/iptv-proxy-v2/pull/14): orchestrator uses `classify_ppv_enrichment(..., cheap_only=True)`; enrichment passes precomputed extraction into classify; regression tests in `tests/ppv/test_enrichability.py`.
 
 ## Test plan
 

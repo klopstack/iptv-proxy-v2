@@ -1,6 +1,6 @@
 # Unify PPV detection into a single module
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done ([PR #14](https://github.com/klopstack/iptv-proxy-v2/pull/14))  
 **Priority:** P0  
 **Audit:** PPV audit, June 2026
 
@@ -36,9 +36,13 @@ Additionally, `services/reverse_event_matcher/orchestrator.py` has its own `_is_
 
 ## Acceptance criteria
 
-- [ ] One implementation of each detection function.
-- [ ] All callers import from `services.ppv.detection` (or `services.ppv` public API).
-- [ ] No behavioral change in existing detection tests.
+- [x] One implementation of each detection function.
+- [x] All callers import from `services.ppv.detection` (or `services.ppv` public API).
+- [x] No behavioral change in existing detection tests.
+
+## Completion
+
+Implemented in [PR #14](https://github.com/klopstack/iptv-proxy-v2/pull/14): `services/ppv/detection.py` is canonical; `services/epg/ppv.py` re-exports for backward compat; callers updated; reverse matcher uses `is_generic_channel_name`.
 
 ## Test plan
 

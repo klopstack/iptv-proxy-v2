@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from services.datetime_utils import parse_title_timezone
+from services.ppv.detection import is_generic_channel_name
 from services.reverse_event_matcher.date_extractor import DateExtractor
 from services.reverse_event_matcher.event_index import EventIndex
 from services.reverse_event_matcher.match_filter import DateFilter, MatchFilter
@@ -227,7 +228,7 @@ class ReverseEventMatcher:
             return []
 
         # Skip generic channels with no event information
-        if self._is_generic_channel(channel_name):
+        if is_generic_channel_name(channel_name):
             logger.debug(f"Skipping generic channel: {channel_name[:50]}")
             return []
 
@@ -282,41 +283,6 @@ class ReverseEventMatcher:
             )
 
         return filtered_matches
-
-    def _is_generic_channel(self, channel_name: str) -> bool:
-        """
-        Detect generic PPV channels that have no event information.
-
-        Looks for patterns like "PPV 1", "PPV EVENT 2", "PPV CHANNEL 3"
-        without any event-specific information.
-
-        Args:
-            channel_name: Channel name to check
-
-        Returns:
-            True if the channel appears to be generic
-        """
-        normalized = self._text_processor.normalize_text(channel_name)
-        words = self._text_processor.extract_significant_words(normalized)
-
-        # Empty or very short channels are generic
-        if len(words) == 0:
-            return True
-
-        # Single word channels are too generic (unless they're team names)
-        if len(words) == 1:
-            word = list(words)[0]
-            # Allow single long words that might be team/event names
-            if len(word) < 5:
-                return True
-
-        # Check for generic patterns: PPV + number, EVENT + number, etc.
-        generic_keywords = {"ppv", "event", "channel", "stream", "live", "show", "event", "box", "office"}
-        if words <= generic_keywords:
-            # All words are generic keywords
-            return True
-
-        return False
 
     def get_stats(self) -> dict:
         """

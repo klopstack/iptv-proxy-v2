@@ -121,8 +121,7 @@ class TestHotColdOrdering:
 
     def test_placeholder_channels_skipped_in_cold_pass(self, app):
         """Generic/placeholder channels are excluded from the cold pass."""
-        from services.epg.ppv import is_ppv_placeholder_name
-        from services.ppv.detection import is_generic_channel_name
+        from services.ppv.detection import is_generic_channel_name, is_ppv_placeholder_name
 
         with app.app_context():
             account = _make_account(app)

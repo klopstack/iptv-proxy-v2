@@ -4,6 +4,7 @@ PPV channel/category detection — used at sync and during enrichment filtering.
 
 import logging
 import re
+from typing import Optional
 
 from models import Channel
 from services.ppv.constants import GENERIC_CHANNEL_PATTERNS, PPV_CATEGORY_PATTERNS, PPV_PLACEHOLDER_PATTERNS
@@ -56,3 +57,10 @@ def is_generic_channel_name(name: str) -> bool:
         if pattern.match(stripped):
             return True
     return False
+
+
+def get_ppv_event_title(channel: Channel) -> Optional[str]:
+    """Extract event title from active PPV channel name, or None if placeholder."""
+    if not channel.name or is_ppv_placeholder_name(channel.name):
+        return None
+    return channel.name.strip()
