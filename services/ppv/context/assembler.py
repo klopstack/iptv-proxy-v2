@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from services.ppv.context.base import DataType, EventContext, TeamContext
 from services.ppv.context.registry import get_registry
+from services.ppv.context.team_lookup import lookup_team_entry
 
 if TYPE_CHECKING:
     from models import Event
@@ -59,15 +60,11 @@ def build_event_context(event: "Event") -> EventContext:
             if standings_result:
                 # All providers return {"_all_teams": {team_name_lower: {"record":..., "standing":...}}}
                 all_teams = standings_result.get("_all_teams", {})
-                for team_ctx, team_name in ((home_ctx, home_name), (away_ctx, away_name)):
-                    name_lower = team_name.lower()
-                    entry = all_teams.get(name_lower)
-                    if not entry:
-                        # Try partial match
-                        for k, v in all_teams.items():
-                            if name_lower in k or k in name_lower:
-                                entry = v
-                                break
+                for team_ctx, team_name, team_id in (
+                    (home_ctx, home_name, home_id),
+                    (away_ctx, away_name, away_id),
+                ):
+                    entry = lookup_team_entry(all_teams, team_name, team_id)
                     if entry:
                         team_ctx.record = entry.get("record")
                         team_ctx.standing = entry.get("standing")

@@ -1,13 +1,9 @@
 """
-PPV Event Extraction and Matching Service
+PPV channel name extraction (competitors, dates, sport hints).
 
-Extracts event information from PPV channel names and matches them to
-TheSportsDB events using configurable strategies.
-
-Strategies:
-1. Direct Search: Parse channel name, search TheSportsDB with team names
-2. Calendar Browse: Extract date, browse TheSportsDB calendar events
-3. Skip: Channel doesn't have enough info to match
+Parsing and normalization for calendar-based enrichment live in
+``services.ppv.enrichment`` and ``services.ppv.matching``; see
+``docs/architecture/ppv-matching-strategies.md`` for the end-to-end flow.
 """
 
 import logging

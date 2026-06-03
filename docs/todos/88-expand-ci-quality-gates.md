@@ -1,6 +1,6 @@
 # Expand CI and local quality gates
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done (Wave 7 PR V)  
 **Priority:** P3  
 **Audit:** Application-wide audit, June 2026
 
@@ -40,9 +40,9 @@ CI gaps vs local Makefile capabilities:
 
 ## Acceptance criteria
 
-- [ ] PR workflow runs docker build (no push)
-- [ ] vulture runs in CI (warn-only acceptable initially)
-- [ ] DEVELOPER_GUIDE documents full CI parity commands
+- [x] PR workflow runs docker build (no push)
+- [x] vulture runs in CI (warn-only acceptable initially)
+- [x] DEVELOPER_GUIDE documents full CI parity commands
 
 ## Test plan
 
@@ -51,3 +51,10 @@ CI gaps vs local Makefile capabilities:
 ## Dependencies
 
 None.
+
+## Completion (Wave 7 PR V)
+
+- `build.yml`: `vulture` job (`continue-on-error`), `docker-build-smoke` on PRs, `develop` in `pull_request.branches`
+- `vitest.config.mjs`: `environmentMatchGlobs` for `account_select.test.js`
+- `DEVELOPER_GUIDE.md`: `make ci`, `make vulture`, `make docker-build`
+- `pyproject.toml` already omits `scripts/*` from coverage (unchanged)

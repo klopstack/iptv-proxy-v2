@@ -1,6 +1,6 @@
 # Fix stale documentation and developer guide drift
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done (Wave 7 PR V)  
 **Priority:** P2  
 **Audit:** Application-wide audit, June 2026
 
@@ -34,9 +34,9 @@ All listed above.
 
 ## Acceptance criteria
 
-- [ ] Every doc claim verifiable against code or marked "planned"
-- [ ] DEVELOPER_GUIDE matches Makefile and CI Python version
-- [ ] No broken links in todos README
+- [x] Every doc claim verifiable against code or marked "planned"
+- [x] DEVELOPER_GUIDE matches Makefile and CI Python version
+- [x] No broken links in todos README
 
 ## Test plan
 
@@ -47,3 +47,9 @@ All listed above.
 
 - TODO 68 covers auth doc correction (Traefik + Authentik)
 - PPV doc gaps partially in `docs/architecture/ppv-documentation-gaps.md`
+
+## Completion (Wave 7 PR V)
+
+- Updated `API_REFERENCE.md`, `ARCHITECTURE.md`, `DEVELOPER_GUIDE.md`, `app.py` header, `scripts/README.md`
+- P4 TODO rows 35–39 marked archived (no broken file links)
+- Rate limiting / webhooks marked planned in API reference

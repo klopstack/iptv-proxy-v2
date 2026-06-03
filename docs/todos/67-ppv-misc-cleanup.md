@@ -1,6 +1,6 @@
 # PPV misc cleanup: constants, heuristics, providers, context dedup
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done (Wave 7 PR V)  
 **Priority:** P3  
 **Audit:** PPV audit, June 2026
 
@@ -38,10 +38,10 @@ See table above.
 
 ## Acceptance criteria
 
-- [ ] No unused constants in enrichment module.
-- [ ] Invalid heuristics file produces startup warning (test with bad JSON fixture).
-- [ ] Provider registration failures visible in status endpoint.
-- [ ] Team lookup helper used by at least assembler + one provider.
+- [x] No unused constants in enrichment module.
+- [x] Invalid heuristics file produces startup warning (test with bad JSON fixture).
+- [x] Provider registration failures visible in status endpoint.
+- [x] Team lookup helper used by at least assembler + one provider.
 
 ## Test plan
 
@@ -51,3 +51,12 @@ See table above.
 ## Dependencies
 
 - TODO 57 (sport registry) for city_timezone_map documentation alignment.
+
+## Completion (Wave 7 PR V)
+
+- Removed unused `API_REQUESTS_PER_MINUTE`; tuning values in `constants.py`
+- `validate_neutral_site_heuristics()` + startup check in `app.py`
+- `providers_failed` on registry `coverage_report` / `health()`; exposed on `/api/ppv-enrichment/status`
+- `services/ppv/context/team_lookup.py` used by assembler + ESPN + football_data
+- Tests: `tests/ppv/test_venue_heuristics.py`, `test_context_registry_health.py`, `test_team_lookup.py`
+- Docs: `ppv-module-coupling.md`, `ppv_timezone_analysis.md` runbook section

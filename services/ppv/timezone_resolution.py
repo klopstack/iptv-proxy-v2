@@ -10,7 +10,15 @@ from zoneinfo import ZoneInfo
 
 from services.datetime_utils import parse_title_timezone
 from services.ppv.city_timezone_map import iana_for_team_city
-from services.ppv.constants import COUNTRY_PREFIX_TZ, PROVIDER_SUFFIX_TZ, US_STYLE_REGION_CODES
+from services.ppv.constants import (
+    COUNTRY_PREFIX_TZ,
+    DEFAULT_DATE_TOLERANCE_HOURS,
+    METADATA_ONLY_DATE_TOLERANCE_HOURS,
+    PROVIDER_SUFFIX_TZ,
+    TIMEZONE_FALLBACK_CONFIDENCE,
+    TIMEZONE_METADATA_ONLY_CONFIDENCE,
+    US_STYLE_REGION_CODES,
+)
 from services.ppv.extraction import MatchupInfo, PPVEventExtractor
 from services.ppv.sport_registry import normalize_sport_key
 from services.ppv.venue_inference import VenueInferenceMode, detect_venue_inference_mode
@@ -93,7 +101,7 @@ def resolve_channel_timezone(
                 code = tag.upper()
                 if code in COUNTRY_PREFIX_TZ:
                     return ChannelTimezoneResolution(COUNTRY_PREFIX_TZ[code], 0.35, "metadata_only_tag", venue_mode)
-        return ChannelTimezoneResolution("UTC", 0.2, "metadata_only_fallback", venue_mode)
+        return ChannelTimezoneResolution("UTC", TIMEZONE_METADATA_ONLY_CONFIDENCE, "metadata_only_fallback", venue_mode)
 
     # Home venue via SportsTeam (US multi-zone / FB via TheSportsDB idTeam)
     if matchup and matchup.home_team and venue_mode.mode == "team_home":
@@ -125,7 +133,7 @@ def resolve_channel_timezone(
         if cat_prefix and cat_prefix.upper() in COUNTRY_PREFIX_TZ:
             return ChannelTimezoneResolution(COUNTRY_PREFIX_TZ[cat_prefix.upper()], 0.75, "category_prefix", venue_mode)
 
-    return ChannelTimezoneResolution("America/New_York", 0.25, "fallback", venue_mode)
+    return ChannelTimezoneResolution("America/New_York", TIMEZONE_FALLBACK_CONFIDENCE, "fallback", venue_mode)
 
 
 def _provider_suffix_timezone(channel_name: str) -> Optional[ChannelTimezoneResolution]:
@@ -238,5 +246,5 @@ def calendar_date_key_for_channel(
 def metadata_only_date_tolerance_hours(venue_mode: Optional[VenueInferenceMode]) -> int:
     """Wider MatchFilter tolerance for neutral-site / tournament titles."""
     if venue_mode and venue_mode.mode == "metadata_only":
-        return 72
-    return 48
+        return METADATA_ONLY_DATE_TOLERANCE_HOURS
+    return DEFAULT_DATE_TOLERANCE_HOURS

@@ -75,8 +75,12 @@ Primary success indicator: **`eastern_fail_best_pass`** — channels where Easte
 
 Re-run after Phase 0 on production and paste summary stats below.
 
-### Production run (pending)
+### Production backtest (runbook)
 
+Run on a production/staging DB copy when validating timezone changes; paste summary stats here if you want a permanent record:
+
+```bash
+python scripts/analyze_ppv_channel_timezones.py --csv /tmp/ppv_tz_backtest.csv
 ```
-# Fill in after running analyze_ppv_channel_timezones.py on production DB
-```
+
+No automated production run is stored in-repo — operators run the script as needed.

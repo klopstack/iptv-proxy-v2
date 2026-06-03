@@ -42,6 +42,9 @@ from services.datetime_utils import parse_thesportsdb_scheduled_at, to_naive_utc
 from services.ppv.cleanup import prune_orphan_ppv_events, sync_ppv_epg_after_enrichment
 from services.ppv.constants import (
     HIGH_CONFIDENCE_THRESHOLD,
+    MATCH_AMBIGUITY_GAP_LOW,
+    MATCH_AMBIGUITY_GAP_MEDIUM,
+    MATCH_AMBIGUITY_LOW_CONFIDENCE_CUTOFF,
     MEDIUM_CONFIDENCE_THRESHOLD,
     METADATA_KEY_CALENDAR_MATCHED,
     METADATA_KEY_CALENDAR_PROCESSED,
@@ -58,9 +61,6 @@ from services.thesportsdb_calendar_scraper import CalendarEvent, get_calendar_sc
 from services.thesportsdb_service import TheSportsDBService, get_thesportsdb_api_request_interval
 
 logger = logging.getLogger(__name__)
-
-# Rate limiting for API (used only for event detail fetching; see get_thesportsdb_api_requests_per_minute)
-API_REQUESTS_PER_MINUTE = 30  # default for free tier; paid key uses 100/min via settings
 
 # Processing configuration
 DETAIL_FETCH_BATCH_SIZE = 25
@@ -521,9 +521,11 @@ class PPVCalendarEnrichmentService:
                 second_confidence = matches[1][1]
                 confidence_gap = confidence - second_confidence
 
-                # For low confidence (0.35-0.5): require 0.2 gap to ensure it's the right match
-                # For medium confidence (0.5-0.6): require 0.15 gap
-                required_gap = 0.2 if confidence < 0.5 else 0.15
+                required_gap = (
+                    MATCH_AMBIGUITY_GAP_LOW
+                    if confidence < MATCH_AMBIGUITY_LOW_CONFIDENCE_CUTOFF
+                    else MATCH_AMBIGUITY_GAP_MEDIUM
+                )
 
                 if confidence_gap < required_gap:
                     logger.debug(

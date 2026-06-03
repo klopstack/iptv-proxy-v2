@@ -1,5 +1,6 @@
 # Mirrors CI lint jobs (see .github/workflows/build.yml: lint-py, lint-js).
 # Hooks delegate to Makefile so pre-commit and CI always run the same commands.
+# Full parity before push: `make ci` (lint + test-js + test with coverage).
 default_language_version:
   python: python3.11
 

@@ -33,8 +33,8 @@ Several architectural choices in the PPV stack create testing friction, state di
 
 `models/ppv.py` → `SportsTeam.home_timezone_for_team` imports:
 
-- `services.ppv.city_timezone_map`
-- `services.team_location_registry`
+- `services.ppv.city_timezone_map` — **legacy fallback** city→IANA map when `SportsTeam.iana_timezone` / `team_location_registry` has no entry
+- `services.team_location_registry` — preferred source for US/FB/WNBA/MiLB home zones
 
 ORM models should not call service layers at runtime. This prevents testing models in isolation and risks circular imports as services import models.
 

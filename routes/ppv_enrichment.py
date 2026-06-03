@@ -67,6 +67,10 @@ def get_enrichment_status():
             logger.warning("Could not load PPV enrichment queue stats: %s", exc, exc_info=True)
             status["queue_stats_error"] = True
 
+        from services.ppv.context.registry import get_registry
+
+        status["context_providers"] = get_registry().health()
+
         return jsonify(status), 200
     finally:
         db.session.remove()

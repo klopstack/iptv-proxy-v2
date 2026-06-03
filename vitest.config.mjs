@@ -4,5 +4,8 @@ export default defineConfig({
     test: {
         environment: 'node',
         include: ['static/js/__tests__/**/*.test.js'],
+        environmentMatchGlobs: [
+            ['static/js/__tests__/account_select.test.js', 'jsdom'],
+        ],
     },
 });
