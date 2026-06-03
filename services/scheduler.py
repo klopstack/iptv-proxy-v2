@@ -191,9 +191,7 @@ class SyncScheduler:
                     "accounts": get_sync_info(SYNC_KEY_LAST_ACCOUNT_SYNC, self._account_interval_hours),
                     "epg": get_sync_info(SYNC_KEY_LAST_EPG_SYNC, self._epg_interval_hours),
                     "fcc": get_sync_info(SYNC_KEY_LAST_FCC_SYNC, self._fcc_interval_hours),
-                    "ppv_prefetch": get_sync_info(
-                        SYNC_KEY_LAST_PPV_PREFETCH, DEFAULT_PPV_PREFETCH_INTERVAL_HOURS
-                    ),
+                    "ppv_prefetch": get_sync_info(SYNC_KEY_LAST_PPV_PREFETCH, DEFAULT_PPV_PREFETCH_INTERVAL_HOURS),
                     "ppv_enrichment": get_sync_info(
                         SYNC_KEY_LAST_PPV_ENRICHMENT, DEFAULT_PPV_ENRICHMENT_INTERVAL_HOURS
                     ),
@@ -631,9 +629,7 @@ class SyncScheduler:
             if result.get("success"):
                 self._record_sync_success(SYNC_KEY_LAST_EPG_SYNC)
             else:
-                error_message = (
-                    f"EPG sync: {result.get('sources_synced', 0)}/{total_sources} sources succeeded"
-                )
+                error_message = f"EPG sync: {result.get('sources_synced', 0)}/{total_sources} sources succeeded"
                 for entry in result.get("results") or []:
                     if not entry.get("success") and entry.get("message"):
                         error_message = str(entry["message"])
