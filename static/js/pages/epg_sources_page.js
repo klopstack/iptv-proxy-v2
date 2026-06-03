@@ -2,6 +2,7 @@
  * EPG Sources tab (ESM). Handlers are exposed on window for inline HTML and init script.
  */
 import { fetchAccounts, populateAccountSelects } from '../lib/account_select.js';
+import { errorMessageFromPayload, unwrapData } from '../lib/api_contract.js';
 import { escapeHtml } from '../lib/escape_html.js';
 import { debounce, escapeJsSingleQuoted } from '../lib/epg_dom_utils.js';
 import { formatLocalDateTime } from '../lib/epg_datetime.js';
@@ -37,10 +38,11 @@ async function loadAccounts() {
 async function loadSources() {
     try {
         const response = await fetch('/api/epg/sources');
-        const data = await response.json();
-        
+        const payload = await response.json();
+        const data = unwrapData(payload);
+
         if (!response.ok || !Array.isArray(data)) {
-            throw new Error(data.error || 'Invalid response from server');
+            throw new Error(errorMessageFromPayload(payload) || 'Invalid response from server');
         }
         
         window.EpgManagementState.sources = data;
@@ -650,8 +652,8 @@ async function loadCoverage() {
     
     try {
         const response = await fetch('/api/epg/coverage');
-        const stats = await response.json();
-        
+        const stats = unwrapData(await response.json());
+
         const coveragePercent = stats.total_channels > 0 
             ? ((stats.channels_with_epg_mapping / stats.total_channels) * 100).toFixed(1)
             : 0;

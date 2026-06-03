@@ -313,6 +313,12 @@ Phased remainders from TODOs 78, 85, 92, 95; PPV module splits from TODO 65 (102
 |---|----------|--------|---------|
 | 101 | [101-final-documentation-review.md](./101-final-documentation-review.md) | ⬜ | Sync README, ROADMAP, API_REFERENCE, DEVELOPER_GUIDE, TODO index (after Wave 9) |
 
+### Operator UX — post-merge smoke test (June 2026)
+
+| # | Document | Status | Summary |
+|---|----------|--------|---------|
+| 106 | [106-improve-main-dashboard.md](./106-improve-main-dashboard.md) | ⬜ | Landing dashboard: channel health + live stream/client counts; fix slow N× account stats load |
+
 ### Recommended order for items 68–90 (historical)
 
 ```
