@@ -1,6 +1,6 @@
 # FCC match patterns route split + CDN SRI (TODO 78 phase 4 + 92)
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P2 (route split) / P3 (SRI)  
 **Parents:** [78-split-fat-route-modules.md](./78-split-fat-route-modules.md), [92-cdn-script-sri-hardening.md](./92-cdn-script-sri-hardening.md)  
 **Roadmap:** [ROADMAP.md](./ROADMAP.md) — Wave 9, PR batch **X**
@@ -40,9 +40,9 @@ Complete the fat-route program by extracting `routes/fcc_match_patterns.py` (~93
 
 ## Acceptance criteria
 
-- [ ] FCC route module reduced ≥30%; behavior unchanged; CRUD tests pass
-- [ ] All external `<script>` / `<link>` tags in admin templates have SRI or are self-hosted
-- [ ] CDN version bump procedure documented
+- [x] FCC route module reduced ≥30%; behavior unchanged; CRUD tests pass
+- [x] All external `<script>` / `<link>` tags in admin templates have SRI or are self-hosted
+- [x] CDN version bump procedure documented
 
 ## Test plan
 
@@ -62,4 +62,8 @@ make test-fast
 
 ## Completion
 
-_(Add PR link when merged.)_
+- **PR:** _(link added after merge)_
+- `routes/fcc_match_patterns.py` 801 → 128 lines (−84%) via `FccMatchPatternsService` + `register_json_crud_routes`
+- Shared serializers for country suffix / quality / country / callsign entities in `services/serializers/fcc.py`
+- Bootstrap CDN SRI on `templates/base.html`; bump procedure in `docs/DEPLOYMENT.md`
+- Tests: `tests/test_fcc_match_patterns_service.py`, `tests/test_cdn_sri.py`
