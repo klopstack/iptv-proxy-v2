@@ -189,8 +189,8 @@ Full-stack review of PPV handling: enrichment pipeline, multi-source events (MiL
 | 60 | [60-add-persistence-unit-tests.md](./60-add-persistence-unit-tests.md) | ⬜ | Unit tests for `services/ppv/persistence.py` |
 | 61 | [61-add-channel-matching-tests.md](./61-add-channel-matching-tests.md) | ⬜ | Unit tests for UTC calendar-day grouping |
 | 62 | [62-add-milb-ppv-integration-test.md](./62-add-milb-ppv-integration-test.md) | ⬜ | End-to-end MiLB channel → Event with `mlb_stats_api` source |
-| 63 | [63-expand-ppv-test-coverage.md](./63-expand-ppv-test-coverage.md) | ⬜ | Orchestrator, cleanup, football-data provider, integration |
-| 64 | [64-consolidate-ppv-detection-tests.md](./64-consolidate-ppv-detection-tests.md) | ⬜ | Deduplicate overlapping detection test modules |
+| 63 | [63-expand-ppv-test-coverage.md](./63-expand-ppv-test-coverage.md) | ✅ | Orchestrator, cleanup, football-data provider, integration ([PR #21](https://github.com/klopstack/iptv-proxy-v2/pull/21)) |
+| 64 | [64-consolidate-ppv-detection-tests.md](./64-consolidate-ppv-detection-tests.md) | ✅ | Deduplicate overlapping detection test modules ([PR #21](https://github.com/klopstack/iptv-proxy-v2/pull/21)) |
 | 65 | [65-refactor-enrichment-god-class.md](./65-refactor-enrichment-god-class.md) | ⬜ | Phased split of ~860-line enrichment service |
 | 66 | [66-detail-thread-and-epg-side-effect-decoupling.md](./66-detail-thread-and-epg-side-effect-decoupling.md) | ⬜ | Replace daemon detail thread; optional EPG hooks |
 | 67 | [67-ppv-misc-cleanup.md](./67-ppv-misc-cleanup.md) | ⬜ | Constants, heuristics validation, provider health, docstrings |
