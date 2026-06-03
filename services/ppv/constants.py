@@ -34,6 +34,7 @@ __all__ = [
     "MATCH_AMBIGUITY_GAP_MEDIUM",
     "MATCH_AMBIGUITY_LOW_CONFIDENCE_CUTOFF",
     "FAR_FUTURE_VISIBILITY_DAYS",
+    "STALE_ARCHIVE_ENRICHMENT_DAYS",
     "METADATA_ONLY_DATE_TOLERANCE_HOURS",
     "DEFAULT_DATE_TOLERANCE_HOURS",
     "TIMEZONE_METADATA_ONLY_CONFIDENCE",
@@ -68,6 +69,8 @@ MATCH_AMBIGUITY_GAP_LOW = 0.2
 MATCH_AMBIGUITY_GAP_MEDIUM = 0.15
 # Playlist visibility: hide channels/events with title dates beyond this horizon
 FAR_FUTURE_VISIBILITY_DAYS = 31
+# PPV titles with explicit dates older than this are stale archive (ESPN Play, etc.)
+STALE_ARCHIVE_ENRICHMENT_DAYS = 21
 # MatchFilter date tolerance (hours) for metadata-only / neutral-site titles
 METADATA_ONLY_DATE_TOLERANCE_HOURS = 72
 DEFAULT_DATE_TOLERANCE_HOURS = 48
