@@ -17,22 +17,8 @@ class EnrichmentSideEffects:
         enrichment.sync_enrichment_status_from_links(ch.id for ch in channels)
 
     def after_batch(self, channels: List[Channel], results: Dict[str, Any]) -> Dict[str, Any]:
-        """Sync link statuses, EPG, or prune orphans depending on match count."""
-        import services.ppv.enrichment as enrichment
-
+        """Sync link statuses after calendar matching (EPG hooks run separately)."""
         self.sync_channel_statuses(channels)
-
-        matched = results.get("matched", 0)
-        if matched > 0:
-            try:
-                epg_stats = enrichment.sync_ppv_epg_after_enrichment(matched)
-                results.update(epg_stats)
-                results["ppv_epg_matched"] = epg_stats.get("epg_mappings", 0)
-            except Exception as e:
-                logger.error(f"Failed to auto-create/match PPV EPG source: {e}")
-        else:
-            enrichment.prune_orphan_ppv_events()
-
         return results
 
     def update_cumulative_stats(self, results: Dict) -> None:
