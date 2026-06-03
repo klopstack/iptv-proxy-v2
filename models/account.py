@@ -114,7 +114,9 @@ class ActiveStream(db.Model):  # type: ignore[name-defined]
     __tablename__ = "active_streams"
 
     id = db.Column(db.Integer, primary_key=True)
-    credential_id = db.Column(db.Integer, db.ForeignKey("credentials.id"), nullable=False, index=True)
+    credential_id = db.Column(
+        db.Integer, db.ForeignKey("credentials.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     stream_id = db.Column(db.String(50), nullable=False)  # Stream being watched
     client_ip = db.Column(db.String(45))  # Client's IP address
     session_token = db.Column(db.String(64), unique=True, nullable=False)  # Unique session identifier

@@ -23,6 +23,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
+def sqlite_connect(db_path: str) -> sqlite3.Connection:
+    """Open SQLite with foreign key enforcement (matches app runtime)."""
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
+
+
 def get_database_path():
     """Get database path from environment or use default."""
     db_path = os.getenv("DATABASE_URL", "sqlite:///data/iptv_proxy.db")
@@ -37,7 +44,7 @@ def get_database_path():
 
 def ensure_schema_migrations_table(db_path: str) -> None:
     """Create schema_migrations table if it does not exist."""
-    conn = sqlite3.connect(db_path)
+    conn = sqlite_connect(db_path)
     try:
         conn.execute(
             """
@@ -55,7 +62,7 @@ def ensure_schema_migrations_table(db_path: str) -> None:
 
 def get_applied_migrations(db_path: str) -> set:
     """Return set of migration names already applied."""
-    conn = sqlite3.connect(db_path)
+    conn = sqlite_connect(db_path)
     try:
         cursor = conn.execute("SELECT migration_name FROM schema_migrations")
         return {row[0] for row in cursor.fetchall()}
@@ -67,7 +74,7 @@ def get_applied_migrations(db_path: str) -> set:
 
 def record_migration(db_path: str, migration_name: str) -> None:
     """Record a migration as applied."""
-    conn = sqlite3.connect(db_path)
+    conn = sqlite_connect(db_path)
     try:
         applied_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         conn.execute(

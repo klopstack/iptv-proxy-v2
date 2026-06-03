@@ -153,7 +153,7 @@ class Channel(db.Model):  # type: ignore[name-defined]
     stream_id = db.Column(db.String(50), nullable=False)  # External stream ID from provider
     name = db.Column(db.String(500), nullable=False, index=True)
     cleaned_name = db.Column(db.String(500))  # Processed name after tag extraction
-    category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), nullable=True, index=True)
+    category_id = db.Column(db.Integer, db.ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True)
     stream_type = db.Column(db.String(20))  # live, movie, series
     stream_icon = db.Column(db.String(500))
     epg_channel_id = db.Column(db.String(100))
@@ -205,6 +205,7 @@ class Channel(db.Model):  # type: ignore[name-defined]
         db.Index("idx_channel_account", "account_id"),
         db.Index("idx_channel_name", "name"),
         db.Index("idx_channel_category", "category_id"),
+        db.Index("ix_channel_ppv_queue", "is_ppv", "ppv_enrichment_status", "last_seen"),
     )
 
     def __repr__(self):
@@ -225,7 +226,11 @@ class Tag(db.Model):  # type: ignore[name-defined]
 
 
 class ChannelTag(db.Model):  # type: ignore[name-defined]
-    """Many-to-many relationship between channels and tags"""
+    """Many-to-many relationship between channels and tags.
+
+    Keys (account_id, stream_id, tag_id) are denormalized — no FK to channels.id.
+    Account delete and sync prune stale rows via AccountDeleteService / retention jobs.
+    """
 
     __tablename__ = "channel_tags"
 
@@ -238,7 +243,7 @@ class ChannelTag(db.Model):  # type: ignore[name-defined]
     id = db.Column(db.Integer, primary_key=True)
     account_id = db.Column(db.Integer, db.ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
     stream_id = db.Column(db.String(50), nullable=False)  # Stream ID from IPTV provider
-    tag_id = db.Column(db.Integer, db.ForeignKey("tags.id"), nullable=False, index=True)
+    tag_id = db.Column(db.Integer, db.ForeignKey("tags.id", ondelete="CASCADE"), nullable=False, index=True)
     source = db.Column(db.String(20), default=SOURCE_EXTRACTION, nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at = db.Column(
