@@ -2,7 +2,7 @@
 
 This directory contains detailed work items identified during the post-restructuring codebase audit (May 2026). Each document is self-contained: problem statement, affected files, proposed solution, acceptance criteria, and test plan.
 
-**Open backlog (36 items):** see **[ROADMAP.md](./ROADMAP.md)** for waves, PR batches (A–U), dependencies, and parallel workstreams. Per-item specs stay in the linked TODO files below.
+**Open backlog (35 items):** see **[ROADMAP.md](./ROADMAP.md)** for waves, PR batches (A–U), dependencies, and parallel workstreams. Per-item specs stay in the linked TODO files below.
 
 **Work through items in roadmap order** (or pick one explicitly). Later items may depend on earlier ones (especially P0 channel-selection unification — now ✅).
 
@@ -271,7 +271,7 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 | 89 | [89-refactor-scheduler-job-registry.md](./89-refactor-scheduler-job-registry.md) | ⬜ | Split 676-line scheduler god class |
 | 90 | [90-split-epg-programs-and-decouple-sync.md](./90-split-epg-programs-and-decouple-sync.md) | ⬜ | Split programs.py; decouple sync post-processing |
 | 92 | [92-cdn-script-sri-hardening.md](./92-cdn-script-sri-hardening.md) | ⬜ | CDN Subresource Integrity (deferred from 84) |
-| 94 | [94-speed-up-thesportsdb-tests-no-live-http.md](./94-speed-up-thesportsdb-tests-no-live-http.md) | ⬜ | Fix stale SDK mocks; stop live TheSportsDB retry loops in unit tests |
+| 94 | [94-speed-up-thesportsdb-tests-no-live-http.md](./94-speed-up-thesportsdb-tests-no-live-http.md) | ✅ | Fix stale SDK mocks; stop live TheSportsDB retry loops in unit tests |
 
 ### Recommended order for items 68–90
 

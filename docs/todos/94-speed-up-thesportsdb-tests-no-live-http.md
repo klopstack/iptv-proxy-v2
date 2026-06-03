@@ -1,8 +1,9 @@
 # Speed up TheSportsDB tests and block live HTTP
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P2  
-**Audit:** Test runtime review, June 2026
+**Audit:** Test runtime review, June 2026  
+**PR batch:** Wave 3 **PR I** (with TODO 62)
 
 ## Problem
 
@@ -60,11 +61,11 @@ Reference fixtures (already exist): `tests/fixtures/thesportsdb/*.json`
 
 ## Acceptance criteria
 
-- [ ] Full `tests/test_thesportsdb*.py` run completes in **under 30s** on a typical dev machine (no intentional live API calls).
-- [ ] No test in that set performs outbound HTTP to TheSportsDB without `@pytest.mark.network`.
-- [ ] All `test_thesportsdb_service.py` cases patch `call_thesportsdb_api` (or equivalent) — not bare SDK functions only.
-- [ ] The five previously ~60s tests each run in **under 1s**.
-- [ ] `make test-fast` / CI pytest still passes with ≥75% coverage.
+- [x] Full `tests/test_thesportsdb*.py` run completes in **under 30s** on a typical dev machine (no intentional live API calls).
+- [x] No test in that set performs outbound HTTP to TheSportsDB without `@pytest.mark.network`.
+- [x] All `test_thesportsdb_service.py` cases patch `call_thesportsdb_api` (or equivalent) — not bare SDK functions only.
+- [x] The five previously ~60s tests each run in **under 1s**.
+- [x] `make test-fast` / CI pytest still passes with ≥75% coverage.
 
 ## Test plan
 
@@ -83,4 +84,11 @@ Compare slowest durations before and after; attach timings in the PR description
 
 ## Completion
 
-_(PR link when done)_
+**June 2026** — Wave 3 PR I (bundled with TODO 62).
+
+- Patched `services.thesportsdb_service.call_thesportsdb_api` in all `test_thesportsdb_service.py` API tests (25 patches).
+- Autouse `try_v2_sdk_call` stub in `tests/conftest.py` for `test_thesportsdb*` modules.
+- Added `network` pytest marker in `pyproject.toml`.
+
+**Before:** `tests/test_thesportsdb*.py` ~288s (five tests ~60s each).  
+**After:** same set **0.18s** (`--no-cov`). Full suite **2548 passed** in ~154s.

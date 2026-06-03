@@ -114,6 +114,7 @@ Update [README.md](./README.md) status columns as work lands. Mark PR IDs in eac
 | 3a | [60](./60-add-persistence-unit-tests.md) | 54 | `persistence.py` unit tests |
 | 3b | [61](./61-add-channel-matching-tests.md) | — | UTC calendar-day grouping tests |
 | 3c | [62](./62-add-milb-ppv-integration-test.md) | 55 | MiLB channel → Event E2E |
+| 3c′ | [94](./94-speed-up-thesportsdb-tests-no-live-http.md) | — | TheSportsDB unit tests: patch `call_thesportsdb_api` (ships with PR **I**) ✅ |
 | 3d | [64](./64-consolidate-ppv-detection-tests.md) | 53 | Dedupe detection test modules |
 | 3e | [63](./63-expand-ppv-test-coverage.md) | 52–59 stable | Orchestrator, cleanup, providers |
 
