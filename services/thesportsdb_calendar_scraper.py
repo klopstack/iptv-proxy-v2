@@ -730,14 +730,14 @@ class TheSportsDBCalendarScraper:
 
         return events
 
-    def _parse_sport_from_cell(self, cell) -> Optional[str]:
+    def _parse_sport_from_cell(self, cell: Any) -> Optional[str]:
         """Extract sport label from the calendar Sport column (links/icons stripped)."""
         if cell is None:
             return None
         text = cell.get_text(" ", strip=True)
         if not text:
             return None
-        return text
+        return str(text)
 
     def _parse_time_from_cell(self, time_text: str) -> Optional[str]:
         """Parse HH:MM from a calendar time cell (with or without UTC suffix)."""

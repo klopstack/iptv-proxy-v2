@@ -4,7 +4,7 @@ Persist PPV match results to Event and EventChannelLink tables.
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Iterable, Optional, Tuple
+from typing import Any, Iterable, Optional, Tuple, cast
 
 from models import Channel, Event, EventChannelLink, db
 from services.datetime_utils import to_naive_utc
@@ -50,12 +50,12 @@ def _resolve_event_sport(calendar_event: CalendarEvent) -> Optional[str]:
     league_key = sport_key_from_league_name(calendar_event.league_name)
     from_league = _sport_display_for_league_key(league_key) if league_key else None
 
-    explicit = getattr(calendar_event, "sport", None)
+    explicit = calendar_event.sport
     if explicit:
         explicit_key = _sport_key_for_label(explicit)
         if league_key and explicit_key and explicit_key != league_key:
             return from_league
-        return explicit
+        return str(explicit)
 
     return from_league
 
@@ -202,7 +202,7 @@ def link_channel_to_event(
         if confidence > existing.match_confidence:
             existing.match_confidence = confidence
             existing.match_method = match_method
-        return existing
+        return cast(EventChannelLink, existing)
 
     link = EventChannelLink(
         event_id=event.id,
@@ -231,16 +231,19 @@ def sync_enrichment_status_from_links(channel_ids: Optional[Iterable[int]] = Non
     if not linked_ids:
         return 0
 
-    return Channel.query.filter(
-        Channel.id.in_(linked_ids),
-        Channel.is_ppv.is_(True),
-        Channel.ppv_enrichment_status != "matched",
-    ).update(
-        {
-            Channel.ppv_enrichment_status: "matched",
-            Channel.ppv_enrichment_error: None,
-        },
-        synchronize_session=False,
+    return cast(
+        int,
+        Channel.query.filter(
+            Channel.id.in_(linked_ids),
+            Channel.is_ppv.is_(True),
+            Channel.ppv_enrichment_status != "matched",
+        ).update(
+            {
+                Channel.ppv_enrichment_status: "matched",
+                Channel.ppv_enrichment_error: None,
+            },
+            synchronize_session=False,
+        ),
     )
 
 
@@ -249,7 +252,10 @@ def clear_event_links_for_channels(channel_ids: Iterable[int]) -> int:
     ids = list(channel_ids)
     if not ids:
         return 0
-    return EventChannelLink.query.filter(EventChannelLink.channel_id.in_(ids)).delete(synchronize_session=False)
+    return cast(
+        int,
+        EventChannelLink.query.filter(EventChannelLink.channel_id.in_(ids)).delete(synchronize_session=False),
+    )
 
 
 def persist_match(

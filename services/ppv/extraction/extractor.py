@@ -2,7 +2,7 @@
 
 import re
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from services.datetime_utils import parse_title_timezone
 from services.ppv.extraction import competitors, patterns
@@ -32,7 +32,7 @@ class PPVEventExtractor:
     _PROVIDER_SLOT_RE = patterns.PROVIDER_SLOT_RE
     _BARE_PPV_SLOT_RE = patterns.BARE_PPV_SLOT_RE
 
-    def __init__(self, current_date: Optional[datetime] = None, date_strategies=None):
+    def __init__(self, current_date: Optional[datetime] = None, date_strategies: Any = None):
         self.current_date = current_date or datetime.now()
         self.current_year = self.current_date.year
         self._date_strategies = date_strategies if date_strategies is not None else DEFAULT_DATE_STRATEGIES
@@ -166,10 +166,10 @@ class PPVEventExtractor:
         date_midnight = date.replace(hour=0, minute=0, second=0, microsecond=0)
         return date_midnight + timedelta(hours=hour, minutes=minute)
 
-    def extract_all(self, channel_name: str) -> Dict:
+    def extract_all(self, channel_name: str) -> Dict[str, Any]:
         inline_sport, _ = self.extract_sport(channel_name)
         country_prefix = self.extract_country_prefix(channel_name)
-        result: Dict = {
+        result: Dict[str, Any] = {
             "is_placeholder": self.is_placeholder(channel_name),
             "is_inactive": self.is_inactive_channel(channel_name),
             "competitors": None,

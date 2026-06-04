@@ -1,7 +1,7 @@
 """Validate PPV channel extractions against calendar events."""
 
 from itertools import permutations
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import List, Optional, Sequence, Tuple
 
 from services.ppv.matching.context import SportLeagueContext, event_league_matches_context, sport_key_from_league_name
 from services.ppv.matching.mlb_teams import resolve_mlb_abbrev
@@ -276,18 +276,15 @@ def competitors_match_event_doubles(
 
 
 def competitors_match_event(
-    competitors: Union[Tuple[str, str], Tuple[str, str, str, str]],
+    competitors: Tuple[str, str],
     event: CalendarEvent,
     *,
     context: Optional[SportLeagueContext] = None,
     players: Optional[Sequence[str]] = None,
 ) -> bool:
     """Extracted competitors must match the event teams (home/away order independent)."""
-    if players and len(players) == 4:
+    if players is not None and len(players) == 4:
         return competitors_match_event_doubles(players, event, context=context)
-
-    if len(competitors) == 4:
-        return competitors_match_event_doubles(competitors, event, context=context)
 
     home = event.home_team
     away = event.away_team
@@ -301,7 +298,7 @@ def competitors_match_event(
             return False
 
     sport_key = _resolve_sport_key(context, event)
-    c1, c2 = competitors  # type: ignore[misc]
+    c1, c2 = competitors
     if " / " in c1 or " / " in c2:
         side1 = _split_doubles_side(c1)
         side2 = _split_doubles_side(c2)
