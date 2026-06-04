@@ -6,7 +6,7 @@ Alembic/JSONB promotion is deferred to TODO 113/117.
 
 import pytest
 
-from models import EpgChannel, EpgProgram, EpgSource, SdStation, SdLineup, db
+from models import EpgChannel, EpgProgram, EpgSource, SdLineup, SdStation, db
 
 
 @pytest.fixture
