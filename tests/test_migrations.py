@@ -1,28 +1,21 @@
-"""Tests for migration runner and schema tracking."""
+"""Tests for Alembic migrations and schema tracking."""
 
-import os
 import sqlite3
 import tempfile
 from pathlib import Path
 
 import pytest
 
-from run_migrations import ensure_schema_migrations_table, get_applied_migrations, run_migrations, sqlite_connect
+from tests.alembic_test_helpers import alembic_upgrade_sqlite
 
 
 @pytest.fixture
 def temp_db():
-    """Temporary SQLite database initialized via create_all (matches production boot)."""
-    from sqlalchemy import create_engine
-
-    from models import db as _db
-
+    """Temporary SQLite database initialized via Alembic upgrade (matches production boot)."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         path = f.name
 
-    engine = create_engine(f"sqlite:///{path}")
-    _db.metadata.create_all(engine)
-    engine.dispose()
+    alembic_upgrade_sqlite(path)
 
     yield path
 
@@ -32,33 +25,23 @@ def temp_db():
             p.unlink()
 
 
-class TestMigrationRunner:
-    def test_schema_migrations_table_created(self):
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-            path = f.name
-        try:
-            ensure_schema_migrations_table(path)
-            conn = sqlite3.connect(path)
-            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'")
-            assert cursor.fetchone() is not None
-            conn.close()
-        finally:
-            Path(path).unlink(missing_ok=True)
+def _sqlite_connect(db_path: str) -> sqlite3.Connection:
+    """Open SQLite with foreign key enforcement (matches app runtime)."""
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
 
-    def test_migration_chain_after_create_all(self, temp_db):
-        original_db_url = os.environ.get("DATABASE_URL")
-        os.environ["DATABASE_URL"] = f"sqlite:///{temp_db}"
-        try:
-            assert run_migrations(temp_db) is True
-        finally:
-            if original_db_url is not None:
-                os.environ["DATABASE_URL"] = original_db_url
-            else:
-                os.environ.pop("DATABASE_URL", None)
 
+class TestAlembicMigrations:
+    def test_upgrade_creates_alembic_version(self, temp_db):
+        conn = sqlite3.connect(temp_db)
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version'")
+        assert cursor.fetchone() is not None
+        conn.close()
+
+    def test_upgrade_creates_core_tables(self, temp_db):
         conn = sqlite3.connect(temp_db)
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-        assert "schema_migrations" in tables
         assert "accounts" in tables
         assert "channels" in tables
         assert "playlist_configs" in tables
@@ -70,7 +53,7 @@ class TestMigrationRunner:
 
         conn.close()
 
-        fk_conn = sqlite_connect(temp_db)
+        fk_conn = _sqlite_connect(temp_db)
         try:
             assert fk_conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
             violations = fk_conn.execute("PRAGMA foreign_key_check").fetchall()
@@ -78,22 +61,54 @@ class TestMigrationRunner:
         finally:
             fk_conn.close()
 
-        applied = get_applied_migrations(temp_db)
-        assert len(applied) >= 40
+    def test_second_upgrade_is_idempotent(self, temp_db):
+        alembic_upgrade_sqlite(temp_db)
+        alembic_upgrade_sqlite(temp_db)
 
-    def test_second_run_skips_tracked_migrations(self, temp_db):
-        original_db_url = os.environ.get("DATABASE_URL")
-        os.environ["DATABASE_URL"] = f"sqlite:///{temp_db}"
+        conn = sqlite3.connect(temp_db)
+        version_count = conn.execute("SELECT COUNT(*) FROM alembic_version").fetchone()[0]
+        conn.close()
+        assert version_count == 1
+
+
+@pytest.mark.legacy_migrations
+class TestLegacyMigrationRunner:
+    """Legacy sqlite3 runner archived in migrations/legacy_sqlite/."""
+
+    def test_schema_migrations_table_from_legacy_runner(self):
+        from migrations.legacy_sqlite.run_migrations import ensure_schema_migrations_table
+
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            path = f.name
         try:
-            assert run_migrations(temp_db) is True
-            applied_first = len(get_applied_migrations(temp_db))
-            assert run_migrations(temp_db) is True
-            applied_second = len(get_applied_migrations(temp_db))
+            ensure_schema_migrations_table(path)
+            conn = sqlite3.connect(path)
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'")
+            assert cursor.fetchone() is not None
+            conn.close()
         finally:
-            if original_db_url is not None:
-                os.environ["DATABASE_URL"] = original_db_url
-            else:
-                os.environ.pop("DATABASE_URL", None)
+            Path(path).unlink(missing_ok=True)
 
-        assert applied_first == applied_second
-        assert applied_first > 0
+    def test_legacy_migration_chain_after_create_all(self):
+        """Legacy path: create_all + run_migrations — kept for parity with pre-113 upgrades."""
+        from sqlalchemy import create_engine
+
+        from migrations.legacy_sqlite.run_migrations import get_applied_migrations, run_migrations
+        from models import db as _db
+
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            path = f.name
+
+        engine = create_engine(f"sqlite:///{path}")
+        _db.metadata.create_all(engine)
+        engine.dispose()
+
+        try:
+            assert run_migrations(path) is True
+            applied = get_applied_migrations(path)
+            assert len(applied) >= 40
+        finally:
+            for suffix in ("", "-wal", "-shm"):
+                p = Path(f"{path}{suffix}")
+                if p.exists():
+                    p.unlink(missing_ok=True)

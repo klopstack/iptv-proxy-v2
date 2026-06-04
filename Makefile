@@ -99,8 +99,8 @@ run: ## Run the application locally
 debug: ## Run the application in debug mode with auto-reload
 	FLASK_DEBUG=1 FLASK_ENV=development python app.py
 
-migrate: ## Run database migrations
-	python run_migrations.py
+migrate: ## Run database migrations (Alembic)
+	flask db upgrade
 
 docker-build: ## Build Docker image
 	docker-compose build
@@ -115,6 +115,6 @@ docker-stop: ## Stop Docker containers
 	docker-compose down
 
 docker-migrate: ## Run migrations in Docker container
-	docker exec -it iptv-proxy-v2 python run_migrations.py
+	docker exec -it iptv-proxy-v2 flask db upgrade
 
 ci: lint test-js test ## Run all CI checks (Python + JavaScript linting + tests)

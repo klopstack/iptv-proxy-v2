@@ -88,7 +88,7 @@ def record_migration(db_path: str, migration_name: str) -> None:
 
 def discover_migrations():
     """Find all migration files in the migrations directory."""
-    migrations_dir = Path(__file__).parent / "migrations"
+    migrations_dir = Path(__file__).parent
 
     if not migrations_dir.exists():
         return []

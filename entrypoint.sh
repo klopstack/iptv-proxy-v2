@@ -26,13 +26,9 @@ else
     fi
 fi
 
-# Ensure ORM tables exist, then apply column/index migrations
-echo "Ensuring database schema (create_all)..."
-python -c 'from app import app, db; app.app_context().push(); db.create_all()'
-
-# Run database migrations (tracked in schema_migrations)
-echo "Running database migrations..."
-python run_migrations.py
+# Run database migrations (Alembic)
+echo "Running database migrations (Alembic)..."
+flask db upgrade
 if [ $? -ne 0 ]; then
     echo "ERROR: Database migrations failed"
     exit 1

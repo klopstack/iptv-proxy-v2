@@ -9,7 +9,7 @@ import pytest
 def _load_migration():
     spec = importlib.util.spec_from_file_location(
         "mig_event_composite_unique",
-        "migrations/2026_06_05_event_composite_external_id_source.py",
+        "migrations/legacy_sqlite/2026_06_05_event_composite_external_id_source.py",
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
