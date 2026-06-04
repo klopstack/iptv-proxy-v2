@@ -160,11 +160,11 @@ class TestTheSportsDBCalendarScraper:
     def test_cache_key_generation(self, scraper):
         """Test cache key format."""
         key = scraper._get_cache_key("2024-06-15", "")
-        assert key.startswith("api-v1:2024-06-15:")
+        assert key.startswith(f"{CACHE_KEY_VERSION}:2024-06-15:")
         assert key.endswith(":anon")
 
         key_with_sport = scraper._get_cache_key("2024-06-15", "Boxing")
-        assert key_with_sport == "api-v1:2024-06-15:Boxing:anon"
+        assert key_with_sport == f"{CACHE_KEY_VERSION}:2024-06-15:Boxing:anon"
 
     def test_is_login_page_with_error(self):
         assert TheSportsDBCalendarScraper._is_login_page_with_error("<h2>Login</h2><div class='form-group has-error'>")
