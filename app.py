@@ -12,6 +12,7 @@ import os
 
 from flask import Flask
 from flask_cors import CORS
+from flask_migrate import Migrate
 
 from error_handling import register_error_handlers, wrap_blueprint_json_errors
 from models import SyncMetadata, db  # noqa: F401 - imported for db.create_all()
@@ -44,6 +45,7 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 # Initialize extensions
 CORS(app)
 db.init_app(app)
+Migrate(app, db, directory="alembic_migrations", compare_type=True)
 
 # Enable WAL mode for SQLite after db initialization
 if "sqlite" in app.config["SQLALCHEMY_DATABASE_URI"]:

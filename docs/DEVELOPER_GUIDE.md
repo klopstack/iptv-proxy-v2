@@ -216,16 +216,23 @@ mypy app.py models/ services/  # Type checking
 
 ### Boot order (Docker / production)
 
-1. `db.create_all()` — creates any tables defined in models but missing from the file
-2. `python run_migrations.py` — applies column/index changes; records each file in `schema_migrations`
+[`entrypoint.sh`](../entrypoint.sh) runs **`flask db upgrade`** (Alembic via Flask-Migrate) on container start. This creates or updates all tables and records the revision in `alembic_version`.
 
-See [`entrypoint.sh`](../entrypoint.sh). Do not rely on `create_all()` alone for upgrades; always add a migration for schema changes.
+**Fresh install:** `flask db upgrade` creates the full schema (~46 tables).
 
-**Local init:** `flask init-db` runs `create_all()` only. Run `python run_migrations.py` afterward so indexes and DDL from migrations match production (Docker entrypoint runs both steps).
+**Existing database (legacy runner):** If the DB was already migrated by the old `run_migrations.py` system (has a populated `schema_migrations` table), stamp Alembic once before upgrading the container image:
+
+```bash
+DATABASE_URL=sqlite:///data/iptv_proxy.db alembic stamp head
+```
+
+Leave the legacy `schema_migrations` table in place; it is historical only.
+
+**Local init:** `flask init-db` runs `create_all()` only (dev convenience). For production parity use `flask db upgrade`.
 
 ### Foreign keys
 
-SQLite requires `PRAGMA foreign_keys=ON` per connection. The app enables this in [`app.py`](../app.py) (`set_sqlite_pragma`). [`run_migrations.py`](../run_migrations.py) uses the same pragma via `sqlite_connect()`. Migration DDL with `ON DELETE CASCADE` only takes effect when this pragma is set.
+SQLite requires `PRAGMA foreign_keys=ON` per connection. The app enables this in [`app.py`](../app.py) (`set_sqlite_pragma`). Alembic migrations run through the same SQLAlchemy engine. Migration DDL with `ON DELETE CASCADE` only takes effect when this pragma is set.
 
 ### Account deletion
 
@@ -257,62 +264,53 @@ PPV orphan event pruning remains inline during enrichment (not scheduled).
 ### Adding a schema change
 
 1. Update SQLAlchemy models in `models/`
-2. Add idempotent migration in `migrations/YYYY_MM_DD_description.py`
-3. Run `python run_migrations.py` locally
-4. Add or extend `tests/test_migrations.py` / `tests/test_schema_parity.py`
+2. `flask db revision --autogenerate -m "describe_change"`
+3. Review the generated file in `alembic_migrations/versions/`
+4. `flask db upgrade` locally
+5. Add or extend `tests/test_migrations.py` / `tests/test_schema_parity.py`
 
 ### Indexes
 
-Use `python run_migrations.py` only for schema migrations.
+Define indexes on SQLAlchemy models or in Alembic revisions. Apply with `flask db upgrade`.
 
-## Database Migrations
+## Database Migrations (Alembic)
 
-Migrations live in `migrations/` and are named with date prefix (e.g., `2024_01_19_add_tag_rule_replacement.py`).
+Migrations live in [`alembic_migrations/`](../alembic_migrations/) (Flask-Migrate + Alembic). Legacy SQLite-only files are archived in [`migrations/legacy_sqlite/`](../migrations/legacy_sqlite/).
 
-### Creating a Migration
+### Commands
 
-```python
-"""Description of what this migration does"""
-import logging
-import sqlite3
+```bash
+# Apply pending migrations
+flask db upgrade
 
-logger = logging.getLogger(__name__)
+# Roll back one revision
+flask db downgrade
 
-def migrate(db_path):
-    """Add/modify database schema"""
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    try:
-        # Check if change already applied (idempotent)
-        cursor.execute("PRAGMA table_info(table_name)")
-        columns = [row[1] for row in cursor.fetchall()]
-        
-        if "new_column" not in columns:
-            cursor.execute("ALTER TABLE table_name ADD COLUMN new_column VARCHAR(255)")
-            conn.commit()
-            return True, "Added new_column"
-        else:
-            return True, "new_column already exists, skipping"
-    finally:
-        conn.close()
+# Generate migration from model changes
+flask db revision --autogenerate -m "add_foo_column"
+
+# Stamp existing DB at current head (no DDL)
+alembic stamp head
+
+# Direct Alembic CLI (uses root alembic.ini)
+alembic upgrade head
+alembic current
 ```
 
-### Migration Guidelines
+### Migration guidelines
 
-- **Always make migrations idempotent** (safe to run multiple times)
-- Check if changes exist before applying
-- Use raw sqlite3, not SQLAlchemy (migrations receive db_path string)
-- Return `(True, "message")` for success, `(False, "error")` for failure
+- Review autogenerate output — Alembic may miss renames or data backfills
+- SQLite uses batch mode (`render_as_batch=True` in `alembic_migrations/env.py`); PostgreSQL uses native `ALTER TABLE`
+- `compare_type=True` detects column type drift between models and database
 
-### Running Migrations
+### Running migrations
 
 ```bash
 # Local
-python run_migrations.py
+flask db upgrade
 
 # Docker
-docker exec -it iptv-proxy-v2 python run_migrations.py
+docker exec -it iptv-proxy-v2 flask db upgrade
 ```
 
 ## Development Workflows

@@ -216,6 +216,42 @@ Current pinned versions:
 
 Alternatively vendor the files under `static/vendor/` and serve them locally (no SRI required for same-origin assets).
 
+## Database migrations
+
+Schema is managed by **Alembic** (via Flask-Migrate). On container start, [`entrypoint.sh`](../entrypoint.sh) runs `flask db upgrade`.
+
+### Fresh install
+
+No action required — the entrypoint applies the baseline migration automatically.
+
+### Upgrading from the legacy SQLite runner
+
+If your production database was migrated by the old `run_migrations.py` system (has a `schema_migrations` table with applied rows), **stamp** Alembic before deploying this version:
+
+```bash
+# Stop the container, then on the host (adjust DATABASE_URL path):
+DATABASE_URL=sqlite:///path/to/iptv_proxy.db alembic stamp head
+
+# Restart container — subsequent boots use flask db upgrade normally
+```
+
+Do **not** run `flask db upgrade` on a fully-migrated legacy database without stamping first — the baseline migration would attempt to recreate existing tables.
+
+### Manual migration commands
+
+```bash
+# Apply pending revisions
+docker exec -it iptv-proxy-v2 flask db upgrade
+
+# Roll back one revision (use with caution in production)
+docker exec -it iptv-proxy-v2 flask db downgrade
+
+# Check current revision
+docker exec -it iptv-proxy-v2 alembic current
+```
+
+Set `DATABASE_URL` when running Alembic on the host outside Docker (default in container: `sqlite:////app/data/iptv_proxy.db`).
+
 ## Related documentation
 
 - [architecture/admin-auth-and-deployment-security.md](architecture/admin-auth-and-deployment-security.md)

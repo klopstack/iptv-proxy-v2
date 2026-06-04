@@ -1,90 +1,39 @@
 # Database Migrations
 
-This directory contains database migration scripts that are run automatically on container startup.
+Schema changes are managed by **Alembic** via **Flask-Migrate**.
 
-## How It Works
-
-1. **Boot**: `entrypoint.sh` runs `db.create_all()` then `python run_migrations.py`
-2. **Tracking**: Applied migrations are recorded in the `schema_migrations` table (skipped on subsequent boots)
-3. **Idempotent**: Each migration checks if changes are needed before applying
-4. **Sequential**: Files run in alphabetical order by filename
-5. **Safe**: Failed migrations abort container startup
-
-## Naming Convention
-
-Migrations should be named: `YYYY_description.py`
-
-Example:
-- `2024_01_add_indexes.py`
-- `2024_02_add_column.py`
-
-## Creating a Migration
-
-```python
-"""
-Description of what this migration does
-"""
-import sqlite3
-import os
-import sys
-
-
-def migrate(db_path):
-    """
-    Apply migration if needed.
-    
-    Args:
-        db_path: Path to the SQLite database
-        
-    Returns:
-        tuple: (success: bool, message: str)
-    """
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        
-        # Check if migration is needed
-        # ... your check logic ...
-        
-        # Apply changes
-        # ... your migration logic ...
-        
-        conn.commit()
-        conn.close()
-        
-        return True, "Migration applied successfully"
-        
-    except Exception as e:
-        return False, f"Migration failed: {e}"
-
-
-if __name__ == "__main__":
-    # For standalone execution
-    db_path = os.getenv("DATABASE_URL", "sqlite:///data/iptv_proxy.db")
-    if db_path.startswith("sqlite:///"):
-        db_path = db_path.replace("sqlite:///", "")
-    
-    success, message = migrate(db_path)
-    print(message)
-    sys.exit(0 if success else 1)
-```
-
-## Testing a Migration
+## Quick reference
 
 ```bash
-# Test standalone
-python migrations/2024_01_add_indexes.py
+# Apply all pending migrations (local or Docker)
+flask db upgrade
 
-# Test full migration runner
-python run_migrations.py
+# Roll back one revision
+flask db downgrade
+
+# Generate a new migration after model changes
+flask db revision --autogenerate -m "describe_change"
+
+# Existing DB already at current schema (legacy runner) — stamp without DDL
+alembic stamp head
 ```
 
-## Rollback
+Configuration: [`alembic.ini`](../alembic.ini), [`alembic_migrations/`](../alembic_migrations/).
 
-These migrations don't support automatic rollback. If a migration fails:
+## Boot (Docker)
 
-1. Restore from backup (include `.db`, `-wal`, and `-shm` files)
-2. Fix the migration script
-3. Run again (migrations are idempotent; already-recorded names in `schema_migrations` are skipped)
+[`entrypoint.sh`](../entrypoint.sh) runs `flask db upgrade` on container start.
 
-To re-run a single migration after fixing it, delete its row from `schema_migrations` before restarting.
+## Legacy system
+
+Pre-Alembic SQLite migrations are archived in [`legacy_sqlite/`](legacy_sqlite/) for reference only.
+
+## Adding a schema change
+
+1. Update SQLAlchemy models in `models/`
+2. `flask db revision --autogenerate -m "description"`
+3. Review the generated file in `alembic_migrations/versions/`
+4. `flask db upgrade` locally
+5. Extend `tests/test_migrations.py` / `tests/test_schema_parity.py` if needed
+
+See [DEVELOPER_GUIDE.md](../docs/DEVELOPER_GUIDE.md) for full workflow.
