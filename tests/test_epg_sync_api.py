@@ -220,7 +220,7 @@ class TestEpgSyncMigration:
 
         spec = importlib.util.spec_from_file_location(
             "mig_epg_progress",
-            "migrations/2026_05_27_add_epg_source_sync_progress.py",
+            "migrations/legacy_sqlite/2026_05_27_add_epg_source_sync_progress.py",
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -253,7 +253,7 @@ class TestEpgSyncMigration:
 
         spec = importlib.util.spec_from_file_location(
             "mig_epg_progress",
-            "migrations/2026_05_27_add_epg_source_sync_progress.py",
+            "migrations/legacy_sqlite/2026_05_27_add_epg_source_sync_progress.py",
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)

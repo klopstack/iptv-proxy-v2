@@ -1,4 +1,4 @@
-"""Schema parity: migrations + create_all produce expected tables and indexes."""
+"""Schema parity: Alembic upgrade produces expected tables and indexes."""
 
 import sqlite3
 import tempfile
@@ -6,8 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from run_migrations import run_migrations, sqlite_connect
+from tests.alembic_test_helpers import alembic_upgrade_sqlite
 from tests.schema_parity_helpers import FK_ONDELETE_SPOT_CHECKS, REQUIRED_CHANNEL_INDEXES
+
+
+def _sqlite_connect(db_path: str) -> sqlite3.Connection:
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
 
 
 def _channel_indexes(conn: sqlite3.Connection) -> set[str]:
@@ -27,19 +33,12 @@ def _fk_ondelete(conn: sqlite3.Connection, table: str, column: str) -> str | Non
 
 @pytest.fixture
 def migrated_db():
-    """Database built like production: create_all then tracked migrations."""
-    from sqlalchemy import create_engine
-
-    from models import db as _db
-
+    """Database built like production: Alembic upgrade head."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         path = f.name
 
-    engine = create_engine(f"sqlite:///{path}")
-    _db.metadata.create_all(engine)
-    engine.dispose()
+    alembic_upgrade_sqlite(path)
 
-    assert run_migrations(path) is True
     yield path
 
     for suffix in ("", "-wal", "-shm"):
@@ -59,7 +58,7 @@ class TestSchemaParity:
             "channel_tags",
             "playlist_configs",
             "epg_programs",
-            "schema_migrations",
+            "alembic_version",
             "sync_metadata",
         ):
             assert name in tables, f"missing table {name}"
@@ -113,7 +112,7 @@ class TestSchemaParity:
             assert row is not None, "ix_channel_ppv_queue missing from create_all test DB"
 
     def test_fk_ondelete_spot_checks(self, migrated_db):
-        conn = sqlite_connect(migrated_db)
+        conn = _sqlite_connect(migrated_db)
         try:
             for table, column, ref_table, ref_col, expected in FK_ONDELETE_SPOT_CHECKS:
                 actual = _fk_ondelete(conn, table, column)
