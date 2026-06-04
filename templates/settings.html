@@ -148,6 +148,22 @@
                         <input type="password" class="form-control" id="ppv-thesportsdb-site-password"
                                placeholder="Leave blank to keep existing password" autocomplete="current-password">
                     </div>
+                    <hr class="my-3">
+                    <p class="text-muted small mb-2">
+                        <strong>Calendar sources.</strong> ESPN tennis (ATP/WTA) is always merged for recent dates.
+                        SofaScore adds secondary tennis fixtures when ESPN does not list a match.
+                    </p>
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="ppv-sofascore-calendar-enabled">
+                            <label class="form-check-label" for="ppv-sofascore-calendar-enabled">
+                                <strong>SofaScore tennis calendar</strong>
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            Fills wheelchair, ITF, and other tennis gaps. Re-run enrichment after changing.
+                        </div>
+                    </div>
                     <div class="d-flex flex-wrap gap-2">
                         <button type="submit" class="btn btn-success">
                             <i class="bi bi-save"></i> Save PPV Enrichment Settings
@@ -500,6 +516,8 @@ async function loadPpvEnrichmentConfig() {
     try {
         const data = await window.PpvApi.fetchPpvEnrichmentConfig();
         document.getElementById('ppv-enrichment-enabled').checked = data.enabled !== false;
+        document.getElementById('ppv-sofascore-calendar-enabled').checked =
+            data.sofascore_calendar_enabled === true;
         if (data.has_api_key && data.api_key_preview) {
             hintEl.textContent =
                 `Current key: ${data.api_key_preview}. Leave the field blank to keep it; enter a new value to replace, or use Clear API key.`;
@@ -531,6 +549,7 @@ document.getElementById('ppv-enrichment-config-form').addEventListener('submit',
     const submitBtn = e.target.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
     const enabled = document.getElementById('ppv-enrichment-enabled').checked;
+    const sofascoreCalendarEnabled = document.getElementById('ppv-sofascore-calendar-enabled').checked;
     const apiKeyInput = document.getElementById('ppv-thesportsdb-api-key');
     const apiKeyRaw = apiKeyInput.value;
     const siteUsernameInput = document.getElementById('ppv-thesportsdb-site-username');
@@ -543,7 +562,7 @@ document.getElementById('ppv-enrichment-config-form').addEventListener('submit',
     statusEl.style.display = 'none';
 
     try {
-        const payload = { enabled };
+        const payload = { enabled, sofascoreCalendarEnabled };
         if (apiKeyRaw.length > 0) {
             payload.apiKey = apiKeyRaw.trim();
         }

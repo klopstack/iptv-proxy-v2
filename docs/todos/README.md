@@ -8,7 +8,7 @@ This directory contains detailed work items identified during the post-restructu
 |-------|------------|
 | Dashboard follow-ups | [107](./107-dashboard-stats-performance-hardening.md)–[110](./110-dashboard-optional-ux-follow-ups.md) |
 | PostgreSQL migration | [111](./111-pg-prep-raw-sqlite3-audit.md)–[119](./119-pg-migration-cleanup-and-docs.md) |
-| PPV production matching | [120](./120-fix-ppv-date-extraction-parsing-bugs.md)–[126](./126-sofascore-calendar-multi-sport-and-enrichment.md) (120 ✅; 124 🟡) |
+| PPV production matching | [120](./120-fix-ppv-date-extraction-parsing-bugs.md)–[127](./127-ppv-multi-player-competitor-extraction.md) (120–126 ✅; **127** ⬜ doubles parsing) |
 
 Waves **1–10** ✅ — merged PRs #10–51 (audit remediation through final doc review). Wave **9** batches **W–AA** (#39–47) and Wave **10** (#101 doc sync) complete.
 
@@ -262,6 +262,7 @@ Identified from live analysis on `docker.klopnet.com` (18,625 active PPV channel
 | 124 | [124-ppv-enrichment-attempt-tracking-and-requeue.md](./124-ppv-enrichment-attempt-tracking-and-requeue.md) | ✅ | Attempt tracking + requeue — PR [#53](https://github.com/klopstack/iptv-proxy-v2/pull/53) |
 | 125 | [125-sofascore-tennis-calendar-slice1.md](./125-sofascore-tennis-calendar-slice1.md) | ✅ | SofaScore client + parser — PR [#58](https://github.com/klopstack/iptv-proxy-v2/pull/58) |
 | 126 | [126-sofascore-calendar-multi-sport-and-enrichment.md](./126-sofascore-calendar-multi-sport-and-enrichment.md) | ✅ | SofaScore merge + doc — PR [#60](https://github.com/klopstack/iptv-proxy-v2/pull/60) |
+| 127 | [127-ppv-multi-player-competitor-extraction.md](./127-ppv-multi-player-competitor-extraction.md) | ⬜ | Tennis doubles / 2v2 channel names → four-player extract + match |
 
 ```
 124-attempt-tracking ✅ (#53)
@@ -269,9 +270,10 @@ Identified from live analysis on `docker.klopnet.com` (18,625 active PPV channel
 120 ──► 122 ESPN tennis ✅ (#55 spike, #56) ──► 125 SofaScore slice 1 ✅ (#58) ──► 126 wire ✅ (#60)
 120 ──► 123-extended-coverage ✅ (D #59, C #61, B #62, A #63)
 124-requeue ──► run on production after deploy
+127-doubles-extraction ──► ~53% of tennis no_match unique keys (after 122/126)
 ```
 
-**Highest impact ops:** Requeue `no_match` per [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) after Wave 12 deploy.
+**Highest impact ops:** Requeue `no_match` per [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) after Wave 12 deploy; then [127](./127-ppv-multi-player-competitor-extraction.md) for doubles/wheelchair-doubles titles.
 
 ---
 

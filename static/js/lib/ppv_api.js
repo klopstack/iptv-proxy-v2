@@ -35,21 +35,43 @@ export async function fetchPpvEnrichmentConfig() {
     if (!response.ok) {
         throw new Error('Failed to load PPV enrichment config');
     }
-    return response.json();
+    const json = await response.json();
+    return json.data ?? json;
 }
 
 /**
- * @param {{ enabled?: boolean, apiKey?: string|null }} options
+ * @param {{
+ *   enabled?: boolean,
+ *   apiKey?: string|null,
+ *   siteUsername?: string,
+ *   sitePassword?: string,
+ *   sofascoreCalendarEnabled?: boolean,
+ * }} options
  * Pass apiKey only when setting or clearing the key (empty string clears).
  * @returns {Promise<{ message: string }>}
  */
-export async function savePpvEnrichmentConfig({ enabled, apiKey } = {}) {
+export async function savePpvEnrichmentConfig({
+    enabled,
+    apiKey,
+    siteUsername,
+    sitePassword,
+    sofascoreCalendarEnabled,
+} = {}) {
     const body = {};
     if (enabled !== undefined) {
         body.enabled = enabled;
     }
     if (apiKey !== undefined) {
         body.api_key = apiKey;
+    }
+    if (siteUsername !== undefined) {
+        body.site_username = siteUsername;
+    }
+    if (sitePassword !== undefined) {
+        body.site_password = sitePassword;
+    }
+    if (sofascoreCalendarEnabled !== undefined) {
+        body.sofascore_calendar_enabled = sofascoreCalendarEnabled;
     }
 
     const response = await fetch(PPV_ENRICHMENT_CONFIG_URL, {

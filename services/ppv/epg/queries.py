@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import func, or_
 
 from models import Channel, Event, EventChannelLink, db
+from services.ppv.persistence import sync_event_sport_from_league
 from services.ppv.serializers import serialize_event_detail, serialize_event_summary, serialize_utc_iso
 
 
@@ -73,6 +74,10 @@ def list_ppv_events(
 
     offset = (page - 1) * per_page
     events = query.order_by(Event.scheduled_at.desc()).offset(offset).limit(per_page).all()
+
+    sport_repairs = sum(1 for event in events if sync_event_sport_from_league(event))
+    if sport_repairs:
+        db.session.commit()
 
     event_ids = [event.id for event in events]
     channel_counts: Dict[int, int] = {}

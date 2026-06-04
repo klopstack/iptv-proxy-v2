@@ -160,11 +160,11 @@ class TestTheSportsDBCalendarScraper:
     def test_cache_key_generation(self, scraper):
         """Test cache key format."""
         key = scraper._get_cache_key("2024-06-15", "")
-        assert key.startswith("api-v1:2024-06-15:")
+        assert key.startswith(f"{CACHE_KEY_VERSION}:2024-06-15:")
         assert key.endswith(":anon")
 
         key_with_sport = scraper._get_cache_key("2024-06-15", "Boxing")
-        assert key_with_sport == "api-v1:2024-06-15:Boxing:anon"
+        assert key_with_sport == f"{CACHE_KEY_VERSION}:2024-06-15:Boxing:anon"
 
     def test_is_login_page_with_error(self):
         assert TheSportsDBCalendarScraper._is_login_page_with_error("<h2>Login</h2><div class='form-group has-error'>")
@@ -597,6 +597,28 @@ class TestCalendarHTMLParsing:
         assert event.time_utc == "00:00"
         assert event.home_team == "Buriram United"
         assert event.away_team == "Prachuap"
+        assert event.sport == "Soccer"
+
+    def test_parse_event_row_baseball_column_layout(self, scraper):
+        """Sport column from browse_calendar (e.g. Baseball | MLB | event)."""
+        from bs4 import BeautifulSoup
+
+        row_html = """
+        <tr>
+            <td>23:10</td>
+            <td><img src="/images/icons/svg/sports/baseball.svg"/>
+                <a href="/browse_calendar/?d=2026-06-04&amp;s=baseball">Baseball</a></td>
+            <td><img src="league.png"/> MLB</td>
+            <td><a href="/event/2388001-san-francisco-giants-vs-chicago-cubs">
+                San Francisco Giants vs Chicago Cubs</a></td>
+        </tr>
+        """
+        soup = BeautifulSoup(row_html, "html.parser")
+        event = scraper._parse_event_row(soup.find("tr"), "2026-06-07")
+
+        assert event is not None
+        assert event.sport == "Baseball"
+        assert event.league_name == "MLB"
 
     def test_parse_calendar_html_new_layout(self, scraper):
         """Test parsing calendar HTML with the 4-column layout."""
@@ -621,8 +643,49 @@ class TestCalendarHTMLParsing:
         assert len(events) == 2
         assert events[0].event_id == "1111111"
         assert events[0].time_utc == "00:00"
+        assert events[0].sport == "Soccer"
         assert events[1].event_id == "2222222"
         assert events[1].time_utc == "14:30"
+        assert events[1].sport == "Basketball"
+
+    def test_from_thesportsdb_api_sets_str_sport(self):
+        raw = {
+            "idEvent": "2388001",
+            "strEvent": "San Francisco Giants vs Chicago Cubs",
+            "strLeague": "MLB",
+            "strSport": "Baseball",
+            "strHomeTeam": "Chicago Cubs",
+            "strAwayTeam": "San Francisco Giants",
+            "dateEvent": "2026-06-07",
+            "strTime": "23:10:00",
+        }
+        event = CalendarEvent.from_thesportsdb_api(raw, date="2026-06-07")
+        assert event is not None
+        assert event.sport == "Baseball"
+        assert event.league_name == "MLB"
+
+    def test_merge_calendar_events_preserves_html_sport(self, scraper):
+        html_event = CalendarEvent(
+            event_id="1",
+            event_name="Giants vs Cubs",
+            league_name="MLB",
+            time_utc="23:10",
+            date="2026-06-07",
+            sport="Baseball",
+        )
+        api_event = CalendarEvent(
+            event_id="1",
+            event_name="Giants vs Cubs",
+            league_name="MLB",
+            time_utc="23:10",
+            date="2026-06-07",
+            home_team="Chicago Cubs",
+            away_team="San Francisco Giants",
+        )
+        merged = scraper._merge_calendar_events([html_event], [api_event])
+        assert len(merged) == 1
+        assert merged[0].sport == "Baseball"
+        assert merged[0].home_team == "Chicago Cubs"
 
 
 class TestFindMatchingEvents:

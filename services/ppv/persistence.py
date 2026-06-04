@@ -4,15 +4,93 @@ Persist PPV match results to Event and EventChannelLink tables.
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Iterable, Optional, Tuple
+from typing import Any, Iterable, Optional, Tuple, cast
 
 from models import Channel, Event, EventChannelLink, db
 from services.datetime_utils import to_naive_utc
 from services.ppv.constants import MAX_EVENT_AGE_DAYS, MAX_EVENT_FUTURE_DAYS
 from services.ppv.enrichment.attempt_tracking import _record_enrichment_attempt
+from services.ppv.matching.context import sport_key_from_league_name
+from services.ppv.sport_registry import normalize_sport_key, normalize_sport_key_exact
 from services.thesportsdb_calendar_scraper import CalendarEvent
 
 logger = logging.getLogger(__name__)
+
+# Canonical display labels for Event.sport (context providers key off these strings).
+_SPORT_KEY_DISPLAY: dict[str, str] = {
+    "mlb": "MLB",
+    "milb": "MiLB",
+    "nhl": "NHL",
+    "nba": "NBA",
+    "wnba": "WNBA",
+    "nfl": "NFL",
+    "ncaaf": "NCAAF",
+    "ncaab": "NCAAB",
+    "mls": "MLS",
+    "soccer": "Soccer",
+    "nwsl": "NWSL",
+    "wsl": "WSL",
+    "ufc": "UFC",
+    "tennis": "Tennis",
+}
+
+
+def _sport_display_for_league_key(sport_key: str) -> str:
+    return _SPORT_KEY_DISPLAY.get(sport_key, sport_key.upper())
+
+
+def _sport_key_for_label(label: Optional[str]) -> Optional[str]:
+    if not label:
+        return None
+    return normalize_sport_key_exact(label) or normalize_sport_key(label)
+
+
+def _resolve_event_sport(calendar_event: CalendarEvent) -> Optional[str]:
+    """Resolve Event.sport from calendar row; never default TheSportsDB rows to MiLB."""
+    league_key = sport_key_from_league_name(calendar_event.league_name)
+    from_league = _sport_display_for_league_key(league_key) if league_key else None
+
+    explicit = calendar_event.sport
+    if explicit:
+        explicit_key = _sport_key_for_label(explicit)
+        if league_key and explicit_key and explicit_key != league_key:
+            return from_league
+        return str(explicit)
+
+    return from_league
+
+
+def sync_event_sport_from_league(event: Event) -> bool:
+    """
+    Align Event.sport with league_name when they disagree (legacy MiLB default on MLB rows).
+
+    Returns True when sport was corrected.
+    """
+    if not event.league_name:
+        return False
+
+    league_key = sport_key_from_league_name(event.league_name)
+    if not league_key:
+        return False
+
+    desired = _sport_display_for_league_key(league_key)
+    current_key = _sport_key_for_label(event.sport)
+    if current_key == league_key or event.sport == desired:
+        return False
+
+    event.sport = desired
+    return True
+
+
+def repair_stale_ppv_event_sports(*, commit: bool = True) -> int:
+    """Bulk-fix PPV events whose sport label disagrees with league_name."""
+    fixed = 0
+    for event in Event.query.filter(Event.is_ppv.is_(True), Event.league_name.isnot(None)).all():  # noqa: E712
+        if sync_event_sport_from_league(event):
+            fixed += 1
+    if fixed and commit:
+        db.session.commit()
+    return fixed
 
 
 def create_or_update_event(calendar_event: CalendarEvent) -> Tuple[Optional[Event], bool]:
@@ -75,15 +153,17 @@ def create_or_update_event(calendar_event: CalendarEvent) -> Tuple[Optional[Even
                 event.home_team_id = calendar_event.home_team_id
             if getattr(calendar_event, "away_team_id", None):
                 event.away_team_id = calendar_event.away_team_id
-            if getattr(calendar_event, "sport", None):
-                event.sport = calendar_event.sport
+            resolved_sport = _resolve_event_sport(calendar_event)
+            if resolved_sport:
+                event.sport = resolved_sport
+            sync_event_sport_from_league(event)
             return event, False
 
         event = Event(
             external_id=calendar_event.event_id,
             source=event_source,
             title=calendar_event.event_name,
-            sport=getattr(calendar_event, "sport", None) or "MiLB",
+            sport=_resolve_event_sport(calendar_event) or "",
             home_team_id=getattr(calendar_event, "home_team_id", None) or "",
             home_team_name=calendar_event.home_team or "Unknown",
             away_team_id=getattr(calendar_event, "away_team_id", None) or "",
@@ -98,6 +178,7 @@ def create_or_update_event(calendar_event: CalendarEvent) -> Tuple[Optional[Even
             status=Event.STATUS_SCHEDULED,
         )
         db.session.add(event)
+        sync_event_sport_from_league(event)
         return event, True
 
     except Exception as e:
@@ -121,7 +202,7 @@ def link_channel_to_event(
         if confidence > existing.match_confidence:
             existing.match_confidence = confidence
             existing.match_method = match_method
-        return existing
+        return cast(EventChannelLink, existing)
 
     link = EventChannelLink(
         event_id=event.id,
@@ -150,16 +231,19 @@ def sync_enrichment_status_from_links(channel_ids: Optional[Iterable[int]] = Non
     if not linked_ids:
         return 0
 
-    return Channel.query.filter(
-        Channel.id.in_(linked_ids),
-        Channel.is_ppv.is_(True),
-        Channel.ppv_enrichment_status != "matched",
-    ).update(
-        {
-            Channel.ppv_enrichment_status: "matched",
-            Channel.ppv_enrichment_error: None,
-        },
-        synchronize_session=False,
+    return cast(
+        int,
+        Channel.query.filter(
+            Channel.id.in_(linked_ids),
+            Channel.is_ppv.is_(True),
+            Channel.ppv_enrichment_status != "matched",
+        ).update(
+            {
+                Channel.ppv_enrichment_status: "matched",
+                Channel.ppv_enrichment_error: None,
+            },
+            synchronize_session=False,
+        ),
     )
 
 
@@ -168,7 +252,10 @@ def clear_event_links_for_channels(channel_ids: Iterable[int]) -> int:
     ids = list(channel_ids)
     if not ids:
         return 0
-    return EventChannelLink.query.filter(EventChannelLink.channel_id.in_(ids)).delete(synchronize_session=False)
+    return cast(
+        int,
+        EventChannelLink.query.filter(EventChannelLink.channel_id.in_(ids)).delete(synchronize_session=False),
+    )
 
 
 def persist_match(

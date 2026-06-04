@@ -7,6 +7,7 @@ This bypasses the API rate limit for bulk event discovery.
 The calendar page at https://www.thesportsdb.com/browse_calendar/?s=&d=YYYY-MM-DD
 contains a table of all events for a given date with:
 - Time (UTC)
+- Sport (e.g., Baseball, Soccer, Ice Hockey)
 - League name and icon
 - Event name (e.g., "Team A vs Team B")
 - Link to event detail page (contains event ID)
@@ -39,7 +40,7 @@ CACHE_TTL_SECONDS = 3600 * 12
 PERSISTENT_CACHE_FILENAME = "calendar_cache.json"
 
 # Cache key version — bump when calendar fetch logic changes (invalidates stale entries)
-CACHE_KEY_VERSION = "api-v1"
+CACHE_KEY_VERSION = "sport-col-v1"
 
 # Request timeout
 REQUEST_TIMEOUT = 30
@@ -238,6 +239,7 @@ class CalendarEvent:
             home_team=home_team,
             away_team=away_team,
             timezone=event_tz,
+            sport=(raw.get("strSport") or "").strip() or None,
         )
         if scheduled:
             event._scheduled_at_cached = scheduled.replace(tzinfo=timezone.utc)
@@ -651,6 +653,21 @@ class TheSportsDBCalendarScraper:
         """Convert a TheSportsDB API event dict to CalendarEvent."""
         return CalendarEvent.from_thesportsdb_api(raw, date=date)
 
+    def _merge_calendar_event_fields(self, primary: CalendarEvent, supplement: CalendarEvent) -> None:
+        """Fill missing primary fields from a duplicate event_id (HTML + API merge)."""
+        if supplement.sport and not primary.sport:
+            primary.sport = supplement.sport
+        if supplement.home_team and not primary.home_team:
+            primary.home_team = supplement.home_team
+        if supplement.away_team and not primary.away_team:
+            primary.away_team = supplement.away_team
+        if supplement.timezone and not primary.timezone:
+            primary.timezone = supplement.timezone
+        if supplement.home_team_id and not primary.home_team_id:
+            primary.home_team_id = supplement.home_team_id
+        if supplement.away_team_id and not primary.away_team_id:
+            primary.away_team_id = supplement.away_team_id
+
     def _merge_calendar_events(
         self,
         html_events: List[CalendarEvent],
@@ -659,7 +676,11 @@ class TheSportsDBCalendarScraper:
         """Merge HTML and API events, deduplicating by event_id."""
         merged: Dict[str, CalendarEvent] = {event.event_id: event for event in html_events}
         for event in api_events:
-            merged.setdefault(event.event_id, event)
+            existing = merged.get(event.event_id)
+            if existing:
+                self._merge_calendar_event_fields(existing, event)
+            else:
+                merged[event.event_id] = event
         return list(merged.values())
 
     def _parse_calendar_html(self, html: str, date: str) -> List[CalendarEvent]:
@@ -709,6 +730,15 @@ class TheSportsDBCalendarScraper:
 
         return events
 
+    def _parse_sport_from_cell(self, cell: Any) -> Optional[str]:
+        """Extract sport label from the calendar Sport column (links/icons stripped)."""
+        if cell is None:
+            return None
+        text = cell.get_text(" ", strip=True)
+        if not text:
+            return None
+        return str(text)
+
     def _parse_time_from_cell(self, time_text: str) -> Optional[str]:
         """Parse HH:MM from a calendar time cell (with or without UTC suffix)."""
         cleaned = re.sub(r"\s*UTC\s*", "", time_text.strip(), flags=re.IGNORECASE).strip()
@@ -724,6 +754,8 @@ class TheSportsDBCalendarScraper:
         event_cell,
         time_utc: str,
         date: str,
+        *,
+        sport: Optional[str] = None,
     ) -> Optional[CalendarEvent]:
         """Build a CalendarEvent from league and event table cells."""
         league_img = league_cell.find("img")
@@ -761,6 +793,7 @@ class TheSportsDBCalendarScraper:
             event_url=event_url,
             league_icon_url=league_icon_url,
             country_flag_url=country_flag_url,
+            sport=sport,
         )
 
     def _parse_event_row(self, row, date: str) -> Optional[CalendarEvent]:
@@ -796,7 +829,8 @@ class TheSportsDBCalendarScraper:
         if not event_cell.find("a", href=re.compile(r"/event/\d+")):
             return None
 
-        return self._extract_event_from_cells(cells[2], event_cell, time_utc, date)
+        sport = self._parse_sport_from_cell(cells[1])
+        return self._extract_event_from_cells(cells[2], event_cell, time_utc, date, sport=sport)
 
     def _parse_teams_from_event_name(self, event_name: str) -> Tuple[Optional[str], Optional[str]]:
         """

@@ -10,6 +10,7 @@ from flask import Blueprint, request
 from api_responses import data_response, no_content, success_response
 from error_handling import ResourceNotFoundError, ValidationError
 from models import Settings, db
+from services.ppv.constants import SETTING_PPV_SOFASCORE_CALENDAR_ENABLED
 
 settings_bp = Blueprint("settings", __name__)
 logger = logging.getLogger(__name__)
@@ -85,6 +86,15 @@ def delete_setting(key):
     return no_content()
 
 
+def _sofascore_calendar_enabled() -> bool:
+    return Settings.get(SETTING_PPV_SOFASCORE_CALENDAR_ENABLED, "false").lower() in (
+        "true",
+        "1",
+        "yes",
+        "on",
+    )
+
+
 @settings_bp.route("/api/ppv-enrichment/config", methods=["GET"])
 def get_ppv_enrichment_config():
     """Get PPV enrichment configuration."""
@@ -100,6 +110,7 @@ def get_ppv_enrichment_config():
             "api_key_preview": _preview_secret(api_key),
             "has_site_credentials": bool(site_username and site_password),
             "site_username_preview": _preview_username(site_username),
+            "sofascore_calendar_enabled": _sofascore_calendar_enabled(),
         }
     )
 
@@ -142,6 +153,15 @@ def update_ppv_enrichment_config():
         from services.thesportsdb_calendar_scraper import reset_calendar_scraper
 
         reset_calendar_scraper()
+
+    if "sofascore_calendar_enabled" in data:
+        Settings.set(
+            SETTING_PPV_SOFASCORE_CALENDAR_ENABLED,
+            "true" if data["sofascore_calendar_enabled"] else "false",
+        )
+        from services.tennis.sofascore_calendar import clear_sofascore_tennis_calendar_cache
+
+        clear_sofascore_tennis_calendar_cache()
 
     return success_response(message="PPV enrichment configuration updated successfully")
 

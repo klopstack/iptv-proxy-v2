@@ -138,7 +138,7 @@ Tennis: Y Kamiji Z Zhu vs A Bernal J Griffioen
 
 Singles extraction is **53/53** on clean `First Last vs First Last` patterns. Seed-suffixed singles also work (`Anna Kalinskaya 22 vs Maja Chwalinska` → correct pair).
 
-Calendar matching for doubles will fail even **with** a tennis API until four-player parsing exists (called out in TODO 122).
+Calendar matching for doubles will fail even **with** a tennis API until four-player parsing exists — see [TODO 127](../todos/127-ppv-multi-player-competitor-extraction.md).
 
 ---
 

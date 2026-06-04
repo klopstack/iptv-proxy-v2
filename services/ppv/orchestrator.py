@@ -78,6 +78,12 @@ class PPVEnrichmentOrchestrator:
             else:
                 batch_size = ENRICHMENT_BATCH_SIZE
 
+        from services.ppv.persistence import repair_stale_ppv_event_sports
+
+        repaired_sports = repair_stale_ppv_event_sports()
+        if repaired_sports:
+            logger.info("Repaired %d PPV event(s) with stale sport labels", repaired_sports)
+
         service = self._get_enrichment_service()
         accounts = [db.session.get(Account, account_id)] if account_id else Account.query.filter_by(enabled=True).all()
 

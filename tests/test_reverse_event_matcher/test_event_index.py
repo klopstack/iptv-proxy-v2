@@ -220,6 +220,22 @@ class TestNamePartIndexing:
         assert first == "amanda"
         assert last == "serrano"
 
+    def test_doubles_side_indexes_each_partner_last_name(self, event_index):
+        """Tennis doubles calendar sides (Player A / Player B) index all surnames."""
+        events = [
+            make_event(
+                event_id="d1",
+                event_name="Doubles",
+                league_name="WTA",
+                home_team="Alize Cornet / Daniela Hantuchova",
+                away_team="Martina Hingis / Angelique Kerber",
+            ),
+        ]
+        event_index.build_indexes(events)
+
+        for surname in ("cornet", "hantuchova", "hingis", "kerber"):
+            assert surname in event_index.last_name_index
+
     def test_single_word_name(self, event_index):
         """Test single-word names are treated as last name."""
         events = [

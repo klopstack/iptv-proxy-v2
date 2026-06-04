@@ -301,11 +301,15 @@ class CalendarMatchPipeline:
                 )
 
         competitors = extraction.get("competitors")
-        if competitors and len(competitors) == 2:
+        competitors_players = extraction.get("competitors_players")
+        if competitors and (len(competitors) == 2 or competitors_players):
             validated_results = []
             for result in match_results:
                 if result.match_type != "both_teams" and not competitors_match_event(
-                    competitors, result.event, context=sport_context
+                    competitors,
+                    result.event,
+                    context=sport_context,
+                    players=competitors_players,
                 ):
                     continue
                 validated_results.append(result)
