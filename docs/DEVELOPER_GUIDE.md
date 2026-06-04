@@ -277,7 +277,9 @@ Define indexes on SQLAlchemy models or in Alembic revisions. Apply with `flask d
 
 Migrations live in [`alembic_migrations/`](../alembic_migrations/) (Flask-Migrate + Alembic). Legacy SQLite-only files are archived in [`migrations/legacy_sqlite/`](../migrations/legacy_sqlite/).
 
-### Commands
+> **PostgreSQL / Alembic:** After [PR #67](https://github.com/klopstack/iptv-proxy-v2/pull/67) merges, schema moves to Alembic (`alembic_migrations/`). Production migration steps: [architecture/pg-migration-guide.md](architecture/pg-migration-guide.md).
+
+### Creating a Migration
 
 ```bash
 # Apply pending migrations
