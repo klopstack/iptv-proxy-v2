@@ -39,7 +39,9 @@ Open / upcoming:
 
 ## Existing SQLite deployments
 
-For production databases already fully migrated by the **legacy** `run_migrations.py` system (rows in `schema_migrations`, no `alembic_version`):
+For production databases already fully migrated by the **legacy** `run_migrations.py` system (rows in `schema_migrations`, empty or missing `alembic_version`):
+
+**Symptom:** First boot on an Alembic image fails with errors like `table accounts already exists` — the baseline migration tried to recreate tables that legacy migrations already applied. **Fix:** stamp before upgrade (see below).
 
 ### 1. Backup
 
@@ -57,21 +59,40 @@ sqlite3 "${DATA_DIR}/iptv_proxy.db" "PRAGMA integrity_check;"
 
 ### 2. Stamp Alembic (before first boot on Alembic image)
 
-**Stop** the `iptv-proxy-v2` container, then stamp the existing schema at head **without running DDL**:
+**Stop** the `iptv-proxy-v2` container, then stamp the existing schema at head **without running DDL**.
+
+Use **`flask db stamp head`**, not bare `alembic stamp head` — Alembic needs Flask app context (`alembic_migrations/env.py` imports the app). A one-off `docker run … alembic stamp head` also fails because the default entrypoint runs `flask db upgrade` first (permission errors on the data volume, or DDL conflicts on legacy DBs).
+
+**Preferred** (when the container can start and is not in a crash loop):
 
 ```bash
-# Using a one-off container with the new image (after PR #67 is released)
-docker run --rm \
-  -v "${DATA_DIR}:/app/data" \
-  -e DATABASE_URL=sqlite:////app/data/iptv_proxy.db \
-  ghcr.io/klopstack/iptv-proxy-v2:latest \
-  alembic stamp head
+docker exec iptv-proxy-v2 flask db stamp head
 ```
 
-Or from the host with a local checkout/venv:
+If the container cannot stay up (e.g. crash loop from missing stamp), use a one-off container with the entrypoint overridden (verified on staging, docker.klopnet.com, June 2026):
 
 ```bash
-DATABASE_URL="sqlite:///${DATA_DIR}/iptv_proxy.db" alembic stamp head
+docker stop iptv-proxy-v2
+cp -a "${DATA_DIR}/iptv_proxy.db" "${DATA_DIR}/iptv_proxy.db.bak.$(date +%Y%m%d%H%M%S)"
+
+docker run --rm --user 33:33 \
+  --entrypoint flask \
+  -v "${DATA_DIR}:/app/data" \
+  -e DATABASE_URL=sqlite:////app/data/iptv_proxy.db \
+  -e FLASK_APP=app.py \
+  -w /app \
+  ghcr.io/klopstack/iptv-proxy-v2:latest \
+  db stamp head
+
+docker start iptv-proxy-v2
+```
+
+Adjust `--user 33:33` if your data volume is owned by a different UID/GID (match `docker inspect iptv-proxy-v2 --format '{{.Config.User}}'` or the host owner of `${DATA_DIR}`).
+
+From the host with a local checkout/venv:
+
+```bash
+DATABASE_URL="sqlite:///${DATA_DIR}/iptv_proxy.db" FLASK_APP=app.py flask db stamp head
 ```
 
 ### 3. Deploy new image
@@ -183,7 +204,7 @@ To revert from PostgreSQL to SQLite:
 - [ ] Confirm PR #67 is merged and a new `ghcr.io/klopstack/iptv-proxy-v2` image is published
 - [ ] Backup `iptv_proxy.db` (copy + optional `PRAGMA integrity_check`)
 - [ ] Stop `iptv-proxy-v2` container
-- [ ] Run `alembic stamp head` against the SQLite file (see above)
+- [ ] Run `flask db stamp head` against the SQLite file (see above)
 - [ ] Pull new image and restart
 - [ ] Verify `docker logs iptv-proxy-v2` shows successful `flask db upgrade`
 - [ ] Smoke-test admin UI and `/api/accounts`
@@ -208,6 +229,7 @@ To revert from PostgreSQL to SQLite:
 
 ```bash
 docker exec -it iptv-proxy-v2 flask db upgrade
+docker exec -it iptv-proxy-v2 flask db stamp head   # legacy SQLite only — see stamp section above
 docker exec -it iptv-proxy-v2 alembic current
 docker exec -it iptv-proxy-v2 flask db downgrade   # use with caution
 ```

@@ -226,14 +226,15 @@ No action required — the entrypoint applies the baseline migration automatical
 
 ### Upgrading from the legacy SQLite runner
 
-If your production database was migrated by the old `run_migrations.py` system (has a `schema_migrations` table with applied rows), **stamp** Alembic before deploying this version:
+If your production database was migrated by the old `run_migrations.py` system (has a `schema_migrations` table with applied rows, empty `alembic_version`), **stamp** Alembic before deploying this version. Without a stamp, the first boot fails with errors like `table accounts already exists`.
+
+Use **`flask db stamp head`** (not bare `alembic stamp head` — needs Flask app context). If the container is running:
 
 ```bash
-# Stop the container, then on the host (adjust DATABASE_URL path):
-DATABASE_URL=sqlite:///path/to/iptv_proxy.db alembic stamp head
-
-# Restart container — subsequent boots use flask db upgrade normally
+docker exec iptv-proxy-v2 flask db stamp head
 ```
+
+If the container is stopped or crash-looping, see the one-off `docker run --entrypoint flask … db stamp head` procedure in [architecture/pg-migration-guide.md](architecture/pg-migration-guide.md#2-stamp-alembic-before-first-boot-on-alembic-image).
 
 Do **not** run `flask db upgrade` on a fully-migrated legacy database without stamping first — the baseline migration would attempt to recreate existing tables.
 
