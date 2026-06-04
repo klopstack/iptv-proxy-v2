@@ -17,7 +17,34 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from app import app
 from models import Channel, EventChannelLink, db
 from services.ppv.enrichment import get_calendar_enrichment_service
+from services.ppv.persistence import repair_stale_ppv_event_sports
 from services.ppv.requeue import requeue_ppv_channels
+
+
+def repair_sport_labels(dry_run=True):
+    """Fix events where sport=MiLB but league_name indicates MLB (legacy default)."""
+    print("=" * 80)
+    print("PPV EVENT SPORT LABEL REPAIR")
+    print("=" * 80)
+    print()
+    if dry_run:
+        from models import Event
+        from services.ppv.persistence import sync_event_sport_from_league
+
+        would_fix = 0
+        for event in Event.query.filter(Event.is_ppv.is_(True), Event.league_name.isnot(None)).all():  # noqa: E712
+            sport_before = event.sport
+            if sync_event_sport_from_league(event):
+                would_fix += 1
+                print(f"  would fix event {event.id}: {sport_before!r} -> {event.sport!r} ({event.league_name})")
+                event.sport = sport_before
+        db.session.rollback()
+        print(f"\nWould repair {would_fix} event(s). Run with --execute to apply.")
+        return would_fix
+
+    fixed = repair_stale_ppv_event_sports()
+    print(f"Repaired {fixed} event(s).")
+    return fixed
 
 
 def clear_existing_matches(account_id=None, dry_run=True):
@@ -177,12 +204,19 @@ def main():
         action="store_true",
         help="Also re-queue skipped channels (use with --status no_match)",
     )
+    parser.add_argument(
+        "--repair-sport-labels",
+        action="store_true",
+        help="Fix events with sport=MiLB but league_name=MLB (legacy persistence bug)",
+    )
 
     args = parser.parse_args()
     dry_run = not args.execute
 
     with app.app_context():
-        if args.status == "no_match":
+        if args.repair_sport_labels:
+            repair_sport_labels(dry_run=dry_run)
+        elif args.status == "no_match":
             requeue_channels(
                 account_id=args.account_id,
                 prefix=args.prefix,

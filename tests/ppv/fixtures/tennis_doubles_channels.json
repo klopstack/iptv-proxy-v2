@@ -1,0 +1,148 @@
+{
+  "doubles": [
+    {
+      "channel": "Tennis: A Cornet D Hantuchova vs M Hingis A Kerber @ Jun 3 10:55 AM",
+      "players": ["Cornet", "Hantuchova", "Hingis", "Kerber"],
+      "sides": ["Cornet / Hantuchova", "Hingis / Kerber"]
+    },
+    {
+      "channel": "Tennis: T Golovin G Forget vs P Parmentier G Simon @ Jun 3 10:55 AM",
+      "players": ["Golovin", "Forget", "Parmentier", "Simon"],
+      "sides": ["Golovin / Forget", "Parmentier / Simon"]
+    },
+    {
+      "channel": "Tennis: Y Kamiji Z Zhu vs A Bernal J Griffioen @ Jun 3 13:00 PM",
+      "players": ["Kamiji", "Zhu", "Bernal", "Griffioen"],
+      "sides": ["Kamiji / Zhu", "Bernal / Griffioen"]
+    },
+    {
+      "channel": "Tennis: P Lucic-Baroni A Radwanska vs S Fichman A Santamaria @ Jun 3 11:00 AM",
+      "players": ["Lucic-Baroni", "Radwanska", "Fichman", "Santamaria"],
+      "sides": ["Lucic-Baroni / Radwanska", "Fichman / Santamaria"]
+    },
+    {
+      "channel": "Tennis: M Bryan B Bryan vs J McEnroe P McEnroe @ Jun 3 14:00 PM",
+      "players": ["Bryan", "Bryan", "McEnroe", "McEnroe"],
+      "sides": ["Bryan / Bryan", "McEnroe / McEnroe"]
+    },
+    {
+      "channel": "Tennis: L Dlamini R Marino vs H Fernandez A Riera @ Jun 3 12:00 PM",
+      "players": ["Dlamini", "Marino", "Fernandez", "Riera"],
+      "sides": ["Dlamini / Marino", "Fernandez / Riera"]
+    },
+    {
+      "channel": "Tennis: K Cross H Hewett vs G Reid A Lapthorne @ Jun 3 15:00 PM",
+      "players": ["Cross", "Hewett", "Reid", "Lapthorne"],
+      "sides": ["Cross / Hewett", "Reid / Lapthorne"]
+    },
+    {
+      "channel": "Tennis: E Mertens S Zhang vs A Pavlyuchenkova L Siegemund @ Jun 3 09:00 AM",
+      "players": ["Mertens", "Zhang", "Pavlyuchenkova", "Siegemund"],
+      "sides": ["Mertens / Zhang", "Pavlyuchenkova / Siegemund"]
+    },
+    {
+      "channel": "Tennis: C Black A Hewett vs N Peifer D Wagner @ Jun 3 16:00 PM",
+      "players": ["Black", "Hewett", "Peifer", "Wagner"],
+      "sides": ["Black / Hewett", "Peifer / Wagner"]
+    },
+    {
+      "channel": "Tennis: J Pegula C Gauff vs B Krejcikova K Siniakova @ Jun 3 08:00 AM",
+      "players": ["Pegula", "Gauff", "Krejcikova", "Siniakova"],
+      "sides": ["Pegula / Gauff", "Krejcikova / Siniakova"]
+    }
+  ],
+  "wheelchair_doubles": [
+    {
+      "channel": "Tennis: Y Kamiji Z Zhu vs A Bernal J Griffioen @ Jun 3 13:00 PM",
+      "players": ["Kamiji", "Zhu", "Bernal", "Griffioen"]
+    },
+    {
+      "channel": "Tennis: K Cross H Hewett vs G Reid A Lapthorne @ Jun 3 15:00 PM",
+      "players": ["Cross", "Hewett", "Reid", "Lapthorne"]
+    },
+    {
+      "channel": "Tennis: C Black A Hewett vs N Peifer D Wagner @ Jun 3 16:00 PM",
+      "players": ["Black", "Hewett", "Peifer", "Wagner"]
+    },
+    {
+      "channel": "Tennis: L Dlamini R Marino vs H Fernandez A Riera @ Jun 3 12:00 PM",
+      "players": ["Dlamini", "Marino", "Fernandez", "Riera"]
+    },
+    {
+      "channel": "Tennis: D Watanabe T Saida vs H Fernandez A Riera @ Jun 3 17:00 PM",
+      "players": ["Watanabe", "Saida", "Fernandez", "Riera"]
+    }
+  ],
+  "singles_controls": [
+    {
+      "channel": "Tennis: Anna Kalinskaya vs Maja Chwalinska @ Jun 3 11:00 AM",
+      "competitors": ["Anna Kalinskaya", "Maja Chwalinska"]
+    },
+    {
+      "channel": "Tennis: Andy Lapthorne vs Niels Vink @ Jun 3 13:00 PM",
+      "competitors": ["Andy Lapthorne", "Niels Vink"]
+    },
+    {
+      "channel": "Tennis: Aryna Sabalenka 1 vs Diana Shnaider @ Jun 3 07:30 AM",
+      "competitors": ["Aryna Sabalenka", "Diana Shnaider"]
+    },
+    {
+      "channel": "Tennis: Iga Swiatek vs Coco Gauff @ Jun 3 14:00 PM",
+      "competitors": ["Iga Swiatek", "Coco Gauff"]
+    },
+    {
+      "channel": "Tennis: Carlos Alcaraz vs Jannik Sinner @ Jun 3 15:00 PM",
+      "competitors": ["Carlos Alcaraz", "Jannik Sinner"]
+    },
+    {
+      "channel": "Eala, Alexandra vs Andreeva, Mirra @ Dec 28",
+      "competitors": ["Eala, Alexandra", "Andreeva, Mirra"]
+    },
+    {
+      "channel": "Fernandez, Leylah vs Kasatkina, Daria @ Dec 28 07:30 AM",
+      "competitors": ["Fernandez, Leylah", "Kasatkina, Daria"]
+    },
+    {
+      "channel": "Tennis: Emma Raducanu vs Marketa Vondrousova @ Jun 3 10:00 AM",
+      "competitors": ["Emma Raducanu", "Marketa Vondrousova"]
+    },
+    {
+      "channel": "Tennis: Stefanos Tsitsipas vs Alexander Zverev @ Jun 3 18:00 PM",
+      "competitors": ["Stefanos Tsitsipas", "Alexander Zverev"]
+    },
+    {
+      "channel": "Tennis: Elena Rybakina vs Jessica Pegula @ Jun 3 19:00 PM",
+      "competitors": ["Elena Rybakina", "Jessica Pegula"]
+    }
+  ],
+  "calendar_events": [
+    {
+      "id": "doubles-1",
+      "home_team": "Alize Cornet / Daniela Hantuchova",
+      "away_team": "Martina Hingis / Angelique Kerber",
+      "league_name": "WTA",
+      "sport": "Tennis"
+    },
+    {
+      "id": "doubles-2",
+      "home_team": "Tatiana Golovin / Guy Forget",
+      "away_team": "Pauline Parmentier / Gilles Simon",
+      "league_name": "Legends",
+      "sport": "Tennis"
+    },
+    {
+      "id": "doubles-3",
+      "home_team": "Yui Kamiji / Zhenxu Zhu",
+      "away_team": "Angela Bernal / J Griffioen",
+      "league_name": "Wheelchair",
+      "sport": "Tennis"
+    },
+    {
+      "id": "doubles-4",
+      "home_team": "Guo Hanyu / Kristina Mladenovic",
+      "away_team": "Shuko Aoyama / En-Shuo Liang",
+      "league_name": "WTA",
+      "sport": "Tennis"
+    }
+  ]
+}

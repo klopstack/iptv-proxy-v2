@@ -119,14 +119,19 @@ def remove_invalid_event_links() -> int:
     for link, channel, event in links:
         extraction = extractor.extract_all(channel.name)
         competitors = extraction.get("competitors")
-        if not competitors or len(competitors) != 2:
+        if not competitors:
             continue
 
         category_name = channel.category.category_name if channel.category else None
         sport_context = resolve_sport_league_context(channel.name, category_name)
 
         calendar_event = _event_to_calendar_event(event)
-        if calendar_event and competitors_match_event(competitors, calendar_event, context=sport_context):
+        if calendar_event and competitors_match_event(
+            competitors,
+            calendar_event,
+            context=sport_context,
+            players=extraction.get("competitors_players"),
+        ):
             continue
 
         db.session.delete(link)

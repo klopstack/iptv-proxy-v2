@@ -142,6 +142,16 @@ class EventIndex:
             team_name: Team name to index
             event: CalendarEvent associated with this team
         """
+        if " / " in team_name:
+            for partner in team_name.split(" / "):
+                partner = partner.strip()
+                if partner:
+                    self._index_team(partner, event)
+            normalized = self.text_processor.normalize_text(team_name)
+            self._team_index[normalized].append(event)
+            self._normalized_teams[normalized] = team_name
+            return
+
         normalized = self.text_processor.normalize_text(team_name)
         self._team_index[normalized].append(event)
         self._normalized_teams[normalized] = team_name
@@ -165,6 +175,13 @@ class EventIndex:
             event: CalendarEvent to associate with these name parts
         """
         if not full_name:
+            return
+
+        if " / " in full_name:
+            for partner in full_name.split(" / "):
+                partner = partner.strip()
+                if partner:
+                    self._index_name_parts(partner, event)
             return
 
         # Normalize the name

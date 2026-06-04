@@ -101,6 +101,20 @@ Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMA
 
 ---
 
+## Wave 13 — Tennis doubles matching (open)
+
+**Goal:** Match PPV channels whose titles encode **four players** (doubles, wheelchair doubles, legends), not only singles `First Last vs First Last`.
+
+| Batch | TODO | Theme |
+|-------|------|-------|
+| **AJ** | [127](./127-ppv-multi-player-competitor-extraction.md) | 2v2 name parsing + `competitors_match_event` + matcher validation |
+
+**Prerequisite:** [122](./122-tennis-calendar-event-source.md) / [126](./126-sofascore-calendar-multi-sport-and-enrichment.md) (calendar rows with `Player A / Player B` sides) ✅.
+
+**Audit impact:** ~89 unique doubles keys (~200 channel rows) currently fail extraction before matching runs — see [tennis-ppv-production-audit.md](../architecture/tennis-ppv-production-audit.md) §4.
+
+---
+
 ## Recommended “next five”
 
 1. **[111](./111-pg-prep-raw-sqlite3-audit.md)** — PostgreSQL prep (batch **PG-A1**)

@@ -140,6 +140,68 @@ class TestCreateOrUpdateEvent:
             assert was_created is True
             assert event.source == Event.SOURCE_MLB_STATS
 
+    def test_thesportsdb_baseball_sport_preserved_over_league_default(self, app, fixed_now):
+        with app.app_context():
+            cal = _calendar_event(
+                event_id="mlb-baseball-sport",
+                league_name="MLB",
+                sport="Baseball",
+                home_team="Boston Red Sox",
+                away_team="New York Yankees",
+            )
+            event, was_created = create_or_update_event(cal)
+            assert was_created is True
+            assert event.sport == "Baseball"
+            assert event.league_name == "MLB"
+
+    def test_thesportsdb_mlb_league_sets_sport_not_milb_default(self, app, fixed_now):
+        with app.app_context():
+            cal = _calendar_event(
+                event_id="mlb-giants-cubs",
+                league_name="MLB",
+                home_team="Chicago Cubs",
+                away_team="San Francisco Giants",
+            )
+            event, was_created = create_or_update_event(cal)
+            assert was_created is True
+            assert event.sport == "MLB"
+            assert event.league_name == "MLB"
+
+    def test_update_corrects_stale_milb_sport_when_league_is_mlb(self, app, fixed_now):
+        with app.app_context():
+            cal = _calendar_event(
+                event_id="stale-sport-1",
+                league_name="MLB",
+                home_team="Chicago Cubs",
+                away_team="San Francisco Giants",
+            )
+            event, _ = create_or_update_event(cal)
+            db.session.commit()
+            event.sport = "MiLB"
+            db.session.commit()
+
+            event, was_created = create_or_update_event(cal)
+            assert was_created is False
+            assert event.sport == "MLB"
+
+    def test_sync_event_sport_from_league_fixes_yankees_red_sox_row(self, app, fixed_now):
+        with app.app_context():
+            from services.ppv.persistence import sync_event_sport_from_league
+
+            cal = _calendar_event(
+                event_id="nyy-bos-1",
+                league_name="MLB",
+                home_team="Boston Red Sox",
+                away_team="New York Yankees",
+            )
+            event, _ = create_or_update_event(cal)
+            db.session.commit()
+            event.sport = "MiLB"
+            db.session.commit()
+
+            assert sync_event_sport_from_league(event) is True
+            assert event.sport == "MLB"
+
 
 class TestLinkChannelToEvent:
     def test_creates_link_and_sets_matched_status(self, app, fixed_now):

@@ -1,6 +1,7 @@
 """Validate PPV channel extractions against calendar events."""
 
-from typing import Optional, Tuple
+from itertools import permutations
+from typing import List, Optional, Sequence, Tuple, Union
 
 from services.ppv.matching.context import SportLeagueContext, event_league_matches_context, sport_key_from_league_name
 from services.ppv.matching.mlb_teams import resolve_mlb_abbrev
@@ -210,13 +211,84 @@ def _resolve_sport_key(context: Optional[SportLeagueContext], event: CalendarEve
     return sport_key_from_league_name(event.league_name)
 
 
-def competitors_match_event(
-    competitors: Tuple[str, str],
+def _split_doubles_side(side: str) -> List[str]:
+    if " / " in side:
+        return [p.strip() for p in side.split(" / ") if p.strip()]
+    if "/" in side:
+        return [p.strip() for p in side.split("/") if p.strip()]
+    return [side.strip()] if side.strip() else []
+
+
+def _calendar_doubles_players(event: CalendarEvent) -> Optional[List[str]]:
+    home_parts = _split_doubles_side(event.home_team or "")
+    away_parts = _split_doubles_side(event.away_team or "")
+    if len(home_parts) != 2 or len(away_parts) != 2:
+        return None
+    return home_parts + away_parts
+
+
+def _four_players_match(
+    channel_players: Sequence[str],
+    calendar_players: Sequence[str],
+    *,
+    sport_key: Optional[str],
+) -> bool:
+    if len(channel_players) != 4 or len(calendar_players) != 4:
+        return False
+
+    cal = list(calendar_players)
+    for perm in permutations(cal):
+        if all(
+            team_names_match_for_event_validation(ch, cal_name, sport_key=sport_key)
+            for ch, cal_name in zip(channel_players, perm)
+        ):
+            return True
+    return False
+
+
+def competitors_match_event_doubles(
+    players: Sequence[str],
     event: CalendarEvent,
     *,
     context: Optional[SportLeagueContext] = None,
 ) -> bool:
-    """Both extracted competitors must match the event teams (home/away order independent)."""
+    """All four extracted players must match a doubles calendar row (home/away order independent)."""
+    if len(players) != 4:
+        return False
+
+    home = event.home_team
+    away = event.away_team
+    if not home or not away:
+        return False
+    if home.lower() == "unknown" or away.lower() == "unknown":
+        return False
+
+    calendar_players = _calendar_doubles_players(event)
+    if not calendar_players:
+        return False
+
+    if context is not None and not context.is_empty:
+        if not event_league_matches_context(event.league_name, context):
+            return False
+
+    sport_key = _resolve_sport_key(context, event) or "tennis"
+    return _four_players_match(players, calendar_players, sport_key=sport_key)
+
+
+def competitors_match_event(
+    competitors: Union[Tuple[str, str], Tuple[str, str, str, str]],
+    event: CalendarEvent,
+    *,
+    context: Optional[SportLeagueContext] = None,
+    players: Optional[Sequence[str]] = None,
+) -> bool:
+    """Extracted competitors must match the event teams (home/away order independent)."""
+    if players and len(players) == 4:
+        return competitors_match_event_doubles(players, event, context=context)
+
+    if len(competitors) == 4:
+        return competitors_match_event_doubles(competitors, event, context=context)
+
     home = event.home_team
     away = event.away_team
     if not home or not away:
@@ -229,7 +301,16 @@ def competitors_match_event(
             return False
 
     sport_key = _resolve_sport_key(context, event)
-    c1, c2 = competitors
+    c1, c2 = competitors  # type: ignore[misc]
+    if " / " in c1 or " / " in c2:
+        side1 = _split_doubles_side(c1)
+        side2 = _split_doubles_side(c2)
+        if len(side1) == 2 and len(side2) == 2:
+            flat = side1 + side2
+            cal_players = _calendar_doubles_players(event)
+            if cal_players:
+                return _four_players_match(flat, cal_players, sport_key=sport_key or "tennis")
+
     return (
         team_names_match_for_event_validation(c1, home, sport_key=sport_key)
         and team_names_match_for_event_validation(c2, away, sport_key=sport_key)

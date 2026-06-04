@@ -50,7 +50,7 @@ This TODO covers **professional tennis** (ATP/WTA/Challenger/ITF singles and dou
 1. **Calendar ingestion:** Tennis events available per UTC day for at least **±7 days** (align with existing calendar cache window).
 2. **Player name matching:** Fuzzy match channel competitors to event players:
    - Handle `First Last` vs `Last, First`
-   - Doubles: `A Cornet D Hantuchova vs M Hingis A Kerber` — multi-player extraction may need extension (separate sub-task if out of scope; document)
+   - Doubles: `A Cornet D Hantuchova vs M Hingis A Kerber` — follow-up [127](./127-ppv-multi-player-competitor-extraction.md) (four-player extraction + validation)
 3. **Event persistence:** Matched tennis events stored with correct `source` and `external_id`; detail fetch strategy documented (TSDB detail vs metadata-only).
 4. **Cache:** Tennis calendar obeys same persistent cache / TTL patterns as TheSportsDB scraper (`calendar_cache.json` or separate file — document tradeoff).
 5. **Graceful degradation:** If tennis source unavailable, enrichment logs provider failure on status API (pattern from TODO 67 `providers_failed`); channels remain `no_match`, not crash.
@@ -59,6 +59,7 @@ This TODO covers **professional tennis** (ATP/WTA/Challenger/ITF singles and dou
 
 - Matching every `Tennis: Multiview` aggregate channel.
 - Historical tennis replays with dates in the past beyond retention window.
+- **Four-player doubles / 2v2 channel title parsing** — [127](./127-ppv-multi-player-competitor-extraction.md).
 
 ## Proposed solution
 
@@ -187,7 +188,7 @@ The spike below recommended API-Tennis. **Current plan (June 2026):** **ESPN** a
 4. Detail fetch: skip / `basic` completeness (no TSDB detail queue for non-TSDB sources)
 5. Recorded fixtures + integration test
 
-**Estimate:** PR #56 scope. **Blockers:** doubles name parsing; TODO 120 date fix ✅.
+**Estimate:** PR #56 scope. **Blockers:** doubles name parsing → [127](./127-ppv-multi-player-competitor-extraction.md); TODO 120 date fix ✅.
 
 ### Phase 2b outline (SofaScore — see 125/126)
 

@@ -151,6 +151,10 @@ class Settings(db.Model):  # type: ignore[name-defined]
             "",
             "TheSportsDB website password for authenticated calendar scraping.",
         ),
+        "ppv_sofascore_calendar_enabled": (
+            "false",
+            "Merge SofaScore tennis into the PPV calendar after ESPN (wheelchair, ITF, and other gaps).",
+        ),
         # Stream proxy failover to linked backup channels
         "stream_fallback_enabled": (
             "true",

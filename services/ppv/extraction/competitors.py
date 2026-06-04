@@ -4,6 +4,7 @@ import re
 from typing import Optional, Tuple
 
 from services.ppv.constants import US_STYLE_REGION_CODES
+from services.ppv.extraction import tennis_doubles
 from services.ppv.extraction.patterns import (
     BARE_PPV_SLOT_RE,
     COMPETITOR_PATTERN,
@@ -14,7 +15,7 @@ from services.ppv.extraction.patterns import (
     TOURNAMENT_STRUCTURE_PATTERN,
     TRAILING_TIME_PATTERN,
 )
-from services.ppv.extraction.types import MatchupInfo
+from services.ppv.extraction.types import ExtractedCompetitors, MatchupInfo
 
 
 def is_placeholder(channel_name: str) -> bool:
@@ -125,7 +126,27 @@ def is_valid_team_name(name: str) -> bool:
     return True
 
 
-def extract_competitors(channel_name: str) -> Optional[Tuple[str, str]]:
+def _is_tennis_channel(channel_name: str) -> bool:
+    sport, _ = extract_sport(channel_name)
+    return bool(sport and sport.strip().lower() == "tennis")
+
+
+def _try_tennis_doubles(comp1: str, comp2: str) -> Optional[ExtractedCompetitors]:
+    side1_players = tennis_doubles.parse_tennis_doubles_side(comp1)
+    side2_players = tennis_doubles.parse_tennis_doubles_side(comp2)
+    if not side1_players or not side2_players or len(side1_players) != 2 or len(side2_players) != 2:
+        return None
+
+    flat = tennis_doubles.flatten_doubles_players(side1_players, side2_players)
+    return ExtractedCompetitors(
+        side1=tennis_doubles.format_doubles_side(side1_players),
+        side2=tennis_doubles.format_doubles_side(side2_players),
+        format="doubles",
+        players=flat,
+    )
+
+
+def extract_competitors_detail(channel_name: str) -> Optional[ExtractedCompetitors]:
     if is_placeholder(channel_name):
         return None
 
@@ -156,7 +177,19 @@ def extract_competitors(channel_name: str) -> Optional[Tuple[str, str]]:
     if not is_valid_team_name(comp1) or not is_valid_team_name(comp2):
         return None
 
-    return (comp1, comp2)
+    if _is_tennis_channel(channel_name):
+        doubles = _try_tennis_doubles(comp1, comp2)
+        if doubles:
+            return doubles
+
+    return ExtractedCompetitors(side1=comp1, side2=comp2, format="singles")
+
+
+def extract_competitors(channel_name: str) -> Optional[Tuple[str, str]]:
+    detail = extract_competitors_detail(channel_name)
+    if not detail:
+        return None
+    return (detail.side1, detail.side2)
 
 
 def feed_region_code(channel_name: str, category_name: Optional[str] = None) -> Optional[str]:
@@ -177,11 +210,11 @@ def extract_matchup(
 ) -> Optional[MatchupInfo]:
     from services.ppv.venue_inference import detect_venue_inference_mode
 
-    competitors = extract_competitors(channel_name)
-    if not competitors:
+    detail = extract_competitors_detail(channel_name)
+    if not detail:
         return None
 
-    comp1, comp2 = competitors
+    comp1, comp2 = detail.side1, detail.side2
     _, cleaned = extract_sport(channel_name)
     cleaned = strip_provider_prefix(cleaned)
     cleaned = clean_tournament_structure(cleaned)
@@ -198,6 +231,8 @@ def extract_matchup(
         ordering_confidence=0.85 if separator in ("@", "at", "versus") else 0.8,
         first_team=comp1,
         second_team=comp2,
+        format=detail.format,
+        players=detail.players,
     )
 
     if not region:
@@ -209,6 +244,8 @@ def extract_matchup(
             ordering_confidence=0.65,
             first_team=comp1,
             second_team=comp2,
+            format=detail.format,
+            players=detail.players,
         )
 
     venue_mode = detect_venue_inference_mode(channel_name, matchup=draft)

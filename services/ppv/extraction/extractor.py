@@ -172,7 +172,9 @@ class PPVEventExtractor:
         result: Dict = {
             "is_placeholder": self.is_placeholder(channel_name),
             "is_inactive": self.is_inactive_channel(channel_name),
-            "competitors": self.extract_competitors(channel_name),
+            "competitors": None,
+            "competitors_format": None,
+            "competitors_players": None,
             "sport": inline_sport,
             "country_prefix": country_prefix,
             "date": None,
@@ -186,6 +188,12 @@ class PPVEventExtractor:
 
         if result["is_placeholder"] or result["is_inactive"]:
             return result
+
+        detail = competitors.extract_competitors_detail(channel_name)
+        if detail:
+            result["competitors"] = (detail.side1, detail.side2)
+            result["competitors_format"] = detail.format
+            result["competitors_players"] = detail.players
 
         channel_tz = parse_title_timezone(channel_name)
         result["timezone"] = channel_tz
