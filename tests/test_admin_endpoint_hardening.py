@@ -6,7 +6,7 @@ from click.testing import CliRunner
 
 from models import FccMatchNetwork, db
 from services.config_bundle_validation import validate_config_import_bundle
-from services.fcc_pattern_reset import reset_fcc_patterns_to_defaults, sqlite_path_from_database_url
+from services.fcc_pattern_reset import reset_fcc_patterns_to_defaults
 
 
 class TestFccResetCliOnly:
@@ -15,8 +15,6 @@ class TestFccResetCliOnly:
         assert response.status_code == 404
 
     def test_reset_fcc_patterns_cli_success(self, app):
-        db_path = sqlite_path_from_database_url()
-        assert db_path is not None
         with app.app_context():
             db.create_all()
             db.session.add(
@@ -31,7 +29,7 @@ class TestFccResetCliOnly:
             )
             db.session.commit()
 
-            success, message = reset_fcc_patterns_to_defaults(db_path)
+            success, message = reset_fcc_patterns_to_defaults()
             assert success is True
             assert "restored" in message.lower()
 
@@ -57,10 +55,6 @@ class TestFccResetCliOnly:
             db.session.remove()
             db.engine.dispose()
             db.create_all()
-
-    def test_sqlite_path_from_database_url(self):
-        assert sqlite_path_from_database_url("sqlite:////app/data/iptv.db") == "/app/data/iptv.db"
-        assert sqlite_path_from_database_url("postgresql://localhost/db") is None
 
 
 class TestConfigImportValidation:

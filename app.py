@@ -226,14 +226,9 @@ def init_db():
 @app.cli.command("reset-fcc-patterns")
 def reset_fcc_patterns():
     """Reset FCC match patterns to migration defaults (CLI only; not available over HTTP)."""
-    from services.fcc_pattern_reset import reset_fcc_patterns_to_defaults, sqlite_path_from_database_url
+    from services.fcc_pattern_reset import reset_fcc_patterns_to_defaults
 
-    db_path = sqlite_path_from_database_url()
-    if not db_path:
-        print("Error: reset-fcc-patterns only supports SQLite (sqlite:/// DATABASE_URL)")
-        raise SystemExit(1)
-
-    success, message = reset_fcc_patterns_to_defaults(db_path)
+    success, message = reset_fcc_patterns_to_defaults()
     if success:
         print(message)
     else:

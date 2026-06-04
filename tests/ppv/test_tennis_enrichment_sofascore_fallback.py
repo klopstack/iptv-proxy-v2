@@ -32,9 +32,13 @@ def enrichment_fixed_now(monkeypatch):
                 return now
             return now.replace(tzinfo=None)
 
+    import services.ppv.enrichability as enrichability_mod
+    import services.ppv.extraction.extractor as extractor_mod
     import services.ppv.persistence as persistence_mod
     import services.reverse_event_matcher.match_filter as match_filter_mod
 
+    monkeypatch.setattr(enrichability_mod, "datetime", FixedDateTime)
+    monkeypatch.setattr(extractor_mod, "datetime", FixedDateTime)
     monkeypatch.setattr(persistence_mod, "datetime", FixedDateTime)
     monkeypatch.setattr(match_filter_mod, "datetime", FixedDateTime)
     return now
