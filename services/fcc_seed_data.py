@@ -4,13 +4,7 @@ from __future__ import annotations
 
 import json
 
-from models import (
-    FccMatchChannelPattern,
-    FccMatchLocationPattern,
-    FccMatchNetwork,
-    FccMatchStrategy,
-    db,
-)
+from models import FccMatchChannelPattern, FccMatchLocationPattern, FccMatchNetwork, FccMatchStrategy, db
 
 _DEFAULT_NETWORKS: tuple[tuple[str, str, str, str, list[str], bool, int], ...] = (
     ("NBC", "NBC", "National Broadcasting Company", "%NBC%", ["NBC"], True, 10),
