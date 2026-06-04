@@ -477,10 +477,7 @@ def preview_fcc_epg_matches(
     for ec in epg_channels:
         names = [ec.display_name.lower()] if ec.display_name else []
         if ec.display_names_json:
-            try:
-                names.extend([n.lower() for n in json.loads(ec.display_names_json)])
-            except (json.JSONDecodeError, TypeError):
-                pass
+            names.extend([n.lower() for n in ec.display_names_json])
         for name in names:
             normalized = normalize_channel_name(name)
             if normalized:
@@ -539,10 +536,7 @@ def build_epg_lookup_indices(epg_channels: List[Any]) -> Tuple[Dict, Dict, Dict,
         # Index by all display names
         names = [ec.display_name.lower()] if ec.display_name else []
         if ec.display_names_json:
-            try:
-                names.extend([n.lower() for n in json.loads(ec.display_names_json)])
-            except (json.JSONDecodeError, TypeError):
-                pass
+            names.extend([n.lower() for n in ec.display_names_json])
         for name in names:
             normalized = normalize_channel_name(name)
             if normalized:

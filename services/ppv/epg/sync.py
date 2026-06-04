@@ -78,7 +78,7 @@ def sync_ppv_events_to_epg_channels(epg_source_id: int) -> Tuple[int, int]:
 
         if epg_channel:
             epg_channel.display_name = display_name
-            epg_channel.display_names_json = json.dumps(display_names)
+            epg_channel.display_names_json = display_names
             epg_channel.icon_url = event.event_image or event.home_team_badge or event.away_team_badge
             epg_channel.program_count = 1
             epg_channel.first_program = event.scheduled_at
@@ -90,7 +90,7 @@ def sync_ppv_events_to_epg_channels(epg_source_id: int) -> Tuple[int, int]:
                 source_id=epg_source_id,
                 channel_id=channel_id,
                 display_name=display_name,
-                display_names_json=json.dumps(display_names),
+                display_names_json=display_names,
                 icon_url=(event.event_image or event.home_team_badge or event.away_team_badge),
                 program_count=1,
                 first_program=event.scheduled_at,
@@ -134,7 +134,7 @@ def sync_ppv_event_to_epg_channels(event: Event) -> bool:
         display_names.append(event.league_name)
 
     epg_channel.display_name = display_name
-    epg_channel.display_names_json = json.dumps(display_names)
+    epg_channel.display_names_json = display_names
     epg_channel.icon_url = event.event_image or event.home_team_badge or event.away_team_badge
     epg_channel.program_count = 1
     epg_channel.first_program = event.scheduled_at

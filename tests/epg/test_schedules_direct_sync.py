@@ -147,5 +147,5 @@ class TestSyncSdChannelsHelper:
             epg_ch = EpgChannel.query.filter_by(source_id=test_epg_source).first()
             assert epg_ch.display_names_json is not None
 
-            display_names = json.loads(epg_ch.display_names_json)
+            display_names = epg_ch.display_names_json
             assert isinstance(display_names, list)

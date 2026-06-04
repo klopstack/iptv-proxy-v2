@@ -150,7 +150,7 @@ class TestEpgSyncOrchestratorSync:
 
             refreshed = db.session.get(EpgSource, xmltv_source.id)
             assert refreshed.sync_phase == PHASE_COMPLETE
-            progress = json.loads(refreshed.sync_progress)
+            progress = refreshed.sync_progress
             assert progress.get("programmes_parsed") == 99
 
     @patch("services.epg_sync_orchestrator.EpgSyncService.sync_source")

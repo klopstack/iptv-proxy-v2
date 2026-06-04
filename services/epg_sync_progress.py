@@ -40,14 +40,14 @@ class EpgSyncProgress:
         elif phase in (PHASE_COMPLETE, PHASE_ERROR, PHASE_SKIPPED):
             source.sync_in_progress = False
 
-        progress = EpgSyncProgress._load_progress(source)
+        progress = dict(EpgSyncProgress._load_progress(source))
         if message:
             progress["message"] = message
         for key, value in counts.items():
             if value is not None:
                 progress[key] = value
         progress["updated_at"] = serialize_utc_iso(now)
-        source.sync_progress = json.dumps(progress)
+        source.sync_progress = progress
         db.session.commit()
 
     @staticmethod
@@ -55,12 +55,12 @@ class EpgSyncProgress:
         source = db.session.get(EpgSource, source_id)
         if not source:
             return
-        progress = EpgSyncProgress._load_progress(source)
+        progress = dict(EpgSyncProgress._load_progress(source))
         for key, value in counts.items():
             if value is not None:
                 progress[key] = value
         progress["updated_at"] = serialize_utc_iso(datetime.now(timezone.utc).replace(tzinfo=None))
-        source.sync_progress = json.dumps(progress)
+        source.sync_progress = progress
         db.session.commit()
 
     @staticmethod
@@ -88,8 +88,13 @@ class EpgSyncProgress:
     def _load_progress(source: EpgSource) -> Dict[str, Any]:
         if not source.sync_progress:
             return {}
-        try:
-            data = json.loads(source.sync_progress)
-            return data if isinstance(data, dict) else {}
-        except (json.JSONDecodeError, TypeError):
-            return {}
+        data = source.sync_progress
+        if isinstance(data, dict):
+            return data
+        if isinstance(data, str):
+            try:
+                parsed = json.loads(data)
+                return parsed if isinstance(parsed, dict) else {}
+            except (json.JSONDecodeError, TypeError):
+                return {}
+        return {}

@@ -233,7 +233,7 @@ class TestSyncXmltvGrabberSource:
         source.xmltv_config_name = "config"
         source.xmltv_days = 10
         source.xmltv_offset = 1
-        source.xmltv_extra_args = '{"key": "value"}'
+        source.xmltv_extra_args = {"key": "value"}
 
         mock_run_grabber.return_value = (True, b"<xml></xml>", None)
         mock_sync.return_value = {"channels_added": 5, "channels_updated": 0}

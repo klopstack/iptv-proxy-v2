@@ -30,7 +30,7 @@ class TestEpgProgramPersistence:
 
             prog = create_epg_program(ch.id, _sample_data())
             assert prog.title == "Test Show"
-            assert prog.categories == '["Sports"]'
+            assert prog.categories == ["Sports"]
             assert prog.created_at is not None
 
     def test_update_epg_program_unchanged_returns_false(self, app, db):

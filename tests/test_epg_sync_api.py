@@ -160,7 +160,7 @@ class TestEpgSyncApi:
                 sync_in_progress=True,
                 sync_started_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 last_sync=datetime.now(timezone.utc).replace(tzinfo=None),
-                sync_progress='{"programmes_parsed": 1000}',
+                sync_progress={"programmes_parsed": 1000},
             )
             db.session.add(source)
             db.session.commit()

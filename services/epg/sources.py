@@ -61,7 +61,7 @@ def sync_sd_channels_to_epg(source: EpgSource, channels: List[Dict]) -> Dict:
         if channel_id in existing:
             ec = existing[channel_id]
             ec.display_name = primary_name
-            ec.display_names_json = json.dumps(display_names) if display_names else None
+            ec.display_names_json = display_names if display_names else None
             ec.icon_url = logo_url
             ec.last_seen = now
             ec.updated_at = now
@@ -71,7 +71,7 @@ def sync_sd_channels_to_epg(source: EpgSource, channels: List[Dict]) -> Dict:
                 source_id=source.id,
                 channel_id=channel_id,
                 display_name=primary_name,
-                display_names_json=json.dumps(display_names) if display_names else None,
+                display_names_json=display_names if display_names else None,
                 icon_url=logo_url,
                 program_count=0,
                 last_seen=now,

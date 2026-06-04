@@ -1,6 +1,5 @@
 """Tests for per-source EPG sync progress tracking."""
 
-import json
 from datetime import datetime, timezone
 
 import pytest
@@ -41,7 +40,7 @@ class TestEpgSyncProgress:
             assert refreshed.sync_phase == PHASE_QUEUED
             assert refreshed.sync_in_progress is True
             assert refreshed.sync_started_at is not None
-            progress = json.loads(refreshed.sync_progress)
+            progress = refreshed.sync_progress
             assert progress["message"] == "Waiting"
             assert "updated_at" in progress
 
@@ -58,7 +57,7 @@ class TestEpgSyncProgress:
             refreshed = db.session.get(EpgSource, epg_source.id)
             assert refreshed.sync_phase == PHASE_PROGRAMS
             assert refreshed.sync_in_progress is True
-            progress = json.loads(refreshed.sync_progress)
+            progress = refreshed.sync_progress
             assert progress["programmes_parsed"] == 1200
             assert progress["programs_added"] == 50
 
@@ -79,7 +78,7 @@ class TestEpgSyncProgress:
             refreshed = db.session.get(EpgSource, epg_source.id)
             assert refreshed.sync_phase == PHASE_ERROR
             assert refreshed.sync_in_progress is False
-            assert json.loads(refreshed.sync_progress)["message"] == "boom"
+            assert refreshed.sync_progress["message"] == "boom"
 
     def test_set_phase_skipped_clears_in_progress(self, app, epg_source):
         with app.app_context():
@@ -89,7 +88,7 @@ class TestEpgSyncProgress:
             refreshed = db.session.get(EpgSource, epg_source.id)
             assert refreshed.sync_phase == PHASE_SKIPPED
             assert refreshed.sync_in_progress is False
-            assert json.loads(refreshed.sync_progress)["message"] == "busy"
+            assert refreshed.sync_progress["message"] == "busy"
 
     def test_merge_preserves_existing_keys(self, app, epg_source):
         with app.app_context():
@@ -101,7 +100,7 @@ class TestEpgSyncProgress:
             )
             EpgSyncProgress.merge(epg_source.id, programmes_parsed=200, programs_added=10)
 
-            progress = json.loads(db.session.get(EpgSource, epg_source.id).sync_progress)
+            progress = db.session.get(EpgSource, epg_source.id).sync_progress
             assert progress["message"] == "first"
             assert progress["programmes_parsed"] == 200
             assert progress["programs_added"] == 10
@@ -111,7 +110,7 @@ class TestEpgSyncProgress:
             EpgSyncProgress.set_phase(epg_source.id, PHASE_PROGRAMS, programmes_parsed=5)
             EpgSyncProgress.merge(epg_source.id, programmes_parsed=None, programs_added=1)
 
-            progress = json.loads(db.session.get(EpgSource, epg_source.id).sync_progress)
+            progress = db.session.get(EpgSource, epg_source.id).sync_progress
             assert progress["programmes_parsed"] == 5
             assert progress["programs_added"] == 1
 
@@ -138,7 +137,7 @@ class TestEpgSyncProgress:
             epg_source.last_sync = now
             epg_source.last_sync_status = "success"
             epg_source.last_sync_message = "ok"
-            epg_source.sync_progress = json.dumps({"programmes_parsed": 42})
+            epg_source.sync_progress = {"programmes_parsed": 42}
             db.session.commit()
 
             snap = EpgSyncProgress.snapshot(epg_source)

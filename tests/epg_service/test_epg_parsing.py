@@ -573,7 +573,7 @@ class TestSyncEpgSource:
             assert cinemax is not None
             import json
 
-            display_names = json.loads(cinemax.display_names_json)
+            display_names = cinemax.display_names_json
             # Should have both display names from the duplicates
             assert "HU: Cinemax" in display_names
             assert "HU: Cinemax2" in display_names

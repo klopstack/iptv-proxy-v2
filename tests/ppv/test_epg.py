@@ -395,7 +395,7 @@ class TestPPVEpgService:
                 assert epg_ch.display_names_json is not None
 
                 # Parse display names
-                display_names = json.loads(epg_ch.display_names_json)
+                display_names = epg_ch.display_names_json
                 assert len(display_names) >= 2
 
             # Running sync again should update existing

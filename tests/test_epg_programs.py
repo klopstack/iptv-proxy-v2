@@ -878,7 +878,7 @@ class TestProgramToXmltvElement:
                 start_time=now,
                 stop_time=now + timedelta(hours=1),
                 title="Sports Show",
-                categories=json.dumps(["Sports", "Basketball"]),
+                categories=["Sports", "Basketball"],
             )
 
             elem = program_to_xmltv_element(prog, "ch-1-100")

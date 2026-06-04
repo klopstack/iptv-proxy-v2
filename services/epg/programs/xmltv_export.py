@@ -1,6 +1,5 @@
 """XMLTV export from EpgProgram database records."""
 
-import json
 import logging
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
@@ -78,13 +77,10 @@ def epg_channel_to_xmltv_element(epg_channel: EpgChannel, output_channel_id: str
     display_name_elem = ET.SubElement(channel_elem, "display-name")
     display_name_elem.text = epg_channel.display_name or epg_channel.channel_id or output_channel_id
     if epg_channel.display_names_json:
-        try:
-            for name in json.loads(epg_channel.display_names_json):
-                if name and name != display_name_elem.text:
-                    extra_name = ET.SubElement(channel_elem, "display-name")
-                    extra_name.text = name
-        except (json.JSONDecodeError, TypeError) as e:
-            logger.debug("Invalid display_names_json for EPG channel %s: %s", epg_channel.id, e)
+        for name in epg_channel.display_names_json:
+            if name and name != display_name_elem.text:
+                extra_name = ET.SubElement(channel_elem, "display-name")
+                extra_name.text = name
     if epg_channel.icon_url:
         ET.SubElement(channel_elem, "icon", src=epg_channel.icon_url)
     return channel_elem

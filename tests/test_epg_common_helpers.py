@@ -140,7 +140,7 @@ class TestSyncSdChannelsToEpg:
 
             channel = EpgChannel.query.filter_by(source_id=source.id).first()
             assert channel.display_names_json is not None
-            names = json.loads(channel.display_names_json)
+            names = channel.display_names_json
             assert "NBC" in names
             assert "NBC New York" in names
 

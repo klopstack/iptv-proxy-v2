@@ -99,7 +99,7 @@ class EpgSourceCreateSchema(Schema):
     xmltv_config_name = fields.Str(validate=lambda x: len(x) <= 100, allow_none=True)
     xmltv_days = fields.Int(validate=lambda x: x > 0, load_default=7)
     xmltv_offset = fields.Int(load_default=0)
-    xmltv_extra_args = fields.Str(allow_none=True)
+    xmltv_extra_args = fields.Raw(allow_none=True)
     priority = fields.Int(validate=lambda x: x > 0, load_default=100)
     enabled = fields.Bool(load_default=True)
 
@@ -124,7 +124,7 @@ class EpgSourceUpdateSchema(Schema):
     xmltv_config_name = fields.Str(validate=lambda x: len(x) <= 100, allow_none=True)
     xmltv_days = fields.Int(validate=lambda x: x > 0)
     xmltv_offset = fields.Int()
-    xmltv_extra_args = fields.Str(allow_none=True)
+    xmltv_extra_args = fields.Raw(allow_none=True)
 
     class Meta:
         unknown = EXCLUDE
