@@ -269,6 +269,8 @@ Use `python run_migrations.py` only for schema migrations.
 
 Migrations live in `migrations/` and are named with date prefix (e.g., `2024_01_19_add_tag_rule_replacement.py`).
 
+> **PostgreSQL / Alembic:** After [PR #67](https://github.com/klopstack/iptv-proxy-v2/pull/67) merges, schema moves to Alembic (`alembic_migrations/`). Production migration steps: [architecture/pg-migration-guide.md](architecture/pg-migration-guide.md).
+
 ### Creating a Migration
 
 ```python

@@ -219,6 +219,7 @@ Alternatively vendor the files under `static/vendor/` and serve them locally (no
 ## Related documentation
 
 - [architecture/admin-auth-and-deployment-security.md](architecture/admin-auth-and-deployment-security.md)
+- [architecture/pg-migration-guide.md](architecture/pg-migration-guide.md) — SQLite → PostgreSQL operator guide (Wave 11)
 - [API_REFERENCE.md — Authentication](API_REFERENCE.md#authentication)
 - [XTREAM_CODES_API.md](XTREAM_CODES_API.md) — client API
 - klopstack: `docker-compose.yaml` (service `iptvproxy`), `traefik-dynamic.yaml`, `traefik-static.yaml`
