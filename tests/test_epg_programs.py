@@ -352,7 +352,7 @@ class TestGetMatchedEpgChannelIds:
 
             channel = Channel(
                 account_id=sample_account.id,
-                stream_id=100,
+                stream_id="100",
                 category_id=cat.id,
                 name="Test Channel",
             )

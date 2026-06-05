@@ -73,21 +73,21 @@ def sample_channels(db, sample_account, sample_category):
     """Create sample channels."""
     ch1 = Channel(
         account_id=sample_account.id,
-        stream_id=100,
+        stream_id="100",
         category_id=sample_category.id,
         name="ESPN HD",
         epg_channel_id="ESPNHD",
     )
     ch2 = Channel(
         account_id=sample_account.id,
-        stream_id=101,
+        stream_id="101",
         category_id=sample_category.id,
         name="Fox News",
         epg_channel_id="FOXNEWS",
     )
     ch3 = Channel(
         account_id=sample_account.id,
-        stream_id=102,
+        stream_id="102",
         category_id=sample_category.id,
         name="No EPG Channel",
         epg_channel_id=None,
@@ -186,7 +186,7 @@ class TestGetChannelEpgMappings:
             for i in range(600):
                 ch = Channel(
                     account_id=sample_account.id,
-                    stream_id=1000 + i,
+                    stream_id=str(1000 + i),
                     category_id=sample_category.id,
                     name=f"Channel {i}",
                 )

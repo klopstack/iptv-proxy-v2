@@ -468,7 +468,7 @@ class TestPPVVisibility:
 
             live_channel = Channel(
                 account_id=account.id,
-                stream_id=101,
+                stream_id="101",
                 name="Live PPV",
                 cleaned_name="Live PPV",
                 category_id=ppv_category.id,
@@ -478,7 +478,7 @@ class TestPPVVisibility:
             )
             replay_channel = Channel(
                 account_id=account.id,
-                stream_id=102,
+                stream_id="102",
                 name="Replay PPV",
                 cleaned_name="Replay PPV",
                 category_id=ppv_category.id,
@@ -669,7 +669,7 @@ class TestChannelMetadata:
             category = Category.query.filter_by(account_id=test_account1).first()
             channel = Channel(
                 account_id=test_account1,
-                stream_id=99,
+                stream_id="99",
                 name='Test "Channel" with\'quotes',
                 cleaned_name="Test Channel",
                 category_id=category.id,

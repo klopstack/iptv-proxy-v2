@@ -37,14 +37,14 @@ class TestChannelLinksAPI:
         # Create east and west channels
         east_channel = Channel(
             account_id=account.id,
-            stream_id=1,
+            stream_id="1",
             name="CNN East",
             epg_channel_id="CNN.east",
             category_id=category.id,
         )
         west_channel = Channel(
             account_id=account.id,
-            stream_id=2,
+            stream_id="2",
             name="CNN West",
             epg_channel_id="CNN.west",
             category_id=category.id,
@@ -112,7 +112,7 @@ class TestChannelLinksAPI:
 
         channel = Channel(
             account_id=account.id,
-            stream_id=1,
+            stream_id="1",
             name="Test Channel",
             category_id=category.id,
         )
@@ -149,13 +149,13 @@ class TestChannelLinksAPI:
 
         channel1 = Channel(
             account_id=account.id,
-            stream_id=1,
+            stream_id="1",
             name="Channel 1",
             category_id=category.id,
         )
         channel2 = Channel(
             account_id=account.id,
-            stream_id=2,
+            stream_id="2",
             name="Channel 2",
             category_id=category.id,
         )
@@ -200,13 +200,13 @@ class TestChannelLinksAPI:
 
         channel1 = Channel(
             account_id=account.id,
-            stream_id=1,
+            stream_id="1",
             name="Channel 1",
             category_id=category.id,
         )
         channel2 = Channel(
             account_id=account.id,
-            stream_id=2,
+            stream_id="2",
             name="Channel 2",
             category_id=category.id,
         )
@@ -254,13 +254,13 @@ class TestChannelLinksAPI:
 
         channel1 = Channel(
             account_id=account.id,
-            stream_id=1,
+            stream_id="1",
             name="Channel 1",
             category_id=category.id,
         )
         channel2 = Channel(
             account_id=account.id,
-            stream_id=2,
+            stream_id="2",
             name="Channel 2",
             category_id=category.id,
         )
@@ -314,13 +314,13 @@ class TestChannelLinksAPI:
 
         channel1 = Channel(
             account_id=account.id,
-            stream_id=1,
+            stream_id="1",
             name="Channel 1",
             category_id=category.id,
         )
         channel2 = Channel(
             account_id=account.id,
-            stream_id=2,
+            stream_id="2",
             name="Channel 2",
             category_id=category.id,
         )
@@ -375,7 +375,7 @@ class TestChannelLinksBulkOperations:
         for i in range(4):
             channel = Channel(
                 account_id=account.id,
-                stream_id=i + 1,
+                stream_id=str(i + 1),
                 name=f"Channel {i + 1}",
                 category_id=category.id,
             )
@@ -428,7 +428,7 @@ class TestChannelLinksBulkOperations:
 
         channel = Channel(
             account_id=account.id,
-            stream_id=1,
+            stream_id="1",
             name="Channel 1",
             category_id=category.id,
         )
@@ -475,13 +475,13 @@ class TestChannelLinksBulkOperations:
 
         channel1 = Channel(
             account_id=account.id,
-            stream_id=1,
+            stream_id="1",
             name="Channel 1",
             category_id=category.id,
         )
         channel2 = Channel(
             account_id=account.id,
-            stream_id=2,
+            stream_id="2",
             name="Channel 2",
             category_id=category.id,
         )
@@ -555,25 +555,25 @@ class TestChannelLinksFiltering:
         # Create channels for each account
         ch1_a = Channel(
             account_id=account1.id,
-            stream_id=1,
+            stream_id="1",
             name="Ch 1A",
             category_id=cat1.id,
         )
         ch1_b = Channel(
             account_id=account1.id,
-            stream_id=2,
+            stream_id="2",
             name="Ch 1B",
             category_id=cat1.id,
         )
         ch2_a = Channel(
             account_id=account2.id,
-            stream_id=3,
+            stream_id="3",
             name="Ch 2A",
             category_id=cat2.id,
         )
         ch2_b = Channel(
             account_id=account2.id,
-            stream_id=4,
+            stream_id="4",
             name="Ch 2B",
             category_id=cat2.id,
         )
@@ -617,7 +617,7 @@ class TestChannelLinksFiltering:
         for i in range(4):
             ch = Channel(
                 account_id=account.id,
-                stream_id=i + 1,
+                stream_id=str(i + 1),
                 name=f"Channel {i + 1}",
                 category_id=category.id,
             )
@@ -670,7 +670,7 @@ class TestChannelLinksFiltering:
         for i in range(4):
             ch = Channel(
                 account_id=account.id,
-                stream_id=i + 1,
+                stream_id=str(i + 1),
                 name=f"Channel {i + 1}",
                 category_id=category.id,
             )
@@ -727,7 +727,7 @@ class TestChannelLinksForChannel:
         for i in range(3):
             ch = Channel(
                 account_id=account.id,
-                stream_id=i + 1,
+                stream_id=str(i + 1),
                 name=f"Channel {i + 1}",
                 category_id=category.id,
             )
@@ -784,7 +784,7 @@ class TestDetectChannelLinks:
 
         channel = Channel(
             account_id=account.id,
-            stream_id=1,
+            stream_id="1",
             name="CNN",
             cleaned_name="CNN",
             category_id=category.id,
@@ -820,7 +820,7 @@ class TestDetectChannelLinks:
         # Create east and west channels with same cleaned name
         east_channel = Channel(
             account_id=account.id,
-            stream_id=1,
+            stream_id="1",
             name="CNN East",
             cleaned_name="CNN",
             epg_channel_id="CNN.east",
@@ -828,7 +828,7 @@ class TestDetectChannelLinks:
         )
         west_channel = Channel(
             account_id=account.id,
-            stream_id=2,
+            stream_id="2",
             name="CNN West",
             cleaned_name="CNN",
             epg_channel_id="CNN.west",
@@ -846,12 +846,12 @@ class TestDetectChannelLinks:
         # Assign tags
         east_channel_tag = ChannelTag(
             account_id=account.id,
-            stream_id=1,
+            stream_id="1",
             tag_id=east_tag.id,
         )
         west_channel_tag = ChannelTag(
             account_id=account.id,
-            stream_id=2,
+            stream_id="2",
             tag_id=west_tag.id,
         )
         db.session.add_all([east_channel_tag, west_channel_tag])
@@ -892,14 +892,14 @@ class TestDetectChannelLinks:
 
         channel1 = Channel(
             account_id=account.id,
-            stream_id=1,
+            stream_id="1",
             name="Channel 1",
             cleaned_name="Channel 1",
             category_id=category.id,
         )
         channel2 = Channel(
             account_id=account.id,
-            stream_id=2,
+            stream_id="2",
             name="Channel 2",
             cleaned_name="Channel 2",
             category_id=category.id,

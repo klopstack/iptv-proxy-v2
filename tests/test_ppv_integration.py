@@ -42,7 +42,7 @@ def test_ppv_category_detection_and_visibility(app, ppv_account):
 
         channel = Channel(
             account_id=account.id,
-            stream_id=9001,
+            stream_id="9001",
             name="UFC 300: Jones vs Miocic",
             category_id=cat.id,
             is_ppv=True,

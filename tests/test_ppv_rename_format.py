@@ -158,7 +158,7 @@ class TestPpvRenameFormatPlaylistIntegration:
 
             channel = Channel(
                 account_id=account.id,
-                stream_id=1,
+                stream_id="1",
                 name="PPV 1",
                 cleaned_name="PPV 1",
                 category_id=category.id,
