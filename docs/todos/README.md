@@ -2,7 +2,7 @@
 
 This directory contains detailed work items identified during the post-restructuring codebase audit (May 2026). Each document is self-contained: problem statement, affected files, proposed solution, acceptance criteria, and test plan.
 
-**Open backlog (19 required):** see **[ROADMAP.md](./ROADMAP.md)** (index) and **[ROADMAP-active.md](./ROADMAP-active.md)** (open waves). Completed waves 1–10: **[archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-waves-1-10.md)**. Per-item specs stay in the linked TODO files below.
+**Open backlog (24 required):** see **[ROADMAP.md](./ROADMAP.md)** (index) and **[ROADMAP-active.md](./ROADMAP-active.md)** (open waves). Completed waves 1–10: **[archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-waves-1-10.md)**. Per-item specs stay in the linked TODO files below.
 
 | Track | Open TODOs |
 |-------|------------|
@@ -264,6 +264,10 @@ Identified from live analysis on `docker.klopnet.com` (18,625 active PPV channel
 | 125 | [125-sofascore-tennis-calendar-slice1.md](./125-sofascore-tennis-calendar-slice1.md) | ✅ | SofaScore client + parser — PR [#58](https://github.com/klopstack/iptv-proxy-v2/pull/58) |
 | 126 | [126-sofascore-calendar-multi-sport-and-enrichment.md](./126-sofascore-calendar-multi-sport-and-enrichment.md) | ✅ | SofaScore merge + doc — PR [#60](https://github.com/klopstack/iptv-proxy-v2/pull/60) |
 | 127 | [127-ppv-multi-player-competitor-extraction.md](./127-ppv-multi-player-competitor-extraction.md) | ⬜ | Tennis doubles / 2v2 channel names → four-player extract + match |
+| 128 | [128-fix-ppv-year-inference-recent-past-dates.md](./128-fix-ppv-year-inference-recent-past-dates.md) | ⬜ | `@ Jun 3` recent-past year rollover — production still skips tennis as `far_future` |
+| 129 | [129-ppv-replay-archive-enrichment-flosp.md](./129-ppv-replay-archive-enrichment-flosp.md) | ⬜ | Flo/FLSP archive replays → enrich + **Replay** category (not skip / live) |
+| 130 | [130-ncaa-college-calendar-source-spike.md](./130-ncaa-college-calendar-source-spike.md) | ⬜ | Spike: NCAA / college / amateur calendar APIs (SofaScore slugs, Sportsipy, …) |
+| 131 | [131-sofascore-college-amateur-calendar-provider.md](./131-sofascore-college-amateur-calendar-provider.md) | ⬜ | Wire SofaScore multi-sport + historical window for Flo replay matching |
 
 ```
 124-attempt-tracking ✅ (#53)
@@ -271,10 +275,22 @@ Identified from live analysis on `docker.klopnet.com` (18,625 active PPV channel
 120 ──► 122 ESPN tennis ✅ (#55 spike, #56) ──► 125 SofaScore slice 1 ✅ (#58) ──► 126 wire ✅ (#60)
 120 ──► 123-extended-coverage ✅ (D #59, C #61, B #62, A #63)
 124-requeue ──► run on production after deploy
+128-year-inference ──► unblocks tennis skipped as far_future (regression after 120)
 127-doubles-extraction ──► ~53% of tennis no_match unique keys (after 122/126)
+130-ncaa-spike ──► data source decision for Flo/college replays
+131-sofascore-college ──► calendar provider (after 130); blocks 129 Track B
+129-replay-flosp ──► ~243 queued Flo college replays → match + Replay group
 ```
 
-**Highest impact ops:** Requeue `no_match` per [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) after Wave 12 deploy; then [127](./127-ppv-multi-player-competitor-extraction.md) for doubles/wheelchair-doubles titles.
+**Highest impact ops:** [128](./128-fix-ppv-year-inference-recent-past-dates.md) then requeue tennis; [130](./130-ncaa-college-calendar-source-spike.md) then [131](./131-sofascore-college-amateur-calendar-provider.md) for Flo; [129](./129-ppv-replay-archive-enrichment-flosp.md) replay UX; [127](./127-ppv-multi-player-competitor-extraction.md) for doubles.
+
+### Wave 14 — Admin UX (June 2026)
+
+| # | Document | Status | Summary |
+|---|----------|--------|---------|
+| 132 | [132-fix-xtream-credential-dialog-ux.md](./132-fix-xtream-credential-dialog-ux.md) | ⬜ | Xtream credential modal: unwrap accounts API envelope; timezone `<select>` |
+
+**Impact:** Blocks creating account-linked Xtream credentials — **Select Account** stuck on “Loading accounts…” after [73](./73-standardize-api-response-shapes.md) envelope migration.
 
 ---
 

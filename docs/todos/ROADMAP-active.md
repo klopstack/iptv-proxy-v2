@@ -15,7 +15,9 @@ Open work only. Completed waves **1–10** (PRs #10–51) and **Wave 12** (PRs #
 | Dashboard follow-ups | 107–110 | **0** | 107–109 ✅; [110](./110-dashboard-optional-ux-follow-ups.md) won't do |
 | Wave 11 — PostgreSQL | 111–119 | **9** | Series A + Series B |
 | Wave 12 — PPV matching | 120–126, 123 | **0** | ✅ complete June 2026; 123 A/B in review [#62](https://github.com/klopstack/iptv-proxy-v2/pull/62)/[#63](https://github.com/klopstack/iptv-proxy-v2/pull/63) |
-| **Total required** | | **9** | 111–119 only |
+| Wave 13 — PPV follow-ups | 127–131 | **5** | Doubles; dates; Flo replay; NCAA spike + SofaScore college |
+| Wave 14 — Admin UX | 132 | **1** | Xtream credential modal — account dropdown + timezone select |
+| **Total required** | | **15** | 111–119, 127–131, 132 |
 
 Waves **1–10** ✅ — see [archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-waves-1-10.md).  
 **Wave 12** ✅ — see [§ Wave 12 complete](#wave-12--ppv-production-matching-gaps--complete-june-2026) below.
@@ -101,17 +103,42 @@ Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMA
 
 ---
 
-## Wave 13 — Tennis doubles matching (open)
+## Wave 13 — PPV follow-ups (open)
 
-**Goal:** Match PPV channels whose titles encode **four players** (doubles, wheelchair doubles, legends), not only singles `First Last vs First Last`.
+**Goal:** Close production gaps from June 4 2026 audit: tennis date skip regression, doubles parsing, Flo replay library, college calendar data.
 
 | Batch | TODO | Theme |
 |-------|------|-------|
+| **AK** | [128](./128-fix-ppv-year-inference-recent-past-dates.md) | `@ Jun N` recent-past year — 332 tennis channels skipped as `far_future` |
 | **AJ** | [127](./127-ppv-multi-player-competitor-extraction.md) | 2v2 name parsing + `competitors_match_event` + matcher validation |
+| **AL** | [129](./129-ppv-replay-archive-enrichment-flosp.md) | Flo/FLSP archive replays → enrich + **Replay** playlist group |
+| **AM** | [130](./130-ncaa-college-calendar-source-spike.md) | Spike: NCAA / college calendar sources (SofaScore slugs, Sportsipy, …) |
+| **AN** | [131](./131-sofascore-college-amateur-calendar-provider.md) | SofaScore multi-sport + historical window → calendar merge |
 
-**Prerequisite:** [122](./122-tennis-calendar-event-source.md) / [126](./126-sofascore-calendar-multi-sport-and-enrichment.md) (calendar rows with `Player A / Player B` sides) ✅.
+**Order:** **128** before tennis requeue; **130 spike** before **131** wire; **129 Track B** after **131**; **127** after calendar + 128 (doubles need fixtures).
 
-**Audit impact:** ~89 unique doubles keys (~200 channel rows) currently fail extraction before matching runs — see [tennis-ppv-production-audit.md](../architecture/tennis-ppv-production-audit.md) §4.
+**Prerequisites:** [122](./122-tennis-calendar-event-source.md) / [126](./126-sofascore-calendar-multi-sport-and-enrichment.md) ✅; [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) requeue after deploy.
+
+**Audit impact:**
+
+- [128](./128-fix-ppv-year-inference-recent-past-dates.md) — `@ Jun 3` parsed as 2027 on production; tennis never reaches matcher.
+- [127](./127-ppv-multi-player-competitor-extraction.md) — ~89 unique doubles keys — [tennis-ppv-production-audit.md](../architecture/tennis-ppv-production-audit.md) §4.
+- [129](./129-ppv-replay-archive-enrichment-flosp.md) — **243** Flo channels (~72% of 339 queued tail); product intent is replay enrichment, not `stale_archive` skip.
+- [130](./130-ncaa-college-calendar-source-spike.md) / [131](./131-sofascore-college-amateur-calendar-provider.md) — calendar gap for Oct 2025 college/hockey; ±14-day SofaScore window blocks historical replay fetch.
+
+---
+
+## Wave 14 — Admin UX (open)
+
+**Goal:** Fix operator-facing admin UI regressions unrelated to PPV/DB tracks.
+
+| TODO | Summary |
+|------|---------|
+| [132](./132-fix-xtream-credential-dialog-ux.md) | `/xtream` Add Credential modal: unwrap `GET /api/accounts` `{ data }` envelope (dropdown stuck on “Loading accounts…”); PPV Rename Timezone → `<select>` |
+
+**Root cause:** [73](./73-standardize-api-response-shapes.md) migrated accounts list to `data_response`; `templates/xtream.html` never adopted `apiUnwrapData` / `account_select.js`.
+
+**Independent of:** Wave 11 (PostgreSQL) and Wave 13 (PPV) — safe to pick up anytime.
 
 ---
 

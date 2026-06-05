@@ -90,6 +90,44 @@ class TestParseThesportsdbScheduledAt:
         )
         assert scheduled is None
 
+    def test_str_time_local_converted_via_venue_timezone(self):
+        """strTimeLocal with known venue zone is converted to UTC, not stored as UTC wall clock."""
+        scheduled, tz = parse_thesportsdb_scheduled_at(
+            {
+                "idEvent": "2427387",
+                "dateEvent": "2026-06-04",
+                "strTimeLocal": "19:30:00",
+                "strCountry": "USA",
+            }
+        )
+        assert tz == "America/New_York"
+        # 19:30 America/New_York on 2026-06-04 is EDT (UTC-4) -> 23:30 UTC
+        assert scheduled == datetime(2026, 6, 4, 23, 30)
+
+    def test_str_time_local_without_venue_timezone_skipped(self):
+        scheduled, tz = parse_thesportsdb_scheduled_at(
+            {
+                "idEvent": "2427388",
+                "dateEvent": "2026-06-04",
+                "strTimeLocal": "19:30:00",
+            }
+        )
+        assert scheduled is None
+        assert tz is None
+
+    def test_str_time_preferred_over_str_time_local(self):
+        """When strTime is set, do not use strTimeLocal (different semantics)."""
+        scheduled, _ = parse_thesportsdb_scheduled_at(
+            {
+                "idEvent": "99",
+                "dateEvent": "2026-01-06",
+                "strTime": "00:00:00",
+                "strTimeLocal": "19:00:00",
+                "strCountry": "USA",
+            }
+        )
+        assert scheduled == datetime(2026, 1, 6, 0, 0)
+
     def test_timestamp_with_numeric_offset(self):
         scheduled, _ = parse_thesportsdb_scheduled_at(
             {
