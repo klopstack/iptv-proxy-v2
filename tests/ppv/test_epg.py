@@ -736,8 +736,8 @@ def test_ppv_channel_epg_matching(app, sample_events):
         from services.epg.match_rules import EpgMatchRulesService
         from services.ppv.epg import PPVEpgService
 
-        # Get the event created by fixture
-        event = Event.query.first()
+        # Get the event created by fixture (deterministic — PG has no implicit row order)
+        event = Event.query.filter_by(external_id="12345").one()
         assert event is not None
 
         # Create a PPV channel
