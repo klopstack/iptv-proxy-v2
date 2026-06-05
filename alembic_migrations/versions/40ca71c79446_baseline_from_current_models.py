@@ -406,7 +406,7 @@ def upgrade():
         sa.Column("aliases", sa.Text(), nullable=True),
         sa.Column("city", sa.String(length=100), nullable=True),
         sa.Column("state", sa.String(length=10), nullable=True),
-        sa.Column("country", sa.String(length=10), nullable=True),
+        sa.Column("country", sa.String(length=100), nullable=True),
         sa.Column("venue_name", sa.String(length=200), nullable=True),
         sa.Column("latitude", sa.Float(), nullable=True),
         sa.Column("longitude", sa.Float(), nullable=True),

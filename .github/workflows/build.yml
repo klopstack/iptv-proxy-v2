@@ -135,7 +135,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U iptv -d iptv_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -158,10 +158,10 @@ jobs:
         run: make install-py
 
       - name: Apply Alembic migrations
-        run: flask db upgrade
+        run: venv/bin/flask db upgrade
 
       - name: Run tests (non-SQLite)
-        run: pytest tests/ -m "not sqlite_only" -x -v --cov=. --cov-report=term-missing --cov-fail-under=75
+        run: venv/bin/pytest tests/ -m "not sqlite_only" -x -v --cov=. --cov-report=term-missing --cov-fail-under=75
 
   vulture:
     name: Dead code scan (vulture)

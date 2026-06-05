@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import text
 
 # Add parent directory to path so we can import app modules
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -59,13 +60,25 @@ def _cleanup_test_db() -> None:
             db_file.unlink()
 
 
+def _reset_pg_database(engine) -> None:
+    """Drop and recreate public schema (cleaner than drop_all on PostgreSQL)."""
+    engine.dispose()
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+        conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
+        conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
+        db_user = engine.url.username
+        if db_user:
+            conn.execute(text(f'GRANT ALL ON SCHEMA public TO "{db_user}"'))
+
+
 def _reset_test_db(flask_app) -> None:
     """Close connections and reset the test database."""
     with flask_app.app_context():
         _db.session.remove()
         _db.engine.dispose()
         if not is_sqlite_backend():
-            _db.drop_all()
+            _reset_pg_database(_db.engine)
             _db.engine.dispose()
             return
     _cleanup_test_db()
@@ -83,6 +96,8 @@ def pytest_runtest_setup(item):
 # Set test database URI BEFORE importing app
 os.environ["DATABASE_URL"] = TEST_DB_URL
 os.environ["DISABLE_IN_WORKER_SCHEDULER"] = "true"
+if not is_sqlite_backend():
+    os.environ["IPTV_PG_TEST"] = "1"
 if is_sqlite_backend():
     _sqlite_path_from_url().parent.mkdir(parents=True, exist_ok=True)
 
@@ -112,8 +127,10 @@ def app():
         # This prevents "database is locked" errors with SQLite
         _db.session.remove()
         _db.engine.dispose()
-        _db.drop_all()
-        _db.engine.dispose()
+        if is_sqlite_backend():
+            _db.drop_all()
+            _db.engine.dispose()
+        # PostgreSQL: next test's setup resets via DROP SCHEMA; skip teardown to avoid deadlocks
 
     if is_sqlite_backend():
         _cleanup_test_db()
