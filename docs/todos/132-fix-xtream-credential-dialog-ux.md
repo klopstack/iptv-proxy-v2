@@ -127,4 +127,4 @@ npm test  # if xtream_page.js or account_select reuse tests added
 
 ## Completion
 
-- PR: _pending_
+- PR: [#71](https://github.com/klopstack/iptv-proxy-v2/pull/71)
