@@ -1,6 +1,6 @@
 # PostgreSQL in CI, Docker Compose service, and DATABASE_URL config abstraction
 
-**Status:** ⬜ Open  
+**Status:** ✅ Complete  
 **Priority:** P2  
 **Track:** Database Migration — Series A (Preparation)
 
@@ -208,12 +208,16 @@ Update `DEPLOYMENT.md` with:
 
 ## Acceptance criteria
 
-- [ ] `app.py` `SQLALCHEMY_ENGINE_OPTIONS` is dialect-branched; starting with a PostgreSQL `DATABASE_URL` raises no `TypeError` on import or first request
-- [ ] `docker-compose.yml` has a `postgres` service under the `postgres` profile; `docker compose --profile postgres up` starts both app and PostgreSQL
-- [ ] `psycopg2-binary` is in `requirements.txt` (or `requirements-postgres.txt`)
-- [ ] `.env.example` documents both SQLite and PostgreSQL `DATABASE_URL` formats
-- [ ] CI `build.yml` has a `test-postgres` job that runs against PostgreSQL 16 and passes `pytest -m "not sqlite_only"`
-- [ ] `DEPLOYMENT.md` updated with PostgreSQL setup instructions
+- [x] `app.py` `SQLALCHEMY_ENGINE_OPTIONS` is dialect-branched; starting with a PostgreSQL `DATABASE_URL` raises no `TypeError` on import or first request
+- [x] `docker-compose.yml` has a `postgres` service under the `postgres` profile; `docker compose --profile postgres up` starts both app and PostgreSQL
+- [x] `psycopg2-binary` is in `requirements.txt` (or `requirements-postgres.txt`)
+- [x] `.env.example` documents both SQLite and PostgreSQL `DATABASE_URL` formats
+- [x] CI `build.yml` has a `test-postgres` job that runs against PostgreSQL 16 and passes `pytest -m "not sqlite_only"`
+- [x] `DEPLOYMENT.md` updated with PostgreSQL setup instructions
+
+## Completion
+
+- PG-A3 batch — dialect-aware engine options, compose postgres profile, CI job (PR TBD)
 
 ## Test plan
 

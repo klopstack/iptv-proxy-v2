@@ -23,11 +23,11 @@ Implement from each **TODO file** linked in the active roadmap — not from summ
 | **Wave 9** | 96–100, 102, 103, 105 | **0** | PRs #39–47 (route splits, ESM, xdist, PPV packages) |
 | **Wave 10** | 101 | **0** | Final doc review ✅ |
 | **Dashboard follow-ups** | 107–110 | **0** | 107–109 ✅; [110](./110-dashboard-optional-ux-follow-ups.md) won't do |
-| **Wave 11 — DB migration** | 111–119 | **9** | SQLite → PostgreSQL; Series A + Series B |
+| **Wave 11 — DB migration** | 111–119 | **4** | Series A ✅ (#65–67, PG-A3); Series B open |
 | **Wave 12 — PPV matching** | 120–126, 123 | **0** | ✅ June 2026 — PRs [#52](https://github.com/klopstack/iptv-proxy-v2/pull/52)–[#63](https://github.com/klopstack/iptv-proxy-v2/pull/63) |
 | **Wave 13 — Tennis doubles** | [127](./127-ppv-multi-player-competitor-extraction.md) | **1** | 2v2 competitor extraction + doubles validation |
 
-**Total open (required):** 10 (111–119, 127) — see [ROADMAP-active.md](./ROADMAP-active.md).
+**Total open (required):** 5 (116–119, 127) — see [ROADMAP-active.md](./ROADMAP-active.md).
 
 Waves **1–10** ✅ (PRs #10–51). **Wave 12** ✅ (PRs #52–63). **Next:** Wave 11 (PostgreSQL).
 

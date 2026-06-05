@@ -120,6 +120,49 @@ jobs:
       - name: Run tests with coverage via Makefile
         run: make test
 
+  test-postgres:
+    name: Tests (PostgreSQL)
+    runs-on: ubuntu-latest
+    needs: [lint-py]
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: iptv_test
+          POSTGRES_USER: iptv
+          POSTGRES_PASSWORD: iptv
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://iptv:iptv@localhost:5432/iptv_test
+      FLASK_APP: app.py
+      DISABLE_IN_WORKER_SCHEDULER: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies via Makefile
+        run: make install-py
+
+      - name: Apply Alembic migrations
+        run: flask db upgrade
+
+      - name: Run tests (non-SQLite)
+        run: pytest tests/ -m "not sqlite_only" -x -v --cov=. --cov-report=term-missing --cov-fail-under=75
+
   vulture:
     name: Dead code scan (vulture)
     runs-on: ubuntu-latest

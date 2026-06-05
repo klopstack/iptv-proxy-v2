@@ -1,6 +1,6 @@
 # Replace bespoke SQLite migration runner with Alembic
 
-**Status:** ⬜ Open  
+**Status:** ✅ Complete (PR #67)  
 **Priority:** P1  
 **Track:** Database Migration — Series A (Preparation)
 

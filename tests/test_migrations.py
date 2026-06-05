@@ -33,12 +33,14 @@ def _sqlite_connect(db_path: str) -> sqlite3.Connection:
 
 
 class TestAlembicMigrations:
+    @pytest.mark.sqlite_only
     def test_upgrade_creates_alembic_version(self, temp_db):
         conn = sqlite3.connect(temp_db)
         cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version'")
         assert cursor.fetchone() is not None
         conn.close()
 
+    @pytest.mark.sqlite_only
     def test_upgrade_creates_core_tables(self, temp_db):
         conn = sqlite3.connect(temp_db)
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
@@ -61,6 +63,7 @@ class TestAlembicMigrations:
         finally:
             fk_conn.close()
 
+    @pytest.mark.sqlite_only
     def test_second_upgrade_is_idempotent(self, temp_db):
         alembic_upgrade_sqlite(temp_db)
         alembic_upgrade_sqlite(temp_db)
@@ -72,6 +75,7 @@ class TestAlembicMigrations:
 
 
 @pytest.mark.legacy_migrations
+@pytest.mark.sqlite_only
 class TestLegacyMigrationRunner:
     """Legacy sqlite3 runner archived in migrations/legacy_sqlite/."""
 

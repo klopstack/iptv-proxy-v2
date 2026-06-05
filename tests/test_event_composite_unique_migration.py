@@ -35,6 +35,7 @@ def _create_legacy_events_table(conn: sqlite3.Connection) -> None:
 
 
 @pytest.mark.migrations
+@pytest.mark.sqlite_only
 class TestEventCompositeUniqueMigration:
     def test_allows_same_external_id_across_sources(self, tmp_path):
         db_path = tmp_path / "test.db"

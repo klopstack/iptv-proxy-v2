@@ -23,24 +23,32 @@ from services.scheduler import SyncScheduler
 # Initialize Flask app
 app = Flask(__name__)
 init_cache_service(app)
-app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:////app/data/iptv_proxy.db")
+_db_url = os.getenv("DATABASE_URL", "sqlite:////app/data/iptv_proxy.db")
+app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 # No SECRET_KEY: admin auth is Traefik + Authentik; Flask sessions are disabled.
 disable_flask_sessions(app)
 
-# SQLite configuration for better concurrency with background scheduler
-# - timeout: Wait up to 60 seconds for locks (increased from 30)
-# - check_same_thread: Allow use across threads (required for scheduler)
-# - isolation_level: None enables autocommit mode for better concurrency
-# Note: pool_size/max_overflow only apply to non-SQLite databases
-app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "connect_args": {
-        "timeout": 60,
-        "check_same_thread": False,
-        "isolation_level": None,  # Autocommit mode
-    },
-    "pool_pre_ping": True,  # Verify connections before use
-}
+if _db_url.startswith("sqlite"):
+    # SQLite: better concurrency with background scheduler
+    # - timeout: wait for write locks
+    # - check_same_thread: allow cross-thread use (scheduler)
+    # - isolation_level: None enables autocommit mode
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "connect_args": {
+            "timeout": 60,
+            "check_same_thread": False,
+            "isolation_level": None,
+        },
+        "pool_pre_ping": True,
+    }
+else:
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "pool_pre_ping": True,
+        "pool_size": int(os.getenv("DB_POOL_SIZE", "5")),
+        "max_overflow": int(os.getenv("DB_MAX_OVERFLOW", "10")),
+        "pool_timeout": int(os.getenv("DB_POOL_TIMEOUT", "30")),
+    }
 
 # Initialize extensions
 CORS(app)

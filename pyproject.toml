@@ -48,6 +48,7 @@ markers = [
     "integration: marks tests requiring external services (deselect with '-m \"not integration\"')",
     "migrations: marks tests that run the full migration chain on a temp database",
     "legacy_migrations: marks tests for archived sqlite3 migration runner",
+    "sqlite_only: marks tests that require SQLite backend (skipped on PostgreSQL CI)",
     "network: marks tests that intentionally call external HTTP APIs (e.g. live TheSportsDB)",
 ]
 norecursedirs = ["services", "routes", "migrations", "static", "templates", "data", "instance", "venv"]

@@ -1,6 +1,6 @@
 # Harden test DB fixtures and isolation for PostgreSQL compatibility
 
-**Status:** ⬜ Open  
+**Status:** ✅ Complete  
 **Priority:** P2  
 **Track:** Database Migration — Series A (Preparation)
 
@@ -162,13 +162,17 @@ A custom `autouse` fixture can auto-skip these when the backend is not SQLite.
 
 ## Acceptance criteria
 
-- [ ] `conftest.py` reads `DATABASE_URL` from environment; SQLite is only the default
-- [ ] Running `DATABASE_URL=postgresql://localhost/test_iptv pytest tests/ -x` does not immediately crash on import or fixture setup
-- [ ] SQLite per-worker file strategy remains intact when `DATABASE_URL` is SQLite
-- [ ] WAL/SHM cleanup is guarded to SQLite-only
-- [ ] `test_migrations.py` SQLite-specific `PRAGMA` and `sqlite_master` assertions are marked `sqlite_only`
-- [ ] `pytest -m "not sqlite_only"` passes against PostgreSQL (assuming schema exists)
-- [ ] Existing SQLite test suite shows no regressions
+- [x] `conftest.py` reads `DATABASE_URL` from environment; SQLite is only the default
+- [x] Running `DATABASE_URL=postgresql://localhost/test_iptv pytest tests/ -x` does not immediately crash on import or fixture setup
+- [x] SQLite per-worker file strategy remains intact when `DATABASE_URL` is SQLite
+- [x] WAL/SHM cleanup is guarded to SQLite-only
+- [x] `test_migrations.py` SQLite-specific `PRAGMA` and `sqlite_master` assertions are marked `sqlite_only`
+- [x] `pytest -m "not sqlite_only"` passes against PostgreSQL (assuming schema exists)
+- [x] Existing SQLite test suite shows no regressions
+
+## Completion
+
+- PG-A3 batch — injectable `DATABASE_URL`, `sqlite_only` markers, PG fixture reset (PR TBD)
 
 ## Test plan
 

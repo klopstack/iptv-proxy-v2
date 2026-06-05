@@ -13,9 +13,9 @@ Open work only. Completed waves **1–10** (PRs #10–51) and **Wave 12** (PRs #
 | Track | TODOs | Open | Notes |
 |-------|-------|------|-------|
 | Dashboard follow-ups | 107–110 | **0** | 107–109 ✅; [110](./110-dashboard-optional-ux-follow-ups.md) won't do |
-| Wave 11 — PostgreSQL | 111–119 | **9** | Series A + Series B |
+| Wave 11 — PostgreSQL | 111–119 | **4** | Series A ✅; Series B open |
 | Wave 12 — PPV matching | 120–126, 123 | **0** | ✅ complete June 2026; 123 A/B in review [#62](https://github.com/klopstack/iptv-proxy-v2/pull/62)/[#63](https://github.com/klopstack/iptv-proxy-v2/pull/63) |
-| **Total required** | | **9** | 111–119 only |
+| **Total required** | | **5** | 116–119, 127 |
 
 Waves **1–10** ✅ — see [archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-waves-1-10.md).  
 **Wave 12** ✅ — see [§ Wave 12 complete](#wave-12--ppv-production-matching-gaps--complete-june-2026) below.
@@ -68,7 +68,7 @@ Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMA
 |----|------|---------|------|
 | **PG-A1** | [111](./111-pg-prep-raw-sqlite3-audit.md), [112](./112-pg-prep-json-column-types.md) | Raw sqlite3 audit; JSON columns | S–M |
 | **PG-A2** | [113](./113-pg-prep-alembic-migration-system.md) | Alembic replaces custom runner | **L** |
-| **PG-A3** | [114](./114-pg-prep-test-db-hardening.md), [115](./115-pg-prep-ci-docker-config.md) | Test DB + CI/Docker PG | M |
+| **PG-A3** | [114](./114-pg-prep-test-db-hardening.md), [115](./115-pg-prep-ci-docker-config.md) | Test DB + CI/Docker PG | M ✅ |
 
 ### Series B — Switchover (after Series A)
 
@@ -117,11 +117,11 @@ Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMA
 
 ## Recommended “next five”
 
-1. **[111](./111-pg-prep-raw-sqlite3-audit.md)** — PostgreSQL prep (batch **PG-A1**)
-2. **[112](./112-pg-prep-json-column-types.md)** — JSON column types (batch **PG-A1**)
-3. **[113](./113-pg-prep-alembic-migration-system.md)** — Alembic migration system (batch **PG-A2**)
-4. **[114](./114-pg-prep-test-db-hardening.md)** — Test DB hardening (batch **PG-A3**)
-5. **[115](./115-pg-prep-ci-docker-config.md)** — CI/Docker PG (batch **PG-A3**)
+1. **[117](./117-pg-migration-schema-creation.md)** — PostgreSQL schema creation (batch **PG-B1**)
+2. **[116](./116-pg-migration-data-export-tooling.md)** — Data export/import tooling (batch **PG-B1**)
+3. **[118](./118-pg-migration-cutover-procedure.md)** — Production cutover (batch **PG-B2**)
+4. **[119](./119-pg-migration-cleanup-and-docs.md)** — Post-cutover cleanup (batch **PG-B3**)
+5. **[128](./128-fix-ppv-year-inference-recent-past-dates.md)** — PPV date year inference (Wave 13)
 
 **Ops (post Wave 12 deploy):** Requeue `no_match` channels via [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md).
 

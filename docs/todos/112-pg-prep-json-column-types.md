@@ -1,6 +1,6 @@
 # Replace `db.Text`-as-JSON columns with `db.JSON` / `JSONB`-compatible types
 
-**Status:** ⬜ Open  
+**Status:** ✅ Complete (PR #66)  
 **Priority:** P2  
 **Track:** Database Migration — Series A (Preparation)
 
