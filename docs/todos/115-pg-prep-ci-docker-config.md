@@ -217,7 +217,7 @@ Update `DEPLOYMENT.md` with:
 
 ## Completion
 
-- PG-A3 batch — dialect-aware engine options, compose postgres profile, CI job (PR TBD)
+- PG-A3 batch — dialect-aware engine options, compose postgres profile, CI job ([#72](https://github.com/klopstack/iptv-proxy-v2/pull/72))
 
 ## Test plan
 

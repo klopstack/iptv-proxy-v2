@@ -172,7 +172,7 @@ A custom `autouse` fixture can auto-skip these when the backend is not SQLite.
 
 ## Completion
 
-- PG-A3 batch — injectable `DATABASE_URL`, `sqlite_only` markers, PG fixture reset (PR TBD)
+- PG-A3 batch — injectable `DATABASE_URL`, `sqlite_only` markers, PG fixture reset ([#72](https://github.com/klopstack/iptv-proxy-v2/pull/72))
 
 ## Test plan
 
