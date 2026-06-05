@@ -174,9 +174,19 @@
 
                     <div class="mb-3">
                         <label for="credential-ppv-rename-timezone" class="form-label">PPV Rename Timezone</label>
-                        <input type="text" class="form-control" id="credential-ppv-rename-timezone"
-                               list="xtream-timezone-options"
-                               placeholder="Leave blank to use account default">
+                        <select class="form-select" id="credential-ppv-rename-timezone">
+                            <option value="">Use account default</option>
+                            <option value="America/New_York">America/New_York</option>
+                            <option value="America/Chicago">America/Chicago</option>
+                            <option value="America/Denver">America/Denver</option>
+                            <option value="America/Los_Angeles">America/Los_Angeles</option>
+                            <option value="America/Phoenix">America/Phoenix</option>
+                            <option value="Europe/London">Europe/London</option>
+                            <option value="Europe/Paris">Europe/Paris</option>
+                            <option value="Europe/Berlin">Europe/Berlin</option>
+                            <option value="Australia/Sydney">Australia/Sydney</option>
+                            <option value="UTC">UTC</option>
+                        </select>
                         <div class="form-text">
                             Override timezone for PPV channel <code>{start_time}</code> and <code>{date}</code> tokens.
                         </div>
@@ -204,18 +214,6 @@
                         </div>
                     </div>
                 </form>
-                <datalist id="xtream-timezone-options">
-                    <option value="America/New_York"></option>
-                    <option value="America/Chicago"></option>
-                    <option value="America/Denver"></option>
-                    <option value="America/Los_Angeles"></option>
-                    <option value="America/Phoenix"></option>
-                    <option value="Europe/London"></option>
-                    <option value="Europe/Paris"></option>
-                    <option value="Europe/Berlin"></option>
-                    <option value="Australia/Sydney"></option>
-                    <option value="UTC"></option>
-                </datalist>
                 <div id="form-error" class="alert alert-danger mt-3" style="display: none;"></div>
             </div>
             <div class="modal-footer">
@@ -246,302 +244,8 @@
     </div>
 </div>
 
-<script>
-let accounts = [];
-let playlistConfigs = [];
-let currentEditId = null;
-let deleteCredentialId = null;
+{% endblock %}
 
-// Initialize page
-document.addEventListener('DOMContentLoaded', function() {
-    // Set server URL
-    const serverUrl = window.location.origin;
-    document.getElementById('server-url').textContent = serverUrl;
-    document.getElementById('server-url-instructions').textContent = serverUrl;
-    
-    // Load data
-    loadCredentials();
-    loadAccounts();
-    loadPlaylistConfigs();
-    
-    // Setup event listeners
-    document.getElementById('save-credential-btn').addEventListener('click', saveCredential);
-    document.getElementById('confirm-delete-btn').addEventListener('click', confirmDelete);
-    
-    // Source type toggle
-    document.querySelectorAll('input[name="source-type"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-            const isAccount = this.value === 'account';
-            document.getElementById('account-select-group').style.display = isAccount ? 'block' : 'none';
-            document.getElementById('playlist-select-group').style.display = isAccount ? 'none' : 'block';
-        });
-    });
-    
-    // Reset form on modal close
-    document.getElementById('addCredentialModal').addEventListener('hidden.bs.modal', function() {
-        document.getElementById('credential-form').reset();
-        document.getElementById('credential-id').value = '';
-        document.getElementById('form-error').style.display = 'none';
-        document.getElementById('modalTitle').textContent = 'Add Xtream Credential';
-        // Reset password field to required state for adding new credentials
-        document.getElementById('credential-password').required = true;
-        document.getElementById('password-required-indicator').style.display = '';
-        document.getElementById('password-help-text').textContent = 'Use a unique password different from your provider';
-        currentEditId = null;
-    });
-});
-
-// Load credentials from API
-function loadCredentials() {
-    fetch('/api/xtream-credentials')
-        .then(response => response.json())
-        .then(credentials => {
-            displayCredentials(credentials);
-            document.getElementById('loading-spinner').style.display = 'none';
-            document.getElementById('credentials-container').style.display = 'block';
-        })
-        .catch(error => {
-            console.error('Error loading credentials:', error);
-            showError('Failed to load credentials');
-        });
-}
-
-// Display credentials in table
-function displayCredentials(credentials) {
-    const tbody = document.getElementById('credentials-list');
-    const noCredsDiv = document.getElementById('no-credentials');
-    
-    if (credentials.length === 0) {
-        tbody.innerHTML = '';
-        noCredsDiv.style.display = 'block';
-        return;
-    }
-    
-    noCredsDiv.style.display = 'none';
-    tbody.innerHTML = credentials.map(cred => {
-        const source = cred.account_id 
-            ? `Account #${cred.account_id}` 
-            : `Playlist Config #${cred.playlist_config_id}`;
-        
-        const statusBadge = cred.enabled 
-            ? '<span class="badge bg-success">Enabled</span>'
-            : '<span class="badge bg-secondary">Disabled</span>';
-        
-        const filtersBadge = cred.use_filters 
-            ? '<span class="badge bg-info">Yes</span>' 
-            : '<span class="badge bg-secondary">No</span>';
-        
-        const collapseBadge = cred.collapse_duplicates 
-            ? '<span class="badge bg-warning">Yes</span>' 
-            : '<span class="badge bg-secondary">No</span>';
-        
-        return `
-            <tr>
-                <td><code>${escapeHtml(cred.username)}</code></td>
-                <td>${source}</td>
-                <td>${filtersBadge}</td>
-                <td>${collapseBadge}</td>
-                <td>${statusBadge}</td>
-                <td>${escapeHtml(cred.description || '')}</td>
-                <td>
-                    <button class="btn btn-sm btn-outline-primary" onclick="editCredential(${cred.id})">
-                        <i class="bi bi-pencil"></i> Edit
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteCredential(${cred.id}, '${escapeHtml(cred.username)}')">
-                        <i class="bi bi-trash"></i> Delete
-                    </button>
-                </td>
-            </tr>
-        `;
-    }).join('');
-}
-
-// Load accounts for dropdown
-function loadAccounts() {
-    fetch('/api/accounts')
-        .then(response => response.json())
-        .then(data => {
-            accounts = data;
-            const select = document.getElementById('credential-account-id');
-            select.innerHTML = '<option value="">-- Select Account --</option>' + 
-                accounts.map(acc => `<option value="${acc.id}">${escapeHtml(acc.name)}</option>`).join('');
-        })
-        .catch(error => console.error('Error loading accounts:', error));
-}
-
-// Load playlist configs for dropdown
-function loadPlaylistConfigs() {
-    fetch('/api/playlist-configs')
-        .then(response => response.json())
-        .then(configs => {
-            playlistConfigs = configs;
-            const select = document.getElementById('credential-playlist-config-id');
-            select.innerHTML = '<option value="">-- Select Playlist Config --</option>' + 
-                configs.map(config => `<option value="${config.id}">${escapeHtml(config.name)}</option>`).join('');
-        })
-        .catch(error => console.error('Error loading playlist configs:', error));
-}
-
-// Save credential (create or update)
-function saveCredential() {
-    const id = document.getElementById('credential-id').value;
-    const username = document.getElementById('credential-username').value.trim();
-    const password = document.getElementById('credential-password').value.trim();
-    const sourceType = document.querySelector('input[name="source-type"]:checked').value;
-    const accountId = sourceType === 'account' ? document.getElementById('credential-account-id').value : null;
-    const playlistConfigId = sourceType === 'playlist' ? document.getElementById('credential-playlist-config-id').value : null;
-    const useFilters = document.getElementById('credential-use-filters').checked;
-    const collapseDuplicates = document.getElementById('credential-collapse-duplicates').checked;
-    const enabled = document.getElementById('credential-enabled').checked;
-    const description = document.getElementById('credential-description').value.trim();
-    const ppvRenameTimezone = document.getElementById('credential-ppv-rename-timezone').value.trim();
-    const preferredLanguages = document.getElementById('credential-preferred-languages').value.trim();
-    const languageFallback = document.getElementById('credential-language-fallback').value;
-    
-    // Validation
-    if (!username) {
-        showFormError('Username is required');
-        return;
-    }
-    
-    // Password is only required for new credentials
-    if (!id && !password) {
-        showFormError('Password is required for new credentials');
-        return;
-    }
-    
-    if (!accountId && !playlistConfigId) {
-        showFormError('Please select an account or playlist config');
-        return;
-    }
-    
-    const data = {
-        username,
-        account_id: accountId ? parseInt(accountId) : null,
-        playlist_config_id: playlistConfigId ? parseInt(playlistConfigId) : null,
-        use_filters: useFilters,
-        collapse_duplicates: collapseDuplicates,
-        enabled,
-        description,
-        ppv_rename_timezone: ppvRenameTimezone || null,
-        preferred_languages: preferredLanguages || 'en',
-        language_fallback: languageFallback,
-    };
-    
-    // Only include password if it was provided
-    if (password) {
-        data.password = password;
-    }
-    
-    const method = id ? 'PUT' : 'POST';
-    const url = id ? `/api/xtream-credentials/${id}` : '/api/xtream-credentials';
-    
-    fetch(url, {
-        method: method,
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(data)
-    })
-    .then(response => {
-        if (!response.ok) {
-            return response.json().then(err => Promise.reject(err));
-        }
-        return response.json();
-    })
-    .then(() => {
-        bootstrap.Modal.getInstance(document.getElementById('addCredentialModal')).hide();
-        loadCredentials();
-        showSuccess(id ? 'Credential updated successfully' : 'Credential created successfully');
-    })
-    .catch(error => {
-        showFormError(error.error || 'Failed to save credential');
-    });
-}
-
-// Edit credential
-function editCredential(id) {
-    fetch(`/api/xtream-credentials`)
-        .then(response => response.json())
-        .then(credentials => {
-            const cred = credentials.find(c => c.id === id);
-            if (!cred) return;
-            
-            document.getElementById('credential-id').value = cred.id;
-            document.getElementById('credential-username').value = cred.username;
-            document.getElementById('credential-password').value = ''; // Don't show existing password
-            document.getElementById('credential-password').required = false; // Password optional when editing
-            document.getElementById('password-required-indicator').style.display = 'none';
-            document.getElementById('password-help-text').textContent = 'Leave blank to keep existing password';
-            document.getElementById('credential-use-filters').checked = cred.use_filters;
-            document.getElementById('credential-collapse-duplicates').checked = cred.collapse_duplicates;
-            document.getElementById('credential-enabled').checked = cred.enabled;
-            document.getElementById('credential-description').value = cred.description || '';
-            document.getElementById('credential-ppv-rename-timezone').value = cred.ppv_rename_timezone || '';
-            const langs = Array.isArray(cred.preferred_languages)
-                ? cred.preferred_languages.join(', ')
-                : (cred.preferred_languages || 'en');
-            document.getElementById('credential-preferred-languages').value = langs;
-            document.getElementById('credential-language-fallback').value = cred.language_fallback || 'unknown';
-            
-            // Set source type
-            if (cred.account_id) {
-                document.getElementById('source-account').checked = true;
-                document.getElementById('account-select-group').style.display = 'block';
-                document.getElementById('playlist-select-group').style.display = 'none';
-                document.getElementById('credential-account-id').value = cred.account_id;
-            } else {
-                document.getElementById('source-playlist').checked = true;
-                document.getElementById('account-select-group').style.display = 'none';
-                document.getElementById('playlist-select-group').style.display = 'block';
-                document.getElementById('credential-playlist-config-id').value = cred.playlist_config_id;
-            }
-            
-            document.getElementById('modalTitle').textContent = 'Edit Xtream Credential';
-            new bootstrap.Modal(document.getElementById('addCredentialModal')).show();
-        });
-}
-
-// Delete credential
-function deleteCredential(id, username) {
-    deleteCredentialId = id;
-    document.getElementById('delete-username').textContent = username;
-    new bootstrap.Modal(document.getElementById('deleteModal')).show();
-}
-
-// Confirm delete
-function confirmDelete() {
-    fetch(`/api/xtream-credentials/${deleteCredentialId}`, {method: 'DELETE'})
-        .then(() => {
-            bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
-            loadCredentials();
-            showSuccess('Credential deleted successfully');
-        })
-        .catch(error => {
-            console.error('Error deleting credential:', error);
-            showError('Failed to delete credential');
-        });
-}
-
-// Helper functions
-function showFormError(message) {
-    const errorDiv = document.getElementById('form-error');
-    errorDiv.textContent = message;
-    errorDiv.style.display = 'block';
-}
-
-function showSuccess(message) {
-    // Use Bootstrap toast or alert
-    alert(message); // Simple for now
-}
-
-function showError(message) {
-    alert('Error: ' + message);
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-</script>
-
+{% block extra_js %}
+<script type="module" src="{{ url_for('static', filename='js/pages/xtream_page.js') }}"></script>
 {% endblock %}
