@@ -344,8 +344,13 @@ After envelope migration, admin JS unwraps `{ data }` / `{ success, data }`. Spo
 | Step | Action | Expected |
 |------|--------|----------|
 | 1 | **Xtream** page: copy playlist URL | URL well-formed |
-| 2 | Fetch playlist from client path (curl or IPTV app) | M3U/XML response; grouped PPV modes still work if configured |
+| 2 | **Add Credential** modal → **Select Account** | Account names listed (not stuck on “Loading accounts…”) |
+| 3 | **Add Credential** modal → **PPV Rename Timezone** | `<select>` with “Use account default” + IANA options (not free-text) |
+| 4 | Save credential with account + timezone override → edit | Account and timezone values restored |
+| 5 | Set timezone to “Use account default” → save | Credential API shows `ppv_rename_timezone: null` |
+| 6 | Fetch playlist from client path (curl or IPTV app) | M3U/XML response; grouped PPV modes still work if configured |
 
+- [ ] Xtream credential modal account dropdown and timezone select work
 - [ ] Playlist generation unaffected by admin API changes
 
 ---

@@ -9,6 +9,7 @@ This directory contains detailed work items identified during the post-restructu
 | Dashboard follow-ups | [107](./107-dashboard-stats-performance-hardening.md)–[110](./110-dashboard-optional-ux-follow-ups.md) |
 | PostgreSQL migration | [111](./111-pg-prep-raw-sqlite3-audit.md)–[119](./119-pg-migration-cleanup-and-docs.md) |
 | PPV production matching | [120](./120-fix-ppv-date-extraction-parsing-bugs.md)–[127](./127-ppv-multi-player-competitor-extraction.md) (120–126 ✅; **127** ⬜ doubles parsing) |
+| Admin UX | [132](./132-fix-xtream-credential-dialog-ux.md) ✅ |
 
 Waves **1–10** ✅ — merged PRs #10–51 (audit remediation through final doc review). Wave **9** batches **W–AA** (#39–47) and Wave **10** (#101 doc sync) complete.
 
@@ -302,6 +303,7 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 | 83 | [83-xss-audit-legacy-frontend.md](./83-xss-audit-legacy-frontend.md) | ✅ | innerHTML with API data in legacy JS + TagSelector ([PR #32](https://github.com/klopstack/iptv-proxy-v2/pull/32)) |
 | 84 | [84-docker-and-secrets-hardening.md](./84-docker-and-secrets-hardening.md) | ✅ | `.dockerignore`, non-root container, Flask sessions disabled (no SECRET_KEY) |
 | 85 | [85-frontend-deduplication-and-esm-migration.md](./85-frontend-deduplication-and-esm-migration.md) | ✅ | Phases 1–3 ✅ ([PR #33](https://github.com/klopstack/iptv-proxy-v2/pull/33), [#40](https://github.com/klopstack/iptv-proxy-v2/pull/40), [#44](https://github.com/klopstack/iptv-proxy-v2/pull/44)) |
+| 132 | [132-fix-xtream-credential-dialog-ux.md](./132-fix-xtream-credential-dialog-ux.md) | ✅ | Xtream credential modal: unwrap accounts API envelope; timezone `<select>` — PR [#71](https://github.com/klopstack/iptv-proxy-v2/pull/71) |
 | 86 | [86-web-smoke-tests-and-pytest-consolidation.md](./86-web-smoke-tests-and-pytest-consolidation.md) | ✅ | Admin page smoke tests; duplicate pytest fixtures ([PR #31](https://github.com/klopstack/iptv-proxy-v2/pull/31)) |
 | 87 | [87-fix-stale-documentation.md](./87-fix-stale-documentation.md) | ✅ | API_REFERENCE auth/Xtream URLs; missing P4 todo files |
 | 88 | [88-expand-ci-quality-gates.md](./88-expand-ci-quality-gates.md) | ✅ | vulture, Docker build on PR, pre-commit tests |

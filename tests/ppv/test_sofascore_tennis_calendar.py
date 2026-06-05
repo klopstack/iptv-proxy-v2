@@ -83,11 +83,16 @@ class TestFetchTennisEventsForDate:
         mock_response.json.return_value = payload
         mock_response.raise_for_status = MagicMock()
 
+        # First request at t=100 (no sleep); second at t=100.5 after 0.5s elapsed.
+        time_values = iter([100.0, 100.0, 100.5, 100.5])
+
         with patch("services.tennis.sofascore_calendar.requests.get", return_value=mock_response):
             with patch("services.tennis.sofascore_calendar.time.sleep") as mock_sleep:
-                with patch("services.tennis.sofascore_calendar._last_request_time", 0.0):
-                    fetch_scheduled_events("tennis", "2026-06-03", force_refresh=True)
-                    fetch_scheduled_events("tennis", "2026-06-03", force_refresh=True)
-                    assert mock_sleep.call_count >= 1
-                    waited = mock_sleep.call_args[0][0]
-                    assert waited >= MIN_REQUEST_INTERVAL_SECONDS
+                with patch("services.tennis.sofascore_calendar.time.time", side_effect=lambda: next(time_values)):
+                    with patch("services.tennis.sofascore_calendar.random.uniform", return_value=0.0):
+                        with patch("services.tennis.sofascore_calendar._last_request_time", 0.0):
+                            fetch_scheduled_events("tennis", "2026-06-03", force_refresh=True)
+                            fetch_scheduled_events("tennis", "2026-06-03", force_refresh=True)
+                            assert mock_sleep.call_count == 1
+                            waited = mock_sleep.call_args[0][0]
+                            assert waited == MIN_REQUEST_INTERVAL_SECONDS - 0.5
