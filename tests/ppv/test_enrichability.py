@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from services.ppv import enrichability
+from services.ppv.detection import is_bogus_extracted_competitors, is_studio_show_title
 from services.ppv.enrichability import (
     classify_ppv_enrichment,
     is_ppv_section_header,
@@ -14,7 +15,6 @@ from services.ppv.enrichability import (
     is_unsupported_league_title,
     stale_archive_date_from_title,
 )
-from services.ppv.detection import is_bogus_extracted_competitors, is_studio_show_title
 from services.ppv.enrichment import PPVCalendarEnrichmentService
 from services.ppv.extraction import PPVEventExtractor
 

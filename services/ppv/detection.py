@@ -27,12 +27,8 @@ STUDIO_SHOW_PATTERNS = [
     re.compile(r"\b(?:talk\s+show|sports?\s+magazine|sports?\s+analysis)\b", re.IGNORECASE),
 ]
 
-_MONTH_ABBREVS = frozenset(
-    {"jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"}
-)
-_BOGUS_COMPETITOR_TOKENS = frozenset(
-    {"tonight", "today", "news", "talk", "show", "plus", "sport", "sports", "ended"}
-)
+_MONTH_ABBREVS = frozenset({"jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"})
+_BOGUS_COMPETITOR_TOKENS = frozenset({"tonight", "today", "news", "talk", "show", "plus", "sport", "sports", "ended"})
 
 
 def is_studio_show_title(name: str) -> bool:
@@ -61,9 +57,7 @@ def is_bogus_extracted_competitors(competitors: tuple) -> bool:
         return True
     if left in _MONTH_ABBREVS and any(token in right.split() for token in _BOGUS_COMPETITOR_TOKENS):
         return True
-    if right in _MONTH_ABBREVS and len(left.split()) <= 3 and not any(
-        sep in left for sep in (" vs ", " at ", " v ")
-    ):
+    if right in _MONTH_ABBREVS and len(left.split()) <= 3 and not any(sep in left for sep in (" vs ", " at ", " v ")):
         return True
     return False
 
