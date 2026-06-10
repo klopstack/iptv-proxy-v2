@@ -1305,7 +1305,10 @@ class TestUnmatchedLiveClassification:
             db.session.add(EventChannelLink(event_id=event.id, channel_id=channel.id))
             db.session.commit()
 
-            assert service.classify_live_replay_channel(channel, current_time=self.NOW) == PPVVisibilityService.PPV_GROUP_LIVE
+            assert (
+                service.classify_live_replay_channel(channel, current_time=self.NOW)
+                == PPVVisibilityService.PPV_GROUP_LIVE
+            )
             assert (
                 service.classify_unmatched_live_channel(channel, current_time=self.NOW)
                 != PPVVisibilityService.PPV_GROUP_UNMATCHED_LIVE
