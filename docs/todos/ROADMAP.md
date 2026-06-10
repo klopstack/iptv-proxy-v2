@@ -25,10 +25,10 @@ Implement from each **TODO file** linked in the active roadmap — not from summ
 | **Dashboard follow-ups** | 107–110 | **0** | 107–109 ✅; [110](./110-dashboard-optional-ux-follow-ups.md) won't do |
 | **Wave 11 — DB migration** | 111–119 | **9** | SQLite → PostgreSQL; Series A + Series B |
 | **Wave 12 — PPV matching** | 120–126, 123 | **0** | ✅ June 2026 — PRs [#52](https://github.com/klopstack/iptv-proxy-v2/pull/52)–[#63](https://github.com/klopstack/iptv-proxy-v2/pull/63) |
-| **Wave 13 — PPV follow-ups** | [127](./127-ppv-multi-player-competitor-extraction.md)–[131](./131-sofascore-college-amateur-calendar-provider.md), [133](./133-sofascore-multi-sport-refactor-and-football-followups.md) | **3** | 127–130 ✅; 129 Track B; 131; 133 P0 ops |
+| **Wave 13 — PPV follow-ups** | [127](./127-ppv-multi-player-competitor-extraction.md)–[131](./131-sofascore-college-amateur-calendar-provider.md), [133](./133-sofascore-multi-sport-refactor-and-football-followups.md), [134](./134-ppv-historical-category-and-visibility-toggles.md) | **7** | Doubles; dates; Flo replay; SofaScore refactor + NCAA calendar; Historical category |
 | **Wave 14 — Admin UX** | [132](./132-fix-xtream-credential-dialog-ux.md) | **0** | ✅ PR [#71](https://github.com/klopstack/iptv-proxy-v2/pull/71) |
 
-**Total open (required):** 12 (111–119, 129 Track B, 131, 133 P0 ops) — see [ROADMAP-active.md](./ROADMAP-active.md).
+**Total open (required):** 13 (111–119, 129 Track B, 131, 133 P0 ops, 134) — see [ROADMAP-active.md](./ROADMAP-active.md).
 
 Waves **1–10** ✅ (PRs #10–51). **Wave 12** ✅ (PRs #52–63). **Next:** Wave 11 (PostgreSQL).
 
@@ -41,7 +41,7 @@ Update [README.md](./README.md) status columns as work lands. Mark PR IDs in eac
 - **What to do next:** [ROADMAP-active.md § Recommended “next five”](./ROADMAP-active.md#recommended-next-five)
 - **PostgreSQL track:** [ROADMAP-active.md § Wave 11](./ROADMAP-active.md#wave-11--postgresql-migration-track)
 - **PPV matching + tennis/SofaScore:** [ROADMAP-active.md § Wave 12](./ROADMAP-active.md#wave-12--ppv-production-matching-gaps)
-- **PPV follow-ups (doubles, dates, replay, SofaScore refactor/college):** [127](./127-ppv-multi-player-competitor-extraction.md)–[131](./131-sofascore-college-amateur-calendar-provider.md), [133](./133-sofascore-multi-sport-refactor-and-football-followups.md) · [ROADMAP-active.md § Wave 13](./ROADMAP-active.md#wave-13--ppv-follow-ups-open)
+- **PPV follow-ups (doubles, dates, replay, SofaScore refactor/college, Historical):** [127](./127-ppv-multi-player-competitor-extraction.md)–[131](./131-sofascore-college-amateur-calendar-provider.md), [133](./133-sofascore-multi-sport-refactor-and-football-followups.md), [134](./134-ppv-historical-category-and-visibility-toggles.md) · [ROADMAP-active.md § Wave 13](./ROADMAP-active.md#wave-13--ppv-follow-ups-open)
 - **Admin UX (Xtream credential dialog):** [132](./132-fix-xtream-credential-dialog-ux.md) · [ROADMAP-active.md § Wave 14](./ROADMAP-active.md#wave-14--admin-ux-open)
 - **Merged PR batch history:** [archive § Master PR batch index](./archive/ROADMAP-waves-1-10.md#master-pr-batch-index)
 

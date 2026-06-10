@@ -2,13 +2,13 @@
 
 This directory contains detailed work items identified during the post-restructuring codebase audit (May 2026). Each document is self-contained: problem statement, affected files, proposed solution, acceptance criteria, and test plan.
 
-**Open backlog (12 required):** see **[ROADMAP.md](./ROADMAP.md)** (index) and **[ROADMAP-active.md](./ROADMAP-active.md)** (open waves). Completed waves 1–10: **[archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-waves-1-10.md)**. Per-item specs stay in the linked TODO files below.
+**Open backlog (17 required):** see **[ROADMAP.md](./ROADMAP.md)** (index) and **[ROADMAP-active.md](./ROADMAP-active.md)** (open waves). Completed waves 1–10: **[archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-waves-1-10.md)**. Per-item specs stay in the linked TODO files below.
 
 | Track | Open TODOs |
 |-------|------------|
 | Dashboard follow-ups | [107](./107-dashboard-stats-performance-hardening.md)–[110](./110-dashboard-optional-ux-follow-ups.md) |
 | PostgreSQL migration | [111](./111-pg-prep-raw-sqlite3-audit.md)–[119](./119-pg-migration-cleanup-and-docs.md) |
-| PPV production matching | [120](./120-fix-ppv-date-extraction-parsing-bugs.md)–[131](./131-sofascore-college-amateur-calendar-provider.md) (120–130 ✅; **129 Track B**, **131** open) |
+| PPV production matching | [120](./120-fix-ppv-date-extraction-parsing-bugs.md)–[131](./131-sofascore-college-amateur-calendar-provider.md) (120–130 ✅; **129 Track B**, **131, 133, 134** open) |
 | Admin UX | [132](./132-fix-xtream-credential-dialog-ux.md) ✅ |
 
 Waves **1–10** ✅ — merged PRs #10–51 (audit remediation through final doc review). Wave **9** batches **W–AA** (#39–47) and Wave **10** (#101 doc sync) complete.
@@ -269,6 +269,7 @@ Identified from live analysis on `docker.klopnet.com` (18,625 active PPV channel
 | 130 | [130-ncaa-college-calendar-source-spike.md](./130-ncaa-college-calendar-source-spike.md) | ✅ | Spike: hybrid SofaScore `ice-hockey` + Sportsipy `ncaab` — [architecture](../architecture/ncaa-college-calendar-source-spike.md) |
 | 131 | [131-sofascore-college-amateur-calendar-provider.md](./131-sofascore-college-amateur-calendar-provider.md) | ⬜ | Wire spike stack + `REPLAY_CALENDAR_DAYS_BACK` for Flo replay matching |
 | 133 | [133-sofascore-multi-sport-refactor-and-football-followups.md](./133-sofascore-multi-sport-refactor-and-football-followups.md) | 🟡 | Refactor ✅ [#81](https://github.com/klopstack/iptv-proxy-v2/pull/81); P0 WC ops after deploy |
+| 134 | [134-ppv-historical-category-and-visibility-toggles.md](./134-ppv-historical-category-and-visibility-toggles.md) | ⬜ | **PPV - Live/Replay/Historical** virtual categories; `/ppv` Replay+Historical toggles; refine stale_archive policy |
 
 ```
 124-attempt-tracking ✅ (#53)
@@ -281,10 +282,11 @@ Identified from live analysis on `docker.klopnet.com` (18,625 active PPV channel
 130-ncaa-spike ──► data source decision for Flo/college replays
 131-sofascore-college ──► calendar provider (after 130); blocks 129 Track B
 133-sofascore-refactor ──► generic provider package (before 131 college slugs); PR #74 football ops
-129-replay-flosp ──► ~243 queued Flo college replays → match + Replay group
+129-replay-flosp ──► ~243 queued Flo college replays → match + Replay/Historical groups ([134](./134-ppv-historical-category-and-visibility-toggles.md))
+134-historical ──► PPV - * titles, Historical bucket, /ppv toggles; refines 123/129 Track D
 ```
 
-**Highest impact ops:** [128](./128-fix-ppv-year-inference-recent-past-dates.md) then requeue tennis; PR #74 deploy + [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) WC requeue; [133](./133-sofascore-multi-sport-refactor-and-football-followups.md) refactor then [130](./130-ncaa-college-calendar-source-spike.md) → [131](./131-sofascore-college-amateur-calendar-provider.md) for Flo; [129](./129-ppv-replay-archive-enrichment-flosp.md) replay UX; [127](./127-ppv-multi-player-competitor-extraction.md) for doubles.
+**Highest impact ops:** [128](./128-fix-ppv-year-inference-recent-past-dates.md) then requeue tennis; PR #74 deploy + [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) WC requeue; [133](./133-sofascore-multi-sport-refactor-and-football-followups.md) refactor then [130](./130-ncaa-college-calendar-source-spike.md) → [131](./131-sofascore-college-amateur-calendar-provider.md) for Flo; [129](./129-ppv-replay-archive-enrichment-flosp.md) replay UX + [134](./134-ppv-historical-category-and-visibility-toggles.md) Historical category; [127](./127-ppv-multi-player-competitor-extraction.md) for doubles.
 
 ### Wave 14 — Admin UX (June 2026)
 

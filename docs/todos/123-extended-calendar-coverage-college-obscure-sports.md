@@ -79,16 +79,19 @@ This TODO is intentionally **multi-track**. Each track has independent acceptanc
 
 ### Track D — Stale archive channels
 
+**Policy note (June 2026):** [134](./134-ppv-historical-category-and-visibility-toggles.md) refines this track for **enrichable** archive streams. `stale_archive` remains for **true non-enrichable noise** (e.g. ESPN Play ancient US-format dates with no calendar path). Streamable long-past content that can be enriched should **not** be skipped — classify into **`PPV - Historical`** (or **`PPV - Replay`** within age threshold) instead of discard.
+
 **Requirements:**
 
 1. Detect **explicit past dates** in title (`11-09-2023`, `01-18-2024`) beyond enrichment window (e.g. > 21 days past).
-2. Mark `skipped` with reason `stale_archive`, not `no_match`.
+2. Mark **`skipped`** with reason **`stale_archive`**, not `no_match` — **only when non-enrichable** (no replay provider / no enrich path per [129](./129-ppv-replay-archive-enrichment-flosp.md) + [134](./134-ppv-historical-category-and-visibility-toggles.md)).
 3. Optional cleanup job to deactivate `is_active=False` for ancient ESPN Play rows.
 
 **Acceptance:**
 
 - [x] ESPN Play 2023/2024 examples move from `no_match` to `skipped` — PR [#59](https://github.com/klopstack/iptv-proxy-v2/pull/59)
 - [x] `/api/ppv-enrichment/channels?status=skipped` summary includes stale archive count or filter — PR [#59](https://github.com/klopstack/iptv-proxy-v2/pull/59)
+- [ ] Enrichable replay providers (Flo/FLSP) never `stale_archive` on age alone; linked ancient events → **PPV - Historical** — [134](./134-ppv-historical-category-and-visibility-toggles.md)
 
 ## Proposed solution
 
@@ -127,6 +130,7 @@ Track progress by **`no_match_count`** vs **`skipped`** with documented reasons 
 - [122](./122-tennis-calendar-event-source.md) — tennis (ESPN + SofaScore [125](./125-sofascore-tennis-calendar-slice1.md)–[126](./126-sofascore-calendar-multi-sport-and-enrichment.md)); do not bundle here ✅
 - [57](./57-centralize-sport-key-mappings.md) — sport context for college vs pro.
 - [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) — re-evaluate channels after changes ✅
+- [134](./134-ppv-historical-category-and-visibility-toggles.md) — Historical playlist bucket; refines Track D for enrichable streams
 
 ## Recommended order
 
