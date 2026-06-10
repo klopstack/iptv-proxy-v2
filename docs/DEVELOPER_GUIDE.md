@@ -218,15 +218,18 @@ mypy app.py models/ services/  # Type checking
 
 [`entrypoint.sh`](../entrypoint.sh) runs **`flask db upgrade`** (Alembic via Flask-Migrate) on container start. This creates or updates all tables and records the revision in `alembic_version`.
 
-**Fresh install:** `flask db upgrade` creates the full schema (~46 tables).
+**Fresh install:** `flask db upgrade` creates the full schema (~46 tables) via the baseline revision plus any incremental revisions.
 
-**Existing database (legacy runner):** If the DB was already migrated by the old `run_migrations.py` system (has a populated `schema_migrations` table), stamp Alembic once before upgrading the container image:
+**Existing database (legacy runner):** If the DB was migrated only by the old `run_migrations.py` system (populated `schema_migrations` table, empty or stale `alembic_version`), stamp the baseline once, then let `flask db upgrade` apply post-baseline revisions:
 
 ```bash
-DATABASE_URL=sqlite:///data/iptv_proxy.db alembic stamp head
+DATABASE_URL=sqlite:///data/iptv_proxy.db alembic stamp 40ca71c79446
+flask db upgrade
 ```
 
 Leave the legacy `schema_migrations` table in place; it is historical only.
+
+**Critical:** New schema changes require an Alembic revision in `alembic_migrations/versions/`. DDL added only to `migrations/legacy_sqlite/` is **not** applied on container boot and will cause `no such column` runtime errors.
 
 **Local init:** `flask init-db` runs `create_all()` only (dev convenience). For production parity use `flask db upgrade`.
 
@@ -264,10 +267,12 @@ PPV orphan event pruning remains inline during enrichment (not scheduled).
 ### Adding a schema change
 
 1. Update SQLAlchemy models in `models/`
-2. `flask db revision --autogenerate -m "describe_change"`
-3. Review the generated file in `alembic_migrations/versions/`
+2. `flask db revision --autogenerate -m "describe_change"` (or hand-write an incremental revision chained from current `head`)
+3. Review the generated file in `alembic_migrations/versions/` — confirm `down_revision` and that boot will run the DDL
 4. `flask db upgrade` locally
 5. Add or extend `tests/test_migrations.py` / `tests/test_schema_parity.py`
+
+Do **not** add executable migrations under `migrations/legacy_sqlite/` — that directory is archived reference only.
 
 ### Indexes
 
@@ -319,6 +324,8 @@ alembic current
 - Review autogenerate output — Alembic may miss renames or data backfills
 - SQLite uses batch mode (`render_as_batch=True` in `alembic_migrations/env.py`); PostgreSQL uses native `ALTER TABLE`
 - `compare_type=True` detects column type drift between models and database
+- Post-baseline incremental revisions should use idempotent column checks (`alembic_migrations/migration_helpers.py`) when DBs may have been patched via the legacy runner
+- Ship model + Alembic revision in the same PR — never rely on `legacy_sqlite/` alone
 
 ### Running migrations
 
