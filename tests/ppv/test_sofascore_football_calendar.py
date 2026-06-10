@@ -57,7 +57,7 @@ class TestFetchFootballEventsForDate:
 
     def test_flag_off_returns_empty_without_http(self, app):
         Settings.set(SETTING_PPV_SOFASCORE_FOOTBALL_ENABLED, "false")
-        with patch("services.tennis.sofascore_calendar._fetch_scheduled_events_http") as mock_fetch:
+        with patch("services.ppv.calendar_providers.sofascore.client.fetch_scheduled_events_http") as mock_fetch:
             assert fetch_football_events_for_date(CALENDAR_DATE) == []
             mock_fetch.assert_not_called()
 
@@ -66,7 +66,7 @@ class TestFetchFootballEventsForDate:
         payload = _load_fixture()
 
         with patch(
-            "services.tennis.sofascore_calendar._fetch_scheduled_events_http",
+            "services.ppv.calendar_providers.sofascore.client.fetch_scheduled_events_http",
             return_value=payload,
         ) as mock_fetch:
             first = fetch_football_events_for_date(CALENDAR_DATE, force_refresh=True)

@@ -32,7 +32,7 @@ Additional slugs: discover via SofaScore sport list; add behind per-sport flags 
 
 ## Rate budget
 
-Module limiter: ~20 req/min with jitter (today: `services/tennis/sofascore_calendar.py`; target: [133](../todos/133-sofascore-multi-sport-refactor-and-football-followups.md) → `services/ppv/calendar_providers/sofascore/client.py`).
+Module limiter: ~20 req/min with jitter (`services/ppv/calendar_providers/sofascore/client.py`; `services/tennis/sofascore_calendar.py` is a deprecated re-export shim).
 
 Rough envelope for tennis-only production:
 

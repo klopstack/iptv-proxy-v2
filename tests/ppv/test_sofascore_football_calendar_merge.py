@@ -66,14 +66,6 @@ class TestCalendarScraperFootballMerge:
     def setup_method(self):
         clear_sofascore_football_calendar_cache()
 
-    @patch(
-        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_tennis_events_for_date",
-        return_value=[],
-    )
-    @patch(
-        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_espn_tennis_events_for_date",
-        return_value=[],
-    )
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_milb_events_for_date")
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_api_events_for_date")
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_calendar_page")
@@ -82,8 +74,6 @@ class TestCalendarScraperFootballMerge:
         mock_fetch,
         mock_api_fetch,
         mock_milb_fetch,
-        mock_espn_fetch,
-        mock_tennis_fetch,
         scraper,
         app,
     ):
@@ -96,14 +86,6 @@ class TestCalendarScraperFootballMerge:
 
         assert all(event.source != EVENT_SOURCE_SOFASCORE for event in events)
 
-    @patch(
-        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_tennis_events_for_date",
-        return_value=[],
-    )
-    @patch(
-        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_espn_tennis_events_for_date",
-        return_value=[],
-    )
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_milb_events_for_date")
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_api_events_for_date")
     @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_calendar_page")
@@ -112,8 +94,6 @@ class TestCalendarScraperFootballMerge:
         mock_fetch,
         mock_api_fetch,
         mock_milb_fetch,
-        mock_espn_fetch,
-        mock_tennis_fetch,
         scraper,
         app,
     ):
@@ -136,10 +116,9 @@ class TestCalendarScraperFootballMerge:
 
         sofascore_events = _load_sofascore_events()
 
-        with patch.object(
-            scraper,
-            "_fetch_sofascore_football_events_for_date",
-            return_value=sofascore_events,
+        with patch(
+            "services.ppv.calendar_providers.sofascore.fetch_events_for_slug",
+            side_effect=lambda slug, date_str, **kwargs: sofascore_events if slug == "football" else [],
         ):
             events = scraper.get_events_for_date(CALENDAR_DATE, force_refresh=True)
 

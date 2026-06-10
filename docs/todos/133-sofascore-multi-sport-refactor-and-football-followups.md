@@ -1,6 +1,6 @@
 # SofaScore multi-sport refactor + football/soccer follow-ups
 
-**Status:** ⬜ Open  
+**Status:** 🟡 Refactor slice implemented — PR pending; P0 production ops deferred to deploy/requeue  
 **Priority:** P1 (post–World Cup structural refactor); P0 items only for remaining football production gaps (see below)  
 **Roadmap:** [ROADMAP-active.md](./ROADMAP-active.md) — Wave 13 batch **AO**  
 **Depends on:** [126](./126-sofascore-calendar-multi-sport-and-enrichment.md) ✅, PR [#74](https://github.com/klopstack/iptv-proxy-v2/pull/74) football merge ✅  
@@ -145,12 +145,12 @@ Merge order (unchanged):
 
 ### Refactor (P1)
 
-- [ ] SofaScore code lives under `services/ppv/calendar_providers/sofascore/`; `services/tennis/sofascore_calendar.py` removed or shim-only.
-- [ ] Single `fetch_scheduled_events(sport_slug, date)` used by all wired slugs.
-- [ ] Scraper uses one merge path for SofaScore slugs; no `_fetch_sofascore_*_events_for_date` per sport.
-- [ ] Unified slug config documented and wired (list or registry); tennis default off, football default on preserved.
-- [ ] All existing SofaScore unit + merge tests pass without behavior change (tennis + football).
-- [ ] [sofascore-calendar-sport-slugs.md](../architecture/sofascore-calendar-sport-slugs.md) updated: module path, config, link to this TODO.
+- [x] SofaScore code lives under `services/ppv/calendar_providers/sofascore/`; `services/tennis/sofascore_calendar.py` removed or shim-only.
+- [x] Single `fetch_scheduled_events(sport_slug, date)` used by all wired slugs.
+- [x] Scraper uses one merge path for SofaScore slugs; no `_fetch_sofascore_*_events_for_date` per sport.
+- [x] Unified slug config documented and wired (list or registry); tennis default off, football default on preserved.
+- [x] All existing SofaScore unit + merge tests pass without behavior change (tennis + football).
+- [x] [sofascore-calendar-sport-slugs.md](../architecture/sofascore-calendar-sport-slugs.md) updated: module path, config, link to this TODO.
 - [ ] [131](./131-sofascore-college-amateur-calendar-provider.md) updated to depend on 133 refactor (college parsers = new files in same package).
 
 ## Test plan

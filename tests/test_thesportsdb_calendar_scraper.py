@@ -792,12 +792,8 @@ class TestIntegration:
         return TheSportsDBCalendarScraper(cache_dir=str(tmp_path))
 
     @patch(
-        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_football_events_for_date",
-        return_value=[],
-    )
-    @patch(
-        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_tennis_events_for_date",
-        return_value=[],
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_events_for_date",
+        return_value={"tennis": [], "football": []},
     )
     @patch(
         "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_espn_tennis_events_for_date",
@@ -819,7 +815,6 @@ class TestIntegration:
         mock_milb_fetch,
         mock_espn_fetch,
         mock_sofascore_fetch,
-        mock_sofascore_football_fetch,
         scraper,
     ):
         """Test that subsequent calls use cache."""
@@ -845,12 +840,8 @@ class TestIntegration:
         assert len(events2) == 1
 
     @patch(
-        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_football_events_for_date",
-        return_value=[],
-    )
-    @patch(
-        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_tennis_events_for_date",
-        return_value=[],
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_events_for_date",
+        return_value={"tennis": [], "football": []},
     )
     @patch(
         "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_espn_tennis_events_for_date",
@@ -872,7 +863,6 @@ class TestIntegration:
         mock_milb_fetch,
         mock_espn_fetch,
         mock_sofascore_fetch,
-        mock_sofascore_football_fetch,
         scraper,
     ):
         """Test that force_refresh bypasses cache."""
@@ -896,12 +886,8 @@ class TestIntegration:
         assert mock_fetch.call_count == 2
 
     @patch(
-        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_football_events_for_date",
-        return_value=[],
-    )
-    @patch(
-        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_tennis_events_for_date",
-        return_value=[],
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_events_for_date",
+        return_value={"tennis": [], "football": []},
     )
     @patch(
         "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_espn_tennis_events_for_date",
@@ -917,7 +903,6 @@ class TestIntegration:
         mock_milb_fetch,
         mock_espn_tennis_fetch,
         mock_sofascore_fetch,
-        mock_sofascore_football_fetch,
         scraper,
     ):
         """API supplement events are merged with HTML calendar events."""
@@ -969,12 +954,8 @@ class TestPersistentCache:
         assert scraper_with_temp_cache._cache_file == expected_path
 
     @patch(
-        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_football_events_for_date",
-        return_value=[],
-    )
-    @patch(
-        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_tennis_events_for_date",
-        return_value=[],
+        "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_sofascore_events_for_date",
+        return_value={"tennis": [], "football": []},
     )
     @patch(
         "services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._fetch_espn_tennis_events_for_date",
@@ -996,7 +977,6 @@ class TestPersistentCache:
         mock_milb_fetch,
         mock_espn_fetch,
         mock_sofascore_fetch,
-        mock_sofascore_football_fetch,
         scraper_with_temp_cache,
         temp_cache_dir,
     ):
