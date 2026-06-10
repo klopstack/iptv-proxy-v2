@@ -104,7 +104,7 @@ class PPVEventExtractor:
     def extract_weekday(self, channel_name: str) -> Optional[str]:
         match = re.search(patterns.WEEKDAY_PATTERN, channel_name, re.IGNORECASE)
         if match:
-            return match.group(1).lower()
+            return patterns.normalize_weekday(match.group(1))
         return None
 
     def extract_time_only(self, channel_name: str) -> Optional[Tuple[int, int, Optional[str]]]:
