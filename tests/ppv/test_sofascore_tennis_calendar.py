@@ -73,7 +73,9 @@ class TestHttpGet:
 
     def test_falls_back_to_requests_when_curl_cffi_missing(self):
         mock_response = MagicMock()
-        with patch("services.ppv.calendar_providers.sofascore.client.requests.get", return_value=mock_response) as mock_requests:
+        with patch(
+            "services.ppv.calendar_providers.sofascore.client.requests.get", return_value=mock_response
+        ) as mock_requests:
             import builtins
 
             real_import = builtins.__import__
