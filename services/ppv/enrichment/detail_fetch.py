@@ -322,6 +322,10 @@ class DetailFetchWorker:
         if not event:
             return
 
+        if event.data_completeness == "enriched" and (event.description or "").strip():
+            logger.debug("Event %s already has LLM description; skipping", external_id)
+            return
+
         context = build_event_context(event)
         persist_context_metadata(event, context)
         description = generate_event_description_or_fallback(context)

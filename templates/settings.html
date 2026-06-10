@@ -164,6 +164,58 @@
                             Fills wheelchair, ITF, and other tennis gaps. Re-run enrichment after changing.
                         </div>
                     </div>
+                    <hr class="my-3">
+                    <p class="text-muted small mb-2">
+                        <strong>LLM description generation.</strong> Optionally generate short EPG descriptions
+                        for matched PPV events using OpenAI-compatible or Anthropic APIs.
+                    </p>
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="llm-enrichment-enabled">
+                            <label class="form-check-label" for="llm-enrichment-enabled">
+                                <strong>Enable LLM description generation</strong>
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            Runs after event detail fetching, when API queues are idle. Requires an API key below.
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="llm-provider" class="form-label">
+                            <strong>LLM provider</strong>
+                        </label>
+                        <select class="form-select" id="llm-provider">
+                            <option value="openai">OpenAI (or compatible)</option>
+                            <option value="anthropic">Anthropic</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="llm-api-key" class="form-label">
+                            <strong>LLM API key</strong>
+                        </label>
+                        <input type="password" class="form-control" id="llm-api-key"
+                               placeholder="Paste API key to set or replace" autocomplete="off">
+                        <div class="form-text" id="llm-api-key-hint">
+                            Loading…
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="llm-model" class="form-label">
+                            <strong>Model</strong>
+                        </label>
+                        <input type="text" class="form-control" id="llm-model"
+                               placeholder="e.g. gpt-4o-mini or claude-3-haiku-20240307">
+                    </div>
+                    <div class="mb-3">
+                        <label for="llm-base-url" class="form-label">
+                            <strong>Base URL override</strong>
+                        </label>
+                        <input type="text" class="form-control" id="llm-base-url"
+                               placeholder="Optional — e.g. http://localhost:11434/v1 for Ollama">
+                        <div class="form-text">
+                            Leave empty to use the provider default endpoint.
+                        </div>
+                    </div>
                     <div class="d-flex flex-wrap gap-2">
                         <button type="submit" class="btn btn-success">
                             <i class="bi bi-save"></i> Save PPV Enrichment Settings
@@ -173,6 +225,9 @@
                         </button>
                         <button type="button" class="btn btn-outline-secondary" id="ppv-clear-site-login-btn">
                             Clear site login
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="llm-clear-api-key-btn">
+                            Clear LLM API key
                         </button>
                     </div>
                 </form>
@@ -509,12 +564,71 @@ document.getElementById('proxy-settings-form').addEventListener('submit', async 
 // PPV Enrichment Config (editable — not /api/ppv-enrichment/settings)
 // ============================================================================
 
+function loadLlmEnrichmentFields(providerData) {
+    const llmHintEl = document.getElementById('llm-api-key-hint');
+    const llm = providerData.providers?.find((provider) => provider.name === 'llm_enrichment');
+    if (!llm) {
+        llmHintEl.textContent = 'LLM settings unavailable.';
+        return;
+    }
+
+    const fieldsByKey = Object.fromEntries(llm.fields.map((field) => [field.key, field]));
+
+    document.getElementById('llm-enrichment-enabled').checked =
+        (fieldsByKey.enabled?.current_value || 'false') === 'true';
+
+    const providerSelect = document.getElementById('llm-provider');
+    const providerValue = fieldsByKey.provider?.current_value || 'openai';
+    if ([...providerSelect.options].some((option) => option.value === providerValue)) {
+        providerSelect.value = providerValue;
+    }
+
+    document.getElementById('llm-model').value = fieldsByKey.model?.current_value || 'gpt-4o-mini';
+    document.getElementById('llm-base-url').value = fieldsByKey.base_url?.current_value || '';
+
+    const apiKeyValue = fieldsByKey.api_key?.current_value || '';
+    if (apiKeyValue.includes('****')) {
+        llmHintEl.textContent =
+            `Current key: ${apiKeyValue}. Leave the field blank to keep it; enter a new value to replace, or use Clear LLM API key.`;
+    } else if (apiKeyValue) {
+        llmHintEl.textContent =
+            'API key configured. Leave the field blank to keep it; enter a new value to replace.';
+    } else {
+        llmHintEl.textContent = 'No API key configured. Required when LLM description generation is enabled.';
+    }
+}
+
+async function saveLlmEnrichmentConfig() {
+    const enabled = document.getElementById('llm-enrichment-enabled').checked;
+    const provider = document.getElementById('llm-provider').value;
+    const model = document.getElementById('llm-model').value.trim();
+    const baseUrl = document.getElementById('llm-base-url').value.trim();
+    const apiKeyRaw = document.getElementById('llm-api-key').value;
+
+    const saves = [
+        window.PpvApi.saveProviderSetting('llm_enrichment', 'enabled', enabled ? 'true' : 'false'),
+        window.PpvApi.saveProviderSetting('llm_enrichment', 'provider', provider),
+        window.PpvApi.saveProviderSetting('llm_enrichment', 'model', model || 'gpt-4o-mini'),
+        window.PpvApi.saveProviderSetting('llm_enrichment', 'base_url', baseUrl),
+    ];
+
+    if (apiKeyRaw.length > 0) {
+        saves.push(window.PpvApi.saveProviderSetting('llm_enrichment', 'api_key', apiKeyRaw.trim()));
+    }
+
+    await Promise.all(saves);
+    document.getElementById('llm-api-key').value = '';
+}
+
 async function loadPpvEnrichmentConfig() {
     const hintEl = document.getElementById('ppv-api-key-hint');
     const siteHintEl = document.getElementById('ppv-site-login-hint');
     const siteUsernameInput = document.getElementById('ppv-thesportsdb-site-username');
     try {
-        const data = await window.PpvApi.fetchPpvEnrichmentConfig();
+        const [data, providerData] = await Promise.all([
+            window.PpvApi.fetchPpvEnrichmentConfig(),
+            window.PpvApi.fetchProviderSettings(),
+        ]);
         document.getElementById('ppv-enrichment-enabled').checked = data.enabled !== false;
         document.getElementById('ppv-sofascore-calendar-enabled').checked =
             data.sofascore_calendar_enabled === true;
@@ -536,9 +650,12 @@ async function loadPpvEnrichmentConfig() {
                 'Optional. Logged-in calendar pages include more events than the public view.';
             siteUsernameInput.placeholder = 'Website login (optional)';
         }
+
+        loadLlmEnrichmentFields(providerData);
     } catch (error) {
         console.error('Error loading PPV enrichment config:', error);
         hintEl.textContent = `Error loading config: ${error.message}`;
+        document.getElementById('llm-api-key-hint').textContent = `Error loading LLM config: ${error.message}`;
     }
 }
 
@@ -574,6 +691,7 @@ document.getElementById('ppv-enrichment-config-form').addEventListener('submit',
         }
 
         await window.PpvApi.savePpvEnrichmentConfig(payload);
+        await saveLlmEnrichmentConfig();
         apiKeyInput.value = '';
         sitePasswordInput.value = '';
 
@@ -625,6 +743,25 @@ document.getElementById('ppv-clear-api-key-btn').addEventListener('click', async
         document.getElementById('ppv-thesportsdb-api-key').value = '';
         statusEl.className = 'alert alert-success mt-3';
         statusEl.innerHTML = '<i class="bi bi-check-circle"></i> API key cleared.';
+        statusEl.style.display = 'block';
+        await loadPpvEnrichmentConfig();
+    } catch (error) {
+        statusEl.className = 'alert alert-danger mt-3';
+        statusEl.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Error: ${error.message}`;
+        statusEl.style.display = 'block';
+    }
+});
+
+document.getElementById('llm-clear-api-key-btn').addEventListener('click', async () => {
+    if (!confirm('Remove the stored LLM API key?')) {
+        return;
+    }
+    const statusEl = document.getElementById('ppv-enrichment-config-status');
+    try {
+        await window.PpvApi.saveProviderSetting('llm_enrichment', 'api_key', '');
+        document.getElementById('llm-api-key').value = '';
+        statusEl.className = 'alert alert-success mt-3';
+        statusEl.innerHTML = '<i class="bi bi-check-circle"></i> LLM API key cleared.';
         statusEl.style.display = 'block';
         await loadPpvEnrichmentConfig();
     } catch (error) {
