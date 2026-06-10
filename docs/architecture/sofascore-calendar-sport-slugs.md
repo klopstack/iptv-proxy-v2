@@ -25,8 +25,13 @@ Feature flags:
 |------|---------|----------|--------|
 | `football` | World Cup and other soccer gaps when TheSportsDB is incomplete | P0 | Production (WC 2026) |
 | `tennis` | Wheelchair, ITF, legends gaps after ESPN | P0 | Production (126) |
+| `ice-hockey` | AHL, OHL, QMJHL, WHL, ECHL — Flo replay tail ([130 spike](./ncaa-college-calendar-source-spike.md)) | P1 | Spike ✅ — wire in [131](../todos/131-sofascore-college-amateur-calendar-provider.md) |
+| `american-football` | NCAA FBS/FCS Saturdays (optional Phase B) | P2 | Spike ✅ — low Oct volume |
+| `basketball` | **Not** NCAA/DIII college (NBA/international only) | — | Spike ❌ for college — use Sportsipy supplement |
 | `mma` | Combat PPV overlap with [123 track C](../todos/123-extended-calendar-coverage-college-obscure-sports.md) | P2 | Documented only |
 | `table-tennis` | Niche feeds | P3 | Documented only |
+
+**College replay stack (131):** SofaScore `ice-hockey` + Sportsipy `ncaab` per [130 spike](./ncaa-college-calendar-source-spike.md). Replay fetch uses `REPLAY_CALENDAR_DAYS_BACK` (400d), not live ±14d window.
 
 Additional slugs: discover via SofaScore sport list; add behind per-sport flags when production `no_match` volume justifies.
 

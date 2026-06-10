@@ -1,6 +1,6 @@
 # PPV replay/archive enrichment (FloSports and similar providers)
 
-**Status:** 🟡 Track A+C implemented — PR pending; Track B deferred to [131](./131-sofascore-college-amateur-calendar-provider.md)  
+**Status:** 🟡 Track A+C ✅ — PR [#80](https://github.com/klopstack/iptv-proxy-v2/pull/80); Track B deferred to [131](./131-sofascore-college-amateur-calendar-provider.md) after [130](./130-ncaa-college-calendar-source-spike.md) ✅  
 **Priority:** P1  
 **Audit:** PPV production report, June 4 2026 (`docker.klopnet.com`)
 
@@ -78,7 +78,7 @@ The gap is **getting archive channels matched and linked** with correct `schedul
 ### Track B — Historical calendar matching
 
 1. For replay-tagged channels, calendar lookup uses **extracted event date** (e.g. `2025-10-22`), not reference “today”.
-2. Evaluate data sources for college / minor leagues present in Flo feeds — see [130](./130-ncaa-college-calendar-source-spike.md) spike and [131](./131-sofascore-college-amateur-calendar-provider.md) implementation.
+2. Data sources per [130 spike](../architecture/ncaa-college-calendar-source-spike.md): SofaScore `ice-hockey` primary; Sportsipy `ncaab` supplement for DIII basketball; implement in [131](./131-sofascore-college-amateur-calendar-provider.md).
 3. **Match strategy:** same reverse matcher + validation; tolerate college team name variants (`Occidental` vs `Occidental Tigers`).
 4. On successful match: persist `Event.scheduled_at` = historical start; link channel; status **`matched`**.
 
@@ -107,7 +107,7 @@ The gap is **getting archive channels matched and linked** with correct `schedul
 
 ## Proposed solution
 
-1. **Spike:** [130](./130-ncaa-college-calendar-source-spike.md) — source decision + recorded fixtures.
+1. **Spike:** [130](./130-ncaa-college-calendar-source-spike.md) ✅ — [architecture note](../architecture/ncaa-college-calendar-source-spike.md) + recorded fixtures.
 2. **Phase 1:** Provider detection + enrichability + extraction hardening for Flo date formats.
 3. **Phase 2:** [131](./131-sofascore-college-amateur-calendar-provider.md) + enrichment date routing for `replay_archive` channels.
 4. **Phase 3:** Playlist/visibility verification + dashboard split + production requeue (`Flo` prefix filter in [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md)).

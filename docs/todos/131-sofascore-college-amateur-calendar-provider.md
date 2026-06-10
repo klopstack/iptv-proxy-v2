@@ -2,7 +2,7 @@
 
 **Status:** ⬜ Not started  
 **Priority:** P1  
-**Depends on:** [130](./130-ncaa-college-calendar-source-spike.md) go-ahead for SofaScore (or spike-named alternate slug set)  
+**Depends on:** [130](./130-ncaa-college-calendar-source-spike.md) ✅ — hybrid go-ahead ([spike doc](../architecture/ncaa-college-calendar-source-spike.md))  
 **Blocks:** [129](./129-ppv-replay-archive-enrichment-flosp.md) Track B (historical replay matching)
 
 ## Problem
@@ -18,14 +18,14 @@ Production blockers today:
 
 ## Scope
 
-Implement the **spike-recommended SofaScore path** (default assumption: extend existing module). If [130](./130-ncaa-college-calendar-source-spike.md) selects a hybrid, this TODO covers SofaScore slice only; open **132** only if spike mandates a second primary vendor (not created unless needed).
+Implement the **spike-recommended hybrid path** ([130](../architecture/ncaa-college-calendar-source-spike.md)): SofaScore `ice-hockey` slug + Sportsipy `ncaab` supplement for DIII basketball. This TODO covers the SofaScore slice and replay window plumbing; Sportsipy fallback hooks live in `match_pipeline.py`.
 
 ### In scope (Phase A — minimum for Flo replay)
 
 | Sport family | SofaScore slug (from spike) | PPV examples |
 |--------------|----------------------------|--------------|
-| College basketball | `basketball` (verify) | `Occidental vs Chapman - Mens` |
 | College / pro-adjacent hockey | `ice-hockey` | `Colorado Eagles vs San Diego Gulls` |
+| College basketball (DIII) | Sportsipy `ncaab` supplement — **not** SofaScore `basketball` | `Occidental vs Chapman - Mens` |
 | Additional slug(s) from spike | TBD | Field hockey, volleyball, etc. |
 
 ### Phase B (optional flags)
@@ -34,7 +34,7 @@ Per-sport feature flags (`ppv_sofascore_basketball_enabled`, …) — only when 
 
 ## Affected files
 
-- `services/tennis/sofascore_calendar.py` → refactor to **`services/ppv/calendar_providers/sofascore/`** (client, parsers, merge helpers) — or extend in place with clear module boundary
+- `services/ppv/calendar_providers/sofascore/` — add `parser_ice_hockey.py` on [133](./133-sofascore-multi-sport-refactor-and-football-followups.md) foundation ✅
 - `services/thesportsdb_calendar_scraper.py` — merge SofaScore team-sport events; replay date bypass hook
 - `services/ppv/constants.py` — replay calendar lookback (`REPLAY_CALENDAR_DAYS_BACK`); new settings keys
 - `services/ppv/sport_registry.py` — map SofaScore categories → internal sport keys (`ncaab`, hockey, …)
