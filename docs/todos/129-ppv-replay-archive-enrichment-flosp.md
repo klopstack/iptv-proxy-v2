@@ -16,7 +16,7 @@ Flo (FLSP) 161: 2025 Colorado Eagles vs San Diego Gulls Away - 22/10 22:00
 These are **intentional replays of old games**, not live fixtures. Product expectation:
 
 1. **Enrich them** — match channel titles to real historical events and create `Event` + `EventChannelLink` rows.
-2. **Classify as replay** in playlist output — when account `ppv_visibility = group_live_replay`, place under the **Replay** virtual category, not **Live**.
+2. **Classify as replay or historical** in playlist output — when account `ppv_visibility = group_live_replay`, place under **`PPV - Replay`** or **`PPV - Historical`** (see [134](./134-ppv-historical-category-and-visibility-toggles.md)), not **Live**.
 
 Current behavior is wrong in multiple places:
 
@@ -24,7 +24,7 @@ Current behavior is wrong in multiple places:
 |-------|------------------|------------------|
 | Enrichability | Parses date/competitors; **not** `stale_archive` (Flo uses `DD/MM`, not ESPN Play `MM-DD-YYYY`) | Treat as **archive-replay enrichable**, not skip |
 | Enrichment | **`no_match_found`** — no calendar events for Oct 2025 NCAA / AHL | Historical fixture lookup for explicit archive dates |
-| Visibility | Unmatched channels hidden or optimistic; matched past events → replay **only if linked** | Linked archive events → **`PPV_GROUP_REPLAY`** |
+| Visibility | Unmatched channels hidden or optimistic; matched past events → replay **only if linked** | Linked archive events → **`PPV_GROUP_REPLAY`** or **`PPV_GROUP_HISTORICAL`** ([134](./134-ppv-historical-category-and-visibility-toggles.md)) |
 | Metrics | 243 channels burn queue cycles; counted as matching failures | Replay bucket separate from live `no_match` |
 
 [123](./123-extended-calendar-coverage-college-obscure-sports.md) Track D added `stale_archive` skip for **ESPN Play** titles with US-format past dates (`11-09-2023`). That reduced noise but **does not apply to Flo** and conflicts with the product goal: **we want these replays enriched**, not skipped.
@@ -90,20 +90,25 @@ The gap is **getting archive channels matched and linked** with correct `schedul
 
 ### Track C — Live vs replay playlist presentation
 
-1. Matched archive events with `scheduled_at < now` → **`classify_live_replay_event` → `replay`** (verify no special-case hides them when `group_live_replay`).
-2. M3U / Xtream: `#EXTINF` group title **Replay** for matched Flo channels (existing `_ppv_group_title` path).
-3. **Hide unmatched** archive replays under `hide_inactive` (no false “live” slots) — document behavior.
-4. Dashboard/metrics: optional **`replay_matched`** count separate from live PPV matched.
+1. Matched archive events with `scheduled_at < now` → **`classify_live_replay_event`** → **`PPV - Replay`** or **`PPV - Historical`** by age threshold ([134](./134-ppv-historical-category-and-visibility-toggles.md); proposed **21 days** aligned with `STALE_ARCHIVE_ENRICHMENT_DAYS`).
+2. M3U / Xtream: group titles **`PPV - Live`**, **`PPV - Replay`**, **`PPV - Historical`** (renamed from Live/Replay — implemented in [134](./134-ppv-historical-category-and-visibility-toggles.md)).
+3. **Hide unmatched** archive replays under `group_live_replay` (no false “live” slots) — document behavior.
+4. Dashboard/metrics: optional **`replay_matched`** / **`historical_matched`** counts separate from live PPV matched.
+5. Per-group show/hide toggles on `/ppv` for Replay and Historical — [134](./134-ppv-historical-category-and-visibility-toggles.md).
 
 **Acceptance:**
 
-- [x] Integration test: Flo channel linked to past event → playlist category **Replay**, not Live.
+- [x] Integration test: Flo channel linked to past event → playlist category **Replay** (not Live) — *titles and Historical split deferred to [134](./134-ppv-historical-category-and-visibility-toggles.md)*.
 - [x] Integration test: same event would be **Live** if `scheduled_at` within 24h window (regression guard).
+- [ ] Group titles **`PPV - Replay`** / **`PPV - Historical`** and age split — [134](./134-ppv-historical-category-and-visibility-toggles.md).
 
 ### Track D — Reconcile with TODO 123 stale archive policy
 
-1. Document matrix: **skip** (ESPN Play ancient junk) vs **enrich as replay** (Flo product feeds).
-2. Adjust [123](./123-extended-calendar-coverage-college-obscure-sports.md) Track D docs — `stale_archive` is for **non-enrichable** archive noise, not Flo replays we sell.
+**Updated policy ([134](./134-ppv-historical-category-and-visibility-toggles.md)):** Do **not** simply remove or hide ancient content that is still available/streamable. Enrich when possible → classify into **Historical** (or **Replay** if within age threshold). `stale_archive` skip remains only for **non-enrichable** noise.
+
+1. Document matrix: **skip** (ESPN Play ancient junk, no replay provider) vs **enrich → Historical/Replay** (Flo and other product replay feeds).
+2. [123](./123-extended-calendar-coverage-college-obscure-sports.md) Track D refined — `stale_archive` for non-enrichable archive titles only; enrichable long-past streams → **PPV - Historical** ([134](./134-ppv-historical-category-and-visibility-toggles.md)).
+3. Align `enrichability.py` with matrix: replay providers never `stale_archive` on age alone; ESPN Play US-format ancient dates without enrich path → still `stale_archive`.
 
 ## Proposed solution
 
@@ -140,6 +145,7 @@ docker exec iptv-proxy-v2 curl -s 'http://127.0.0.1:8000/api/ppv-enrichment/chan
 - [130](./130-ncaa-college-calendar-source-spike.md) — calendar source decision (blocks Track B).
 - [131](./131-sofascore-college-amateur-calendar-provider.md) — primary provider implementation after spike.
 - [126](./126-sofascore-calendar-multi-sport-and-enrichment.md) — merge patterns ✅.
+- [134](./134-ppv-historical-category-and-visibility-toggles.md) — virtual category rename, Historical bucket, `/ppv` toggles; supersedes Track C title acceptance for **PPV - *** labels.
 - **Independent of** [127](./127-ppv-multi-player-competitor-extraction.md) (tennis doubles).
 
 ## Recommended order

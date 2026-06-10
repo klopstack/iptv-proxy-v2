@@ -158,6 +158,6 @@ Some PPV categories parse correctly but have **no calendar provider** today. Enr
 | Category | Skip reason | Status |
 |----------|-------------|--------|
 | Boxing undated | `no_event_date` | Track C ✅ PR #61 |
-| Stale ESPN Play | `stale_archive` | Track D ✅ PR #59 |
+| Stale ESPN Play | `stale_archive` | Track D ✅ PR #59 — non-enrichable only; enrichable long-past → **PPV - Historical** ([134](../todos/134-ppv-historical-category-and-visibility-toggles.md)) |
 | Obscure DAZN leagues | `unsupported_league` | Track B ✅ |
 | English Championship playoffs | Remain enrichable | TSDB league 4399 configured; playoff fixtures absent from API |
