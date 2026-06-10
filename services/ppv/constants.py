@@ -28,6 +28,8 @@ __all__ = [
     "SETTING_PPV_ENRICHMENT_ENABLED",
     "SETTING_PPV_SOFASCORE_CALENDAR_ENABLED",
     "SETTING_PPV_SOFASCORE_FOOTBALL_ENABLED",
+    "SETTING_PPV_SOFASCORE_COLLEGE_ENABLED",
+    "REPLAY_CALENDAR_DAYS_BACK",
     "METADATA_KEY_CALENDAR_PROCESSED",
     "METADATA_KEY_CALENDAR_MATCHED",
     "METADATA_KEY_DETAILS_FETCHED",
@@ -172,10 +174,14 @@ def get_sport_grace_hours(sport_name: Optional[str]) -> int:
     return SPORT_GRACE_HOURS.get(sport_name.lower().strip(), DEFAULT_SPORT_GRACE_HOURS)
 
 
+# Replay archive calendar fetch (Flo/FLSP historical titles)
+REPLAY_CALENDAR_DAYS_BACK = 400
+
 # Scheduler / settings keys
 SETTING_PPV_ENRICHMENT_ENABLED = "ppv_enrichment_enabled"
 SETTING_PPV_SOFASCORE_CALENDAR_ENABLED = "ppv_sofascore_calendar_enabled"
 SETTING_PPV_SOFASCORE_FOOTBALL_ENABLED = "ppv_sofascore_football_enabled"
+SETTING_PPV_SOFASCORE_COLLEGE_ENABLED = "ppv_sofascore_college_enabled"
 METADATA_KEY_CALENDAR_PROCESSED = "ppv_calendar_processed_count"
 METADATA_KEY_CALENDAR_MATCHED = "ppv_calendar_matched_count"
 METADATA_KEY_DETAILS_FETCHED = "ppv_details_fetched_count"

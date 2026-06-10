@@ -17,7 +17,16 @@ SPORT_LEAGUE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bHigh-A\b",
         r"\bSingle-A\b",
     ),
-    "nhl": (r"\bNHL\b", r"\bAHL\b", r"\bECHL\b", r"\bIce Hockey\b", r"\bHockey\b"),
+    "nhl": (
+        r"\bNHL\b",
+        r"\bAHL\b",
+        r"\bECHL\b",
+        r"\bOHL\b",
+        r"\bQMJHL\b",
+        r"\bWHL\b",
+        r"\bIce Hockey\b",
+        r"\bHockey\b",
+    ),
     "nba": (r"\bNBA\b", r"\bBasketball\b"),
     "wnba": (r"\bWNBA\b", r"\bWomen's National Basketball\b"),
     "nfl": (r"\bNFL\b", r"\bUFL\b", r"\bAmerican Football\b"),
@@ -354,3 +363,35 @@ def sport_keys_for_context(channel_name: str, category_name: Optional[str] = Non
                     break
 
     return frozenset(sport_keys)
+
+
+# SofaScore ice-hockey tournament → canonical sport key (131 spike)
+SOFASCORE_HOCKEY_TOURNAMENT_SPORT_KEYS: dict[str, str] = {
+    "AHL": "nhl",
+    "OHL": "nhl",
+    "QMJHL": "nhl",
+    "WHL": "nhl",
+    "ECHL": "nhl",
+}
+
+
+def sofascore_hockey_sport_key(tournament_name: str) -> str:
+    """Map SofaScore uniqueTournament name to internal sport key."""
+    upper = (tournament_name or "").upper()
+    for token, sport_key in SOFASCORE_HOCKEY_TOURNAMENT_SPORT_KEYS.items():
+        if token in upper:
+            return sport_key
+    return "nhl"
+
+
+def sofascore_hockey_sport_label() -> str:
+    return "Ice Hockey"
+
+
+def sofascore_hockey_league_label(tournament_name: str) -> str:
+    """Return league label for matcher validation (e.g. AHL, OHL)."""
+    upper = (tournament_name or "").upper()
+    for token in SOFASCORE_HOCKEY_TOURNAMENT_SPORT_KEYS:
+        if token in upper:
+            return token
+    return tournament_name or "Ice Hockey"

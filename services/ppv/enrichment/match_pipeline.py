@@ -21,6 +21,7 @@ from services.ppv.extraction import PPVEventExtractor
 from services.ppv.matching.context import context_for_event, resolve_sport_league_context
 from services.ppv.matching.validation import competitors_match_event
 from services.ppv.persistence import persist_match
+from services.ppv.replay_providers import METADATA_KEY_REPLAY_ARCHIVE
 from services.reverse_event_matcher.orchestrator import ReverseEventMatcher
 from services.thesportsdb_calendar_scraper import CalendarEvent, get_calendar_scraper
 
@@ -119,8 +120,9 @@ class CalendarMatchPipeline:
         logger.info(f"Channels grouped into {len(unique_dates)} unique dates")
 
         calendar_data = {}
-        for date_str in unique_dates:
-            events = self.calendar_scraper.get_events_for_date(date_str)
+        for date_str, channel_extractions in channels_by_date.items():
+            replay_mode = any(extraction.get(METADATA_KEY_REPLAY_ARCHIVE) for _, extraction in channel_extractions)
+            events = self.calendar_scraper.get_events_for_date(date_str, replay=replay_mode)
             calendar_data[date_str] = events
             results["calendar_requests_made"] += 1
 
@@ -275,6 +277,9 @@ class CalendarMatchPipeline:
         )
 
         if not match_results:
+            ncaab_result = self._try_sportsipy_ncaab_direct_match(channel, extraction, date_str)
+            if ncaab_result is not None:
+                return ncaab_result
             return EnrichmentResult(
                 channel=channel,
                 matched=False,
@@ -371,3 +376,45 @@ class CalendarMatchPipeline:
             match_method=match_method,
             extraction_result=extraction,
         )
+
+    def _try_sportsipy_ncaab_direct_match(
+        self,
+        channel: Channel,
+        extraction: Dict,
+        date_str: str,
+    ) -> Optional[EnrichmentResult]:
+        from services.ppv.calendar_providers.sportsipy_ncaab import fetch_ncaab_replay_events
+
+        supplement = fetch_ncaab_replay_events(channel.name, extraction, date_str)
+        if not supplement:
+            return None
+
+        category_name = None
+        category = getattr(channel, "category", None)
+        if category is not None:
+            raw_name = getattr(category, "category_name", None)
+            if isinstance(raw_name, str):
+                category_name = raw_name
+
+        sport_context = resolve_sport_league_context(channel.name, category_name)
+        competitors = extraction.get("competitors")
+        if not competitors or len(competitors) != 2:
+            return None
+
+        for event in supplement:
+            if not competitors_match_event(
+                competitors,
+                event,
+                context=sport_context,
+                players=extraction.get("competitors_players"),
+            ):
+                continue
+            return EnrichmentResult(
+                channel=channel,
+                matched=True,
+                calendar_event=event,
+                confidence=MEDIUM_CONFIDENCE_THRESHOLD,
+                match_method="sportsipy_ncaab_supplement",
+                extraction_result=extraction,
+            )
+        return None
