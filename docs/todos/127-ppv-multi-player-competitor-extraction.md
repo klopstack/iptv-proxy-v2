@@ -1,6 +1,6 @@
 # Multi-player (2v2) competitor extraction and doubles matching
 
-**Status:** ✅ Implemented (branch `todo/tennis-doubles`)  
+**Status:** ✅ Implemented — PR [#70](https://github.com/klopstack/iptv-proxy-v2/pull/70); completion tests in follow-up PR  
 **Priority:** P1  
 **Audit:** [tennis-ppv-production-audit.md](../architecture/tennis-ppv-production-audit.md), June 2026
 

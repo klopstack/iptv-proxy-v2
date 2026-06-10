@@ -106,7 +106,7 @@ class TestTennisEnrichmentSofascoreFallback:
                     return_value=[],
                 ),
                 patch(
-                    "services.tennis.sofascore_calendar.fetch_scheduled_events",
+                    "services.ppv.calendar_providers.sofascore.client.fetch_scheduled_events_http",
                     return_value=payload,
                 ),
                 patch("services.ppv.cleanup.sync_ppv_epg_after_enrichment", return_value={}),

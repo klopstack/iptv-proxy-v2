@@ -23,8 +23,7 @@ instance/test.db
 instance/test.db-*
 # Runtime data under data/ (not committed)
 data/*
-!data/team_locations/
-data/team_locations/raw/
+assets/team_locations/raw/
 data/calendar_cache.json
 data/epg_cache/
 data/image_cache/

@@ -9,6 +9,7 @@ from services.ppv.extraction import competitors, patterns
 from services.ppv.extraction.date_strategies import DEFAULT_DATE_STRATEGIES
 from services.ppv.extraction.date_strategies.base import parse_date_with_strategies
 from services.ppv.extraction.types import MatchupInfo
+from services.ppv.replay_providers import METADATA_KEY_REPLAY_ARCHIVE, is_replay_archive_provider, replay_provider_id
 
 
 class PPVEventExtractor:
@@ -104,7 +105,7 @@ class PPVEventExtractor:
     def extract_weekday(self, channel_name: str) -> Optional[str]:
         match = re.search(patterns.WEEKDAY_PATTERN, channel_name, re.IGNORECASE)
         if match:
-            return match.group(1).lower()
+            return patterns.normalize_weekday(match.group(1))
         return None
 
     def extract_time_only(self, channel_name: str) -> Optional[Tuple[int, int, Optional[str]]]:
@@ -188,6 +189,12 @@ class PPVEventExtractor:
 
         if result["is_placeholder"] or result["is_inactive"]:
             return result
+
+        if is_replay_archive_provider(channel_name):
+            result[METADATA_KEY_REPLAY_ARCHIVE] = True
+            provider = replay_provider_id(channel_name)
+            if provider:
+                result["replay_provider"] = provider
 
         detail = competitors.extract_competitors_detail(channel_name)
         if detail:

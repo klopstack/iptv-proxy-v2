@@ -16,7 +16,7 @@ For each linked PPV channel with a parseable title datetime:
 
 ## US home-team timezone source
 
-US `@home` PPV timezone resolution uses **`SportsTeam.iana_timezone`** populated from the bundled location registry at `data/team_locations/registry.json`. The registry is rebuilt offline:
+US `@home` PPV timezone resolution uses **`SportsTeam.iana_timezone`** populated from the bundled location registry at `assets/team_locations/registry.json`. The registry is rebuilt offline:
 
 ```bash
 pip install -r requirements.txt   # or scripts/requirements-build.txt for cached/offline sections
@@ -27,7 +27,7 @@ python scripts/build_team_locations.py --refresh
 
 During sportsipy team refresh, locations are looked up by `(sport, abbreviation)` — **no city/name heuristics**. Teams without a registry entry keep `city` and `iana_timezone` null and appear in refresh stats as `location_misses`.
 
-Rebuild the registry after franchise moves or when adding manual entries in `data/team_locations/overrides.json`.
+Rebuild the registry after franchise moves or when adding manual entries in `assets/team_locations/overrides.json`.
 
 ### MiLB (affiliated minors)
 

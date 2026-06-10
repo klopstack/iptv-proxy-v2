@@ -2,13 +2,14 @@
 
 This directory contains detailed work items identified during the post-restructuring codebase audit (May 2026). Each document is self-contained: problem statement, affected files, proposed solution, acceptance criteria, and test plan.
 
-**Open backlog (19 required):** see **[ROADMAP.md](./ROADMAP.md)** (index) and **[ROADMAP-active.md](./ROADMAP-active.md)** (open waves). Completed waves 1–10: **[archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-waves-1-10.md)**. Per-item specs stay in the linked TODO files below.
+**Open backlog (24 required):** see **[ROADMAP.md](./ROADMAP.md)** (index) and **[ROADMAP-active.md](./ROADMAP-active.md)** (open waves). Completed waves 1–10: **[archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-waves-1-10.md)**. Per-item specs stay in the linked TODO files below.
 
 | Track | Open TODOs |
 |-------|------------|
 | Dashboard follow-ups | [107](./107-dashboard-stats-performance-hardening.md)–[110](./110-dashboard-optional-ux-follow-ups.md) |
 | PostgreSQL migration | [111](./111-pg-prep-raw-sqlite3-audit.md)–[119](./119-pg-migration-cleanup-and-docs.md) |
-| PPV production matching | [120](./120-fix-ppv-date-extraction-parsing-bugs.md)–[127](./127-ppv-multi-player-competitor-extraction.md) (120–126 ✅; **127** ⬜ doubles parsing) |
+| PPV production matching | [120](./120-fix-ppv-date-extraction-parsing-bugs.md)–[129](./129-ppv-replay-archive-enrichment-flosp.md) (120–127 ✅; **128–129** in flight) |
+| Admin UX | [132](./132-fix-xtream-credential-dialog-ux.md) ✅ |
 
 Waves **1–10** ✅ — merged PRs #10–51 (audit remediation through final doc review). Wave **9** batches **W–AA** (#39–47) and Wave **10** (#101 doc sync) complete.
 
@@ -262,7 +263,12 @@ Identified from live analysis on `docker.klopnet.com` (18,625 active PPV channel
 | 124 | [124-ppv-enrichment-attempt-tracking-and-requeue.md](./124-ppv-enrichment-attempt-tracking-and-requeue.md) | ✅ | Attempt tracking + requeue — PR [#53](https://github.com/klopstack/iptv-proxy-v2/pull/53) |
 | 125 | [125-sofascore-tennis-calendar-slice1.md](./125-sofascore-tennis-calendar-slice1.md) | ✅ | SofaScore client + parser — PR [#58](https://github.com/klopstack/iptv-proxy-v2/pull/58) |
 | 126 | [126-sofascore-calendar-multi-sport-and-enrichment.md](./126-sofascore-calendar-multi-sport-and-enrichment.md) | ✅ | SofaScore merge + doc — PR [#60](https://github.com/klopstack/iptv-proxy-v2/pull/60) |
-| 127 | [127-ppv-multi-player-competitor-extraction.md](./127-ppv-multi-player-competitor-extraction.md) | ⬜ | Tennis doubles / 2v2 channel names → four-player extract + match |
+| 127 | [127-ppv-multi-player-competitor-extraction.md](./127-ppv-multi-player-competitor-extraction.md) | ✅ | Tennis doubles / 2v2 extract + validation — PR [#70](https://github.com/klopstack/iptv-proxy-v2/pull/70) + integration tests |
+| 128 | [128-fix-ppv-year-inference-recent-past-dates.md](./128-fix-ppv-year-inference-recent-past-dates.md) | ✅ | `@ Jun 3` recent-past year rollover — 7-day lookback in `resolve_month_day_year` |
+| 129 | [129-ppv-replay-archive-enrichment-flosp.md](./129-ppv-replay-archive-enrichment-flosp.md) | 🟡 | Track A+C: Flo enrichability + Replay group; Track B → [131](./131-sofascore-college-amateur-calendar-provider.md) |
+| 130 | [130-ncaa-college-calendar-source-spike.md](./130-ncaa-college-calendar-source-spike.md) | ⬜ | Spike: NCAA / college / amateur calendar APIs (SofaScore slugs, Sportsipy, …) |
+| 131 | [131-sofascore-college-amateur-calendar-provider.md](./131-sofascore-college-amateur-calendar-provider.md) | ⬜ | Wire SofaScore multi-sport + historical window for Flo replay matching |
+| 133 | [133-sofascore-multi-sport-refactor-and-football-followups.md](./133-sofascore-multi-sport-refactor-and-football-followups.md) | 🟡 | Generic `calendar_providers/sofascore/` package; P0 WC ops after deploy |
 
 ```
 124-attempt-tracking ✅ (#53)
@@ -270,10 +276,23 @@ Identified from live analysis on `docker.klopnet.com` (18,625 active PPV channel
 120 ──► 122 ESPN tennis ✅ (#55 spike, #56) ──► 125 SofaScore slice 1 ✅ (#58) ──► 126 wire ✅ (#60)
 120 ──► 123-extended-coverage ✅ (D #59, C #61, B #62, A #63)
 124-requeue ──► run on production after deploy
+128-year-inference ──► unblocks tennis skipped as far_future (regression after 120)
 127-doubles-extraction ──► ~53% of tennis no_match unique keys (after 122/126)
+130-ncaa-spike ──► data source decision for Flo/college replays
+131-sofascore-college ──► calendar provider (after 130); blocks 129 Track B
+133-sofascore-refactor ──► generic provider package (before 131 college slugs); PR #74 football ops
+129-replay-flosp ──► ~243 queued Flo college replays → match + Replay group
 ```
 
-**Highest impact ops:** Requeue `no_match` per [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) after Wave 12 deploy; then [127](./127-ppv-multi-player-competitor-extraction.md) for doubles/wheelchair-doubles titles.
+**Highest impact ops:** [128](./128-fix-ppv-year-inference-recent-past-dates.md) then requeue tennis; PR #74 deploy + [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) WC requeue; [133](./133-sofascore-multi-sport-refactor-and-football-followups.md) refactor then [130](./130-ncaa-college-calendar-source-spike.md) → [131](./131-sofascore-college-amateur-calendar-provider.md) for Flo; [129](./129-ppv-replay-archive-enrichment-flosp.md) replay UX; [127](./127-ppv-multi-player-competitor-extraction.md) for doubles.
+
+### Wave 14 — Admin UX (June 2026)
+
+| # | Document | Status | Summary |
+|---|----------|--------|---------|
+| 132 | [132-fix-xtream-credential-dialog-ux.md](./132-fix-xtream-credential-dialog-ux.md) | ⬜ | Xtream credential modal: unwrap accounts API envelope; timezone `<select>` |
+
+**Impact:** Blocks creating account-linked Xtream credentials — **Select Account** stuck on “Loading accounts…” after [73](./73-standardize-api-response-shapes.md) envelope migration.
 
 ---
 
@@ -302,6 +321,7 @@ Routes, services (EPG/sync/scheduler/CQS), models/migrations, frontend, CI, and 
 | 83 | [83-xss-audit-legacy-frontend.md](./83-xss-audit-legacy-frontend.md) | ✅ | innerHTML with API data in legacy JS + TagSelector ([PR #32](https://github.com/klopstack/iptv-proxy-v2/pull/32)) |
 | 84 | [84-docker-and-secrets-hardening.md](./84-docker-and-secrets-hardening.md) | ✅ | `.dockerignore`, non-root container, Flask sessions disabled (no SECRET_KEY) |
 | 85 | [85-frontend-deduplication-and-esm-migration.md](./85-frontend-deduplication-and-esm-migration.md) | ✅ | Phases 1–3 ✅ ([PR #33](https://github.com/klopstack/iptv-proxy-v2/pull/33), [#40](https://github.com/klopstack/iptv-proxy-v2/pull/40), [#44](https://github.com/klopstack/iptv-proxy-v2/pull/44)) |
+| 132 | [132-fix-xtream-credential-dialog-ux.md](./132-fix-xtream-credential-dialog-ux.md) | ✅ | Xtream credential modal: unwrap accounts API envelope; timezone `<select>` — PR [#71](https://github.com/klopstack/iptv-proxy-v2/pull/71) |
 | 86 | [86-web-smoke-tests-and-pytest-consolidation.md](./86-web-smoke-tests-and-pytest-consolidation.md) | ✅ | Admin page smoke tests; duplicate pytest fixtures ([PR #31](https://github.com/klopstack/iptv-proxy-v2/pull/31)) |
 | 87 | [87-fix-stale-documentation.md](./87-fix-stale-documentation.md) | ✅ | API_REFERENCE auth/Xtream URLs; missing P4 todo files |
 | 88 | [88-expand-ci-quality-gates.md](./88-expand-ci-quality-gates.md) | ✅ | vulture, Docker build on PR, pre-commit tests |

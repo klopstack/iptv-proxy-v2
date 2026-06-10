@@ -1,0 +1,504 @@
+{
+  "events": [
+    {
+      "tournament": {
+        "name": "FIFA World Cup, Group A",
+        "slug": "world-championship-gr-a",
+        "category": {
+          "name": "World",
+          "slug": "world",
+          "sport": {
+            "name": "Football",
+            "slug": "football",
+            "id": 1
+          },
+          "priority": 20,
+          "country": {},
+          "id": 1468,
+          "flag": "international",
+          "fieldTranslations": {
+            "nameTranslation": {
+              "ar": "\u0627\u0644\u0639\u0627\u0644\u0645",
+              "bn": "\u09ac\u09bf\u09b6\u09cd\u09ac",
+              "hi": "\u0935\u093f\u0936\u094d\u0935",
+              "ru": "\u041c\u0438\u0440"
+            },
+            "shortNameTranslation": {}
+          }
+        },
+        "uniqueTournament": {
+          "name": "FIFA World Cup",
+          "slug": "world-championship",
+          "category": {
+            "name": "World",
+            "slug": "world",
+            "sport": {
+              "name": "Football",
+              "slug": "football",
+              "id": 1
+            },
+            "priority": 20,
+            "country": {},
+            "id": 1468,
+            "flag": "international",
+            "fieldTranslations": {
+              "nameTranslation": {
+                "ar": "\u0627\u0644\u0639\u0627\u0644\u0645",
+                "bn": "\u09ac\u09bf\u09b6\u09cd\u09ac",
+                "hi": "\u0935\u093f\u0936\u094d\u0935",
+                "ru": "\u041c\u0438\u0440"
+              },
+              "shortNameTranslation": {}
+            }
+          },
+          "userCount": 983133,
+          "hasPerformanceGraphFeature": false,
+          "country": {},
+          "id": 16,
+          "hasEventPlayerStatistics": true,
+          "displayInverseHomeAwayTeams": false,
+          "fieldTranslations": {
+            "nameTranslation": {
+              "pt-pt": "Mundial",
+              "ar": "\u0643\u0623\u0633 \u0627\u0644\u0639\u0627\u0644\u0645",
+              "bn": "\u0993\u09af\u09bc\u09be\u09b0\u09cd\u09b2\u09cd\u09a1 \u099a\u09cd\u09af\u09be\u09ae\u09cd\u09aa\u09bf\u09af\u09bc\u09a8\u09b6\u09bf\u09aa",
+              "hi": "\u0935\u0930\u094d\u0932\u094d\u0921 \u091a\u0948\u0902\u092a\u093f\u092f\u0928\u0936\u093f\u092a",
+              "hr": "FIFA Svjetsko prvenstvo",
+              "az": "F\u0130FA D\u00fcnya Kuboku",
+              "nl": "Wereldkampioenschap",
+              "fr": "Coupe du monde",
+              "de": "Weltmeisterschaft",
+              "el": "\u03a0\u03b1\u03b3\u03ba\u03cc\u03c3\u03bc\u03b9\u03bf \u039a\u03cd\u03c0\u03b5\u03bb\u03bb\u03bf",
+              "hu": "FIFA Vil\u00e1gbajnoks\u00e1g",
+              "id": "Piala Dunia FIFA",
+              "it": "Coppa del Mondo FIFA",
+              "ja": "FIFA\u30ef\u30fc\u30eb\u30c9\u30ab\u30c3\u30d7",
+              "ko": "FIFA \uc6d4\ub4dc\ucef5",
+              "no": "Verdensmesterskapet",
+              "pl": "Mistrzostwa \u015awiata",
+              "pt": "Copa do Mundo FIFA",
+              "ro": "Campionatul Mondial",
+              "es": "Copa Mundial",
+              "es-la": "Copa Mundial",
+              "sv": "V\u00e4rldsm\u00e4sterskapet",
+              "th": "\u0e1f\u0e38\u0e15\u0e1a\u0e2d\u0e25\u0e42\u0e25\u0e01",
+              "tr": "FIFA D\u00fcnya Kupas\u0131",
+              "vi": "Gi\u1ea3i V\u00f4 \u0110\u1ecbch Th\u1ebf Gi\u1edbi",
+              "ru": "\u0427\u0435\u043c\u043f\u0438\u043e\u043d\u0430\u0442 \u043c\u0438\u0440\u0430",
+              "sr": "\u0421\u0432\u0435\u0442\u0441\u043a\u043e \u043f\u0440\u0432\u0435\u043d\u0441\u0442\u0432\u043e"
+            },
+            "shortNameTranslation": {}
+          }
+        },
+        "priority": 813,
+        "groupName": "Group A",
+        "groupSign": "A",
+        "id": 3954,
+        "fieldTranslations": {
+          "nameTranslation": {
+            "hr": "FIFA Svjetsko prvenstvo, Grupa A",
+            "az": "F\u0130FA D\u00fcnya Kuboku, Qrup A",
+            "nl": "Wereldkampioenschap, Groep A",
+            "fr": "Coupe du monde, Groupe A",
+            "ru": "\u0427\u0435\u043c\u043f\u0438\u043e\u043d\u0430\u0442 \u043c\u0438\u0440\u0430, \u0413\u0440\u0443\u043f\u043f\u0430 A",
+            "ar": "\u0628\u0637\u0648\u0644\u0629 \u0627\u0644\u0639\u0627\u0644\u0645\u060c \u0627\u0644\u0645\u062c\u0645\u0648\u0639\u0629 A",
+            "bn": "\u0993\u09af\u09bc\u09be\u09b0\u09cd\u09b2\u09cd\u09a1 \u099a\u09cd\u09af\u09be\u09ae\u09cd\u09aa\u09bf\u09af\u09bc\u09a8\u09b6\u09bf\u09aa, \u0997\u09cd\u09b0. \u098f",
+            "hi": "\u0935\u0930\u094d\u0932\u094d\u0921 \u091a\u0948\u0902\u092a\u093f\u092f\u0928\u0936\u093f\u092a, \u0917\u094d\u0930\u0947\u0921 \u090f",
+            "de": "Weltmeisterschaft, Gruppe A",
+            "th": "\u0e1f\u0e38\u0e15\u0e1a\u0e2d\u0e25\u0e42\u0e25\u0e01, \u0e01\u0e25\u0e38\u0e48\u0e21 A",
+            "el": "\u03a0\u03b1\u03b3\u03ba\u03cc\u03c3\u03bc\u03b9\u03bf \u039a\u03cd\u03c0\u03b5\u03bb\u03bb\u03bf, \u038c\u03bc\u03b9\u03bb\u03bf\u03c2 A",
+            "hu": "Vil\u00e1gbajnoks\u00e1g, Csoport A",
+            "id": "Piala Dunia FIFA, Grup A",
+            "it": "Coppa del Mondo, Gruppo A",
+            "ja": "FIFA\u30ef\u30fc\u30eb\u30c9\u30ab\u30c3\u30d7, \u30b0\u30eb\u30fc\u30d7A",
+            "ko": "FIFA \uc6d4\ub4dc\ucef5, \uadf8\ub8f9 A",
+            "no": "Verdensmesterskapet, Gruppe A",
+            "pl": "Mistrzostwa \u015awiata, Grupa A",
+            "pt": "Copa do Mundo FIFA, Grupo A",
+            "ro": "Campionatul Mondial, Grupa A",
+            "es": "Copa Mundial, Grupo A",
+            "es-la": "Copa Mundial, Grupo A",
+            "sv": "V\u00e4rldsm\u00e4sterskapet, Grupp A",
+            "tr": "FIFA D\u00fcnya Kupas\u0131, Grup A",
+            "vi": "Gi\u1ea3i V\u00f4 \u0110\u1ecbch Th\u1ebf Gi\u1edbi, B\u1ea3ng A",
+            "pt-pt": "Mundial, Grupo A",
+            "sr": "\u0421\u0432\u0435\u0442\u0441\u043a\u043e \u043f\u0440\u0432\u0435\u043d\u0441\u0442\u0432\u043e, \u0413\u0440\u0443\u043f\u0430 A"
+          },
+          "shortNameTranslation": {}
+        }
+      },
+      "season": {
+        "name": "World Cup 2026",
+        "year": "2026",
+        "editor": false,
+        "seasonCoverageInfo": {},
+        "id": 58210
+      },
+      "roundInfo": {
+        "round": 1
+      },
+      "customId": "LUbsGVb",
+      "status": {
+        "code": 0,
+        "description": "Not started",
+        "type": "notstarted"
+      },
+      "homeTeam": {
+        "name": "Mexico",
+        "slug": "mexico",
+        "shortName": "Mexico",
+        "gender": "M",
+        "sport": {
+          "name": "Football",
+          "slug": "football",
+          "id": 1
+        },
+        "userCount": 310535,
+        "nameCode": "MEX",
+        "disabled": false,
+        "national": true,
+        "type": 0,
+        "country": {
+          "alpha2": "MX",
+          "alpha3": "MEX",
+          "name": "Mexico",
+          "slug": "mexico"
+        },
+        "id": 4781,
+        "subTeams": [],
+        "teamColors": {
+          "primary": "#374df5",
+          "secondary": "#374df5",
+          "text": "#ffffff"
+        },
+        "fieldTranslations": {
+          "nameTranslation": {
+            "ar": "\u0627\u0644\u0645\u0643\u0633\u064a\u0643",
+            "bn": "\u09ae\u09c7\u0995\u09cd\u09b8\u09bf\u0995\u09cb",
+            "hi": "\u092e\u0947\u0915\u094d\u0938\u093f\u0915\u094b",
+            "ru": "\u041c\u0435\u043a\u0441\u0438\u043a\u0430"
+          },
+          "shortNameTranslation": {}
+        }
+      },
+      "awayTeam": {
+        "name": "South Africa",
+        "slug": "south-africa",
+        "shortName": "South Africa",
+        "gender": "M",
+        "sport": {
+          "name": "Football",
+          "slug": "football",
+          "id": 1
+        },
+        "userCount": 164774,
+        "nameCode": "RSA",
+        "disabled": false,
+        "national": true,
+        "type": 0,
+        "country": {
+          "alpha2": "ZA",
+          "alpha3": "ZAF",
+          "name": "South Africa",
+          "slug": "south-africa"
+        },
+        "id": 4736,
+        "subTeams": [],
+        "teamColors": {
+          "primary": "#374df5",
+          "secondary": "#374df5",
+          "text": "#ffffff"
+        },
+        "fieldTranslations": {
+          "nameTranslation": {
+            "ar": "\u062c\u0646\u0648\u0628 \u0623\u0641\u0631\u064a\u0642\u064a\u0627",
+            "bn": "\u09a6\u0995\u09cd\u09b7\u09bf\u09a3 \u0986\u09ab\u09cd\u09b0\u09bf\u0995\u09be",
+            "hi": "\u0938\u093e\u0909\u0925 \u0905\u092b\u094d\u0930\u0940\u0915\u093e",
+            "ru": "\u042e\u0436\u043d\u0430\u044f \u0410\u0444\u0440\u0438\u043a\u0430"
+          },
+          "shortNameTranslation": {}
+        }
+      },
+      "homeScore": {},
+      "awayScore": {},
+      "coverage": -1,
+      "time": {},
+      "changes": {
+        "changeTimestamp": 0
+      },
+      "hasGlobalHighlights": false,
+      "detailId": 1,
+      "crowdsourcingDataDisplayEnabled": false,
+      "id": 15186710,
+      "slug": "mexico-south-africa",
+      "startTimestamp": 1781204400,
+      "finalResultOnly": false,
+      "feedLocked": false,
+      "isEditor": false,
+      "eventFilters": {
+        "category": [
+          "national"
+        ],
+        "level": [
+          "top-competitions",
+          "pro"
+        ],
+        "gender": [
+          "M"
+        ]
+      }
+    },
+    {
+      "tournament": {
+        "name": "FIFA World Cup, Group A",
+        "slug": "world-championship-gr-a",
+        "category": {
+          "name": "World",
+          "slug": "world",
+          "sport": {
+            "name": "Football",
+            "slug": "football",
+            "id": 1
+          },
+          "priority": 20,
+          "country": {},
+          "id": 1468,
+          "flag": "international",
+          "fieldTranslations": {
+            "nameTranslation": {
+              "ar": "\u0627\u0644\u0639\u0627\u0644\u0645",
+              "bn": "\u09ac\u09bf\u09b6\u09cd\u09ac",
+              "hi": "\u0935\u093f\u0936\u094d\u0935",
+              "ru": "\u041c\u0438\u0440"
+            },
+            "shortNameTranslation": {}
+          }
+        },
+        "uniqueTournament": {
+          "name": "FIFA World Cup",
+          "slug": "world-championship",
+          "category": {
+            "name": "World",
+            "slug": "world",
+            "sport": {
+              "name": "Football",
+              "slug": "football",
+              "id": 1
+            },
+            "priority": 20,
+            "country": {},
+            "id": 1468,
+            "flag": "international",
+            "fieldTranslations": {
+              "nameTranslation": {
+                "ar": "\u0627\u0644\u0639\u0627\u0644\u0645",
+                "bn": "\u09ac\u09bf\u09b6\u09cd\u09ac",
+                "hi": "\u0935\u093f\u0936\u094d\u0935",
+                "ru": "\u041c\u0438\u0440"
+              },
+              "shortNameTranslation": {}
+            }
+          },
+          "userCount": 983133,
+          "hasPerformanceGraphFeature": false,
+          "country": {},
+          "id": 16,
+          "hasEventPlayerStatistics": true,
+          "displayInverseHomeAwayTeams": false,
+          "fieldTranslations": {
+            "nameTranslation": {
+              "pt-pt": "Mundial",
+              "ar": "\u0643\u0623\u0633 \u0627\u0644\u0639\u0627\u0644\u0645",
+              "bn": "\u0993\u09af\u09bc\u09be\u09b0\u09cd\u09b2\u09cd\u09a1 \u099a\u09cd\u09af\u09be\u09ae\u09cd\u09aa\u09bf\u09af\u09bc\u09a8\u09b6\u09bf\u09aa",
+              "hi": "\u0935\u0930\u094d\u0932\u094d\u0921 \u091a\u0948\u0902\u092a\u093f\u092f\u0928\u0936\u093f\u092a",
+              "hr": "FIFA Svjetsko prvenstvo",
+              "az": "F\u0130FA D\u00fcnya Kuboku",
+              "nl": "Wereldkampioenschap",
+              "fr": "Coupe du monde",
+              "de": "Weltmeisterschaft",
+              "el": "\u03a0\u03b1\u03b3\u03ba\u03cc\u03c3\u03bc\u03b9\u03bf \u039a\u03cd\u03c0\u03b5\u03bb\u03bb\u03bf",
+              "hu": "FIFA Vil\u00e1gbajnoks\u00e1g",
+              "id": "Piala Dunia FIFA",
+              "it": "Coppa del Mondo FIFA",
+              "ja": "FIFA\u30ef\u30fc\u30eb\u30c9\u30ab\u30c3\u30d7",
+              "ko": "FIFA \uc6d4\ub4dc\ucef5",
+              "no": "Verdensmesterskapet",
+              "pl": "Mistrzostwa \u015awiata",
+              "pt": "Copa do Mundo FIFA",
+              "ro": "Campionatul Mondial",
+              "es": "Copa Mundial",
+              "es-la": "Copa Mundial",
+              "sv": "V\u00e4rldsm\u00e4sterskapet",
+              "th": "\u0e1f\u0e38\u0e15\u0e1a\u0e2d\u0e25\u0e42\u0e25\u0e01",
+              "tr": "FIFA D\u00fcnya Kupas\u0131",
+              "vi": "Gi\u1ea3i V\u00f4 \u0110\u1ecbch Th\u1ebf Gi\u1edbi",
+              "ru": "\u0427\u0435\u043c\u043f\u0438\u043e\u043d\u0430\u0442 \u043c\u0438\u0440\u0430",
+              "sr": "\u0421\u0432\u0435\u0442\u0441\u043a\u043e \u043f\u0440\u0432\u0435\u043d\u0441\u0442\u0432\u043e"
+            },
+            "shortNameTranslation": {}
+          }
+        },
+        "priority": 813,
+        "groupName": "Group A",
+        "groupSign": "A",
+        "id": 3954,
+        "fieldTranslations": {
+          "nameTranslation": {
+            "hr": "FIFA Svjetsko prvenstvo, Grupa A",
+            "az": "F\u0130FA D\u00fcnya Kuboku, Qrup A",
+            "nl": "Wereldkampioenschap, Groep A",
+            "fr": "Coupe du monde, Groupe A",
+            "ru": "\u0427\u0435\u043c\u043f\u0438\u043e\u043d\u0430\u0442 \u043c\u0438\u0440\u0430, \u0413\u0440\u0443\u043f\u043f\u0430 A",
+            "ar": "\u0628\u0637\u0648\u0644\u0629 \u0627\u0644\u0639\u0627\u0644\u0645\u060c \u0627\u0644\u0645\u062c\u0645\u0648\u0639\u0629 A",
+            "bn": "\u0993\u09af\u09bc\u09be\u09b0\u09cd\u09b2\u09cd\u09a1 \u099a\u09cd\u09af\u09be\u09ae\u09cd\u09aa\u09bf\u09af\u09bc\u09a8\u09b6\u09bf\u09aa, \u0997\u09cd\u09b0. \u098f",
+            "hi": "\u0935\u0930\u094d\u0932\u094d\u0921 \u091a\u0948\u0902\u092a\u093f\u092f\u0928\u0936\u093f\u092a, \u0917\u094d\u0930\u0947\u0921 \u090f",
+            "de": "Weltmeisterschaft, Gruppe A",
+            "th": "\u0e1f\u0e38\u0e15\u0e1a\u0e2d\u0e25\u0e42\u0e25\u0e01, \u0e01\u0e25\u0e38\u0e48\u0e21 A",
+            "el": "\u03a0\u03b1\u03b3\u03ba\u03cc\u03c3\u03bc\u03b9\u03bf \u039a\u03cd\u03c0\u03b5\u03bb\u03bb\u03bf, \u038c\u03bc\u03b9\u03bb\u03bf\u03c2 A",
+            "hu": "Vil\u00e1gbajnoks\u00e1g, Csoport A",
+            "id": "Piala Dunia FIFA, Grup A",
+            "it": "Coppa del Mondo, Gruppo A",
+            "ja": "FIFA\u30ef\u30fc\u30eb\u30c9\u30ab\u30c3\u30d7, \u30b0\u30eb\u30fc\u30d7A",
+            "ko": "FIFA \uc6d4\ub4dc\ucef5, \uadf8\ub8f9 A",
+            "no": "Verdensmesterskapet, Gruppe A",
+            "pl": "Mistrzostwa \u015awiata, Grupa A",
+            "pt": "Copa do Mundo FIFA, Grupo A",
+            "ro": "Campionatul Mondial, Grupa A",
+            "es": "Copa Mundial, Grupo A",
+            "es-la": "Copa Mundial, Grupo A",
+            "sv": "V\u00e4rldsm\u00e4sterskapet, Grupp A",
+            "tr": "FIFA D\u00fcnya Kupas\u0131, Grup A",
+            "vi": "Gi\u1ea3i V\u00f4 \u0110\u1ecbch Th\u1ebf Gi\u1edbi, B\u1ea3ng A",
+            "pt-pt": "Mundial, Grupo A",
+            "sr": "\u0421\u0432\u0435\u0442\u0441\u043a\u043e \u043f\u0440\u0432\u0435\u043d\u0441\u0442\u0432\u043e, \u0413\u0440\u0443\u043f\u0430 A"
+          },
+          "shortNameTranslation": {}
+        }
+      },
+      "season": {
+        "name": "World Cup 2026",
+        "year": "2026",
+        "editor": false,
+        "seasonCoverageInfo": {},
+        "id": 58210
+      },
+      "roundInfo": {
+        "round": 1
+      },
+      "customId": "oUbsKUb",
+      "status": {
+        "code": 0,
+        "description": "Not started",
+        "type": "notstarted"
+      },
+      "homeTeam": {
+        "name": "South Korea",
+        "slug": "south-korea",
+        "shortName": "South Korea",
+        "gender": "M",
+        "sport": {
+          "name": "Football",
+          "slug": "football",
+          "id": 1
+        },
+        "userCount": 92240,
+        "nameCode": "KOR",
+        "disabled": false,
+        "national": true,
+        "type": 0,
+        "country": {
+          "alpha2": "KR",
+          "alpha3": "KOR",
+          "name": "South Korea",
+          "slug": "south-korea"
+        },
+        "id": 4735,
+        "subTeams": [],
+        "teamColors": {
+          "primary": "#374df5",
+          "secondary": "#374df5",
+          "text": "#ffffff"
+        },
+        "fieldTranslations": {
+          "nameTranslation": {
+            "ar": "\u0643\u0648\u0631\u064a\u0627 \u0627\u0644\u062c\u0646\u0648\u0628\u064a\u0629",
+            "bn": "\u09a6\u0995\u09cd\u09b7\u09bf\u09a3 \u0995\u09cb\u09b0\u09bf\u09af\u09bc\u09be",
+            "hi": "\u0938\u093e\u0909\u0925 \u0915\u094b\u0930\u093f\u092f\u093e",
+            "ru": "\u042e\u0436\u043d\u0430\u044f \u041a\u043e\u0440\u0435\u044f"
+          },
+          "shortNameTranslation": {
+            "ru": "\u042e\u0436\u043d\u0430\u044f \u041a\u043e\u0440\u0435\u044f"
+          }
+        }
+      },
+      "awayTeam": {
+        "name": "Czechia",
+        "slug": "czech-republic",
+        "shortName": "Czechia",
+        "gender": "M",
+        "sport": {
+          "name": "Football",
+          "slug": "football",
+          "id": 1
+        },
+        "userCount": 78153,
+        "nameCode": "CZE",
+        "disabled": false,
+        "national": true,
+        "type": 0,
+        "country": {
+          "alpha2": "CZ",
+          "alpha3": "CZE",
+          "name": "Czechia",
+          "slug": "czechia"
+        },
+        "id": 4714,
+        "subTeams": [],
+        "teamColors": {
+          "primary": "#374df5",
+          "secondary": "#374df5",
+          "text": "#ffffff"
+        },
+        "fieldTranslations": {
+          "nameTranslation": {
+            "ar": "\u0627\u0644\u062a\u0634\u064a\u0643",
+            "bn": "\u099a\u09c7\u0995 \u09b0\u09bf\u09aa\u09be\u09ac\u09b2\u09bf\u0995",
+            "hi": "\u091a\u0947\u0915 \u0930\u093f\u092a\u092c\u094d\u0932\u093f\u0915",
+            "ru": "\u0427\u0435\u0445\u0438\u044f"
+          },
+          "shortNameTranslation": {
+            "ar": "\u0627\u0644\u062a\u0634\u064a\u0643"
+          }
+        }
+      },
+      "homeScore": {},
+      "awayScore": {},
+      "coverage": -1,
+      "time": {},
+      "changes": {
+        "changeTimestamp": 0
+      },
+      "hasGlobalHighlights": false,
+      "detailId": 1,
+      "crowdsourcingDataDisplayEnabled": false,
+      "id": 15186720,
+      "slug": "south-korea-czechia",
+      "startTimestamp": 1781229600,
+      "finalResultOnly": false,
+      "feedLocked": false,
+      "isEditor": false,
+      "eventFilters": {
+        "category": [
+          "national"
+        ],
+        "level": [
+          "top-competitions",
+          "pro"
+        ],
+        "gender": [
+          "M"
+        ]
+      }
+    }
+  ]
+}

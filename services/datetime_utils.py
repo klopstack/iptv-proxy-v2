@@ -140,6 +140,25 @@ def _timestamp_has_timezone(ts: str) -> bool:
     return False
 
 
+def _local_datetime_to_naive_utc(
+    date_event: str,
+    hour: int,
+    minute: int,
+    tz_name: str,
+) -> Optional[datetime]:
+    """Combine dateEvent + wall clock in IANA zone, return naive UTC for storage."""
+    try:
+        year, month, day = map(int, date_event.split("-"))
+        tz = ZoneInfo(tz_name)
+    except (ValueError, IndexError):
+        return None
+    try:
+        local_dt = datetime(year, month, day, hour, minute, tzinfo=tz)
+    except Exception:
+        return None
+    return to_naive_utc(local_dt)
+
+
 def infer_thesportsdb_event_timezone(api_data: Dict[str, Any]) -> Optional[str]:
     """Infer display timezone from TheSportsDB local/UTC time fields or venue country/city."""
     from services.ppv.city_timezone_map import iana_for_city
@@ -165,6 +184,9 @@ def parse_thesportsdb_scheduled_at(
     api_data: Dict[str, Any],
 ) -> Tuple[Optional[datetime], Optional[str]]:
     """Parse canonical start time from TheSportsDB API fields.
+
+    Priority: strTimestamp (with zone) > dateEvent+strTime (UTC wall clock) >
+    dateEvent+strTimeLocal (converted via inferred venue IANA zone).
 
     Returns (naive_utc_datetime, iana_timezone_or_none).
     """
@@ -199,8 +221,22 @@ def parse_thesportsdb_scheduled_at(
         )
 
     if date_event and not str_time:
-        logger.warning(
-            "TheSportsDB event %s has dateEvent but no strTime; skipping time update",
+        str_time_local = (api_data.get("strTimeLocal") or "").strip()
+        if str_time_local and event_tz:
+            hms_local = _parse_hms(str_time_local)
+            if hms_local:
+                hour, minute = hms_local
+                scheduled = _local_datetime_to_naive_utc(date_event, hour, minute, event_tz)
+                if scheduled is not None:
+                    logger.debug(
+                        "TheSportsDB event %s: parsed dateEvent+strTimeLocal via %s -> %s UTC",
+                        api_data.get("idEvent"),
+                        event_tz,
+                        scheduled,
+                    )
+                    return scheduled, event_tz
+        logger.debug(
+            "TheSportsDB event %s has dateEvent but no parseable UTC/local time; skipping scheduled_at update",
             api_data.get("idEvent"),
         )
 

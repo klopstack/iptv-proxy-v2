@@ -105,6 +105,7 @@ class TestCalendarScraperSofascoreMerge:
         app,
     ):
         Settings.set(SETTING_PPV_SOFASCORE_CALENDAR_ENABLED, "false")
+        Settings.set("ppv_sofascore_football_enabled", "false")
         mock_milb_fetch.return_value = []
         mock_fetch.return_value = []
         mock_api_fetch.return_value = []
@@ -150,10 +151,9 @@ class TestCalendarScraperSofascoreMerge:
                 "_fetch_espn_tennis_events_for_date",
                 return_value=espn_events,
             ),
-            patch.object(
-                scraper,
-                "_fetch_sofascore_tennis_events_for_date",
-                return_value=sofascore_events,
+            patch(
+                "services.ppv.calendar_providers.sofascore.fetch_events_for_slug",
+                side_effect=lambda slug, date_str, **kwargs: sofascore_events if slug == "tennis" else [],
             ),
         ):
             events = scraper.get_events_for_date(CALENDAR_DATE, force_refresh=True)

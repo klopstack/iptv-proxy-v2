@@ -6,7 +6,7 @@ Operational utilities, offline data builds, and PPV analysis tools. All scripts 
 
 | Script | Purpose |
 |--------|---------|
-| `build_team_locations.py` | Rebuild `data/team_locations/registry.json` (TheSportsDB, MLB Stats, sportsipy); see `docs/ppv_timezone_analysis.md` |
+| `build_team_locations.py` | Rebuild `assets/team_locations/registry.json` (TheSportsDB, MLB Stats, sportsipy); see `docs/ppv_timezone_analysis.md` |
 | `reset_fcc_match_patterns.py` | Reset FCC match patterns to migration defaults (also `flask reset-fcc-patterns`) |
 | `cleanup_old_events.py` | Remove stale PPV events from the database |
 | `cleanup_corrupt_ppv_data.py` | Repair inconsistent PPV enrichment rows |

@@ -1,0 +1,28 @@
+{
+  "channels": [
+    {
+      "id": "occidental_chapman",
+      "channel": "Flo (FLSP) 110: 2025 Occidental vs Chapman - Mens - 22/10 19:00",
+      "expect_date": "2025-10-22T19:00:00",
+      "expect_competitors": ["Occidental", "Chapman"]
+    },
+    {
+      "id": "colorado_gulls",
+      "channel": "Flo (FLSP) 161: 2025 Colorado Eagles vs San Diego Gulls Away - 22/10 22:00",
+      "expect_date": "2025-10-22T22:00:00",
+      "expect_competitors": ["Colorado Eagles", "San Diego Gulls"]
+    },
+    {
+      "id": "ottawa_spitfires",
+      "channel": "Flo (FLSP) 230: 2025 Ottawa 67s vs Windsor Spitfires - 23/10 19:05",
+      "expect_date": "2025-10-23T19:05:00",
+      "expect_competitors": ["Ottawa 67s", "Windsor Spitfires"]
+    },
+    {
+      "id": "us_flo_hockey",
+      "channel": "US (Flo 481) | [Hockey|2025 Sherbrooke Phoenix vs Chicoutimi Sagueneens Home] (2025-11-01 16:02:30)",
+      "expect_date": "2025-11-01T16:02:30",
+      "expect_competitors": ["Sherbrooke Phoenix", "Chicoutimi Sagueneens"]
+    }
+  ]
+}

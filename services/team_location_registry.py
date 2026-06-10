@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_REGISTRY_PATH = ROOT / "data" / "team_locations" / "registry.json"
+DEFAULT_REGISTRY_PATH = ROOT / "assets" / "team_locations" / "registry.json"
 
 RegistryIndexes = Tuple[
     Dict[Tuple[str, str], "LocationEntry"],

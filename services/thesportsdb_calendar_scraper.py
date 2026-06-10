@@ -83,20 +83,30 @@ def filter_sofascore_tennis_without_espn_duplicates(
     sofascore_events: List["CalendarEvent"],
 ) -> List["CalendarEvent"]:
     """Keep SofaScore tennis rows that do not duplicate an ESPN (player pair, day) fixture."""
-    espn_keys = {key for key in (_tennis_matchup_key(event) for event in espn_events) if key is not None}
-    kept: List[CalendarEvent] = []
-    for event in sofascore_events:
-        key = _tennis_matchup_key(event)
-        if key is not None and key in espn_keys:
-            logger.debug(
-                "Skipping SofaScore tennis duplicate of ESPN: %s vs %s on %s",
-                event.home_team,
-                event.away_team,
-                event.date,
-            )
-            continue
-        kept.append(event)
-    return kept
+    from services.ppv.calendar_providers.sofascore.dedup import filter_without_espn_duplicates
+
+    return filter_without_espn_duplicates(espn_events, sofascore_events)
+
+
+def _football_matchup_key(event: "CalendarEvent") -> Optional[Tuple[str, str, str]]:
+    """Normalized (date, home, away) key for soccer dedup (order-independent)."""
+    sport_lower = (event.sport or "").lower()
+    if sport_lower not in ("soccer", "football"):
+        return None
+    if not event.home_team or not event.away_team:
+        return None
+    pair = tuple(sorted([event.home_team.strip().lower(), event.away_team.strip().lower()]))
+    return (event.date, pair[0], pair[1])
+
+
+def filter_sofascore_football_without_tsdb_duplicates(
+    tsdb_events: List["CalendarEvent"],
+    sofascore_events: List["CalendarEvent"],
+) -> List["CalendarEvent"]:
+    """Keep SofaScore football rows that do not duplicate a TheSportsDB (home, away, day) fixture."""
+    from services.ppv.calendar_providers.sofascore.dedup import filter_without_tsdb_duplicates
+
+    return filter_without_tsdb_duplicates(tsdb_events, sofascore_events)
 
 
 class CalendarEvent:
@@ -492,14 +502,18 @@ class TheSportsDBCalendarScraper:
             api_events = self._fetch_api_events_for_date(date, sport)
             milb_events = self._fetch_milb_events_for_date(date, sport)
             espn_tennis_events = self._fetch_espn_tennis_events_for_date(date, sport)
-            sofascore_tennis_events = self._fetch_sofascore_tennis_events_for_date(date, sport)
-            sofascore_unique = filter_sofascore_tennis_without_espn_duplicates(
-                espn_tennis_events,
-                sofascore_tennis_events,
+            tsdb_soccer_events = [event for event in html_events + api_events if _football_matchup_key(event)]
+            sofascore_supplements = self._fetch_sofascore_events_for_date(
+                date,
+                sport,
+                espn_tennis_events=espn_tennis_events,
+                tsdb_soccer_events=tsdb_soccer_events,
             )
+            sofascore_tennis_unique = sofascore_supplements.get("tennis", [])
+            sofascore_football_unique = sofascore_supplements.get("football", [])
             events = self._merge_calendar_events(
                 html_events,
-                api_events + milb_events + espn_tennis_events + sofascore_unique,
+                api_events + milb_events + espn_tennis_events + sofascore_tennis_unique + sofascore_football_unique,
             )
             if events:
                 self._cache[cache_key] = (events, time.time())
@@ -628,15 +642,39 @@ class TheSportsDBCalendarScraper:
 
         return fetch_espn_tennis_events_for_date(date)
 
-    def _fetch_sofascore_tennis_events_for_date(self, date: str, sport: str = "") -> List[CalendarEvent]:
-        """Fetch tennis from SofaScore when sport filter allows and feature flag is on."""
-        if sport:
-            sport_lower = sport.lower()
-            if "tennis" not in sport_lower and sport_lower not in ("", "all"):
-                return []
-        from services.tennis.sofascore_calendar import fetch_tennis_events_for_date
+    def _fetch_sofascore_events_for_date(
+        self,
+        date: str,
+        sport: str = "",
+        *,
+        espn_tennis_events: Optional[List[CalendarEvent]] = None,
+        tsdb_soccer_events: Optional[List[CalendarEvent]] = None,
+    ) -> Dict[str, List[CalendarEvent]]:
+        """Fetch enabled SofaScore slugs for a date, applying registry dedup strategies."""
+        from services.ppv.calendar_providers.sofascore import fetch_events_for_slug
+        from services.ppv.calendar_providers.sofascore.dedup import dedup_sofascore_events
+        from services.ppv.calendar_providers.sofascore.registry import (
+            SLUG_REGISTRY,
+            slug_allowed_for_sport_filter,
+            slug_enabled,
+        )
 
-        return fetch_tennis_events_for_date(date)
+        results: Dict[str, List[CalendarEvent]] = {}
+        espn_primary = espn_tennis_events or []
+        tsdb_primary = tsdb_soccer_events or []
+
+        for slug, config in SLUG_REGISTRY.items():
+            if not slug_enabled(slug) or not slug_allowed_for_sport_filter(slug, sport):
+                continue
+            sofascore_events = fetch_events_for_slug(slug, date)
+            if config.dedup_strategy == "espn_tennis":
+                primary = espn_primary
+            elif config.dedup_strategy == "tsdb_football":
+                primary = tsdb_primary
+            else:
+                primary = []
+            results[slug] = dedup_sofascore_events(slug, primary_events=primary, sofascore_events=sofascore_events)
+        return results
 
     def _is_date_in_api_supplement_window(self, date: str) -> bool:
         """Return False for dates too far from today to query via eventsDay."""
