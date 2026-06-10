@@ -10,7 +10,13 @@ from flask import Blueprint, jsonify, redirect, request
 
 from error_handling import handle_errors, handle_xml_errors
 from models import Account, PlaylistConfig, XtreamCredential, db
-from services.category_tag_service import build_virtual_category_map, effective_grouping, grouping_needs_fcc_facility
+from services.category_tag_service import (
+    XTREAM_LOCAL_CHANNELS_PARENT_ID,
+    build_virtual_category_map,
+    effective_grouping,
+    grouping_needs_fcc_facility,
+    xtream_local_channels_parent_category,
+)
 from services.channel_query_service import ChannelQueryService
 from services.datetime_utils import serialize_utc_iso
 from services.image_cache_service import ImageCacheService
@@ -432,12 +438,15 @@ def get_live_categories(xtream_cred, account, playlist_config):
             }
         )
 
+    if tag_categories:
+        categories.append(xtream_local_channels_parent_category())
+
     for tag_cat_id, tag_cat_name in sorted(tag_categories.items(), key=lambda item: item[1].lower()):
         categories.append(
             {
                 "category_id": tag_cat_id,
                 "category_name": tag_cat_name,
-                "parent_id": 0,
+                "parent_id": XTREAM_LOCAL_CHANNELS_PARENT_ID,
             }
         )
 
@@ -487,6 +496,8 @@ def get_live_streams(xtream_cred, account, playlist_config):
                 and ch.category
                 and is_ppv_category(ch.category.category_name)
             ]
+        elif category_id == XTREAM_LOCAL_CHANNELS_PARENT_ID:
+            channels = [ch for ch in channels if ch.id in tag_channel_map]
         elif _is_tag_virtual_category_id(category_id):
             channels = [ch for ch in channels if tag_channel_map.get(ch.id, {}).get("category_id") == category_id]
         else:

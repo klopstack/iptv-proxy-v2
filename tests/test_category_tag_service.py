@@ -6,6 +6,7 @@ import pytest
 from models import Account, Category, Channel, ChannelTag, FccFacility, PlaylistConfig, Tag, db
 from services.category_tag_service import (
     PRESET_DMA,
+    XTREAM_LOCAL_CHANNELS_PARENT_ID,
     CategoryTagGrouping,
     build_virtual_category_map,
     effective_grouping,
@@ -14,6 +15,7 @@ from services.category_tag_service import (
     resolve_output_category,
     serialize_grouping_for_db,
     virtual_category_id,
+    xtream_local_channels_parent_category,
 )
 
 
@@ -163,6 +165,12 @@ class TestEffectiveGrouping:
 class TestVirtualCategoryId:
     def test_slug_format(self):
         assert virtual_category_id("Los Angeles", "DMA:") == "tag:dma:los_angeles"
+
+    def test_local_channels_parent(self):
+        parent = xtream_local_channels_parent_category()
+        assert parent["category_id"] == XTREAM_LOCAL_CHANNELS_PARENT_ID
+        assert parent["category_name"] == "Local Channels"
+        assert parent["parent_id"] == 0
 
 
 class TestBuildVirtualCategoryMap:

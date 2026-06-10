@@ -20,6 +20,10 @@ PRESET_DMA = {
     "display": DISPLAY_STRIP_PREFIX_TITLE,
 }
 
+# Xtream-only parent folder for tag-derived market/local categories (M3U stays flat).
+XTREAM_LOCAL_CHANNELS_PARENT_ID = "tag:parent:local_channels"
+XTREAM_LOCAL_CHANNELS_PARENT_NAME = "Local Channels"
+
 
 @dataclass(frozen=True)
 class CategoryTagGrouping:
@@ -181,6 +185,15 @@ def resolve_output_category(
 
     tag, prefix = match
     return format_tag_value(tag, prefix, grouping.display, facility=facility)
+
+
+def xtream_local_channels_parent_category() -> dict:
+    """Virtual Xtream parent category for nested tag-based groups."""
+    return {
+        "category_id": XTREAM_LOCAL_CHANNELS_PARENT_ID,
+        "category_name": XTREAM_LOCAL_CHANNELS_PARENT_NAME,
+        "parent_id": 0,
+    }
 
 
 def virtual_category_id(category_name: str, prefix: str = "") -> str:

@@ -308,9 +308,14 @@ class TestXtreamPlayerAPI:
             data = response.json
             names = {item["category_name"] for item in data}
             assert "Chicago" in names
+            assert "Local Channels" in names
             assert "Test Category" in names
 
+            parent = next(item for item in data if item["category_name"] == "Local Channels")
+            assert parent["parent_id"] == 0
+
             tag_cat = next(item for item in data if item["category_name"] == "Chicago")
+            assert tag_cat["parent_id"] == parent["category_id"]
             streams_response = client.get(
                 "/player_api.php",
                 query_string={
