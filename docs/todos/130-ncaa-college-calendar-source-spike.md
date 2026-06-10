@@ -174,7 +174,7 @@ Sections:
 - **Architecture:** [ncaa-college-calendar-source-spike.md](../architecture/ncaa-college-calendar-source-spike.md)
 - **Fixtures:** `tests/ppv/fixtures/spike/flo_spike_sample_channels.json`, `tests/ppv/fixtures/sofascore/ice_hockey_2025-10-*.json`
 - **Probe script:** `scripts/spike/ncaa_college_calendar_probe.py`
-- PR: *(pending)*
+- PR: [#82](https://github.com/klopstack/iptv-proxy-v2/pull/82)
 
 ## Non-goals
 
