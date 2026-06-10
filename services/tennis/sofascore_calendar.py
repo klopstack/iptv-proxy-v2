@@ -18,8 +18,8 @@ from services.ppv.calendar_providers.sofascore import (
     parse_tennis_scheduled_events,
     scheduled_event_to_calendar_event,
 )
-from services.ppv.calendar_providers.sofascore.client import http_get as _http_get
 from services.ppv.calendar_providers.sofascore.client import fetch_scheduled_events_http as _fetch_scheduled_events_http
+from services.ppv.calendar_providers.sofascore.client import http_get as _http_get
 
 __all__ = [
     "EVENT_SOURCE_SOFASCORE",

@@ -8,10 +8,7 @@ from typing import Any, Dict, List, Optional
 import requests
 
 from services.ppv.calendar_providers.sofascore import client, registry
-from services.ppv.calendar_providers.sofascore.constants import (
-    EVENT_SOURCE_SOFASCORE,
-    MIN_REQUEST_INTERVAL_SECONDS,
-)
+from services.ppv.calendar_providers.sofascore.constants import EVENT_SOURCE_SOFASCORE, MIN_REQUEST_INTERVAL_SECONDS
 from services.ppv.calendar_providers.sofascore.dedup import (
     filter_without_espn_duplicates,
     filter_without_tsdb_duplicates,
