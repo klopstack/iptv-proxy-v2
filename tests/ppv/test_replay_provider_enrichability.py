@@ -41,11 +41,15 @@ class TestReplayProviderDetection:
 
 
 class TestFloEnrichability:
-    @pytest.mark.parametrize("row", json.loads(FLOSP_FIXTURE.read_text(encoding="utf-8"))["channels"], ids=lambda r: r["id"])
+    @pytest.mark.parametrize(
+        "row", json.loads(FLOSP_FIXTURE.read_text(encoding="utf-8"))["channels"], ids=lambda r: r["id"]
+    )
     def test_flosp_channels_enrichable_not_stale_archive(self, row):
         assert classify_ppv_enrichment(row["channel"]) is None
 
-    @pytest.mark.parametrize("row", json.loads(FLOSP_FIXTURE.read_text(encoding="utf-8"))["channels"], ids=lambda r: r["id"])
+    @pytest.mark.parametrize(
+        "row", json.loads(FLOSP_FIXTURE.read_text(encoding="utf-8"))["channels"], ids=lambda r: r["id"]
+    )
     def test_flosp_extraction_tags_replay_archive(self, row):
         extraction = PPVEventExtractor().extract_all(row["channel"])
         assert extraction.get("replay_archive") is True
@@ -53,7 +57,9 @@ class TestFloEnrichability:
         assert extraction.get("competitors")
         assert extraction.get("date") is not None
 
-    @pytest.mark.parametrize("row", json.loads(FLOSP_FIXTURE.read_text(encoding="utf-8"))["channels"], ids=lambda r: r["id"])
+    @pytest.mark.parametrize(
+        "row", json.loads(FLOSP_FIXTURE.read_text(encoding="utf-8"))["channels"], ids=lambda r: r["id"]
+    )
     def test_flosp_date_parsing(self, row):
         extraction = PPVEventExtractor().extract_all(row["channel"])
         expected = datetime.fromisoformat(row["expect_date"])
