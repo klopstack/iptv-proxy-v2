@@ -164,6 +164,28 @@
                             Fills wheelchair, ITF, and other tennis gaps. Re-run enrichment after changing.
                         </div>
                     </div>
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="ppv-sofascore-football-enabled">
+                            <label class="form-check-label" for="ppv-sofascore-football-enabled">
+                                <strong>SofaScore football calendar</strong>
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            Adds soccer fixtures when TheSportsDB coverage is incomplete (e.g. World Cup). Default on.
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="ppv-sofascore-college-enabled">
+                            <label class="form-check-label" for="ppv-sofascore-college-enabled">
+                                <strong>SofaScore college / minor hockey calendar</strong>
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            AHL, OHL, QMJHL, and ECHL fixtures for Flo replay archive channels. Re-run enrichment after changing.
+                        </div>
+                    </div>
                     <hr class="my-3">
                     <p class="text-muted small mb-2">
                         <strong>LLM description generation.</strong> Optionally generate short EPG descriptions
@@ -632,6 +654,10 @@ async function loadPpvEnrichmentConfig() {
         document.getElementById('ppv-enrichment-enabled').checked = data.enabled !== false;
         document.getElementById('ppv-sofascore-calendar-enabled').checked =
             data.sofascore_calendar_enabled === true;
+        document.getElementById('ppv-sofascore-football-enabled').checked =
+            data.sofascore_football_enabled !== false;
+        document.getElementById('ppv-sofascore-college-enabled').checked =
+            data.sofascore_college_enabled === true;
         if (data.has_api_key && data.api_key_preview) {
             hintEl.textContent =
                 `Current key: ${data.api_key_preview}. Leave the field blank to keep it; enter a new value to replace, or use Clear API key.`;
@@ -667,6 +693,8 @@ document.getElementById('ppv-enrichment-config-form').addEventListener('submit',
     const originalText = submitBtn.innerHTML;
     const enabled = document.getElementById('ppv-enrichment-enabled').checked;
     const sofascoreCalendarEnabled = document.getElementById('ppv-sofascore-calendar-enabled').checked;
+    const sofascoreFootballEnabled = document.getElementById('ppv-sofascore-football-enabled').checked;
+    const sofascoreCollegeEnabled = document.getElementById('ppv-sofascore-college-enabled').checked;
     const apiKeyInput = document.getElementById('ppv-thesportsdb-api-key');
     const apiKeyRaw = apiKeyInput.value;
     const siteUsernameInput = document.getElementById('ppv-thesportsdb-site-username');
@@ -679,7 +707,12 @@ document.getElementById('ppv-enrichment-config-form').addEventListener('submit',
     statusEl.style.display = 'none';
 
     try {
-        const payload = { enabled, sofascoreCalendarEnabled };
+        const payload = {
+            enabled,
+            sofascoreCalendarEnabled,
+            sofascoreFootballEnabled,
+            sofascoreCollegeEnabled,
+        };
         if (apiKeyRaw.length > 0) {
             payload.apiKey = apiKeyRaw.trim();
         }

@@ -47,6 +47,8 @@ export async function fetchPpvEnrichmentConfig() {
  *   siteUsername?: string,
  *   sitePassword?: string,
  *   sofascoreCalendarEnabled?: boolean,
+ *   sofascoreFootballEnabled?: boolean,
+ *   sofascoreCollegeEnabled?: boolean,
  * }} options
  * Pass apiKey only when setting or clearing the key (empty string clears).
  * @returns {Promise<{ message: string }>}
@@ -57,6 +59,8 @@ export async function savePpvEnrichmentConfig({
     siteUsername,
     sitePassword,
     sofascoreCalendarEnabled,
+    sofascoreFootballEnabled,
+    sofascoreCollegeEnabled,
 } = {}) {
     const body = {};
     if (enabled !== undefined) {
@@ -73,6 +77,12 @@ export async function savePpvEnrichmentConfig({
     }
     if (sofascoreCalendarEnabled !== undefined) {
         body.sofascore_calendar_enabled = sofascoreCalendarEnabled;
+    }
+    if (sofascoreFootballEnabled !== undefined) {
+        body.sofascore_football_enabled = sofascoreFootballEnabled;
+    }
+    if (sofascoreCollegeEnabled !== undefined) {
+        body.sofascore_college_enabled = sofascoreCollegeEnabled;
     }
 
     const response = await fetch(PPV_ENRICHMENT_CONFIG_URL, {

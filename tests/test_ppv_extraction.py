@@ -378,6 +378,13 @@ class TestPPVEventExtractor:
         result = self.extractor._clean_team_name("Team Name 123")
         assert result == "Team Name"
 
+    def test_clean_team_name_trailing_home_away(self):
+        """Flo venue suffixes must not remain on extracted team names."""
+        result = self.extractor._clean_team_name("San Diego Gulls Home")
+        assert result == "San Diego Gulls"
+        result = self.extractor._clean_team_name("Colorado Eagles Away")
+        assert result == "Colorado Eagles"
+
     def test_clean_team_name_whitespace(self):
         """Test normalization of whitespace"""
         result = self.extractor._clean_team_name("  Team   A  ")
