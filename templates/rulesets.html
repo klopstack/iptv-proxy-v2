@@ -321,6 +321,23 @@
                         <div id="playlist-excluded-tags"></div>
                         <small class="form-text text-muted">Type to search and click to add tags. Channels with any of these tags will be excluded.</small>
                     </div>
+                    <div class="mb-3">
+                        <label for="playlist-category-grouping-mode" class="form-label">Category Grouping</label>
+                        <select class="form-select" id="playlist-category-grouping-mode">
+                            <option value="inherit">Use account default</option>
+                            <option value="off">Off (provider categories)</option>
+                            <option value="dma">Group by DMA (markets)</option>
+                            <option value="custom">Custom tag prefixes</option>
+                        </select>
+                        <small class="form-text text-muted">
+                            Controls M3U <code>group-title</code> and Xtream categories. Tag filters above choose which channels appear; grouping chooses how they are labeled.
+                        </small>
+                    </div>
+                    <div class="mb-3" id="playlist-category-prefixes-row" style="display: none;">
+                        <label for="playlist-category-prefixes" class="form-label">Custom Prefixes</label>
+                        <input type="text" class="form-control" id="playlist-category-prefixes"
+                               placeholder="e.g. DMA:, NETWORK:">
+                    </div>
                     <div id="playlistValidationError" class="alert alert-danger" style="display: none;" role="alert">
                         <i class="bi bi-exclamation-triangle-fill"></i>
                         <span id="playlistValidationMessage"></span>
@@ -1454,6 +1471,7 @@ async function editPlaylist(id) {
         
         (playlist.include_tags || []).filter(tag => tag !== null && tag !== '').forEach(tag => requiredTagSelector.addTag(tag));
         (playlist.exclude_tags || []).filter(tag => tag !== null && tag !== '').forEach(tag => excludedTagSelector.addTag(tag));
+        setPlaylistCategoryGroupingForm(playlist.category_tag_grouping);
         
         new bootstrap.Modal(document.getElementById('playlistModal')).show();
         
@@ -1487,6 +1505,40 @@ async function deletePlaylist(id, name) {
 let requiredTagSelector = null;
 let excludedTagSelector = null;
 
+function playlistCategoryGroupingPreset(grouping) {
+    if (grouping === null || grouping === undefined) return 'inherit';
+    if (!grouping.enabled) return 'off';
+    const prefixes = (grouping.prefixes || []).map(p => p.toUpperCase());
+    if (prefixes.length === 1 && prefixes[0] === 'DMA:') return 'dma';
+    return 'custom';
+}
+
+function playlistCategoryGroupingFromForm() {
+    const mode = document.getElementById('playlist-category-grouping-mode').value;
+    if (mode === 'inherit') return null;
+    if (mode === 'off') return { enabled: false };
+    if (mode === 'dma') {
+        return { enabled: true, prefixes: ['DMA:'], display: 'strip_prefix_title' };
+    }
+    const prefixes = document.getElementById('playlist-category-prefixes').value
+        .split(',').map(s => s.trim()).filter(Boolean);
+    return { enabled: true, prefixes, display: 'strip_prefix_title' };
+}
+
+function updatePlaylistCategoryGroupingUi() {
+    const mode = document.getElementById('playlist-category-grouping-mode').value;
+    const row = document.getElementById('playlist-category-prefixes-row');
+    row.style.display = mode === 'custom' ? 'block' : 'none';
+}
+
+function setPlaylistCategoryGroupingForm(grouping) {
+    const preset = playlistCategoryGroupingPreset(grouping);
+    document.getElementById('playlist-category-grouping-mode').value = preset;
+    document.getElementById('playlist-category-prefixes').value =
+        preset === 'custom' ? (grouping.prefixes || []).join(', ') : '';
+    updatePlaylistCategoryGroupingUi();
+}
+
 function initPlaylistTagSelectors() {
     if (requiredTagSelector) return; // Already initialized
     
@@ -1513,6 +1565,7 @@ function showCreatePlaylistModal() {
     document.getElementById('playlist-id').value = '';
     document.getElementById('playlist-tag-mode').value = 'all';  // Default to 'all' for new playlists
     document.getElementById('playlistValidationError').style.display = 'none';
+    setPlaylistCategoryGroupingForm(null);
     
     // Initialize tag selectors if needed
     initPlaylistTagSelectors();
@@ -1566,7 +1619,8 @@ async function savePlaylist() {
         include_accounts: accountId ? [parseInt(accountId)] : [],
         include_tags: requiredTags,
         exclude_tags: excludedTags,
-        tag_match_mode: tagMatchMode
+        tag_match_mode: tagMatchMode,
+        category_tag_grouping: playlistCategoryGroupingFromForm(),
     };
     
     try {
@@ -1622,6 +1676,11 @@ async function savePlaylist() {
 
 // Initialize event listeners after DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+    const groupingMode = document.getElementById('playlist-category-grouping-mode');
+    if (groupingMode) {
+        groupingMode.addEventListener('change', updatePlaylistCategoryGroupingUi);
+    }
+
     // Static button listeners
     const cleanupOrphanTagsBtn = document.getElementById('cleanup-orphan-tags-btn');
     if (cleanupOrphanTagsBtn) {

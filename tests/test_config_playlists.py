@@ -470,3 +470,41 @@ def test_config_playlist_single_account_no_account_in_group(client, test_account
     assert 'group-title="Sports"' in playlist
     assert 'group-title="Movies"' in playlist
     assert "(Account 1)" not in playlist
+
+
+def test_config_playlist_dma_category_grouping(client, test_accounts_with_channels):
+    """DMA tag grouping overrides provider category in M3U group-title."""
+    with client.application.app_context():
+        data = test_accounts_with_channels
+        account = db.session.get(Account, data["account1"].id)
+        account.category_tag_grouping = json.dumps(
+            {"enabled": True, "prefixes": ["DMA:"], "display": "strip_prefix_title"}
+        )
+
+        dma_tag = Tag(name="DMA:LOS ANGELES")
+        db.session.add(dma_tag)
+        db.session.flush()
+        db.session.add(ChannelTag(account_id=data["account1"].id, stream_id="ch1", tag_id=dma_tag.id))
+
+        config = PlaylistConfig(
+            name="DMA Locals",
+            include_accounts=json.dumps([data["account1"].id]),
+            exclude_accounts="[]",
+            include_tags="[]",
+            exclude_tags="[]",
+            category_tag_grouping=json.dumps({"enabled": True, "prefixes": ["DMA:"], "display": "strip_prefix_title"}),
+            enabled=True,
+        )
+        db.session.add(config)
+        db.session.commit()
+        config_slug = config.slug
+
+        reloaded = db.session.get(Account, data["account1"].id)
+        assert reloaded.category_tag_grouping is not None
+        tags = db.session.query(ChannelTag).filter_by(account_id=data["account1"].id, stream_id="ch1").all()
+        assert len(tags) == 1
+
+    response = client.get(f"/playlist/config/{config_slug}.m3u?proxy_icons=false")
+    assert response.status_code == 200
+    playlist = response.data.decode("utf-8")
+    assert 'group-title="Los Angeles"' in playlist

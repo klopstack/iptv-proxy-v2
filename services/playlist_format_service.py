@@ -5,6 +5,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from models import Account, Channel
+from services.category_tag_service import effective_grouping, grouping_needs_fcc_facility, resolve_output_category
 from services.channel_query_service import ChannelQueryService
 from services.datetime_utils import resolve_ppv_rename_timezone, to_display_timezone
 from services.image_cache_service import ImageCacheService
@@ -217,6 +218,26 @@ def _build_channel_fcc_map(channels: List[Channel]) -> Dict[int, Any]:
     }
 
 
+def _output_category_name(
+    channel: Channel,
+    *,
+    tags: List[str],
+    account: Optional[Account] = None,
+    playlist_config: Any = None,
+    fcc_facility: Any = None,
+) -> str:
+    """Resolve M3U/Xtream category from tags with provider fallback."""
+    return sanitize_m3u_value(
+        resolve_output_category(
+            channel,
+            tags,
+            account=account,
+            playlist_config=playlist_config,
+            facility=fcc_facility,
+        )
+    )
+
+
 def _ppv_group_title(category_name: str, *, channel: Channel, event: Any, account: Optional[Account]) -> str:
     """Return 'Live', 'Replay', or the original category name for grouped PPV channels."""
     if not account or account.ppv_visibility != PPVVisibilityService.GROUP_LIVE_REPLAY or not channel.is_ppv:
@@ -316,19 +337,27 @@ def render_account_m3u_playlist(
         username = cred.username
         password = cred.password
 
-    # Pre-fetch event and FCC data to avoid per-channel queries
+    # Pre-fetch event, FCC, and tag data to avoid per-channel queries
+    grouping = effective_grouping(account)
     needs_event_map = bool(
         account.ppv_rename_format or account.ppv_visibility == PPVVisibilityService.GROUP_LIVE_REPLAY
     )
-    needs_fcc_map = bool(account.fcc_rename_format)
+    needs_fcc_map = bool(account.fcc_rename_format) or grouping_needs_fcc_facility(grouping)
     event_map = _build_channel_event_map(channels) if needs_event_map else {}
     fcc_map = _build_channel_fcc_map(channels) if needs_fcc_map else {}
+    tags_map = ChannelQueryService.load_tags_for_channels(channels) if grouping else {}
 
     m3u_lines = ["#EXTM3U"]
     for channel in channels:
         event = event_map.get(channel.id) if needs_event_map else None
         fcc_facility = fcc_map.get(channel.id) if needs_fcc_map else None
-        _, category_name, _ = _channel_display_fields(channel, event=event, fcc_facility=fcc_facility, account=account)
+        tags = tags_map.get((channel.account_id, channel.stream_id), [])
+        category_name = _output_category_name(
+            channel,
+            tags=tags,
+            account=account,
+            fcc_facility=fcc_facility,
+        )
         category_name = _ppv_group_title(category_name, channel=channel, event=event, account=account)
         m3u_lines.extend(
             _format_channel_lines(
@@ -359,6 +388,7 @@ def render_config_m3u_playlist(
     proxy_base: str,
     use_proxy: bool,
     proxy_icons: bool,
+    playlist_config: Any = None,
 ) -> str:
     """Build #EXTM3U body for a multi-account playlist configuration."""
     from models import Account as AccountModel
@@ -379,11 +409,20 @@ def render_config_m3u_playlist(
         aid = d["account_data"]["id"]
         channels_by_account.setdefault(aid, []).append(d["channel"])
 
+    all_channels = [d["channel"] for d in channel_data]
+    config_grouping = effective_grouping(None, playlist_config) if playlist_config else None
+    tags_map = (
+        ChannelQueryService.load_tags_for_channels(all_channels)
+        if config_grouping or any(effective_grouping(accounts_by_id.get(d["account_data"]["id"])) for d in channel_data)
+        else {}
+    )
+
     for aid, acc_channels in channels_by_account.items():
         acc = accounts_by_id.get(aid)
+        acc_grouping = effective_grouping(acc, playlist_config)
         if acc and (acc.ppv_rename_format or acc.ppv_visibility == PPVVisibilityService.GROUP_LIVE_REPLAY):
             event_maps[aid] = _build_channel_event_map(acc_channels)
-        if acc and acc.fcc_rename_format:
+        if acc and (acc.fcc_rename_format or grouping_needs_fcc_facility(acc_grouping)):
             fcc_maps[aid] = _build_channel_fcc_map(acc_channels)
 
     m3u_lines = ["#EXTM3U", f"# Playlist: {config_name}"]
@@ -399,7 +438,14 @@ def render_config_m3u_playlist(
         event = event_maps.get(aid, {}).get(channel.id)
         fcc_facility = fcc_maps.get(aid, {}).get(channel.id)
 
-        _, category_name, _ = _channel_display_fields(channel, event=event, fcc_facility=fcc_facility, account=acc)
+        tags = tags_map.get((channel.account_id, channel.stream_id), [])
+        category_name = _output_category_name(
+            channel,
+            tags=tags,
+            account=acc,
+            playlist_config=playlist_config,
+            fcc_facility=fcc_facility,
+        )
         category_name = _ppv_group_title(category_name, channel=channel, event=event, account=acc)
 
         if multi_account:

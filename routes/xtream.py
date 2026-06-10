@@ -10,10 +10,12 @@ from flask import Blueprint, jsonify, redirect, request
 
 from error_handling import handle_errors, handle_xml_errors
 from models import Account, PlaylistConfig, XtreamCredential, db
+from services.category_tag_service import build_virtual_category_map, effective_grouping, grouping_needs_fcc_facility
 from services.channel_query_service import ChannelQueryService
 from services.datetime_utils import serialize_utc_iso
 from services.image_cache_service import ImageCacheService
 from services.playlist_format_service import (
+    _build_channel_fcc_map,
     build_channel_display_maps,
     channel_display_name,
     load_accounts_for_channels,
@@ -168,6 +170,42 @@ def _build_ppv_grouping(channels, account=None):
                 "event": service.get_linked_event(channel),
             }
     return grouped
+
+
+def _build_tag_virtual_categories(channels, account=None, playlist_config=None):
+    """Build tag-based virtual category assignments for Xtream output."""
+    if not channels:
+        return {}, {}
+
+    accounts_by_id = load_accounts_for_channels(channels, account=account)
+    needs_tags = any(effective_grouping(accounts_by_id.get(ch.account_id), playlist_config) for ch in channels)
+    if not needs_tags:
+        return {}, {}
+
+    tags_map = ChannelQueryService.load_tags_for_channels(channels)
+    needs_fcc = any(
+        grouping_needs_fcc_facility(effective_grouping(accounts_by_id.get(ch.account_id), playlist_config))
+        for ch in channels
+    )
+    fcc_map = _build_channel_fcc_map(channels) if needs_fcc else {}
+
+    channel_map = build_virtual_category_map(
+        channels,
+        tags_map,
+        accounts_by_id=accounts_by_id,
+        playlist_config=playlist_config,
+        facilities_by_channel_id=fcc_map,
+    )
+
+    tag_categories = {}
+    for info in channel_map.values():
+        tag_categories[info["category_id"]] = info["category_name"]
+
+    return channel_map, tag_categories
+
+
+def _is_tag_virtual_category_id(category_id):
+    return bool(category_id and str(category_id).startswith("tag:"))
 
 
 def _sort_grouped_ppv_channels(channels, grouped_ppv, category_id):
@@ -327,13 +365,14 @@ def get_live_categories(xtream_cred, account, playlist_config):
     """
     channels = get_channels_for_credential(xtream_cred, account, playlist_config)
     grouped_ppv = _build_ppv_grouping(channels, account=account)
+    tag_channel_map, tag_categories = _build_tag_virtual_categories(channels, account, playlist_config)
 
     # Group channels by category
     category_ids = set()
     category_map = {}
     ppv_category_ids = set()
     for ch in channels:
-        if ch.id in grouped_ppv:
+        if ch.id in grouped_ppv or ch.id in tag_channel_map:
             continue
         if ch.category:
             category_ids.add(ch.category.id)
@@ -374,6 +413,15 @@ def get_live_categories(xtream_cred, account, playlist_config):
             }
         )
 
+    for tag_cat_id, tag_cat_name in sorted(tag_categories.items(), key=lambda item: item[1].lower()):
+        categories.append(
+            {
+                "category_id": tag_cat_id,
+                "category_name": tag_cat_name,
+                "parent_id": 0,
+            }
+        )
+
     # Add all categories (PPV categories will have parent_id: -1)
     for cat_id in sorted(category_ids):
         cat = category_map[cat_id]
@@ -403,6 +451,7 @@ def get_live_streams(xtream_cred, account, playlist_config):
     category_id = request.args.get("category_id")
     channels = get_channels_for_credential(xtream_cred, account, playlist_config)
     grouped_ppv = _build_ppv_grouping(channels, account=account)
+    tag_channel_map, _tag_categories = _build_tag_virtual_categories(channels, account, playlist_config)
 
     # Filter by category if requested
     if category_id:
@@ -414,12 +463,22 @@ def get_live_streams(xtream_cred, account, playlist_config):
             channels = [
                 ch
                 for ch in channels
-                if ch.id not in grouped_ppv and ch.category and is_ppv_category(ch.category.category_name)
+                if ch.id not in grouped_ppv
+                and ch.id not in tag_channel_map
+                and ch.category
+                and is_ppv_category(ch.category.category_name)
             ]
+        elif _is_tag_virtual_category_id(category_id):
+            channels = [ch for ch in channels if tag_channel_map.get(ch.id, {}).get("category_id") == category_id]
         else:
             # Regular category - return channels in that category
             channels = [
-                ch for ch in channels if ch.id not in grouped_ppv and ch.category and str(ch.category.id) == category_id
+                ch
+                for ch in channels
+                if ch.id not in grouped_ppv
+                and ch.id not in tag_channel_map
+                and ch.category
+                and str(ch.category.id) == category_id
             ]
 
     # Get proxy base URL
@@ -456,6 +515,7 @@ def get_live_streams(xtream_cred, account, playlist_config):
             "epg_channel_id": ChannelQueryService.epg_channel_id_for_channel(ch),
             "added": str(_utc_unix_timestamp(ch.created_at)) if ch.created_at else "",
             "category_id": grouped_ppv.get(ch.id, {}).get("category_id")
+            or tag_channel_map.get(ch.id, {}).get("category_id")
             or (str(ch.category.id) if ch.category else "0"),
             "custom_sid": "",
             "tv_archive": 0,

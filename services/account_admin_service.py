@@ -17,6 +17,7 @@ from services.account_epg_source_service import (
     upsert_account_xmltv_epg_source,
 )
 from services.cache_service import cache_service
+from services.category_tag_service import serialize_grouping_for_api
 from services.channel_query_service import ChannelQueryService
 from services.connection_manager import ConnectionManager
 from services.datetime_utils import serialize_utc_iso
@@ -61,6 +62,7 @@ class AccountAdminService:
                 "ppv_rename_format": account.ppv_rename_format,
                 "ppv_rename_timezone": account.ppv_rename_timezone,
                 "fcc_rename_format": account.fcc_rename_format,
+                "category_tag_grouping": serialize_grouping_for_api(account.category_tag_grouping),
                 "credentials": [serialize_credential(c) for c in list(account.credentials)],
                 "total_max_connections": account.get_total_max_connections(),
                 "channel_count": channel_count_map.get(account.id, 0),

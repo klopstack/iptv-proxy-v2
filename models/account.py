@@ -36,6 +36,9 @@ class Account(db.Model):  # type: ignore[name-defined]
     # FCC template tokens: {network}, {callsign}, {broadcast_channel}, {market}
     fcc_rename_format = db.Column(db.Text, nullable=True)
 
+    # Tag-based output category grouping (JSON): prefixes like DMA:, display mode, enabled flag
+    category_tag_grouping = db.Column(db.Text, nullable=True)
+
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at = db.Column(
         db.DateTime,
@@ -154,6 +157,9 @@ class PlaylistConfig(db.Model):  # type: ignore[name-defined]
     # Ordered ISO 639-1 language codes for PPV feed disambiguation (JSON array text)
     preferred_languages = db.Column(db.Text, default='["en"]')
     language_fallback = db.Column(db.String(20), default="unknown")  # unknown, hide, show_all
+
+    # Tag-based output category grouping override (JSON); null = use each channel's account setting
+    category_tag_grouping = db.Column(db.Text, nullable=True)
 
     enabled = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
