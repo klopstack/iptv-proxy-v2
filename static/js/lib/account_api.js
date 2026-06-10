@@ -67,13 +67,15 @@ export async function fetchPpvVisibilityOptions() {
 /**
  * @param {number|string} accountId
  * @param {string} ppvVisibility
- * @returns {Promise<{ id: number, ppv_visibility: string }>}
+ * @param {{ ppv_show_replay?: boolean, ppv_show_historical?: boolean }} [options]
+ * @returns {Promise<{ id: number, ppv_visibility: string, ppv_show_replay?: boolean, ppv_show_historical?: boolean }>}
  */
-export async function updateAccountPpvVisibility(accountId, ppvVisibility) {
+export async function updateAccountPpvVisibility(accountId, ppvVisibility, options = {}) {
+    const body = { ppv_visibility: ppvVisibility, ...options };
     const response = await fetch(accountPpvVisibilityUrl(accountId), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ppv_visibility: ppvVisibility }),
+        body: JSON.stringify(body),
     });
 
     if (!response.ok) {

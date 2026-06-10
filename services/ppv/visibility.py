@@ -8,7 +8,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from models import Event, EventChannelLink, db
-from services.ppv.constants import FAR_FUTURE_VISIBILITY_DAYS, get_sport_grace_hours
+from services.ppv.constants import FAR_FUTURE_VISIBILITY_DAYS, PPV_HISTORICAL_THRESHOLD_DAYS, get_sport_grace_hours
 from services.ppv.detection import is_generic_channel_name, is_ppv_placeholder_name
 from services.ppv.extraction import PPVEventExtractor
 
@@ -26,6 +26,13 @@ class PPVVisibilityService:
 
     PPV_GROUP_LIVE = "live"
     PPV_GROUP_REPLAY = "replay"
+    PPV_GROUP_HISTORICAL = "historical"
+
+    PPV_GROUP_DISPLAY_TITLES = {
+        PPV_GROUP_LIVE: "PPV - Live",
+        PPV_GROUP_REPLAY: "PPV - Replay",
+        PPV_GROUP_HISTORICAL: "PPV - Historical",
+    }
 
     VALID_MODES = [HIDE_ALL, HIDE_INACTIVE, GROUP_LIVE_REPLAY, SHOW_ALL]
 
@@ -68,7 +75,10 @@ class PPVVisibilityService:
             # Use event extractor to determine if channel has an active event
             return self._is_ppv_active(channel)
         elif self.ppv_visibility == self.GROUP_LIVE_REPLAY:
-            return self.classify_live_replay_channel(channel) is not None
+            classification = self.classify_live_replay_channel(channel)
+            if classification is None:
+                return False
+            return self._is_ppv_group_enabled(classification)
         elif self.ppv_visibility == self.SHOW_ALL:
             # Show all PPV channels
             return True
@@ -76,8 +86,23 @@ class PPVVisibilityService:
             # Unknown mode - default to hiding inactive
             return self._is_ppv_active(channel)
 
+    def _is_ppv_group_enabled(self, classification):
+        """Return True when a virtual PPV group is visible for this account (Live always shown)."""
+        if classification == self.PPV_GROUP_LIVE:
+            return True
+        if classification == self.PPV_GROUP_REPLAY:
+            return getattr(self.account, "ppv_show_replay", True)
+        if classification == self.PPV_GROUP_HISTORICAL:
+            return getattr(self.account, "ppv_show_historical", True)
+        return False
+
+    @classmethod
+    def ppv_group_display_title(cls, classification):
+        """Return the M3U/Xtream group title for a PPV bucket key."""
+        return cls.PPV_GROUP_DISPLAY_TITLES.get(classification, classification)
+
     def classify_live_replay_channel(self, channel, current_time=None):
-        """Classify a PPV channel as 'live', 'replay', or None for Live/Replay grouping."""
+        """Classify a PPV channel as live, replay, historical, or None for grouped output."""
         if not channel.is_ppv:
             return None
 
@@ -86,7 +111,7 @@ class PPVVisibilityService:
 
     @classmethod
     def classify_live_replay_event(cls, event, current_time=None):
-        """Classify an event as 'live', 'replay', or None using a 24-hour Live window."""
+        """Classify an event as live, replay, historical, or None using 24h Live + age split."""
         if not event or event.status == Event.STATUS_CANCELLED:
             return None
 
@@ -98,6 +123,9 @@ class PPVVisibilityService:
         if not event.scheduled_at:
             return None
         if event.scheduled_at < current_time:
+            age = current_time - event.scheduled_at
+            if age > timedelta(days=PPV_HISTORICAL_THRESHOLD_DAYS):
+                return cls.PPV_GROUP_HISTORICAL
             return cls.PPV_GROUP_REPLAY
         if event.scheduled_at <= live_cutoff:
             return cls.PPV_GROUP_LIVE
@@ -262,7 +290,10 @@ class PPVVisibilityService:
             PPVVisibilityService.GROUP_LIVE_REPLAY: {
                 "value": PPVVisibilityService.GROUP_LIVE_REPLAY,
                 "label": "Group PPV as Live/Replay",
-                "description": "Hide PPV categories and group events into Live (next 24 hours) and Replay",
+                "description": (
+                    "Hide PPV categories and group events into PPV - Live (next 24 hours), "
+                    "PPV - Replay (recent past), and PPV - Historical (archive)"
+                ),
             },
             PPVVisibilityService.SHOW_ALL: {
                 "value": PPVVisibilityService.SHOW_ALL,

@@ -240,6 +240,28 @@ Forces specific event channels to be marked as PPV.
 
 See [docs/API_REFERENCE.md](docs/API_REFERENCE.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed documentation.
 
+### Tag-Based Category Grouping
+
+Beyond filtering channels by tags, you can use tags to set M3U `group-title` and Xtream categories:
+
+1. **Enrich channels** with FCC tags (e.g. `DMA:LOS ANGELES`) on the Stations page
+2. **Enable grouping** per account (Stations → Tag-Based Category Grouping) or per playlist config (Tags & Rulesets → playlist editor)
+3. **Optional tag playlist** to include only certain markets; grouping labels each channel by its DMA
+
+**Presets:**
+- **Off** — use provider categories (default)
+- **By DMA** — `{ "enabled": true, "prefixes": ["DMA:"], "display": "strip_prefix_title" }`
+- **Custom** — ordered prefix list (first match wins), e.g. `NETWORK:` then `DMA:`
+
+Account setting applies to single-account M3U and Xtream credentials. Playlist configs can override grouping for combined playlists.
+
+On Xtream (e.g. TiviMate), tag-grouped categories are nested under a **Local Channels** parent; M3U `group-title` remains flat per market. FCC-matched channels without a Nielsen DMA are grouped by licensed city name instead of their provider category.
+
+```bash
+PUT /api/accounts/<id>/category-tag-grouping
+{ "category_tag_grouping": { "enabled": true, "prefixes": ["DMA:"], "display": "strip_prefix_title" } }
+```
+
 ## API Reference
 
 ### Accounts

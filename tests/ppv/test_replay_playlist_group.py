@@ -51,7 +51,7 @@ class TestFloReplayPlaylistGroup:
             db.session.commit()
 
             service = PPVVisibilityService(account)
-            assert service.classify_live_replay_channel(channel) == PPVVisibilityService.PPV_GROUP_REPLAY
+            assert service.classify_live_replay_channel(channel) == PPVVisibilityService.PPV_GROUP_HISTORICAL
 
             with app.test_request_context("/"):
                 m3u = render_account_m3u_playlist(
@@ -62,7 +62,8 @@ class TestFloReplayPlaylistGroup:
                     proxy_icons=False,
                     primary_cred=None,
                 )
-            assert 'group-title="Replay"' in m3u
+            assert 'group-title="PPV - Historical"' in m3u
+            assert 'group-title="PPV - Replay"' not in m3u
             assert channel.name in m3u
 
     def test_recent_live_event_stays_live_group(self, app):

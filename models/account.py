@@ -27,6 +27,9 @@ class Account(db.Model):  # type: ignore[name-defined]
 
     # PPV visibility settings: 'hide_all' | 'hide_inactive' (default) | 'group_live_replay' | 'show_all'
     ppv_visibility = db.Column(db.String(20), default="hide_inactive", nullable=False)
+    # Per-group toggles for group_live_replay mode (Live always shown)
+    ppv_show_replay = db.Column(db.Boolean, default=True, nullable=False)
+    ppv_show_historical = db.Column(db.Boolean, default=True, nullable=False)
 
     # Channel rename format templates (None = use original cleaned_name)
     # PPV template tokens: {league}, {sport}, {home_team}, {away_team}, {start_time}, {date}
@@ -35,6 +38,9 @@ class Account(db.Model):  # type: ignore[name-defined]
     ppv_rename_timezone = db.Column(db.String(50), nullable=True)
     # FCC template tokens: {network}, {callsign}, {broadcast_channel}, {market}
     fcc_rename_format = db.Column(db.Text, nullable=True)
+
+    # Tag-based output category grouping (JSON): prefixes like DMA:, display mode, enabled flag
+    category_tag_grouping = db.Column(db.Text, nullable=True)
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at = db.Column(
@@ -154,6 +160,9 @@ class PlaylistConfig(db.Model):  # type: ignore[name-defined]
     # Ordered ISO 639-1 language codes for PPV feed disambiguation (JSON array text)
     preferred_languages = db.Column(db.Text, default='["en"]')
     language_fallback = db.Column(db.String(20), default="unknown")  # unknown, hide, show_all
+
+    # Tag-based output category grouping override (JSON); null = use each channel's account setting
+    category_tag_grouping = db.Column(db.Text, nullable=True)
 
     enabled = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))

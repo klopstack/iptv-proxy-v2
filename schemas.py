@@ -257,6 +257,26 @@ class AccountRuleSetAssignSchema(Schema):
 
 
 # ============================================================================
+# Category tag grouping Schemas
+# ============================================================================
+
+CATEGORY_TAG_DISPLAY_MODES = ("strip_prefix_title", "as_tag")
+
+
+class CategoryTagGroupingSchema(Schema):
+    """Schema for tag-based output category grouping settings."""
+
+    enabled = fields.Bool(load_default=False)
+    prefixes = fields.List(fields.Str(validate=lambda x: 1 <= len(x) <= 50), load_default=[])
+    display = fields.Str(validate=lambda x: x in CATEGORY_TAG_DISPLAY_MODES, load_default="strip_prefix_title")
+
+    @validates_schema
+    def validate_prefixes_when_enabled(self, data, **kwargs):
+        if data.get("enabled") and not data.get("prefixes"):
+            raise ValidationError({"prefixes": ["At least one prefix is required when grouping is enabled"]})
+
+
+# ============================================================================
 # PlaylistConfig Schemas
 # ============================================================================
 
@@ -289,6 +309,7 @@ class PlaylistConfigCreateSchema(Schema):
     include_tags = fields.List(fields.Str(validate=lambda x: 1 <= len(x) <= 100), load_default=[])
     exclude_tags = fields.List(fields.Str(validate=lambda x: 1 <= len(x) <= 100), load_default=[])
     tag_match_mode = fields.Str(validate=lambda x: x in ("all", "any"), load_default="all")
+    category_tag_grouping = fields.Nested(CategoryTagGroupingSchema, allow_none=True, load_default=None)
 
     @validates_schema
     def validate_accounts(self, data, **kwargs):
@@ -311,9 +332,16 @@ class PlaylistConfigUpdateSchema(Schema):
     include_tags = fields.List(fields.Str(validate=lambda x: 1 <= len(x) <= 100))
     exclude_tags = fields.List(fields.Str(validate=lambda x: 1 <= len(x) <= 100))
     tag_match_mode = fields.Str(validate=lambda x: x in ("all", "any"))
+    category_tag_grouping = fields.Nested(CategoryTagGroupingSchema, allow_none=True)
 
     class Meta:
         unknown = EXCLUDE
+
+
+class CategoryTagGroupingUpdateSchema(Schema):
+    """Schema for updating account category tag grouping."""
+
+    category_tag_grouping = fields.Nested(CategoryTagGroupingSchema, allow_none=True, required=True)
 
 
 # ============================================================================

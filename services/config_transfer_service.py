@@ -33,6 +33,7 @@ from models import (
     db,
 )
 from services.cache_service import cache_service
+from services.category_tag_service import serialize_grouping_for_api, serialize_grouping_for_db
 from services.epg.match_rules import clear_fcc_pattern_cache
 from services.serializers.epg_match import (
     serialize_epg_channel_name_mapping,
@@ -96,6 +97,7 @@ def _serialize_account(account: Account) -> dict[str, Any]:
         "ppv_rename_format": account.ppv_rename_format,
         "ppv_rename_timezone": account.ppv_rename_timezone,
         "fcc_rename_format": account.fcc_rename_format,
+        "category_tag_grouping": serialize_grouping_for_api(account.category_tag_grouping),
     }
 
 
@@ -127,6 +129,7 @@ def _resolve_account(
         ppv_rename_format=payload.get("ppv_rename_format"),
         ppv_rename_timezone=payload.get("ppv_rename_timezone"),
         fcc_rename_format=payload.get("fcc_rename_format"),
+        category_tag_grouping=serialize_grouping_for_db(payload.get("category_tag_grouping")),
     )
     db.session.add(account)
     db.session.flush()
@@ -323,6 +326,8 @@ class ConfigTransferService:
                 account.ppv_rename_format = account_data.get("ppv_rename_format", account.ppv_rename_format)
                 account.ppv_rename_timezone = account_data.get("ppv_rename_timezone", account.ppv_rename_timezone)
                 account.fcc_rename_format = account_data.get("fcc_rename_format", account.fcc_rename_format)
+                if "category_tag_grouping" in account_data:
+                    account.category_tag_grouping = serialize_grouping_for_db(account_data.get("category_tag_grouping"))
                 stats["accounts"]["updated"] += 1
                 continue
 
@@ -336,6 +341,7 @@ class ConfigTransferService:
                     ppv_rename_format=account_data.get("ppv_rename_format"),
                     ppv_rename_timezone=account_data.get("ppv_rename_timezone"),
                     fcc_rename_format=account_data.get("fcc_rename_format"),
+                    category_tag_grouping=serialize_grouping_for_db(account_data.get("category_tag_grouping")),
                 )
             )
             stats["accounts"]["created"] += 1

@@ -11,6 +11,7 @@ from models import Account, Channel, ChannelTag, Credential, Filter, Tag, db
 from schemas import (
     AccountCreateSchema,
     AccountUpdateSchema,
+    CategoryTagGroupingUpdateSchema,
     CredentialCreateSchema,
     CredentialUpdateSchema,
     validate_request_data,
@@ -23,6 +24,7 @@ from services.account_epg_source_service import (
     upsert_account_xmltv_epg_source,
 )
 from services.cache_service import cache_service
+from services.category_tag_service import resolve_output_category
 from services.channel_query_service import ChannelQueryService
 from services.connection_manager import ConnectionManager
 from services.datetime_utils import DEFAULT_DISPLAY_TIMEZONE, serialize_utc_iso
@@ -157,13 +159,15 @@ def update_ppv_visibility(account_id):
 
     Request body:
     {
-        "ppv_visibility": "hide_all" | "hide_inactive" | "group_live_replay" | "show_all"
+        "ppv_visibility": "hide_all" | "hide_inactive" | "group_live_replay" | "show_all",
+        "ppv_show_replay": true,      // optional, group_live_replay only
+        "ppv_show_historical": true   // optional, group_live_replay only
     }
     """
     account = Account.query.get_or_404(account_id)
-    data = request.get_json()
+    data = request.get_json() or {}
 
-    ppv_visibility = data.get("ppv_visibility", "hide_inactive")
+    ppv_visibility = data.get("ppv_visibility", account.ppv_visibility)
 
     # Validate the value
     from services.ppv.visibility import PPVVisibilityService
@@ -175,9 +179,22 @@ def update_ppv_visibility(account_id):
         )
 
     account.ppv_visibility = ppv_visibility
+
+    if "ppv_show_replay" in data:
+        account.ppv_show_replay = bool(data["ppv_show_replay"])
+    if "ppv_show_historical" in data:
+        account.ppv_show_historical = bool(data["ppv_show_historical"])
+
     db.session.commit()
 
-    return jsonify({"id": account.id, "ppv_visibility": account.ppv_visibility})
+    return jsonify(
+        {
+            "id": account.id,
+            "ppv_visibility": account.ppv_visibility,
+            "ppv_show_replay": account.ppv_show_replay,
+            "ppv_show_historical": account.ppv_show_historical,
+        }
+    )
 
 
 @accounts_bp.route("/api/ppv-visibility-options", methods=["GET"])
@@ -256,6 +273,34 @@ def update_fcc_rename_format(account_id):
     cache_service.clear_account_cache(account_id)
 
     return jsonify({"id": account.id, "fcc_rename_format": account.fcc_rename_format})
+
+
+@accounts_bp.route("/api/accounts/<int:account_id>/category-tag-grouping", methods=["PUT"])
+@validate_request_data(CategoryTagGroupingUpdateSchema)
+def update_category_tag_grouping(account_id):
+    """Update tag-based output category grouping for an account.
+
+    Request body:
+    {
+        "category_tag_grouping": {"enabled": true, "prefixes": ["DMA:"], "display": "strip_prefix_title"}
+    }
+
+    Set category_tag_grouping to null to disable.
+    """
+    from services.category_tag_service import serialize_grouping_for_api, serialize_grouping_for_db
+
+    account = Account.query.get_or_404(account_id)
+    data = request.validated_data
+    account.category_tag_grouping = serialize_grouping_for_db(data.get("category_tag_grouping"))
+    db.session.commit()
+    cache_service.clear_account_cache(account_id)
+
+    return jsonify(
+        {
+            "id": account.id,
+            "category_tag_grouping": serialize_grouping_for_api(account.category_tag_grouping),
+        }
+    )
 
 
 @accounts_bp.route("/api/accounts/<int:account_id>", methods=["DELETE"])
@@ -664,7 +709,7 @@ def preview_account_playlist(account_id):
     Returns:
     - JSON with total count, channel data, and using_database flag
     """
-    Account.query.get_or_404(account_id)
+    account = Account.query.get_or_404(account_id)
 
     # Parse tag filter
     tags_param = request.args.get("tags", "")
@@ -706,6 +751,9 @@ def preview_account_playlist(account_id):
         all_channels = ChannelQueryService.channels_for_account_candidates(account_id, all_channels)
 
         tags_map = ChannelQueryService.load_tags_for_account_channels(account_id, all_channels)
+        from services.playlist_format_service import _build_channel_fcc_map
+
+        fcc_map = _build_channel_fcc_map(all_channels)
 
         # Initialize image cache for proxying icons
         from services.image_cache_service import ImageCacheService
@@ -722,6 +770,12 @@ def preview_account_playlist(account_id):
                 "name": ch.name,
                 "cleaned_name": ch.cleaned_name if ch.cleaned_name is not None else ch.name,
                 "category": ch.category.cleaned_name or ch.category.category_name if ch.category else "Uncategorized",
+                "output_category": resolve_output_category(
+                    ch,
+                    tags_map.get(ch.stream_id, []),
+                    account=account,
+                    facility=fcc_map.get(ch.id),
+                ),
                 "category_id": ch.category_id,
                 "icon": image_cache.get_proxy_url(ch.stream_icon, proxy_base) if ch.stream_icon else None,
                 "is_visible": True,
@@ -765,6 +819,9 @@ def preview_account_playlist(account_id):
         )
 
         tags_map = ChannelQueryService.load_tags_for_account_channels(account_id, channels)
+        from services.playlist_format_service import _build_channel_fcc_map
+
+        fcc_map = _build_channel_fcc_map(channels)
 
         # Initialize image cache for proxying icons
         from services.image_cache_service import ImageCacheService
@@ -787,6 +844,12 @@ def preview_account_playlist(account_id):
                         "category": ch.category.cleaned_name or ch.category.category_name
                         if ch.category
                         else "Uncategorized",
+                        "output_category": resolve_output_category(
+                            ch,
+                            tags_map.get(ch.stream_id, []),
+                            account=account,
+                            facility=fcc_map.get(ch.id),
+                        ),
                         "category_id": ch.category_id,
                         "icon": image_cache.get_proxy_url(ch.stream_icon, proxy_base) if ch.stream_icon else None,
                         "is_visible": True,  # Legacy field; all channels here are playlist-visible

@@ -49,7 +49,7 @@
                             <ul class="mb-0 mt-2">
                                 <li><strong>Hide All PPV:</strong> Don't show any pay-per-view channels in playlists</li>
                                 <li><strong>Hide Inactive PPV:</strong> Show only upcoming/active PPV events, hide past events (default)</li>
-                                <li><strong>Group PPV as Live/Replay:</strong> Hide PPV categories and group events into Live (next 24 hours) and Replay</li>
+                                <li><strong>Group PPV as Live/Replay:</strong> Hide PPV categories and group events into PPV - Live (next 24 hours), PPV - Replay (recent past), and PPV - Historical (archive). Replay and Historical groups can be toggled per account below.</li>
                                 <li><strong>Show All PPV:</strong> Show all pay-per-view channels including inactive ones</li>
                             </ul>
                         </div>
@@ -422,6 +422,10 @@ async function loadAccountsVisibility() {
         let html = '<div class="list-group">';
 
         for (const account of accounts) {
+            previewState.accounts[account.id] = account;
+            const showGroupToggles = account.ppv_visibility === 'group_live_replay';
+            const replayChecked = account.ppv_show_replay !== false ? 'checked' : '';
+            const historicalChecked = account.ppv_show_historical !== false ? 'checked' : '';
             html += `
                 <div class="list-group-item">
                     <div class="row align-items-center">
@@ -441,6 +445,19 @@ async function loadAccountsVisibility() {
 
             html += `
                             </select>
+                            <div class="ppv-group-toggles mt-2 ${showGroupToggles ? '' : 'd-none'}" data-account-id="${account.id}">
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input ppv-show-replay" type="checkbox"
+                                        id="ppv-show-replay-${account.id}" data-account-id="${account.id}" ${replayChecked}>
+                                    <label class="form-check-label" for="ppv-show-replay-${account.id}">Show PPV - Replay</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input ppv-show-historical" type="checkbox"
+                                        id="ppv-show-historical-${account.id}" data-account-id="${account.id}" ${historicalChecked}>
+                                    <label class="form-check-label" for="ppv-show-historical-${account.id}">Show PPV - Historical</label>
+                                </div>
+                                <div class="form-text">Live is always shown in grouped mode.</div>
+                            </div>
                         </div>
                         <div class="col-md-3">
                             <small class="text-muted visibility-status-${account.id}"></small>
@@ -462,6 +479,10 @@ async function loadAccountsVisibility() {
                 previewState.accountId = select.dataset.accountId;
             });
         });
+
+        document.querySelectorAll('.ppv-show-replay, .ppv-show-historical').forEach((checkbox) => {
+            checkbox.addEventListener('change', handleGroupToggleChange);
+        });
     } catch (error) {
         console.error('Error loading accounts visibility:', error);
         document.getElementById('accounts-visibility-list').innerHTML =
@@ -474,6 +495,7 @@ async function handleVisibilityChange(e) {
     const accountId = select.dataset.accountId;
     const newVisibility = select.value;
     const statusEl = document.querySelector(`.visibility-status-${accountId}`);
+    const togglesEl = document.querySelector(`.ppv-group-toggles[data-account-id="${accountId}"]`);
 
     document.getElementById('preview-account-select').value = accountId;
     previewState.accountId = accountId;
@@ -481,15 +503,52 @@ async function handleVisibilityChange(e) {
         previewState.accounts[accountId].ppv_visibility = newVisibility;
     }
 
+    if (togglesEl) {
+        togglesEl.classList.toggle('d-none', newVisibility !== 'group_live_replay');
+    }
+
     try {
         statusEl.innerHTML = '<i class="bi bi-hourglass-split"></i> Saving...';
-        await window.AccountApi.updateAccountPpvVisibility(accountId, newVisibility);
+        const toggleOptions = {};
+        if (newVisibility === 'group_live_replay') {
+            toggleOptions.ppv_show_replay = document.querySelector(`#ppv-show-replay-${accountId}`)?.checked ?? true;
+            toggleOptions.ppv_show_historical = document.querySelector(`#ppv-show-historical-${accountId}`)?.checked ?? true;
+        }
+        await window.AccountApi.updateAccountPpvVisibility(accountId, newVisibility, toggleOptions);
         statusEl.innerHTML = '<i class="bi bi-check-circle text-success"></i> Saved';
         setTimeout(() => { statusEl.innerHTML = ''; }, 2000);
         renderPreviewTable();
     } catch (error) {
         statusEl.innerHTML = '<i class="bi bi-exclamation-triangle text-danger"></i> Error';
         console.error('Error updating visibility:', error);
+    }
+}
+
+async function handleGroupToggleChange(e) {
+    const accountId = e.target.dataset.accountId;
+    const statusEl = document.querySelector(`.visibility-status-${accountId}`);
+    const account = previewState.accounts[accountId];
+    if (!account || account.ppv_visibility !== 'group_live_replay') {
+        return;
+    }
+
+    const ppv_show_replay = document.querySelector(`#ppv-show-replay-${accountId}`)?.checked ?? true;
+    const ppv_show_historical = document.querySelector(`#ppv-show-historical-${accountId}`)?.checked ?? true;
+    account.ppv_show_replay = ppv_show_replay;
+    account.ppv_show_historical = ppv_show_historical;
+
+    try {
+        statusEl.innerHTML = '<i class="bi bi-hourglass-split"></i> Saving...';
+        await window.AccountApi.updateAccountPpvVisibility(accountId, 'group_live_replay', {
+            ppv_show_replay,
+            ppv_show_historical,
+        });
+        statusEl.innerHTML = '<i class="bi bi-check-circle text-success"></i> Saved';
+        setTimeout(() => { statusEl.innerHTML = ''; }, 2000);
+        renderPreviewTable();
+    } catch (error) {
+        statusEl.innerHTML = '<i class="bi bi-exclamation-triangle text-danger"></i> Error';
+        console.error('Error updating group toggles:', error);
     }
 }
 

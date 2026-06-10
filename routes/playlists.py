@@ -16,11 +16,16 @@ from schemas import (
     check_playlist_filter_overlap,
     validate_request_data,
 )
+from services.category_tag_service import resolve_output_category, serialize_grouping_for_api, serialize_grouping_for_db
 from services.channel_query_service import ChannelQueryService
 from services.epg.generation import generate_epg_for_channels
 from services.image_cache_service import ImageCacheService
 from services.playlist_config_service import assign_slug, get_playlist_config_by_slug
-from services.playlist_format_service import render_account_m3u_playlist, render_config_m3u_playlist
+from services.playlist_format_service import (
+    _build_channel_fcc_map,
+    render_account_m3u_playlist,
+    render_config_m3u_playlist,
+)
 from services.url_service import get_proxy_base_url
 
 logger = logging.getLogger(__name__)
@@ -52,6 +57,7 @@ def playlist_to_dict(c):
         "include_tags": lists["include_tags"],
         "exclude_tags": lists["exclude_tags"],
         "tag_match_mode": c.tag_match_mode,
+        "category_tag_grouping": serialize_grouping_for_api(c.category_tag_grouping),
         "enabled": c.enabled,
     }
 
@@ -95,6 +101,7 @@ def create_playlist_config():
         include_tags=json.dumps(data.get("include_tags", [])),
         exclude_tags=json.dumps(data.get("exclude_tags", [])),
         tag_match_mode=data.get("tag_match_mode", "any"),
+        category_tag_grouping=serialize_grouping_for_db(data.get("category_tag_grouping")),
         enabled=data.get("enabled", True),
     )
 
@@ -152,6 +159,8 @@ def update_playlist_config(config_id):
         config.exclude_tags = json.dumps(data["exclude_tags"])
     if "tag_match_mode" in data:
         config.tag_match_mode = data["tag_match_mode"]
+    if "category_tag_grouping" in data:
+        config.category_tag_grouping = serialize_grouping_for_db(data["category_tag_grouping"])
     if "enabled" in data:
         config.enabled = data["enabled"]
 
@@ -203,15 +212,25 @@ def preview_playlist_config(config_id):
     total = len(channels)
     paginated = channels[offset : offset + limit]
 
+    account_by_id = {account.id: account for account in accounts}
     account_names = {account.id: account.name for account in accounts}
     tags_map = ChannelQueryService.load_tags_for_channels(paginated)
+    fcc_map = _build_channel_fcc_map(paginated)
 
     image_cache = ImageCacheService.get_instance()
     proxy_base = f"{request.scheme}://{request.host}"
 
     preview_channels = []
     for channel in paginated:
-        tag_names = sorted(tags_map.get((channel.account_id, channel.stream_id), set()))
+        tag_names = sorted(tags_map.get((channel.account_id, channel.stream_id), []))
+        account = account_by_id.get(channel.account_id)
+        output_category = resolve_output_category(
+            channel,
+            tag_names,
+            account=account,
+            playlist_config=config,
+            facility=fcc_map.get(channel.id),
+        )
         preview_channels.append(
             {
                 "account_id": channel.account_id,
@@ -220,6 +239,7 @@ def preview_playlist_config(config_id):
                 "original_name": channel.name,
                 "cleaned_name": channel.cleaned_name if channel.cleaned_name is not None else channel.name,
                 "category": channel.category.cleaned_name or channel.category.category_name if channel.category else "",
+                "output_category": output_category,
                 "tags": tag_names,
                 "icon": image_cache.get_proxy_url(channel.stream_icon, proxy_base) if channel.stream_icon else "",
             }
@@ -394,6 +414,7 @@ def _generate_playlist_from_config(config):
         proxy_base=proxy_base,
         use_proxy=use_proxy,
         proxy_icons=proxy_icons,
+        playlist_config=config,
     )
 
     logger.info(
