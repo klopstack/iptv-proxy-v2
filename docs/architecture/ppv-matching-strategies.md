@@ -132,3 +132,4 @@ flowchart LR
 
 - 54, 56, 58, 65 — implementation
 - 63 — integration tests with real matcher + fixtures
+- [134](../todos/134-ppv-historical-category-and-visibility-toggles.md) — **PPV - Live/Replay/Historical** playlist grouping when `group_live_replay`

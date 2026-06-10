@@ -15,9 +15,9 @@ Open work only. Completed waves **1–10** (PRs #10–51) and **Wave 12** (PRs #
 | Dashboard follow-ups | 107–110 | **0** | 107–109 ✅; [110](./110-dashboard-optional-ux-follow-ups.md) won't do |
 | Wave 11 — PostgreSQL | 111–119 | **9** | Series A + Series B |
 | Wave 12 — PPV matching | 120–126, 123 | **0** | ✅ complete June 2026; 123 A/B in review [#62](https://github.com/klopstack/iptv-proxy-v2/pull/62)/[#63](https://github.com/klopstack/iptv-proxy-v2/pull/63) |
-| Wave 13 — PPV follow-ups | 127–131, 133 | **3** | 127–128 ✅; 129 Track B; 131 college wire; 133 P0 WC ops |
+| Wave 13 — PPV follow-ups | 127–131, 133, 134 | **4** | 127–128 ✅; 129 Track B; 131 college wire; 133 P0 WC ops |
 | Wave 14 — Admin UX | 132 | **0** | ✅ [#71](https://github.com/klopstack/iptv-proxy-v2/pull/71) |
-| **Total required** | | **12** | 111–119, 129 Track B, 131, 133 P0 ops |
+| **Total required** | | **13** | 111–119, 129 Track B, 131, 133 P0 ops, 134|
 
 Waves **1–10** ✅ — see [archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-waves-1-10.md).  
 **Wave 12** ✅ — see [§ Wave 12 complete](#wave-12--ppv-production-matching-gaps--complete-june-2026) below.
@@ -111,12 +111,13 @@ Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMA
 |-------|------|-------|
 | **AK** | [128](./128-fix-ppv-year-inference-recent-past-dates.md) | `@ Jun N` recent-past year — 332 tennis channels skipped as `far_future` |
 | **AJ** | [127](./127-ppv-multi-player-competitor-extraction.md) | 2v2 name parsing + `competitors_match_event` + matcher validation |
-| **AL** | [129](./129-ppv-replay-archive-enrichment-flosp.md) | Flo/FLSP archive replays → enrich + **Replay** playlist group |
+| **AL** | [129](./129-ppv-replay-archive-enrichment-flosp.md) | Flo/FLSP archive replays → enrich + **PPV - Replay/Historical** groups |
 | **AM** | [130](./130-ncaa-college-calendar-source-spike.md) | ✅ Spike: hybrid SofaScore `ice-hockey` + Sportsipy `ncaab` — [architecture](../architecture/ncaa-college-calendar-source-spike.md) |
 | **AN** | [131](./131-sofascore-college-amateur-calendar-provider.md) | ✅ SofaScore ice-hockey + Sportsipy ncaab + `REPLAY_CALENDAR_DAYS_BACK` |
 | **AO** | [133](./133-sofascore-multi-sport-refactor-and-football-followups.md) | Generic SofaScore provider refactor; PR #74 WC football ops + soccer follow-ups |
+| **AP** | [134](./134-ppv-historical-category-and-visibility-toggles.md) | **PPV - Live/Replay/Historical** titles; `/ppv` Replay+Historical toggles; refine stale_archive → Historical |
 
-**Order:** **128** ✅ + tennis requeue; PR **#74** deploy + **124** WC requeue; **133 refactor** ✅ before **131** ✅; **130 spike** ✅; **129 Track B** next; **127** ✅.
+**Order:** **128** ✅ + tennis requeue; PR **#74** deploy + **124** WC requeue; **133 refactor** ✅ before **131** ✅; **130 spike** ✅; **129 Track B** next; **127** ✅; **134** with or after **129 Track C** (titles + Historical); **127** after calendar + 128 (doubles need fixtures).
 
 **Prerequisites:** [122](./122-tennis-calendar-event-source.md) / [126](./126-sofascore-calendar-multi-sport-and-enrichment.md) ✅; [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) requeue after deploy.
 
@@ -124,7 +125,8 @@ Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMA
 
 - [128](./128-fix-ppv-year-inference-recent-past-dates.md) — `@ Jun 3` parsed as 2027 on production; tennis never reaches matcher.
 - [127](./127-ppv-multi-player-competitor-extraction.md) — ~89 unique doubles keys — [tennis-ppv-production-audit.md](../architecture/tennis-ppv-production-audit.md) §4.
-- [129](./129-ppv-replay-archive-enrichment-flosp.md) — **243** Flo channels (~72% of 339 queued tail); product intent is replay enrichment, not `stale_archive` skip.
+- [129](./129-ppv-replay-archive-enrichment-flosp.md) — **243** Flo channels (~72% of 339 queued tail); product intent is replay enrichment, not `stale_archive` skip; playlist buckets → [134](./134-ppv-historical-category-and-visibility-toggles.md).
+- [134](./134-ppv-historical-category-and-visibility-toggles.md) — virtual **PPV - *** categories; long-past streamable replays → Historical (21-day threshold); `/ppv` toggles.
 - [130](./130-ncaa-college-calendar-source-spike.md) / [131](./131-sofascore-college-amateur-calendar-provider.md) — calendar gap for Oct 2025 college/hockey; ±14-day SofaScore window blocks historical replay fetch.
 - [133](./133-sofascore-multi-sport-refactor-and-football-followups.md) — PR #74 football lives in `services/tennis/sofascore_calendar.py`; refactor unblocks 131 and future slugs.
 
