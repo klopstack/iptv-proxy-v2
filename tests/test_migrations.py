@@ -97,7 +97,7 @@ class TestAlembicMigrations:
             conn = sqlite3.connect(path)
             head = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
             conn.close()
-            assert head == "6e7d8c9b0a1f"
+            assert head == "b2c3d4e5f6a7"
         finally:
             for suffix in ("", "-wal", "-shm"):
                 p = Path(f"{path}{suffix}")

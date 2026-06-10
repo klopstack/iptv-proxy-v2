@@ -32,6 +32,7 @@ from services.ppv.ordering import (
     PPV_HISTORICAL_CATEGORY_ID,
     PPV_LIVE_CATEGORY_ID,
     PPV_REPLAY_CATEGORY_ID,
+    PPV_UNMATCHED_LIVE_CATEGORY_ID,
     build_ppv_grouping,
     reorder_grouped_ppv_in_channel_list,
 )
@@ -384,6 +385,17 @@ def get_live_categories(xtream_cred, account, playlist_config):
             }
         )
 
+    if any(data["category_id"] == PPV_UNMATCHED_LIVE_CATEGORY_ID for data in grouped_ppv.values()):
+        categories.append(
+            {
+                "category_id": PPV_UNMATCHED_LIVE_CATEGORY_ID,
+                "category_name": PPVVisibilityService.ppv_group_display_title(
+                    PPVVisibilityService.PPV_GROUP_UNMATCHED_LIVE
+                ),
+                "parent_id": ppv_events_parent_id,
+            }
+        )
+
     # Add virtual PPV Events parent category if there are non-grouped PPV categories
     if ppv_category_ids:
         categories.append(
@@ -439,7 +451,12 @@ def get_live_streams(xtream_cred, account, playlist_config):
 
     # Filter by category if requested
     if category_id:
-        if category_id in (PPV_LIVE_CATEGORY_ID, PPV_REPLAY_CATEGORY_ID, PPV_HISTORICAL_CATEGORY_ID):
+        if category_id in (
+            PPV_LIVE_CATEGORY_ID,
+            PPV_REPLAY_CATEGORY_ID,
+            PPV_HISTORICAL_CATEGORY_ID,
+            PPV_UNMATCHED_LIVE_CATEGORY_ID,
+        ):
             channels = [ch for ch in channels if grouped_ppv.get(ch.id, {}).get("category_id") == category_id]
         elif category_id == PPV_EVENTS_CATEGORY_ID:
             if grouped_ppv:

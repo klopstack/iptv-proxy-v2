@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from models import Event, EventChannelLink, db
 from services.ppv.constants import FAR_FUTURE_VISIBILITY_DAYS, PPV_HISTORICAL_THRESHOLD_DAYS, get_sport_grace_hours
 from services.ppv.detection import is_generic_channel_name, is_ppv_placeholder_name
+from services.ppv.enrichability import classify_ppv_enrichment
 from services.ppv.extraction import PPVEventExtractor
 
 logger = logging.getLogger(__name__)
@@ -27,11 +28,13 @@ class PPVVisibilityService:
     PPV_GROUP_LIVE = "live"
     PPV_GROUP_REPLAY = "replay"
     PPV_GROUP_HISTORICAL = "historical"
+    PPV_GROUP_UNMATCHED_LIVE = "unmatched_live"
 
     PPV_GROUP_DISPLAY_TITLES = {
         PPV_GROUP_LIVE: "PPV - Live",
         PPV_GROUP_REPLAY: "PPV - Replay",
         PPV_GROUP_HISTORICAL: "PPV - Historical",
+        PPV_GROUP_UNMATCHED_LIVE: "PPV - Unmatched Live",
     }
 
     VALID_MODES = [HIDE_ALL, HIDE_INACTIVE, GROUP_LIVE_REPLAY, SHOW_ALL]
@@ -94,6 +97,8 @@ class PPVVisibilityService:
             return getattr(self.account, "ppv_show_replay", True)
         if classification == self.PPV_GROUP_HISTORICAL:
             return getattr(self.account, "ppv_show_historical", True)
+        if classification == self.PPV_GROUP_UNMATCHED_LIVE:
+            return getattr(self.account, "ppv_show_unmatched_live", True)
         return False
 
     @classmethod
@@ -102,12 +107,64 @@ class PPVVisibilityService:
         return cls.PPV_GROUP_DISPLAY_TITLES.get(classification, classification)
 
     def classify_live_replay_channel(self, channel, current_time=None):
-        """Classify a PPV channel as live, replay, historical, or None for grouped output."""
+        """Classify a PPV channel for grouped output (linked event or unmatched-live bucket)."""
         if not channel.is_ppv:
             return None
 
         event = self.get_linked_event(channel)
-        return self.classify_live_replay_event(event, current_time=current_time)
+        if event:
+            return self.classify_live_replay_event(event, current_time=current_time)
+        return self.classify_unmatched_live_channel(channel, current_time=current_time)
+
+    @classmethod
+    def classify_unmatched_live_channel(cls, channel, current_time=None):
+        """Classify an unmatched PPV channel that looks like a live/upcoming event."""
+        if not channel.is_ppv or getattr(channel, "ppv_enrichment_status", None) != "no_match":
+            return None
+
+        channel_name = channel.name
+        if not channel_name:
+            return None
+
+        extraction = PPVEventExtractor().extract_all(channel_name)
+        if classify_ppv_enrichment(channel_name, extraction=extraction):
+            return None
+
+        if not extraction.get("competitors"):
+            return None
+
+        event_date = extraction.get("date")
+        if not isinstance(event_date, datetime):
+            return None
+
+        current_time = current_time or datetime.now(timezone.utc).replace(tzinfo=None)
+        naive_date = event_date.replace(tzinfo=None)
+        live_cutoff = current_time + timedelta(hours=24)
+
+        if naive_date >= current_time and naive_date <= live_cutoff:
+            return cls.PPV_GROUP_UNMATCHED_LIVE
+
+        if naive_date < current_time:
+            stop_time = PPVEventExtractor.extract_stop_time(channel_name)
+            if stop_time is not None and current_time < stop_time.replace(tzinfo=None):
+                return cls.PPV_GROUP_UNMATCHED_LIVE
+
+            grace_hours = get_sport_grace_hours(extraction.get("sport"))
+            if current_time < naive_date + timedelta(hours=grace_hours):
+                return cls.PPV_GROUP_UNMATCHED_LIVE
+
+        return None
+
+    @classmethod
+    def unmatched_live_scheduled_at(cls, channel):
+        """Return extracted event datetime for unmatched-live ordering, if any."""
+        if not channel.name:
+            return None
+        extraction = PPVEventExtractor().extract_all(channel.name)
+        event_date = extraction.get("date")
+        if isinstance(event_date, datetime):
+            return event_date.replace(tzinfo=None)
+        return None
 
     @classmethod
     def classify_live_replay_event(cls, event, current_time=None):
@@ -302,7 +359,8 @@ class PPVVisibilityService:
                 "label": "Group PPV as Live/Replay",
                 "description": (
                     "Hide PPV categories and group events into PPV - Live (next 24 hours), "
-                    "PPV - Replay (recent past), and PPV - Historical (archive)"
+                    "PPV - Replay (recent past), PPV - Historical (archive), and "
+                    "PPV - Unmatched Live (calendar-unconfirmed events)"
                 ),
             },
             PPVVisibilityService.SHOW_ALL: {

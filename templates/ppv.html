@@ -426,6 +426,7 @@ async function loadAccountsVisibility() {
             const showGroupToggles = account.ppv_visibility === 'group_live_replay';
             const replayChecked = account.ppv_show_replay !== false ? 'checked' : '';
             const historicalChecked = account.ppv_show_historical !== false ? 'checked' : '';
+            const unmatchedLiveChecked = account.ppv_show_unmatched_live !== false ? 'checked' : '';
             html += `
                 <div class="list-group-item">
                     <div class="row align-items-center">
@@ -456,6 +457,11 @@ async function loadAccountsVisibility() {
                                         id="ppv-show-historical-${account.id}" data-account-id="${account.id}" ${historicalChecked}>
                                     <label class="form-check-label" for="ppv-show-historical-${account.id}">Show PPV - Historical</label>
                                 </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input ppv-show-unmatched-live" type="checkbox"
+                                        id="ppv-show-unmatched-live-${account.id}" data-account-id="${account.id}" ${unmatchedLiveChecked}>
+                                    <label class="form-check-label" for="ppv-show-unmatched-live-${account.id}">Show PPV - Unmatched Live</label>
+                                </div>
                                 <div class="form-text">Live is always shown in grouped mode.</div>
                             </div>
                         </div>
@@ -480,7 +486,7 @@ async function loadAccountsVisibility() {
             });
         });
 
-        document.querySelectorAll('.ppv-show-replay, .ppv-show-historical').forEach((checkbox) => {
+        document.querySelectorAll('.ppv-show-replay, .ppv-show-historical, .ppv-show-unmatched-live').forEach((checkbox) => {
             checkbox.addEventListener('change', handleGroupToggleChange);
         });
     } catch (error) {
@@ -513,6 +519,7 @@ async function handleVisibilityChange(e) {
         if (newVisibility === 'group_live_replay') {
             toggleOptions.ppv_show_replay = document.querySelector(`#ppv-show-replay-${accountId}`)?.checked ?? true;
             toggleOptions.ppv_show_historical = document.querySelector(`#ppv-show-historical-${accountId}`)?.checked ?? true;
+            toggleOptions.ppv_show_unmatched_live = document.querySelector(`#ppv-show-unmatched-live-${accountId}`)?.checked ?? true;
         }
         await window.AccountApi.updateAccountPpvVisibility(accountId, newVisibility, toggleOptions);
         statusEl.innerHTML = '<i class="bi bi-check-circle text-success"></i> Saved';
@@ -534,14 +541,17 @@ async function handleGroupToggleChange(e) {
 
     const ppv_show_replay = document.querySelector(`#ppv-show-replay-${accountId}`)?.checked ?? true;
     const ppv_show_historical = document.querySelector(`#ppv-show-historical-${accountId}`)?.checked ?? true;
+    const ppv_show_unmatched_live = document.querySelector(`#ppv-show-unmatched-live-${accountId}`)?.checked ?? true;
     account.ppv_show_replay = ppv_show_replay;
     account.ppv_show_historical = ppv_show_historical;
+    account.ppv_show_unmatched_live = ppv_show_unmatched_live;
 
     try {
         statusEl.innerHTML = '<i class="bi bi-hourglass-split"></i> Saving...';
         await window.AccountApi.updateAccountPpvVisibility(accountId, 'group_live_replay', {
             ppv_show_replay,
             ppv_show_historical,
+            ppv_show_unmatched_live,
         });
         statusEl.innerHTML = '<i class="bi bi-check-circle text-success"></i> Saved';
         setTimeout(() => { statusEl.innerHTML = ''; }, 2000);

@@ -61,6 +61,8 @@ Rationale:
 
 Extend `classify_live_replay_event` (or successor) to return `PPV_GROUP_HISTORICAL = "historical"` when past age exceeds threshold. Unmatched channels under `group_live_replay` remain hidden (`None`) unless product decides otherwise.
 
+**Update (2026-06):** Added fourth bucket **`PPV - Unmatched Live`** (`-13`) for `no_match` channels with enrichable extraction (competitors + date in live window). Toggle: `ppv_show_unmatched_live` (default true). See PR for classification rules.
+
 **Enrichability reconciliation:** `stale_archive` skip ([123](./123-extended-calendar-coverage-college-obscure-sports.md) Track D) applies only to **non-enrichable** archive noise (e.g. ESPN Play with no replay provider tag). **Enrichable** providers ([129](./129-ppv-replay-archive-enrichment-flosp.md)) must never be skipped solely for age — classify into Historical after match.
 
 ### 3. PPV Management visibility toggles

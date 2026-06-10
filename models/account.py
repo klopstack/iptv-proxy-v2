@@ -30,6 +30,7 @@ class Account(db.Model):  # type: ignore[name-defined]
     # Per-group toggles for group_live_replay mode (Live always shown)
     ppv_show_replay = db.Column(db.Boolean, default=True, nullable=False)
     ppv_show_historical = db.Column(db.Boolean, default=True, nullable=False)
+    ppv_show_unmatched_live = db.Column(db.Boolean, default=True, nullable=False)
 
     # Channel rename format templates (None = use original cleaned_name)
     # PPV template tokens: {league}, {sport}, {home_team}, {away_team}, {start_time}, {date}
