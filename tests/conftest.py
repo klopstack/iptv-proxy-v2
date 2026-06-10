@@ -80,33 +80,59 @@ def _ensure_pg_worker_schema(engine) -> None:
             conn.execute(text(f'GRANT ALL ON SCHEMA "{schema}" TO "{db_user}"'))
 
 
-def _set_pg_search_path(dbapi_conn, _connection_record) -> None:
+def _pg_search_path_sql() -> str | None:
+    """Worker schema only — never fall back to public (avoids xdist TRUNCATE deadlocks)."""
     schema = _pg_worker_schema()
     if not schema:
+        return None
+    return f'SET search_path TO "{schema}"'
+
+
+def _set_pg_search_path(dbapi_conn, _connection_record) -> None:
+    sql = _pg_search_path_sql()
+    if not sql:
         return
     cursor = dbapi_conn.cursor()
-    cursor.execute(f'SET search_path TO "{schema}", public')
+    cursor.execute(sql)
     cursor.close()
 
 
 def _pg_connection(conn):
     """Apply per-worker search_path on a SQLAlchemy connection."""
-    schema = _pg_worker_schema()
-    if schema:
-        conn.execute(text(f'SET search_path TO "{schema}", public'))
+    sql = _pg_search_path_sql()
+    if sql:
+        conn.execute(text(sql))
     return conn
+
+
+_PG_TRUNCATE_SQL: str | None = None
+
+
+def _pg_truncate_sql() -> str | None:
+    global _PG_TRUNCATE_SQL
+    if _PG_TRUNCATE_SQL is None:
+        tables = [t.name for t in _db.metadata.sorted_tables]
+        if not tables:
+            return None
+        schema = _pg_worker_schema()
+        if schema:
+            qualified = ", ".join(f'"{schema}".{name}' for name in tables)
+        else:
+            qualified = ", ".join(tables)
+        _PG_TRUNCATE_SQL = f"TRUNCATE {qualified} RESTART IDENTITY CASCADE"
+    return _PG_TRUNCATE_SQL
 
 
 def _truncate_pg_tables(engine) -> None:
     """Clear all rows between tests; much faster than DROP SCHEMA per test."""
-    tables = [t.name for t in _db.metadata.sorted_tables]
-    if not tables:
+    stmt = _pg_truncate_sql()
+    if not stmt:
         return
-    stmt = f"TRUNCATE {', '.join(tables)} RESTART IDENTITY CASCADE"
-    with engine.connect() as conn:
+    with engine.begin() as conn:
+        # Fail fast instead of waiting behind other xdist workers on shared tables.
+        conn.execute(text("SET lock_timeout = '30s'"))
         _pg_connection(conn)
         conn.execute(text(stmt))
-        conn.commit()
 
 
 @pytest.fixture(scope="session")
@@ -186,7 +212,7 @@ def app(_pg_schema):
         _cleanup_test_db()
         return
 
-    # PostgreSQL: truncate rows per test (~400ms vs ~1.4s for DROP SCHEMA).
+    # PostgreSQL: truncate rows per test (~300-500ms for 46 tables).
     with flask_app.app_context():
         _truncate_pg_tables(_db.engine)
         yield flask_app

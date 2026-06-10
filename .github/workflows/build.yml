@@ -163,7 +163,7 @@ jobs:
         run: venv/bin/flask db upgrade
 
       - name: Run tests (non-SQLite)
-        run: venv/bin/pytest tests/ -m "not sqlite_only" -n auto -x -v --cov=. --cov-report=term-missing --cov-fail-under=75
+        run: venv/bin/pytest tests/ -m "not sqlite_only" -n 2 -x -v --cov=. --cov-report=term-missing --cov-fail-under=75
 
   vulture:
     name: Dead code scan (vulture)
