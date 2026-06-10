@@ -53,6 +53,46 @@ def apply_ampm(hour: int, minute: int, ampm: Optional[str]) -> Tuple[int, int]:
     return hour % 24, minute % 60
 
 
+def resolve_month_day_year(
+    month: int,
+    day: int,
+    reference: datetime,
+    *,
+    lookback_days: int = 7,
+) -> int:
+    """
+    Pick the calendar year for a month/day-only anchor near ``reference``.
+
+    Recent-past titles (within ``lookback_days`` before reference) keep the
+    current year; upcoming same-season dates stay in the current year; distant
+    past rolls to the next calendar year.
+    """
+    candidates = []
+    for year in (reference.year - 1, reference.year, reference.year + 1):
+        try:
+            candidates.append(datetime(year, month, day))
+        except ValueError:
+            continue
+
+    if not candidates:
+        return reference.year
+
+    ref_date = reference.date()
+    same_year_past = [c for c in candidates if c.year == reference.year and c.date() < ref_date]
+    within_lookback = [c for c in same_year_past if (ref_date - c.date()).days <= lookback_days]
+    if within_lookback:
+        return max(within_lookback).year
+
+    if any(c.date() == ref_date for c in candidates):
+        return reference.year
+
+    future = [c for c in candidates if c >= reference.replace(hour=0, minute=0, second=0, microsecond=0)]
+    if future:
+        return min(future).year
+
+    return max(candidates).year
+
+
 def resolve_month_day_datetime(
     month: int,
     day: int,
@@ -61,35 +101,20 @@ def resolve_month_day_datetime(
     *,
     ampm: Optional[str] = None,
     reference: datetime,
+    lookback_days: int = 7,
 ) -> Optional[datetime]:
     """
     Build a datetime for an explicit month/day (+ time) anchor.
 
-    Picks the nearest occurrence within ±1 year of ``reference`` so titles
-    like ``@ Jun 3`` on 2026-06-03 stay on that calendar day (not 2027).
+    Uses ``resolve_month_day_year`` so recent-past titles like ``@ Jun 3`` on
+    2026-06-04 resolve to 2026-06-03, not 2027-06-03.
     """
     hour, minute = apply_ampm(int(hour), int(minute), ampm)
-
-    candidates = []
-    for year in (reference.year - 1, reference.year, reference.year + 1):
-        try:
-            candidates.append(datetime(year, month, day, hour, minute))
-        except ValueError:
-            continue
-
-    if not candidates:
+    year = resolve_month_day_year(month, day, reference, lookback_days=lookback_days)
+    try:
+        return datetime(year, month, day, hour, minute)
+    except ValueError:
         return None
-
-    # Prefer same calendar day as reference when month/day match
-    same_day = [c for c in candidates if c.date() == reference.date()]
-    if same_day:
-        return same_day[0]
-
-    future = [c for c in candidates if c >= reference]
-    if future:
-        return min(future)
-
-    return max(candidates)
 
 
 def parse_month_day_anchor(channel_name: str, reference: datetime) -> Optional[datetime]:
