@@ -34,8 +34,7 @@ DAY_MONTH_TIME_PATTERN = (
 )
 
 WEEKDAY_NAMES_PATTERN = (
-    r"(?:Mon(?:day)?|Tue(?:s(?:day)?)?|Wed(?:nesday)?|Thu(?:rs(?:day)?)?|"
-    r"Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)"
+    r"(?:Mon(?:day)?|Tue(?:s(?:day)?)?|Wed(?:nesday)?|Thu(?:rs(?:day)?)?|" r"Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)"
 )
 WEEKDAY_PATTERN = rf"\b({WEEKDAY_NAMES_PATTERN})\b"
 
@@ -63,6 +62,7 @@ _WEEKDAY_TO_ABBREV = {
 def normalize_weekday(name: str) -> str | None:
     """Map weekday abbreviations and full names to three-letter lowercase."""
     return _WEEKDAY_TO_ABBREV.get(name.lower())
+
 
 TIME_ONLY_PATTERN = r"\b(\d{1,2}):(\d{2})(?:\s*(am|pm))?\b"
 
