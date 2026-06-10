@@ -8,7 +8,7 @@ This directory contains detailed work items identified during the post-restructu
 |-------|------------|
 | Dashboard follow-ups | [107](./107-dashboard-stats-performance-hardening.md)–[110](./110-dashboard-optional-ux-follow-ups.md) |
 | PostgreSQL migration | [111](./111-pg-prep-raw-sqlite3-audit.md)–[119](./119-pg-migration-cleanup-and-docs.md) |
-| PPV production matching | [120](./120-fix-ppv-date-extraction-parsing-bugs.md)–[127](./127-ppv-multi-player-competitor-extraction.md) (120–126 ✅; **127** ⬜ doubles parsing) |
+| PPV production matching | [120](./120-fix-ppv-date-extraction-parsing-bugs.md)–[129](./129-ppv-replay-archive-enrichment-flosp.md) (120–127 ✅; **128–129** in flight) |
 | Admin UX | [132](./132-fix-xtream-credential-dialog-ux.md) ✅ |
 
 Waves **1–10** ✅ — merged PRs #10–51 (audit remediation through final doc review). Wave **9** batches **W–AA** (#39–47) and Wave **10** (#101 doc sync) complete.
@@ -263,7 +263,7 @@ Identified from live analysis on `docker.klopnet.com` (18,625 active PPV channel
 | 124 | [124-ppv-enrichment-attempt-tracking-and-requeue.md](./124-ppv-enrichment-attempt-tracking-and-requeue.md) | ✅ | Attempt tracking + requeue — PR [#53](https://github.com/klopstack/iptv-proxy-v2/pull/53) |
 | 125 | [125-sofascore-tennis-calendar-slice1.md](./125-sofascore-tennis-calendar-slice1.md) | ✅ | SofaScore client + parser — PR [#58](https://github.com/klopstack/iptv-proxy-v2/pull/58) |
 | 126 | [126-sofascore-calendar-multi-sport-and-enrichment.md](./126-sofascore-calendar-multi-sport-and-enrichment.md) | ✅ | SofaScore merge + doc — PR [#60](https://github.com/klopstack/iptv-proxy-v2/pull/60) |
-| 127 | [127-ppv-multi-player-competitor-extraction.md](./127-ppv-multi-player-competitor-extraction.md) | ⬜ | Tennis doubles / 2v2 channel names → four-player extract + match |
+| 127 | [127-ppv-multi-player-competitor-extraction.md](./127-ppv-multi-player-competitor-extraction.md) | ✅ | Tennis doubles / 2v2 extract + validation — PR [#70](https://github.com/klopstack/iptv-proxy-v2/pull/70) + integration tests |
 | 128 | [128-fix-ppv-year-inference-recent-past-dates.md](./128-fix-ppv-year-inference-recent-past-dates.md) | ⬜ | `@ Jun 3` recent-past year rollover — production still skips tennis as `far_future` |
 | 129 | [129-ppv-replay-archive-enrichment-flosp.md](./129-ppv-replay-archive-enrichment-flosp.md) | ⬜ | Flo/FLSP archive replays → enrich + **Replay** category (not skip / live) |
 | 130 | [130-ncaa-college-calendar-source-spike.md](./130-ncaa-college-calendar-source-spike.md) | ⬜ | Spike: NCAA / college / amateur calendar APIs (SofaScore slugs, Sportsipy, …) |
