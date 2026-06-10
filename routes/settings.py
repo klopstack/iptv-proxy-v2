@@ -10,7 +10,11 @@ from flask import Blueprint, request
 from api_responses import data_response, no_content, success_response
 from error_handling import ResourceNotFoundError, ValidationError
 from models import Settings, db
-from services.ppv.constants import SETTING_PPV_SOFASCORE_CALENDAR_ENABLED, SETTING_PPV_SOFASCORE_FOOTBALL_ENABLED
+from services.ppv.constants import (
+    SETTING_PPV_SOFASCORE_CALENDAR_ENABLED,
+    SETTING_PPV_SOFASCORE_COLLEGE_ENABLED,
+    SETTING_PPV_SOFASCORE_FOOTBALL_ENABLED,
+)
 
 settings_bp = Blueprint("settings", __name__)
 logger = logging.getLogger(__name__)
@@ -104,6 +108,15 @@ def _sofascore_football_enabled() -> bool:
     )
 
 
+def _sofascore_college_enabled() -> bool:
+    return Settings.get(SETTING_PPV_SOFASCORE_COLLEGE_ENABLED, "false").lower() in (
+        "true",
+        "1",
+        "yes",
+        "on",
+    )
+
+
 @settings_bp.route("/api/ppv-enrichment/config", methods=["GET"])
 def get_ppv_enrichment_config():
     """Get PPV enrichment configuration."""
@@ -121,6 +134,7 @@ def get_ppv_enrichment_config():
             "site_username_preview": _preview_username(site_username),
             "sofascore_calendar_enabled": _sofascore_calendar_enabled(),
             "sofascore_football_enabled": _sofascore_football_enabled(),
+            "sofascore_college_enabled": _sofascore_college_enabled(),
         }
     )
 
@@ -181,6 +195,15 @@ def update_ppv_enrichment_config():
         from services.tennis.sofascore_calendar import clear_sofascore_football_calendar_cache
 
         clear_sofascore_football_calendar_cache()
+
+    if "sofascore_college_enabled" in data:
+        Settings.set(
+            SETTING_PPV_SOFASCORE_COLLEGE_ENABLED,
+            "true" if data["sofascore_college_enabled"] else "false",
+        )
+        from services.ppv.calendar_providers.sofascore.client import clear_cache as clear_sofascore_client_cache
+
+        clear_sofascore_client_cache()
 
     return success_response(message="PPV enrichment configuration updated successfully")
 

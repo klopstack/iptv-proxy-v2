@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Set
 
 from models import Channel
+from services.ppv.replay_providers import METADATA_KEY_REPLAY_ARCHIVE
 from services.ppv.timezone_resolution import (
     ChannelTimezoneResolution,
     calendar_date_key_for_channel,
@@ -65,7 +66,11 @@ def build_matching_context_from_name(
     if isinstance(naive_dt, datetime):
         channel_date_utc = local_channel_datetime_to_utc(naive_dt, resolution)
         channel_date_for_match = channel_date_utc.replace(tzinfo=timezone.utc)
-        calendar_date = calendar_date_key_for_channel(naive_dt, resolution)
+        if extraction.get(METADATA_KEY_REPLAY_ARCHIVE):
+            # Replay titles use wall-clock DD/MM dates; keep local day for calendar fetch.
+            calendar_date = naive_dt.strftime("%Y-%m-%d")
+        else:
+            calendar_date = calendar_date_key_for_channel(naive_dt, resolution)
 
     tolerance = metadata_only_date_tolerance_hours(resolution.venue_mode)
 

@@ -106,6 +106,8 @@ def clean_team_name(name: str) -> str:
     name = re.sub(r":\w+.*$", "", name)
     name = re.sub(r"^#?\s*\d+\s+", "", name)
     name = re.sub(r"\s+\d+$", "", name)
+    name = re.sub(r"\s+(?:home|away)\s*$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+(?:mens?|womens?)\s*$", "", name, flags=re.IGNORECASE)
     name = " ".join(name.split())
     return name.strip()
 

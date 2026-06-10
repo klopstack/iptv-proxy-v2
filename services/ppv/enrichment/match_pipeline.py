@@ -13,6 +13,7 @@ from services.ppv.constants import (
     MATCH_AMBIGUITY_LOW_CONFIDENCE_CUTOFF,
     MEDIUM_CONFIDENCE_THRESHOLD,
     MIN_MATCH_CONFIDENCE,
+    REPLAY_CALENDAR_DAYS_BACK,
 )
 from services.ppv.enrichability import classify_ppv_enrichment, skip_error_message
 from services.ppv.enrichment.attempt_tracking import _record_enrichment_attempt
@@ -22,6 +23,7 @@ from services.ppv.matching.context import context_for_event, resolve_sport_leagu
 from services.ppv.matching.validation import competitors_match_event
 from services.ppv.persistence import persist_match
 from services.ppv.replay_providers import METADATA_KEY_REPLAY_ARCHIVE
+from services.reverse_event_matcher.match_filter import DateFilter
 from services.reverse_event_matcher.orchestrator import ReverseEventMatcher
 from services.thesportsdb_calendar_scraper import CalendarEvent, get_calendar_scraper
 
@@ -257,26 +259,52 @@ class CalendarMatchPipeline:
             )
 
         if not index_loaded:
-            self.reverse_matcher.load_events_for_date_range(
-                start_date=date_str,
-                end_date=date_str,
-                days_ahead=0,
-                days_back=0,
-            )
+            replay_archive = bool(extraction.get(METADATA_KEY_REPLAY_ARCHIVE))
+            if replay_archive and calendar_events:
+                self.reverse_matcher._event_index.build_indexes(calendar_events)
+                self.reverse_matcher._events_loaded = True
+            else:
+                self.reverse_matcher.load_events_for_date_range(
+                    start_date=date_str,
+                    end_date=date_str,
+                    days_ahead=0,
+                    days_back=0,
+                )
 
         match_ctx = extraction.get("_matching_context") or {}
         channel_date_for_match = match_ctx.get("channel_date_for_match")
-        match_results = self.reverse_matcher.find_matches(
-            channel_name=channel.name,
-            max_results=5,
-            min_confidence=MIN_MATCH_CONFIDENCE,
-            use_channel_date=channel_date_for_match is None,
-            channel_date=channel_date_for_match,
-            channel_timezone="UTC" if channel_date_for_match is not None else None,
-            date_tolerance_hours=match_ctx.get("date_tolerance_hours"),
-        )
+        replay_archive = bool(extraction.get(METADATA_KEY_REPLAY_ARCHIVE))
+        if replay_archive:
+            saved_filter = self.reverse_matcher._match_filter
+            self.reverse_matcher._match_filter = saved_filter.__class__(
+                date_tolerance_hours=saved_filter.date_tolerance_hours,
+                close_match_hours=saved_filter.close_match_hours,
+                close_match_boost=saved_filter.close_match_boost,
+                tolerance_match_boost=saved_filter.tolerance_match_boost,
+                default_timezone=saved_filter.default_timezone.key,
+                max_event_age_days=REPLAY_CALENDAR_DAYS_BACK,
+                max_event_future_days=saved_filter.max_event_future_days,
+                strict_date_validation=False,
+            )
+        try:
+            match_results = self.reverse_matcher.find_matches(
+                channel_name=channel.name,
+                max_results=5,
+                min_confidence=MIN_MATCH_CONFIDENCE,
+                date_filter=DateFilter.ALL if replay_archive else DateFilter.RECENT_AND_UPCOMING,
+                use_channel_date=channel_date_for_match is None,
+                channel_date=channel_date_for_match,
+                channel_timezone="UTC" if channel_date_for_match is not None else None,
+                date_tolerance_hours=match_ctx.get("date_tolerance_hours"),
+            )
+        finally:
+            if replay_archive:
+                self.reverse_matcher._match_filter = saved_filter
 
         if not match_results:
+            direct_result = self._try_direct_calendar_match(channel, extraction, calendar_events)
+            if direct_result is not None:
+                return direct_result
             ncaab_result = self._try_sportsipy_ncaab_direct_match(channel, extraction, date_str)
             if ncaab_result is not None:
                 return ncaab_result
@@ -376,6 +404,43 @@ class CalendarMatchPipeline:
             match_method=match_method,
             extraction_result=extraction,
         )
+
+    def _try_direct_calendar_match(
+        self,
+        channel: Channel,
+        extraction: Dict,
+        calendar_events: List[CalendarEvent],
+    ) -> Optional[EnrichmentResult]:
+        """Match extracted competitors directly against already-loaded calendar rows."""
+        competitors = extraction.get("competitors")
+        if not competitors or len(competitors) != 2:
+            return None
+
+        category_name = None
+        category = getattr(channel, "category", None)
+        if category is not None:
+            raw_name = getattr(category, "category_name", None)
+            if isinstance(raw_name, str):
+                category_name = raw_name
+
+        sport_context = resolve_sport_league_context(channel.name, category_name)
+        for event in calendar_events:
+            if not competitors_match_event(
+                competitors,
+                event,
+                context=sport_context,
+                players=extraction.get("competitors_players"),
+            ):
+                continue
+            return EnrichmentResult(
+                channel=channel,
+                matched=True,
+                calendar_event=event,
+                confidence=MEDIUM_CONFIDENCE_THRESHOLD,
+                match_method="calendar_direct_competitors",
+                extraction_result=extraction,
+            )
+        return None
 
     def _try_sportsipy_ncaab_direct_match(
         self,

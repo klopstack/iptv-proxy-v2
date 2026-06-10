@@ -149,6 +149,8 @@ class TestPpvEnrichmentConfigRoutes:
         assert data["has_site_credentials"] is False
         assert data["site_username_preview"] is None
         assert data["sofascore_calendar_enabled"] is False
+        assert data["sofascore_football_enabled"] is True
+        assert data["sofascore_college_enabled"] is False
 
     def test_update_ppv_enrichment_config(self, client):
         response = client.put(
@@ -159,6 +161,8 @@ class TestPpvEnrichmentConfigRoutes:
                 "site_username": "myuser",
                 "site_password": "mypassword",
                 "sofascore_calendar_enabled": True,
+                "sofascore_football_enabled": False,
+                "sofascore_college_enabled": True,
             },
         )
         assert response.status_code == 200
@@ -172,7 +176,11 @@ class TestPpvEnrichmentConfigRoutes:
         assert data["has_site_credentials"] is True
         assert data["site_username_preview"].startswith("my")
         assert data["sofascore_calendar_enabled"] is True
+        assert data["sofascore_football_enabled"] is False
+        assert data["sofascore_college_enabled"] is True
         assert Settings.get("ppv_sofascore_calendar_enabled") == "true"
+        assert Settings.get("ppv_sofascore_football_enabled") == "false"
+        assert Settings.get("ppv_sofascore_college_enabled") == "true"
 
     def test_clear_ppv_enrichment_site_login(self, client):
         Settings.set("ppv_thesportsdb_site_username", "saveduser")

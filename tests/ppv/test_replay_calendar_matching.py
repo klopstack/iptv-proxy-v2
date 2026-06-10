@@ -21,6 +21,7 @@ from services.url_service import get_proxy_base_url
 FIXTURES = Path(__file__).parent / "fixtures"
 ICE_HOCKEY_1022 = FIXTURES / "sofascore" / "ice_hockey_2025-10-22.json"
 FLO_HOCKEY_TITLE = "Flo (FLSP) 161: 2025 Colorado Eagles vs San Diego Gulls Away - 22/10 22:00"
+FLO_HOCKEY_HOME_TITLE = "Flo (FLSP) 160: 2025 Colorado Eagles vs San Diego Gulls Home - 22/10 22:00"
 
 
 def _load_ice_hockey(date: str = "2025-10-22"):
@@ -78,6 +79,45 @@ class TestReplayCalendarMatching:
         calendar_events = _load_ice_hockey()
         assert competitors
         assert any(competitors_match_event(competitors, event) for event in calendar_events)
+
+    def test_flo_hockey_home_suffix_stripped_from_competitors(self):
+        """Home/Away venue tokens must not remain on extracted team names."""
+        extractor = PPVEventExtractor()
+        extraction = extractor.extract_all(FLO_HOCKEY_HOME_TITLE)
+        assert extraction.get("competitors") == ("Colorado Eagles", "San Diego Gulls")
+
+    def test_flo_hockey_pipeline_matches_home_title(self, app):
+        """Flo Home-suffixed title matches Oct 2025 fixture through calendar pipeline."""
+        with app.app_context():
+            Settings.set(SETTING_PPV_SOFASCORE_COLLEGE_ENABLED, "true")
+            hockey_events = _load_ice_hockey()
+            scraper = TheSportsDBCalendarScraper(cache_ttl=60)
+
+            with patch.object(scraper, "_fetch_milb_events_for_date", return_value=[]), patch.object(
+                scraper, "_fetch_api_events_for_date", return_value=[]
+            ), patch.object(scraper, "_fetch_calendar_page", return_value=[]), patch.object(
+                scraper, "_fetch_espn_tennis_events_for_date", return_value=[]
+            ), patch(
+                "services.ppv.calendar_providers.sofascore.fetch_events_for_slug",
+                side_effect=lambda slug, date_str, **kwargs: hockey_events
+                if slug == "ice-hockey" and kwargs.get("replay")
+                else [],
+            ):
+                pipeline = CalendarMatchPipeline(calendar_scraper=scraper)
+                extractor = PPVEventExtractor()
+                extraction = extractor.extract_all(FLO_HOCKEY_HOME_TITLE)
+                extraction[METADATA_KEY_REPLAY_ARCHIVE] = True
+                channel = type("Ch", (), {"name": FLO_HOCKEY_HOME_TITLE, "category": None, "id": 1})()
+
+                grouped = pipeline.group_by_date([(channel, extraction)])
+                date_str = next(iter(grouped))
+                assert date_str == "2025-10-22"
+
+                calendar_events = scraper.get_events_for_date(date_str, replay=True)
+                result = pipeline.match_channel_to_calendar(
+                    channel, extraction, calendar_events, date_str, index_loaded=False
+                )
+                assert result.matched, result.match_method
 
     def test_replay_pipeline_groups_by_extracted_date_not_today(self):
         """Replay-tagged channels batch calendar fetch on extracted historical date (Track B)."""
