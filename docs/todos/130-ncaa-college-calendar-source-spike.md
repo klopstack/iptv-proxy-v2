@@ -1,6 +1,6 @@
 # Spike: NCAA / college / amateur calendar data sources
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Done  
 **Priority:** P1  
 **Type:** Research spike (no production wiring in this TODO)  
 **Audit:** PPV production report, June 4 2026; [129](./129-ppv-replay-archive-enrichment-flosp.md) Flo replay tail
@@ -161,12 +161,20 @@ Sections:
 
 ## Acceptance criteria
 
-- [ ] `docs/architecture/ncaa-college-calendar-source-spike.md` merged with decision matrix and **go/no-go for SofaScore 131**.
-- [ ] ≥20 Flo sample channels manually scored against ≥2 candidate sources.
-- [ ] SofaScore slug probe results documented for **basketball**, **ice-hockey**, and ≥2 other Flo-heavy sports.
-- [ ] Explicit note on **historical fetch window** (14-day limit today blocks Oct 2025 replays).
-- [ ] [129](./129-ppv-replay-archive-enrichment-flosp.md) Track B updated to link spike outcome (replace inline “Phase 0” with this doc).
-- [ ] Recorded JSON fixtures for at least one successful SofaScore college/hockey day committed under `tests/ppv/fixtures/sofascore/` (for 131 tests) **if** spike recommends SofaScore.
+- [x] `docs/architecture/ncaa-college-calendar-source-spike.md` merged with decision matrix and **go/no-go for SofaScore 131**.
+- [x] ≥20 Flo sample channels manually scored against ≥2 candidate sources.
+- [x] SofaScore slug probe results documented for **basketball**, **ice-hockey**, and ≥2 other Flo-heavy sports.
+- [x] Explicit note on **historical fetch window** (14-day limit today blocks Oct 2025 replays).
+- [x] [129](./129-ppv-replay-archive-enrichment-flosp.md) Track B updated to link spike outcome (replace inline “Phase 0” with this doc).
+- [x] Recorded JSON fixtures for at least one successful SofaScore college/hockey day committed under `tests/ppv/fixtures/sofascore/` (for 131 tests) **if** spike recommends SofaScore.
+
+## Completion
+
+- **Decision:** Hybrid — SofaScore `ice-hockey` primary; Sportsipy `ncaab` supplement for DIII basketball; `REPLAY_CALENDAR_DAYS_BACK=400`.
+- **Architecture:** [ncaa-college-calendar-source-spike.md](../architecture/ncaa-college-calendar-source-spike.md)
+- **Fixtures:** `tests/ppv/fixtures/spike/flo_spike_sample_channels.json`, `tests/ppv/fixtures/sofascore/ice_hockey_2025-10-*.json`
+- **Probe script:** `scripts/spike/ncaa_college_calendar_probe.py`
+- PR: [#82](https://github.com/klopstack/iptv-proxy-v2/pull/82)
 
 ## Non-goals
 

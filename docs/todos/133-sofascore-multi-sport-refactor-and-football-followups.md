@@ -1,6 +1,6 @@
 # SofaScore multi-sport refactor + football/soccer follow-ups
 
-**Status:** 🟡 Refactor slice implemented — PR pending; P0 production ops deferred to deploy/requeue  
+**Status:** 🟡 Refactor ✅ — PR [#81](https://github.com/klopstack/iptv-proxy-v2/pull/81); P0 production ops deferred to deploy/requeue  
 **Priority:** P1 (post–World Cup structural refactor); P0 items only for remaining football production gaps (see below)  
 **Roadmap:** [ROADMAP-active.md](./ROADMAP-active.md) — Wave 13 batch **AO**  
 **Depends on:** [126](./126-sofascore-calendar-multi-sport-and-enrichment.md) ✅, PR [#74](https://github.com/klopstack/iptv-proxy-v2/pull/74) football merge ✅  
@@ -151,7 +151,7 @@ Merge order (unchanged):
 - [x] Unified slug config documented and wired (list or registry); tennis default off, football default on preserved.
 - [x] All existing SofaScore unit + merge tests pass without behavior change (tennis + football).
 - [x] [sofascore-calendar-sport-slugs.md](../architecture/sofascore-calendar-sport-slugs.md) updated: module path, config, link to this TODO.
-- [ ] [131](./131-sofascore-college-amateur-calendar-provider.md) updated to depend on 133 refactor (college parsers = new files in same package).
+- [x] [131](./131-sofascore-college-amateur-calendar-provider.md) updated to depend on 133 refactor (college parsers = new files in same package).
 
 ## Test plan
 

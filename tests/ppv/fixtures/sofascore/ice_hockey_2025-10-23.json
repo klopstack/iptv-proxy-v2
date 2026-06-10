@@ -1,0 +1,54 @@
+{
+  "events": [
+    {
+      "id": 14213035,
+      "startTimestamp": 1761260700,
+      "status": {
+        "code": 100,
+        "description": "Ended",
+        "type": "finished"
+      },
+      "homeTeam": {
+        "id": 119616,
+        "name": "Windsor Spitfires",
+        "shortName": "Windsor Spitfires"
+      },
+      "awayTeam": {
+        "id": 119600,
+        "name": "Ottawa 67's",
+        "shortName": "Ottawa 67's"
+      },
+      "tournament": {
+        "name": "OHL",
+        "category": {
+          "name": "Canada"
+        }
+      }
+    },
+    {
+      "id": 14156485,
+      "startTimestamp": 1761184800,
+      "status": {
+        "code": 100,
+        "description": "Ended",
+        "type": "finished"
+      },
+      "homeTeam": {
+        "id": 45169,
+        "name": "San Diego Gulls",
+        "shortName": "San Diego"
+      },
+      "awayTeam": {
+        "id": 292497,
+        "name": "Colorado Eagles",
+        "shortName": "Colorado"
+      },
+      "tournament": {
+        "name": "AHL",
+        "category": {
+          "name": "USA"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,231 @@
+{
+  "description": "TODO 130 spike sample — 24 Flo-style channels scored against SofaScore probes (June 2026)",
+  "probe_dates": ["2025-10-22", "2025-10-23", "2025-11-01"],
+  "channels": [
+    {
+      "id": "ahl_eagles_gulls",
+      "title": "Flo (FLSP) 161: 2025 Colorado Eagles vs San Diego Gulls Away - 22/10 22:00",
+      "sport_hint": "hockey",
+      "date": "2025-10-22",
+      "sofascore_slug": "ice-hockey",
+      "result": "match",
+      "notes": "AHL exact names"
+    },
+    {
+      "id": "ohl_67s_spitfires",
+      "title": "Flo (FLSP) 230: 2025 Ottawa 67s vs Windsor Spitfires - 23/10 19:05",
+      "sport_hint": "hockey",
+      "date": "2025-10-23",
+      "sofascore_slug": "ice-hockey",
+      "result": "match",
+      "notes": "OHL; normalize 67s vs 67's"
+    },
+    {
+      "id": "qmjhl_phoenix_sagueneens",
+      "title": "US (Flo 481) | [Hockey|2025 Sherbrooke Phoenix vs Chicoutimi Sagueneens Home] (2025-11-01 16:02:30)",
+      "sport_hint": "hockey",
+      "date": "2025-11-01",
+      "sofascore_slug": "ice-hockey",
+      "result": "partial",
+      "notes": "QMJHL; API home name Sagueneens Chicoutimi"
+    },
+    {
+      "id": "ohl_greyhounds_otters",
+      "title": "Flo (FLSP) 88: 2025 Sault Ste Marie Greyhounds vs Erie Otters - 22/10 19:00",
+      "sport_hint": "hockey",
+      "date": "2025-10-22",
+      "sofascore_slug": "ice-hockey",
+      "result": "match",
+      "notes": "OHL"
+    },
+    {
+      "id": "ohl_battalion_petes",
+      "title": "Flo (FLSP) 91: 2025 North Bay Battalion vs Peterborough Petes - 23/10 19:00",
+      "sport_hint": "hockey",
+      "date": "2025-10-23",
+      "sofascore_slug": "ice-hockey",
+      "result": "match",
+      "notes": "OHL"
+    },
+    {
+      "id": "echl_solar_bears",
+      "title": "Flo (FLSP) 102: 2025 Orlando Solar Bears vs Florida Everblades - 22/10 19:30",
+      "sport_hint": "hockey",
+      "date": "2025-10-22",
+      "sofascore_slug": "ice-hockey",
+      "result": "match",
+      "notes": "ECHL"
+    },
+    {
+      "id": "occidental_chapman_mens",
+      "title": "Flo (FLSP) 110: 2025 Occidental vs Chapman - Mens - 22/10 19:00",
+      "sport_hint": "college_mens_basketball",
+      "date": "2025-10-22",
+      "sofascore_slug": "basketball",
+      "result": "miss",
+      "notes": "No DIII in SofaScore basketball; Sportsipy supplement"
+    },
+    {
+      "id": "guilford_randolph_mens",
+      "title": "Flo (FLSP) 112: 2025 Guilford vs Randolph - Mens - 22/10 20:00",
+      "sport_hint": "college_mens_basketball",
+      "date": "2025-10-22",
+      "sofascore_slug": "basketball",
+      "result": "miss",
+      "notes": "DIII absent from SofaScore day feed"
+    },
+    {
+      "id": "occidental_chapman_womens",
+      "title": "Flo (FLSP) 115: 2025 Occidental vs Chapman - Womens - 22/10 19:00",
+      "sport_hint": "college_womens_basketball",
+      "date": "2025-10-22",
+      "sofascore_slug": "basketball",
+      "result": "miss",
+      "notes": "Women's DIII not in SofaScore basketball"
+    },
+    {
+      "id": "whitman_willamette_mens",
+      "title": "Flo (FLSP) 118: 2025 Whitman vs Willamette - Mens - 22/10 21:00",
+      "sport_hint": "college_mens_basketball",
+      "date": "2025-10-22",
+      "sofascore_slug": "basketball",
+      "result": "miss",
+      "notes": "DIII"
+    },
+    {
+      "id": "puget_sound_pacific_lutheran_womens",
+      "title": "Flo (FLSP) 120: 2025 Puget Sound vs Pacific Lutheran - Womens - 22/10 18:00",
+      "sport_hint": "college_womens_basketball",
+      "date": "2025-10-22",
+      "sofascore_slug": "basketball",
+      "result": "miss",
+      "notes": "DIII"
+    },
+    {
+      "id": "trinity_conn_mens",
+      "title": "Flo (FLSP) 122: 2025 Trinity (CT) vs Connecticut College - Mens - 22/10 19:30",
+      "sport_hint": "college_mens_basketball",
+      "date": "2025-10-22",
+      "sofascore_slug": "basketball",
+      "result": "miss",
+      "notes": "DIII"
+    },
+    {
+      "id": "amherst_williams_womens",
+      "title": "Flo (FLSP) 125: 2025 Amherst vs Williams - Womens - 22/10 17:00",
+      "sport_hint": "college_womens_basketball",
+      "date": "2025-10-22",
+      "sofascore_slug": "basketball",
+      "result": "miss",
+      "notes": "NESCAC DIII"
+    },
+    {
+      "id": "middlebury_bowdoin_mens",
+      "title": "Flo (FLSP) 128: 2025 Middlebury vs Bowdoin - Mens - 22/10 19:00",
+      "sport_hint": "college_mens_basketball",
+      "date": "2025-10-22",
+      "sofascore_slug": "basketball",
+      "result": "miss",
+      "notes": "NESCAC DIII"
+    },
+    {
+      "id": "carleton_st_olaf_womens",
+      "title": "Flo (FLSP) 130: 2025 Carleton vs St. Olaf - Womens - 22/10 18:30",
+      "sport_hint": "college_womens_basketball",
+      "date": "2025-10-22",
+      "sofascore_slug": "basketball",
+      "result": "miss",
+      "notes": "DIII"
+    },
+    {
+      "id": "hope_calvin_mens",
+      "title": "Flo (FLSP) 132: 2025 Hope vs Calvin - Mens - 22/10 20:30",
+      "sport_hint": "college_mens_basketball",
+      "date": "2025-10-22",
+      "sofascore_slug": "basketball",
+      "result": "miss",
+      "notes": "DIII"
+    },
+    {
+      "id": "wheaton_illinois_wesleyan_womens",
+      "title": "Flo (FLSP) 135: 2025 Wheaton (IL) vs Illinois Wesleyan - Womens - 22/10 19:00",
+      "sport_hint": "college_womens_basketball",
+      "date": "2025-10-22",
+      "sofascore_slug": "basketball",
+      "result": "miss",
+      "notes": "DIII"
+    },
+    {
+      "id": "denison_kenyon_mens",
+      "title": "Flo (FLSP) 138: 2025 Denison vs Kenyon - Mens - 22/10 19:00",
+      "sport_hint": "college_mens_basketball",
+      "date": "2025-10-22",
+      "sofascore_slug": "basketball",
+      "result": "miss",
+      "notes": "DIII"
+    },
+    {
+      "id": "depauw_oberlin_womens",
+      "title": "Flo (FLSP) 140: 2025 DePauw vs Oberlin - Womens - 22/10 18:00",
+      "sport_hint": "college_womens_basketball",
+      "date": "2025-10-22",
+      "sofascore_slug": "basketball",
+      "result": "miss",
+      "notes": "DIII"
+    },
+    {
+      "id": "ncaaf_sample_sat",
+      "title": "Flo (FLSP) 200: 2025 Ohio State vs Penn State - 01/11 12:00",
+      "sport_hint": "college_football",
+      "date": "2025-11-01",
+      "sofascore_slug": "american-football",
+      "result": "match",
+      "notes": "NCAA Regular Season present on Nov 1 (194 events)"
+    },
+    {
+      "id": "field_hockey_sample",
+      "title": "Flo (FLSP) 210: 2025 Messiah vs Elizabethtown - Field Hockey - 22/10 16:00",
+      "sport_hint": "field_hockey",
+      "date": "2025-10-22",
+      "sofascore_slug": null,
+      "result": "miss",
+      "notes": "No slug hit; permanent gap"
+    },
+    {
+      "id": "lacrosse_sample",
+      "title": "Flo (FLSP) 215: 2025 Tufts vs Middlebury - Lacrosse - 22/10 14:00",
+      "sport_hint": "lacrosse",
+      "date": "2025-10-22",
+      "sofascore_slug": null,
+      "result": "miss",
+      "notes": "No slug hit; permanent gap"
+    },
+    {
+      "id": "volleyball_sample",
+      "title": "Flo (FLSP) 220: 2025 Stanford vs UCLA - Volleyball - 22/10 21:00",
+      "sport_hint": "volleyball",
+      "date": "2025-10-22",
+      "sofascore_slug": "volleyball",
+      "result": "miss",
+      "notes": "Intl/college mix; school names not found on probe"
+    },
+    {
+      "id": "cjhl_obscure",
+      "title": "Flo (FLSP) 225: 2025 Brooks Bandits vs Okotoks Oilers - 22/10 21:00",
+      "sport_hint": "junior_hockey",
+      "date": "2025-10-22",
+      "sofascore_slug": "ice-hockey",
+      "result": "miss",
+      "notes": "AJHL not in SofaScore OHL/AHL/QMJHL set on date"
+    }
+  ],
+  "summary": {
+    "total": 24,
+    "sofascore_ice_hockey_match_or_partial": 6,
+    "sofascore_basketball_match": 0,
+    "sofascore_american_football_match": 1,
+    "permanent_miss": 17,
+    "sofascore_hockey_hit_rate": "100% of hockey-only samples (6/6)",
+    "sofascore_college_basketball_hit_rate": "0% (0/12)"
+  }
+}

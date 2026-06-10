@@ -14,12 +14,9 @@ from services.ppv.calendar_providers.sofascore.dedup import (
     filter_without_tsdb_duplicates,
 )
 from services.ppv.calendar_providers.sofascore.parser_football import parse_football_scheduled_events
+from services.ppv.calendar_providers.sofascore.parser_ice_hockey import parse_ice_hockey_scheduled_events
 from services.ppv.calendar_providers.sofascore.parser_tennis import parse_tennis_scheduled_events
-from services.ppv.calendar_providers.sofascore.registry import (
-    enabled_slugs,
-    slug_allowed_for_sport_filter,
-    slug_enabled,
-)
+from services.ppv.calendar_providers.sofascore.registry import enabled_slugs, slug_enabled
 from services.thesportsdb_calendar_scraper import CalendarEvent
 
 logger = logging.getLogger(__name__)
@@ -35,6 +32,7 @@ __all__ = [
     "filter_without_tsdb_duplicates",
     "get_sofascore_calendar_stats",
     "parse_football_scheduled_events",
+    "parse_ice_hockey_scheduled_events",
     "parse_tennis_scheduled_events",
     "scheduled_event_to_calendar_event",
     "clear_sofascore_tennis_calendar_cache",
@@ -69,12 +67,13 @@ def fetch_events_for_slug(
     *,
     force_refresh: bool = False,
     session: Optional[requests.Session] = None,
+    replay: bool = False,
 ) -> List[CalendarEvent]:
     """Fetch parsed CalendarEvent rows for one enabled SofaScore slug."""
     config = registry.SLUG_REGISTRY.get(slug)
     if not config or not slug_enabled(slug):
         return []
-    if not client.is_date_in_window(date_str):
+    if not client.is_date_in_window(date_str, replay=replay):
         return []
 
     cache_key = f"sofascore-{slug}:{date_str}"
@@ -83,11 +82,21 @@ def fetch_events_for_slug(
         if cached is not None:
             return cached
 
-    payload = client.fetch_scheduled_events_http(slug, date_str, session=session)
+    payload = client.fetch_scheduled_events_http(slug, date_str, session=session, replay=replay)
     events = config.parser(payload, date_str)
     client.store_cached_events(cache_key, events)
     logger.debug("Fetched %d SofaScore %s events for %s", len(events), slug, date_str)
     return events
+
+
+def fetch_ice_hockey_events_for_date(
+    date_str: str,
+    *,
+    force_refresh: bool = False,
+    session: Optional[requests.Session] = None,
+    replay: bool = False,
+) -> List[CalendarEvent]:
+    return fetch_events_for_slug("ice-hockey", date_str, force_refresh=force_refresh, session=session, replay=replay)
 
 
 def fetch_tennis_events_for_date(
@@ -122,7 +131,9 @@ def get_sofascore_calendar_stats() -> Dict[str, Any]:
         {
             "enabled": slug_enabled("tennis"),
             "football_enabled": slug_enabled("football"),
+            "college_enabled": slug_enabled("ice-hockey"),
             "enabled_slugs": enabled_slugs(),
+            "slug_event_counts": client.cached_slug_event_counts(),
         }
     )
     return stats

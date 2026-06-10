@@ -72,6 +72,37 @@ def filter_without_tsdb_duplicates(
     return kept
 
 
+def _hockey_matchup_key(event: CalendarEvent) -> Optional[Tuple[str, str, str]]:
+    sport_lower = (event.sport or "").lower()
+    if sport_lower not in ("ice hockey", "hockey", "nhl"):
+        return None
+    if not event.home_team or not event.away_team:
+        return None
+    pair = tuple(sorted([event.home_team.strip().lower(), event.away_team.strip().lower()]))
+    return (event.date, pair[0], pair[1])
+
+
+def filter_without_tsdb_hockey_duplicates(
+    primary_events: List[CalendarEvent],
+    sofascore_events: List[CalendarEvent],
+) -> List[CalendarEvent]:
+    """Keep SofaScore hockey rows that do not duplicate a TheSportsDB fixture."""
+    tsdb_keys = {key for key in (_hockey_matchup_key(event) for event in primary_events) if key is not None}
+    kept: List[CalendarEvent] = []
+    for event in sofascore_events:
+        key = _hockey_matchup_key(event)
+        if key is not None and key in tsdb_keys:
+            logger.debug(
+                "Skipping SofaScore hockey duplicate of TheSportsDB: %s vs %s on %s",
+                event.home_team,
+                event.away_team,
+                event.date,
+            )
+            continue
+        kept.append(event)
+    return kept
+
+
 def dedup_sofascore_events(
     slug: str,
     *,
@@ -82,4 +113,6 @@ def dedup_sofascore_events(
         return filter_without_espn_duplicates(primary_events, sofascore_events)
     if slug == "football":
         return filter_without_tsdb_duplicates(primary_events, sofascore_events)
+    if slug == "ice-hockey":
+        return filter_without_tsdb_hockey_duplicates(primary_events, sofascore_events)
     return list(sofascore_events)
