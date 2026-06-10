@@ -653,7 +653,11 @@ class TheSportsDBCalendarScraper:
         """Fetch enabled SofaScore slugs for a date, applying registry dedup strategies."""
         from services.ppv.calendar_providers.sofascore import fetch_events_for_slug
         from services.ppv.calendar_providers.sofascore.dedup import dedup_sofascore_events
-        from services.ppv.calendar_providers.sofascore.registry import SLUG_REGISTRY, slug_allowed_for_sport_filter, slug_enabled
+        from services.ppv.calendar_providers.sofascore.registry import (
+            SLUG_REGISTRY,
+            slug_allowed_for_sport_filter,
+            slug_enabled,
+        )
 
         results: Dict[str, List[CalendarEvent]] = {}
         espn_primary = espn_tennis_events or []

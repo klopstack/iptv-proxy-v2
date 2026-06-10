@@ -18,7 +18,11 @@ from services.ppv.calendar_providers.sofascore.dedup import (
 )
 from services.ppv.calendar_providers.sofascore.parser_football import parse_football_scheduled_events
 from services.ppv.calendar_providers.sofascore.parser_tennis import parse_tennis_scheduled_events
-from services.ppv.calendar_providers.sofascore.registry import enabled_slugs, slug_allowed_for_sport_filter, slug_enabled
+from services.ppv.calendar_providers.sofascore.registry import (
+    enabled_slugs,
+    slug_allowed_for_sport_filter,
+    slug_enabled,
+)
 from services.thesportsdb_calendar_scraper import CalendarEvent
 
 logger = logging.getLogger(__name__)

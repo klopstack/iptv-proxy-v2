@@ -116,22 +116,14 @@ class TestFetchTennisEventsForDate:
             assert mock_get.call_count == 1
 
     def test_rate_limit_spaces_requests(self, app):
-        Settings.set(SETTING_PPV_SOFASCORE_CALENDAR_ENABLED, "true")
-        payload = _load_fixture()
-        mock_response = MagicMock()
-        mock_response.json.return_value = payload
-        mock_response.raise_for_status = MagicMock()
+        """Verify _rate_limit sleeps when the minimum interval has not elapsed."""
+        import services.ppv.calendar_providers.sofascore.client as client
 
-        # First request at t=100 (no sleep); second at t=100.5 after 0.5s elapsed.
-        time_values = iter([100.0, 100.0, 100.5, 100.5])
+        client._last_request_time = 100.0
+        time_values = iter([100.5, 100.5])
 
-        with patch("services.ppv.calendar_providers.sofascore.client.http_get", return_value=mock_response):
-            with patch("services.ppv.calendar_providers.sofascore.client.time.sleep") as mock_sleep:
-                with patch("services.ppv.calendar_providers.sofascore.client.time.time", side_effect=lambda: next(time_values)):
-                    with patch("services.ppv.calendar_providers.sofascore.client.random.uniform", return_value=0.0):
-                        with patch("services.ppv.calendar_providers.sofascore.client._last_request_time", 0.0):
-                            fetch_scheduled_events("tennis", "2026-06-03", force_refresh=True)
-                            fetch_scheduled_events("tennis", "2026-06-03", force_refresh=True)
-                            assert mock_sleep.call_count == 1
-                            waited = mock_sleep.call_args[0][0]
-                            assert waited == MIN_REQUEST_INTERVAL_SECONDS - 0.5
+        with patch.object(client.time, "time", side_effect=lambda: next(time_values)):
+            with patch.object(client.random, "uniform", return_value=0.0):
+                with patch.object(client.time, "sleep") as mock_sleep:
+                    client.rate_limit()
+        mock_sleep.assert_called_once_with(MIN_REQUEST_INTERVAL_SECONDS - 0.5)
