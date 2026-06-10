@@ -22,6 +22,7 @@ from services.scheduler_constants import (
     DEFAULT_PPV_PREFETCH_INTERVAL_HOURS,
     DEFAULT_PPV_TIME_REFRESH_INTERVAL_HOURS,
     DEFAULT_SPORTSIPY_REFRESH_INTERVAL_HOURS,
+    SCHEDULER_HEARTBEAT_INTERVAL_SECONDS,
     SCHEDULER_HEARTBEAT_TIMEOUT_SECONDS,
     SYNC_KEY_ACCOUNT_INTERVAL,
     SYNC_KEY_EPG_INTERVAL,
@@ -72,6 +73,7 @@ class SyncScheduler:
         self.interval_seconds = interval_hours * 3600
         self.running = False
         self.thread = None
+        self._heartbeat_thread = None
         self._lock = SchedulerLock()
         self._check_interval = 60
         with self.app.app_context():
@@ -195,11 +197,17 @@ class SyncScheduler:
         with self.app.app_context():
             self._update_heartbeat()
         self.thread = threading.Thread(target=self._run, daemon=True, name="sync-scheduler")
+        self._heartbeat_thread = threading.Thread(
+            target=self._run_heartbeat_loop, daemon=True, name="sync-scheduler-heartbeat"
+        )
         self.thread.start()
+        self._heartbeat_thread.start()
         logger.info("Sync scheduler started in worker pid=%s (interval: %s hours)", os.getpid(), self.interval_hours)
 
     def stop(self):
         self.running = False
+        if self._heartbeat_thread:
+            self._heartbeat_thread.join(timeout=5)
         if self.thread:
             self.thread.join(timeout=5)
         self._lock.release()
@@ -215,6 +223,20 @@ class SyncScheduler:
             self._update_heartbeat()
         except Exception as e:
             logger.error("Error updating scheduler heartbeat: %s", e)
+
+    def _run_heartbeat_loop(self):
+        """Keep heartbeat fresh while the main loop is blocked in long-running jobs."""
+        interval = SCHEDULER_HEARTBEAT_INTERVAL_SECONDS
+        while self.running:
+            try:
+                with self.app.app_context():
+                    self._touch_heartbeat()
+            except Exception as e:
+                logger.error("Error in scheduler heartbeat loop: %s", e)
+            for _ in range(interval):
+                if not self.running:
+                    break
+                time.sleep(1)
 
     def _is_scheduler_alive(self) -> bool:
         heartbeat_str = SyncMetadata.get(SYNC_KEY_SCHEDULER_HEARTBEAT)

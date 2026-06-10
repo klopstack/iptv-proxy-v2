@@ -3,7 +3,9 @@
 Dedicated background scheduler process.
 
 Runs outside gunicorn workers so long EPG syncs cannot trigger worker timeouts
-or block HTTP request handling.
+or block HTTP request handling. SyncScheduler keeps a background heartbeat thread
+alive during long in-job sleeps so the dashboard does not show a false
+"Scheduler Not Running" state.
 """
 
 import logging

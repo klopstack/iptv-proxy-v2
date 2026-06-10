@@ -4,6 +4,8 @@ Tests for the scheduler service to improve coverage
 Uses shared fixtures from conftest.py for proper test isolation.
 """
 
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
@@ -36,8 +38,9 @@ def scheduler(app, tmp_path):
     # Always cleanup after test
     if sched.running:
         sched.stop()
-    if sched.thread and sched.thread.is_alive():
-        sched.thread.join(timeout=1)
+    for thread in (sched.thread, sched._heartbeat_thread):
+        if thread and thread.is_alive():
+            thread.join(timeout=1)
 
 
 class TestSchedulerJobRegistry:
@@ -334,6 +337,7 @@ class TestStartStop:
         scheduler.start()
         assert scheduler.running is True
         assert scheduler.thread is not None
+        assert scheduler._heartbeat_thread is not None
         scheduler.stop()
         mock_run.assert_called()
 
@@ -584,3 +588,20 @@ class TestSchedulerHeartbeat:
                                 scheduler._check_and_sync()
 
             assert scheduler.get_status()["running"] is True
+
+    def test_background_heartbeat_loop_keeps_status_running(self, scheduler, app):
+        """Background heartbeat refreshes stale metadata during long blocking work."""
+        with app.app_context():
+            scheduler.running = True
+            stale = datetime.now(timezone.utc) - timedelta(seconds=300)
+            SyncMetadata.set(SYNC_KEY_SCHEDULER_HEARTBEAT, stale.isoformat())
+            with patch("services.scheduler.SCHEDULER_HEARTBEAT_INTERVAL_SECONDS", 1):
+                heartbeat_thread = threading.Thread(target=scheduler._run_heartbeat_loop, daemon=True)
+                heartbeat_thread.start()
+                try:
+                    time.sleep(2.5)
+                    assert scheduler._is_scheduler_alive() is True
+                    assert scheduler.get_status()["running"] is True
+                finally:
+                    scheduler.running = False
+                    heartbeat_thread.join(timeout=3)
