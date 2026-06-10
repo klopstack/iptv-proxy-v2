@@ -667,3 +667,32 @@ class TestDAZNStyleExtraction:
         """Returns None when no stop: token present."""
         result = PPVEventExtractor.extract_stop_time("MLB 10 | Giants x Rockies")
         assert result is None
+
+
+class TestWorldCupChannelExtraction:
+    """Staging regressions: FIFA World Cup 2026 PPV channel title patterns."""
+
+    def setup_method(self):
+        # Wednesday 2026-06-10 — Thursday in titles should anchor to 2026-06-11.
+        self.extractor = PPVEventExtractor(current_date=datetime(2026, 6, 10, 12, 0, 0))
+
+    def test_extract_weekday_full_thursday(self):
+        result = self.extractor.extract_weekday("Event | Thursday 11 Jun 19:00")
+        assert result == "thu"
+
+    def test_pipe_date_full_thursday(self):
+        channel = "US: ESPN PPV 1 - World Cup 01 - Mexico vs South Africa | Thursday 11 Jun 19:00"
+        result = self.extractor.extract_date(channel)
+        assert result == datetime(2026, 6, 11, 19, 0)
+
+    def test_world_cup_slot_prefix_and_kickoff_suffix(self):
+        channel = "World Cup 01 - Mexico vs South Africa, kick-off"
+        result = self.extractor.extract_competitors(channel)
+        assert result == ("Mexico", "South Africa")
+
+    def test_extract_all_world_cup_channel_date_and_competitors(self):
+        channel = "US: ESPN PPV 1 - World Cup 01 - Mexico vs South Africa, kick-off | Thursday 11 Jun 19:00"
+        result = self.extractor.extract_all(channel)
+        assert result["competitors"] == ("Mexico", "South Africa")
+        assert result["date"] == datetime(2026, 6, 11, 19, 0)
+        assert result["inferred_how"] == "full_date"
