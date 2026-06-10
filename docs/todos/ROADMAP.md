@@ -26,9 +26,9 @@ Implement from each **TODO file** linked in the active roadmap — not from summ
 | **Wave 11 — DB migration** | 111–119 | **9** | SQLite → PostgreSQL; Series A + Series B |
 | **Wave 12 — PPV matching** | 120–126, 123 | **0** | ✅ June 2026 — PRs [#52](https://github.com/klopstack/iptv-proxy-v2/pull/52)–[#63](https://github.com/klopstack/iptv-proxy-v2/pull/63) |
 | **Wave 13 — PPV follow-ups** | [127](./127-ppv-multi-player-competitor-extraction.md)–[131](./131-sofascore-college-amateur-calendar-provider.md), [133](./133-sofascore-multi-sport-refactor-and-football-followups.md), [134](./134-ppv-historical-category-and-visibility-toggles.md) | **7** | Doubles; dates; Flo replay; SofaScore refactor + NCAA calendar; Historical category |
-| **Wave 14 — Admin UX** | [132](./132-fix-xtream-credential-dialog-ux.md) | **1** | Xtream credential modal account dropdown + timezone select |
+| **Wave 14 — Admin UX** | [132](./132-fix-xtream-credential-dialog-ux.md) | **0** | ✅ PR [#71](https://github.com/klopstack/iptv-proxy-v2/pull/71) |
 
-**Total open (required):** 17 (111–119, 127–131, 132, 133, 134) — see [ROADMAP-active.md](./ROADMAP-active.md).
+**Total open (required):** 13 (111–119, 129 Track B, 131, 133 P0 ops, 134) — see [ROADMAP-active.md](./ROADMAP-active.md).
 
 Waves **1–10** ✅ (PRs #10–51). **Wave 12** ✅ (PRs #52–63). **Next:** Wave 11 (PostgreSQL).
 

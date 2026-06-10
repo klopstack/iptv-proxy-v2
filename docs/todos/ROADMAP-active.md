@@ -15,9 +15,9 @@ Open work only. Completed waves **1–10** (PRs #10–51) and **Wave 12** (PRs #
 | Dashboard follow-ups | 107–110 | **0** | 107–109 ✅; [110](./110-dashboard-optional-ux-follow-ups.md) won't do |
 | Wave 11 — PostgreSQL | 111–119 | **9** | Series A + Series B |
 | Wave 12 — PPV matching | 120–126, 123 | **0** | ✅ complete June 2026; 123 A/B in review [#62](https://github.com/klopstack/iptv-proxy-v2/pull/62)/[#63](https://github.com/klopstack/iptv-proxy-v2/pull/63) |
-| Wave 13 — PPV follow-ups | 127–131, 133, 134 | **7** | Doubles; dates; Flo replay; NCAA spike + SofaScore refactor/college; Historical category |
-| Wave 14 — Admin UX | 132 | **1** | Xtream credential modal — account dropdown + timezone select |
-| **Total required** | | **17** | 111–119, 127–131, 132, 133, 134 |
+| Wave 13 — PPV follow-ups | 127–131, 133, 134 | **4** | 127–128 ✅; 129 Track B; 131 college wire; 133 P0 WC ops |
+| Wave 14 — Admin UX | 132 | **0** | ✅ [#71](https://github.com/klopstack/iptv-proxy-v2/pull/71) |
+| **Total required** | | **13** | 111–119, 129 Track B, 131, 133 P0 ops, 134|
 
 Waves **1–10** ✅ — see [archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-waves-1-10.md).  
 **Wave 12** ✅ — see [§ Wave 12 complete](#wave-12--ppv-production-matching-gaps--complete-june-2026) below.
@@ -112,12 +112,12 @@ Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMA
 | **AK** | [128](./128-fix-ppv-year-inference-recent-past-dates.md) | `@ Jun N` recent-past year — 332 tennis channels skipped as `far_future` |
 | **AJ** | [127](./127-ppv-multi-player-competitor-extraction.md) | 2v2 name parsing + `competitors_match_event` + matcher validation |
 | **AL** | [129](./129-ppv-replay-archive-enrichment-flosp.md) | Flo/FLSP archive replays → enrich + **PPV - Replay/Historical** groups |
-| **AM** | [130](./130-ncaa-college-calendar-source-spike.md) | Spike: NCAA / college calendar sources (SofaScore slugs, Sportsipy, …) |
+| **AM** | [130](./130-ncaa-college-calendar-source-spike.md) | ✅ Spike: hybrid SofaScore `ice-hockey` + Sportsipy `ncaab` — [architecture](../architecture/ncaa-college-calendar-source-spike.md) |
 | **AN** | [131](./131-sofascore-college-amateur-calendar-provider.md) | SofaScore multi-sport + historical window → calendar merge |
 | **AO** | [133](./133-sofascore-multi-sport-refactor-and-football-followups.md) | Generic SofaScore provider refactor; PR #74 WC football ops + soccer follow-ups |
 | **AP** | [134](./134-ppv-historical-category-and-visibility-toggles.md) | **PPV - Live/Replay/Historical** titles; `/ppv` Replay+Historical toggles; refine stale_archive → Historical |
 
-**Order:** **128** before tennis requeue; PR **#74** deploy + **124** WC requeue; **133 refactor** before **131** college slug wire; **130 spike** before **131**; **129 Track B** after **131**; **134** with or after **129 Track C** (titles + Historical); **127** after calendar + 128 (doubles need fixtures).
+**Order:** **128** before tennis requeue; PR **#74** deploy + **124** WC requeue; **133 refactor** before **131** college slug wire; **130 spike** ✅ → **131** next; **129 Track B** after **131**; **134** with or after **129 Track C** (titles + Historical); **127** after calendar + 128 (doubles need fixtures).
 
 **Prerequisites:** [122](./122-tennis-calendar-event-source.md) / [126](./126-sofascore-calendar-multi-sport-and-enrichment.md) ✅; [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) requeue after deploy.
 
@@ -132,13 +132,13 @@ Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMA
 
 ---
 
-## Wave 14 — Admin UX (open)
+## Wave 14 — Admin UX ✅ complete
 
 **Goal:** Fix operator-facing admin UI regressions unrelated to PPV/DB tracks.
 
 | TODO | Summary |
 |------|---------|
-| [132](./132-fix-xtream-credential-dialog-ux.md) | `/xtream` Add Credential modal: unwrap `GET /api/accounts` `{ data }` envelope (dropdown stuck on “Loading accounts…”); PPV Rename Timezone → `<select>` |
+| [132](./132-fix-xtream-credential-dialog-ux.md) | ✅ PR [#71](https://github.com/klopstack/iptv-proxy-v2/pull/71) — account dropdown + timezone `<select>` |
 
 **Root cause:** [73](./73-standardize-api-response-shapes.md) migrated accounts list to `data_response`; `templates/xtream.html` never adopted `apiUnwrapData` / `account_select.js`.
 
@@ -146,13 +146,13 @@ Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMA
 
 ---
 
-## Recommended “next five”
+## Recommended “next five” (non-PG)
 
-1. **[111](./111-pg-prep-raw-sqlite3-audit.md)** — PostgreSQL prep (batch **PG-A1**)
-2. **[112](./112-pg-prep-json-column-types.md)** — JSON column types (batch **PG-A1**)
-3. **[113](./113-pg-prep-alembic-migration-system.md)** — Alembic migration system (batch **PG-A2**)
-4. **[114](./114-pg-prep-test-db-hardening.md)** — Test DB hardening (batch **PG-A3**)
-5. **[115](./115-pg-prep-ci-docker-config.md)** — CI/Docker PG (batch **PG-A3**)
+1. **[131](./131-sofascore-college-amateur-calendar-provider.md)** — SofaScore `ice-hockey` + replay window + Sportsipy supplement ([130](./130-ncaa-college-calendar-source-spike.md) ✅)
+2. **[129](./129-ppv-replay-archive-enrichment-flosp.md) Track B** — historical calendar matching (after 131)
+3. **[133](./133-sofascore-multi-sport-refactor-and-football-followups.md) P0** — WC deploy + requeue ops
+4. **[111](./111-pg-prep-raw-sqlite3-audit.md)** — PostgreSQL prep (batch **PG-A1**, when #72 lands)
+5. **[112](./112-pg-prep-json-column-types.md)** — JSON column types (batch **PG-A1**)
 
 **Ops (post Wave 12 deploy):** Requeue `no_match` channels via [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md).
 

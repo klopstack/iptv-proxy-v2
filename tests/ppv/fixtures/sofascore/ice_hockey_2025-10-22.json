@@ -1,0 +1,54 @@
+{
+  "events": [
+    {
+      "id": 14213028,
+      "startTimestamp": 1761174420,
+      "status": {
+        "code": 100,
+        "description": "Ended",
+        "type": "finished"
+      },
+      "homeTeam": {
+        "id": 119612,
+        "name": "Sault Ste Marie Greyhounds",
+        "shortName": "Sault Ste Marie Greyhounds"
+      },
+      "awayTeam": {
+        "id": 119582,
+        "name": "Erie Otters",
+        "shortName": "Erie Otters"
+      },
+      "tournament": {
+        "name": "OHL",
+        "category": {
+          "name": "Canada"
+        }
+      }
+    },
+    {
+      "id": 14156485,
+      "startTimestamp": 1761184800,
+      "status": {
+        "code": 100,
+        "description": "Ended",
+        "type": "finished"
+      },
+      "homeTeam": {
+        "id": 45169,
+        "name": "San Diego Gulls",
+        "shortName": "San Diego"
+      },
+      "awayTeam": {
+        "id": 292497,
+        "name": "Colorado Eagles",
+        "shortName": "Colorado"
+      },
+      "tournament": {
+        "name": "AHL",
+        "category": {
+          "name": "USA"
+        }
+      }
+    }
+  ]
+}
