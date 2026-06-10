@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import text
 
 # Add parent directory to path so we can import app modules
@@ -60,16 +61,70 @@ def _cleanup_test_db() -> None:
             db_file.unlink()
 
 
-def _reset_pg_database(engine) -> None:
-    """Drop and recreate public schema (cleaner than drop_all on PostgreSQL)."""
-    engine.dispose()
+def _pg_worker_schema() -> str | None:
+    """Per-xdist-worker PostgreSQL schema for parallel test isolation."""
+    worker = os.environ.get("PYTEST_XDIST_WORKER")
+    if worker and worker != "master":
+        return f"pytest_{worker}"
+    return None
+
+
+def _ensure_pg_worker_schema(engine) -> None:
+    schema = _pg_worker_schema()
+    if not schema:
+        return
     with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-        conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
-        conn.execute(text("CREATE SCHEMA public"))
-        conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
+        conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema}"'))
         db_user = engine.url.username
         if db_user:
-            conn.execute(text(f'GRANT ALL ON SCHEMA public TO "{db_user}"'))
+            conn.execute(text(f'GRANT ALL ON SCHEMA "{schema}" TO "{db_user}"'))
+
+
+def _set_pg_search_path(dbapi_conn, _connection_record) -> None:
+    schema = _pg_worker_schema()
+    if not schema:
+        return
+    cursor = dbapi_conn.cursor()
+    cursor.execute(f'SET search_path TO "{schema}", public')
+    cursor.close()
+
+
+def _pg_connection(conn):
+    """Apply per-worker search_path on a SQLAlchemy connection."""
+    schema = _pg_worker_schema()
+    if schema:
+        conn.execute(text(f'SET search_path TO "{schema}", public'))
+    return conn
+
+
+def _truncate_pg_tables(engine) -> None:
+    """Clear all rows between tests; much faster than DROP SCHEMA per test."""
+    tables = [t.name for t in _db.metadata.sorted_tables]
+    if not tables:
+        return
+    stmt = f"TRUNCATE {', '.join(tables)} RESTART IDENTITY CASCADE"
+    with engine.connect() as conn:
+        _pg_connection(conn)
+        conn.execute(text(stmt))
+        conn.commit()
+
+
+@pytest.fixture(scope="session")
+def _pg_schema():
+    """Ensure PostgreSQL schema exists once per test session (CI also runs Alembic)."""
+    if is_sqlite_backend():
+        yield
+        return
+
+    flask_app = app_module.app
+    with flask_app.app_context():
+        _ensure_pg_worker_schema(_db.engine)
+        with _db.engine.connect() as conn:
+            _pg_connection(conn)
+            if not sa_inspect(conn).get_table_names():
+                _db.metadata.create_all(bind=conn)
+            conn.commit()
+    yield
 
 
 def _reset_test_db(flask_app) -> None:
@@ -77,10 +132,6 @@ def _reset_test_db(flask_app) -> None:
     with flask_app.app_context():
         _db.session.remove()
         _db.engine.dispose()
-        if not is_sqlite_backend():
-            _reset_pg_database(_db.engine)
-            _db.engine.dispose()
-            return
     _cleanup_test_db()
 
 
@@ -106,9 +157,15 @@ import app as app_module
 from models import Account, Category, Channel, Credential, EpgSource
 from models import db as _db
 
+if not is_sqlite_backend():
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+
+    event.listens_for(Engine, "connect")(_set_pg_search_path)
+
 
 @pytest.fixture(scope="function")
-def app():
+def app(_pg_schema):
     """
     Create Flask app configured for testing
 
@@ -117,23 +174,23 @@ def app():
     flask_app = app_module.app
     flask_app.config["TESTING"] = True
 
-    _reset_test_db(flask_app)
-
-    # Create all tables
-    with flask_app.app_context():
-        _db.create_all()
-        yield flask_app
-        # Properly dispose of all connections before dropping tables
-        # This prevents "database is locked" errors with SQLite
-        _db.session.remove()
-        _db.engine.dispose()
-        if is_sqlite_backend():
+    if is_sqlite_backend():
+        _reset_test_db(flask_app)
+        with flask_app.app_context():
+            _db.create_all()
+            yield flask_app
+            _db.session.remove()
+            _db.engine.dispose()
             _db.drop_all()
             _db.engine.dispose()
-        # PostgreSQL: next test's setup resets via DROP SCHEMA; skip teardown to avoid deadlocks
-
-    if is_sqlite_backend():
         _cleanup_test_db()
+        return
+
+    # PostgreSQL: truncate rows per test (~400ms vs ~1.4s for DROP SCHEMA).
+    with flask_app.app_context():
+        _truncate_pg_tables(_db.engine)
+        yield flask_app
+        _db.session.remove()
 
 
 @pytest.fixture(scope="function")
