@@ -74,6 +74,25 @@ def _rate_limit() -> None:
     _last_request_time = time.time()
 
 
+def _http_get(
+    url: str,
+    *,
+    timeout: int,
+    headers: Optional[Dict[str, str]] = None,
+    session: Optional[requests.Session] = None,
+):
+    """HTTP GET with Chrome TLS fingerprint via curl_cffi; falls back to requests."""
+    hdrs = headers or {}
+    if session is not None:
+        return session.get(url, timeout=timeout, headers=hdrs)
+    try:
+        from curl_cffi import requests as curl_requests
+
+        return curl_requests.get(url, timeout=timeout, headers=hdrs, impersonate="chrome")
+    except ImportError:
+        return requests.get(url, timeout=timeout, headers=hdrs)
+
+
 def _parse_start_timestamp(ts: Optional[int]) -> Optional[datetime]:
     if ts is None:
         return None
@@ -232,12 +251,12 @@ def _fetch_scheduled_events_http(
 
     url = SCHEDULED_EVENTS_URL.format(sport=sport, date_str=date_str)
     _rate_limit()
-    http = session or requests
     try:
-        response = http.get(
+        response = _http_get(
             url,
             timeout=REQUEST_TIMEOUT,
             headers={"User-Agent": "iptv-proxy-v2/1.0"},
+            session=session,
         )
         response.raise_for_status()
         return response.json()

@@ -1,6 +1,7 @@
 """Tests for SofaScore tennis calendar provider (slice 1 — not wired to enrichment)."""
 
 import json
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -52,13 +53,51 @@ class TestScheduledEventToCalendarEvent:
         assert scheduled_event_to_calendar_event(raw, fallback_date="2026-06-03") is None
 
 
+class TestHttpGet:
+    def test_prefers_curl_cffi_with_chrome_impersonation(self):
+        mock_response = MagicMock()
+        mock_curl = MagicMock()
+        mock_curl.get.return_value = mock_response
+
+        with patch.dict("sys.modules", {"curl_cffi": MagicMock(requests=mock_curl)}):
+            from services.tennis.sofascore_calendar import _http_get
+
+            result = _http_get("https://api.sofascore.com/test", timeout=30, headers={"User-Agent": "test"})
+            assert result is mock_response
+            mock_curl.get.assert_called_once_with(
+                "https://api.sofascore.com/test",
+                timeout=30,
+                headers={"User-Agent": "test"},
+                impersonate="chrome",
+            )
+
+    def test_falls_back_to_requests_when_curl_cffi_missing(self):
+        mock_response = MagicMock()
+        with patch("services.tennis.sofascore_calendar.requests.get", return_value=mock_response) as mock_requests:
+            import builtins
+
+            real_import = builtins.__import__
+
+            def _import_without_curl(name, *args, **kwargs):
+                if name == "curl_cffi":
+                    raise ImportError("no curl_cffi")
+                return real_import(name, *args, **kwargs)
+
+            with patch("builtins.__import__", side_effect=_import_without_curl):
+                from services.tennis.sofascore_calendar import _http_get
+
+                result = _http_get("https://api.sofascore.com/test", timeout=30)
+                assert result is mock_response
+                mock_requests.assert_called_once()
+
+
 class TestFetchTennisEventsForDate:
     def setup_method(self):
         clear_sofascore_tennis_calendar_cache()
 
     def test_flag_off_returns_empty_without_http(self, app):
         Settings.set(SETTING_PPV_SOFASCORE_CALENDAR_ENABLED, "false")
-        with patch("services.tennis.sofascore_calendar.requests.get") as mock_get:
+        with patch("services.tennis.sofascore_calendar._http_get") as mock_get:
             assert fetch_tennis_events_for_date("2026-06-03") == []
             mock_get.assert_not_called()
 
@@ -69,7 +108,7 @@ class TestFetchTennisEventsForDate:
         mock_response.json.return_value = payload
         mock_response.raise_for_status = MagicMock()
 
-        with patch("services.tennis.sofascore_calendar.requests.get", return_value=mock_response) as mock_get:
+        with patch("services.tennis.sofascore_calendar._http_get", return_value=mock_response) as mock_get:
             first = fetch_tennis_events_for_date("2026-06-03", force_refresh=True)
             second = fetch_tennis_events_for_date("2026-06-03")
             assert len(first) >= 1
@@ -86,7 +125,7 @@ class TestFetchTennisEventsForDate:
         # First request at t=100 (no sleep); second at t=100.5 after 0.5s elapsed.
         time_values = iter([100.0, 100.0, 100.5, 100.5])
 
-        with patch("services.tennis.sofascore_calendar.requests.get", return_value=mock_response):
+        with patch("services.tennis.sofascore_calendar._http_get", return_value=mock_response):
             with patch("services.tennis.sofascore_calendar.time.sleep") as mock_sleep:
                 with patch("services.tennis.sofascore_calendar.time.time", side_effect=lambda: next(time_values)):
                     with patch("services.tennis.sofascore_calendar.random.uniform", return_value=0.0):
