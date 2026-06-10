@@ -1,6 +1,6 @@
 # SofaScore college / amateur calendar provider (multi-sport extension)
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Complete  
 **Priority:** P1  
 **Depends on:** [130](./130-ncaa-college-calendar-source-spike.md) ✅ — hybrid go-ahead ([spike doc](../architecture/ncaa-college-calendar-source-spike.md))  
 **Blocks:** [129](./129-ppv-replay-archive-enrichment-flosp.md) Track B (historical replay matching)
@@ -75,12 +75,12 @@ Per-sport feature flags (`ppv_sofascore_basketball_enabled`, …) — only when 
 
 ## Acceptance criteria
 
-- [ ] With flags on, `get_events_for_date("2025-10-22")` includes SofaScore college/hockey events (count > 0 when API has fixtures — use recorded fixture in CI).
-- [ ] With college flag off, behavior identical to pre-131 (tennis-only SofaScore).
-- [ ] ≥10 Flo sample titles from [130](./130-ncaa-college-calendar-source-spike.md) match in integration test (mocked fixture JSON).
-- [ ] Replay-dated channel (`2025-10-22`) triggers fetch despite date > 14 days ago; live channel on same code path without `replay_archive` does **not** expand window.
-- [ ] Rate limit + cache tests ported from tennis module.
-- [ ] Architecture docs updated; spike doc linked in **Completion**.
+- [x] With flags on, `get_events_for_date("2025-10-22")` includes SofaScore college/hockey events (count > 0 when API has fixtures — use recorded fixture in CI).
+- [x] With college flag off, behavior identical to pre-131 (tennis-only SofaScore).
+- [x] ≥10 Flo sample titles from [130](./130-ncaa-college-calendar-source-spike.md) match in integration test (mocked fixture JSON).
+- [x] Replay-dated channel (`2025-10-22`) triggers fetch despite date > 14 days ago; live channel on same code path without `replay_archive` does **not** expand window.
+- [x] Rate limit + cache tests ported from tennis module.
+- [x] Architecture docs updated; spike doc linked in **Completion**.
 - [ ] Production: Flo `matched` count > 0 after [129](./129-ppv-replay-archive-enrichment-flosp.md) Track A + requeue ([124](./124-ppv-enrichment-attempt-tracking-and-requeue.md)).
 
 ## Test plan
@@ -125,3 +125,15 @@ Do not start fallback implementation until spike closes and 131 scope is adjuste
 ```
 
 Parallel: [129](./129-ppv-replay-archive-enrichment-flosp.md) Track A (enrichability) can land before 131 if calendar merge follows immediately after.
+
+## Completion
+
+Implemented hybrid stack from [130 spike](../architecture/ncaa-college-calendar-source-spike.md):
+
+- SofaScore `ice-hockey` slug behind `ppv_sofascore_college_enabled` with `parser_ice_hockey.py` and TSDB hockey dedup
+- `REPLAY_CALENDAR_DAYS_BACK=400` replay window bypass in client + scraper + match_pipeline date routing
+- Sportsipy `ncaab` supplement hook in `match_pipeline` for `- Mens -` / `- Womens -` Flo replay channels (not day-bucket merge)
+- Rejected SofaScore `basketball` for college — spike confirmed 0% DIII hit rate
+- Fixtures: `tests/ppv/fixtures/sofascore/ice_hockey_2025-10-22.json`, `ice_hockey_2025-10-23.json`
+
+**Deferred to 129 Track B:** E2E Flo channel → past `Event.scheduled_at` → Replay visibility wiring; production Flo requeue verification.

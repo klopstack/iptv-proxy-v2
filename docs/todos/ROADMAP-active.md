@@ -113,10 +113,10 @@ Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMA
 | **AJ** | [127](./127-ppv-multi-player-competitor-extraction.md) | 2v2 name parsing + `competitors_match_event` + matcher validation |
 | **AL** | [129](./129-ppv-replay-archive-enrichment-flosp.md) | Flo/FLSP archive replays → enrich + **Replay** playlist group |
 | **AM** | [130](./130-ncaa-college-calendar-source-spike.md) | ✅ Spike: hybrid SofaScore `ice-hockey` + Sportsipy `ncaab` — [architecture](../architecture/ncaa-college-calendar-source-spike.md) |
-| **AN** | [131](./131-sofascore-college-amateur-calendar-provider.md) | SofaScore multi-sport + historical window → calendar merge |
+| **AN** | [131](./131-sofascore-college-amateur-calendar-provider.md) | ✅ SofaScore ice-hockey + Sportsipy ncaab + `REPLAY_CALENDAR_DAYS_BACK` |
 | **AO** | [133](./133-sofascore-multi-sport-refactor-and-football-followups.md) | Generic SofaScore provider refactor; PR #74 WC football ops + soccer follow-ups |
 
-**Order:** **128** ✅ + tennis requeue; PR **#74** deploy + **124** WC requeue; **133 refactor** ✅ before **131**; **130 spike** ✅ → **131** next; **129 Track B** after **131**; **127** ✅.
+**Order:** **128** ✅ + tennis requeue; PR **#74** deploy + **124** WC requeue; **133 refactor** ✅ before **131** ✅; **130 spike** ✅; **129 Track B** next; **127** ✅.
 
 **Prerequisites:** [122](./122-tennis-calendar-event-source.md) / [126](./126-sofascore-calendar-multi-sport-and-enrichment.md) ✅; [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) requeue after deploy.
 

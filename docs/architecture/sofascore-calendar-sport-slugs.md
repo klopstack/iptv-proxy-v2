@@ -11,6 +11,7 @@ GET https://api.sofascore.com/api/v1/sport/{slug}/scheduled-events/{YYYY-MM-DD}
 Feature flags:
 - `ppv_sofascore_calendar_enabled` — tennis (default **off**)
 - `ppv_sofascore_football_enabled` — football/soccer (default **on**)
+- `ppv_sofascore_college_enabled` — ice-hockey AHL/OHL/QMJHL/ECHL for Flo replay (default **off**)
 
 ## Merge order
 
@@ -18,6 +19,7 @@ Feature flags:
 2. **ESPN tennis** (primary)
 3. **SofaScore tennis** (secondary, `ppv_sofascore_calendar_enabled`) — deduped by `(player pair, calendar day)`; ESPN wins
 4. **SofaScore football** (secondary, `ppv_sofascore_football_enabled`, default **on**) — deduped by `(home, away, calendar day)` vs TheSportsDB; TSDB wins
+5. **SofaScore ice-hockey** (secondary, `ppv_sofascore_college_enabled`, default **off**) — AHL/OHL/QMJHL/ECHL for Flo replay; deduped vs TSDB hockey; replay window 400d
 
 ## Sport slugs
 
@@ -25,7 +27,7 @@ Feature flags:
 |------|---------|----------|--------|
 | `football` | World Cup and other soccer gaps when TheSportsDB is incomplete | P0 | Production (WC 2026) |
 | `tennis` | Wheelchair, ITF, legends gaps after ESPN | P0 | Production (126) |
-| `ice-hockey` | AHL, OHL, QMJHL, WHL, ECHL — Flo replay tail ([130 spike](./ncaa-college-calendar-source-spike.md)) | P1 | Spike ✅ — wire in [131](../todos/131-sofascore-college-amateur-calendar-provider.md) |
+| `ice-hockey` | AHL, OHL, QMJHL, WHL, ECHL — Flo replay tail ([130 spike](./ncaa-college-calendar-source-spike.md)) | P1 | ✅ [131](../todos/131-sofascore-college-amateur-calendar-provider.md) |
 | `american-football` | NCAA FBS/FCS Saturdays (optional Phase B) | P2 | Spike ✅ — low Oct volume |
 | `basketball` | **Not** NCAA/DIII college (NBA/international only) | — | Spike ❌ for college — use Sportsipy supplement |
 | `mma` | Combat PPV overlap with [123 track C](../todos/123-extended-calendar-coverage-college-obscure-sports.md) | P2 | Documented only |

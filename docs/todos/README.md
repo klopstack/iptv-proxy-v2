@@ -267,7 +267,7 @@ Identified from live analysis on `docker.klopnet.com` (18,625 active PPV channel
 | 128 | [128-fix-ppv-year-inference-recent-past-dates.md](./128-fix-ppv-year-inference-recent-past-dates.md) | ✅ | `@ Jun 3` recent-past year rollover — 7-day lookback in `resolve_month_day_year` |
 | 129 | [129-ppv-replay-archive-enrichment-flosp.md](./129-ppv-replay-archive-enrichment-flosp.md) | 🟡 | Track A+C ✅ [#80](https://github.com/klopstack/iptv-proxy-v2/pull/80); Track B → [131](./131-sofascore-college-amateur-calendar-provider.md) |
 | 130 | [130-ncaa-college-calendar-source-spike.md](./130-ncaa-college-calendar-source-spike.md) | ✅ | Spike: hybrid SofaScore `ice-hockey` + Sportsipy `ncaab` — [architecture](../architecture/ncaa-college-calendar-source-spike.md) |
-| 131 | [131-sofascore-college-amateur-calendar-provider.md](./131-sofascore-college-amateur-calendar-provider.md) | ⬜ | Wire spike stack + `REPLAY_CALENDAR_DAYS_BACK` for Flo replay matching |
+| 131 | [131-sofascore-college-amateur-calendar-provider.md](./131-sofascore-college-amateur-calendar-provider.md) | ✅ | SofaScore ice-hockey + Sportsipy ncaab supplement + replay window — PR TBD |
 | 133 | [133-sofascore-multi-sport-refactor-and-football-followups.md](./133-sofascore-multi-sport-refactor-and-football-followups.md) | 🟡 | Refactor ✅ [#81](https://github.com/klopstack/iptv-proxy-v2/pull/81); P0 WC ops after deploy |
 
 ```

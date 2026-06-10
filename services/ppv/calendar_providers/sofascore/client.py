@@ -16,6 +16,7 @@ from services.ppv.calendar_providers.sofascore.constants import (
     REQUEST_TIMEOUT,
     SCHEDULED_EVENTS_URL,
 )
+from services.ppv.constants import REPLAY_CALENDAR_DAYS_BACK
 from services.thesportsdb_calendar_scraper import (
     MAX_API_SUPPLEMENT_DAYS_AHEAD,
     MAX_API_SUPPLEMENT_DAYS_BACK,
@@ -28,14 +29,21 @@ _sofascore_cache: Dict[str, Tuple[List[CalendarEvent], float]] = {}
 _last_request_time = 0.0
 
 
-def is_date_in_window(date_str: str) -> bool:
+def is_date_in_window(date_str: str, *, replay: bool = False) -> bool:
     try:
         target = datetime.strptime(date_str, "%Y-%m-%d").date()
     except ValueError:
         return False
     today = datetime.now(timezone.utc).date()
     delta = (target - today).days
+    if replay:
+        return -REPLAY_CALENDAR_DAYS_BACK <= delta <= MAX_API_SUPPLEMENT_DAYS_AHEAD
     return -MAX_API_SUPPLEMENT_DAYS_BACK <= delta <= MAX_API_SUPPLEMENT_DAYS_AHEAD
+
+
+def is_date_in_replay_window(date_str: str) -> bool:
+    """Return True when date is within replay archive lookback (400d default)."""
+    return is_date_in_window(date_str, replay=True)
 
 
 def rate_limit() -> None:
@@ -72,9 +80,10 @@ def fetch_scheduled_events_http(
     date_str: str,
     *,
     session: Optional[requests.Session] = None,
+    replay: bool = False,
 ) -> dict:
     """Fetch raw SofaScore scheduled-events JSON (no feature-flag gate)."""
-    if not is_date_in_window(date_str):
+    if not is_date_in_window(date_str, replay=replay):
         return {"events": []}
 
     url = SCHEDULED_EVENTS_URL.format(sport=sport_slug, date_str=date_str)
@@ -115,3 +124,13 @@ def cache_stats() -> Dict[str, Any]:
         "cache_entries": len(_sofascore_cache),
         "cached_events": sum(len(events) for events, _ in _sofascore_cache.values()),
     }
+
+
+def cached_slug_event_counts() -> Dict[str, int]:
+    counts: Dict[str, int] = {}
+    for cache_key, (events, _) in _sofascore_cache.items():
+        if not cache_key.startswith("sofascore-"):
+            continue
+        slug = cache_key.removeprefix("sofascore-").split(":", 1)[0]
+        counts[slug] = counts.get(slug, 0) + len(events)
+    return counts

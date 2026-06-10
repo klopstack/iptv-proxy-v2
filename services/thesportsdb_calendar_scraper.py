@@ -474,7 +474,9 @@ class TheSportsDBCalendarScraper:
             return False
         return (time.time() - timestamp) < self._cache_ttl
 
-    def get_events_for_date(self, date: str, sport: str = "", force_refresh: bool = False) -> List[CalendarEvent]:
+    def get_events_for_date(
+        self, date: str, sport: str = "", force_refresh: bool = False, *, replay: bool = False
+    ) -> List[CalendarEvent]:
         """
         Get all events for a specific date from the calendar page.
 
@@ -482,6 +484,7 @@ class TheSportsDBCalendarScraper:
             date: Date in YYYY-MM-DD format
             sport: Optional sport filter (empty string for all sports)
             force_refresh: If True, bypass cache
+            replay: When True, allow SofaScore fetch outside live ±14d window (400d lookback)
 
         Returns:
             List of CalendarEvent objects for the date
@@ -508,12 +511,19 @@ class TheSportsDBCalendarScraper:
                 sport,
                 espn_tennis_events=espn_tennis_events,
                 tsdb_soccer_events=tsdb_soccer_events,
+                replay=replay,
             )
             sofascore_tennis_unique = sofascore_supplements.get("tennis", [])
             sofascore_football_unique = sofascore_supplements.get("football", [])
+            sofascore_ice_hockey_unique = sofascore_supplements.get("ice-hockey", [])
             events = self._merge_calendar_events(
                 html_events,
-                api_events + milb_events + espn_tennis_events + sofascore_tennis_unique + sofascore_football_unique,
+                api_events
+                + milb_events
+                + espn_tennis_events
+                + sofascore_tennis_unique
+                + sofascore_football_unique
+                + sofascore_ice_hockey_unique,
             )
             if events:
                 self._cache[cache_key] = (events, time.time())
@@ -649,6 +659,7 @@ class TheSportsDBCalendarScraper:
         *,
         espn_tennis_events: Optional[List[CalendarEvent]] = None,
         tsdb_soccer_events: Optional[List[CalendarEvent]] = None,
+        replay: bool = False,
     ) -> Dict[str, List[CalendarEvent]]:
         """Fetch enabled SofaScore slugs for a date, applying registry dedup strategies."""
         from services.ppv.calendar_providers.sofascore import fetch_events_for_slug
@@ -662,15 +673,20 @@ class TheSportsDBCalendarScraper:
         results: Dict[str, List[CalendarEvent]] = {}
         espn_primary = espn_tennis_events or []
         tsdb_primary = tsdb_soccer_events or []
+        tsdb_hockey_primary = [
+            event for event in tsdb_primary if (event.sport or "").lower() in ("ice hockey", "hockey", "nhl")
+        ]
 
         for slug, config in SLUG_REGISTRY.items():
             if not slug_enabled(slug) or not slug_allowed_for_sport_filter(slug, sport):
                 continue
-            sofascore_events = fetch_events_for_slug(slug, date)
+            sofascore_events = fetch_events_for_slug(slug, date, replay=replay)
             if config.dedup_strategy == "espn_tennis":
                 primary = espn_primary
             elif config.dedup_strategy == "tsdb_football":
                 primary = tsdb_primary
+            elif config.dedup_strategy == "tsdb_hockey":
+                primary = tsdb_hockey_primary
             else:
                 primary = []
             results[slug] = dedup_sofascore_events(slug, primary_events=primary, sofascore_events=sofascore_events)

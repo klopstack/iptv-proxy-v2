@@ -159,6 +159,10 @@ class Settings(db.Model):  # type: ignore[name-defined]
             "true",
             "Merge SofaScore football/soccer into the PPV calendar when TheSportsDB coverage is incomplete (e.g. World Cup).",
         ),
+        "ppv_sofascore_college_enabled": (
+            "false",
+            "Merge SofaScore ice-hockey (AHL/OHL/QMJHL/ECHL) for Flo replay archive channels; uses REPLAY_CALENDAR_DAYS_BACK window.",
+        ),
         # Stream proxy failover to linked backup channels
         "stream_fallback_enabled": (
             "true",

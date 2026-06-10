@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List
 
 from models.sync import Settings
-from services.ppv.calendar_providers.sofascore import parser_football, parser_tennis
-from services.ppv.constants import SETTING_PPV_SOFASCORE_CALENDAR_ENABLED, SETTING_PPV_SOFASCORE_FOOTBALL_ENABLED
+from services.ppv.calendar_providers.sofascore import parser_football, parser_ice_hockey, parser_tennis
+from services.ppv.constants import (
+    SETTING_PPV_SOFASCORE_CALENDAR_ENABLED,
+    SETTING_PPV_SOFASCORE_COLLEGE_ENABLED,
+    SETTING_PPV_SOFASCORE_FOOTBALL_ENABLED,
+)
 from services.thesportsdb_calendar_scraper import CalendarEvent
 
 
@@ -41,6 +45,16 @@ SLUG_REGISTRY: Dict[str, SofaScoreSlugConfig] = {
         parser=lambda payload, date_str: parser_football.parse_football_scheduled_events(payload, date_str=date_str),
         sport_filter_tokens=frozenset({"", "all", "soccer", "football"}),
         dedup_strategy="tsdb_football",
+    ),
+    "ice-hockey": SofaScoreSlugConfig(
+        slug="ice-hockey",
+        setting_key=SETTING_PPV_SOFASCORE_COLLEGE_ENABLED,
+        default_enabled="false",
+        parser=lambda payload, date_str: parser_ice_hockey.parse_ice_hockey_scheduled_events(
+            payload, date_str=date_str
+        ),
+        sport_filter_tokens=frozenset({"", "all", "hockey", "nhl", "ice hockey", "ice-hockey"}),
+        dedup_strategy="tsdb_hockey",
     ),
 }
 
