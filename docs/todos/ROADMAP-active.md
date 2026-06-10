@@ -15,9 +15,9 @@ Open work only. Completed waves **1–10** (PRs #10–51) and **Wave 12** (PRs #
 | Dashboard follow-ups | 107–110 | **0** | 107–109 ✅; [110](./110-dashboard-optional-ux-follow-ups.md) won't do |
 | Wave 11 — PostgreSQL | 111–119 | **9** | Series A + Series B |
 | Wave 12 — PPV matching | 120–126, 123 | **0** | ✅ complete June 2026; 123 A/B in review [#62](https://github.com/klopstack/iptv-proxy-v2/pull/62)/[#63](https://github.com/klopstack/iptv-proxy-v2/pull/63) |
-| Wave 13 — PPV follow-ups | 127–131 | **5** | Doubles; dates; Flo replay; NCAA spike + SofaScore college |
+| Wave 13 — PPV follow-ups | 127–131, 133 | **6** | Doubles; dates; Flo replay; NCAA spike + SofaScore refactor/college |
 | Wave 14 — Admin UX | 132 | **1** | Xtream credential modal — account dropdown + timezone select |
-| **Total required** | | **15** | 111–119, 127–131, 132 |
+| **Total required** | | **16** | 111–119, 127–131, 132, 133 |
 
 Waves **1–10** ✅ — see [archive/ROADMAP-waves-1-10.md](./archive/ROADMAP-waves-1-10.md).  
 **Wave 12** ✅ — see [§ Wave 12 complete](#wave-12--ppv-production-matching-gaps--complete-june-2026) below.
@@ -114,8 +114,9 @@ Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMA
 | **AL** | [129](./129-ppv-replay-archive-enrichment-flosp.md) | Flo/FLSP archive replays → enrich + **Replay** playlist group |
 | **AM** | [130](./130-ncaa-college-calendar-source-spike.md) | Spike: NCAA / college calendar sources (SofaScore slugs, Sportsipy, …) |
 | **AN** | [131](./131-sofascore-college-amateur-calendar-provider.md) | SofaScore multi-sport + historical window → calendar merge |
+| **AO** | [133](./133-sofascore-multi-sport-refactor-and-football-followups.md) | Generic SofaScore provider refactor; PR #74 WC football ops + soccer follow-ups |
 
-**Order:** **128** before tennis requeue; **130 spike** before **131** wire; **129 Track B** after **131**; **127** after calendar + 128 (doubles need fixtures).
+**Order:** **128** before tennis requeue; PR **#74** deploy + **124** WC requeue; **133 refactor** before **131** college slug wire; **130 spike** before **131**; **129 Track B** after **131**; **127** after calendar + 128 (doubles need fixtures).
 
 **Prerequisites:** [122](./122-tennis-calendar-event-source.md) / [126](./126-sofascore-calendar-multi-sport-and-enrichment.md) ✅; [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md) requeue after deploy.
 
@@ -125,6 +126,7 @@ Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMA
 - [127](./127-ppv-multi-player-competitor-extraction.md) — ~89 unique doubles keys — [tennis-ppv-production-audit.md](../architecture/tennis-ppv-production-audit.md) §4.
 - [129](./129-ppv-replay-archive-enrichment-flosp.md) — **243** Flo channels (~72% of 339 queued tail); product intent is replay enrichment, not `stale_archive` skip.
 - [130](./130-ncaa-college-calendar-source-spike.md) / [131](./131-sofascore-college-amateur-calendar-provider.md) — calendar gap for Oct 2025 college/hockey; ±14-day SofaScore window blocks historical replay fetch.
+- [133](./133-sofascore-multi-sport-refactor-and-football-followups.md) — PR #74 football lives in `services/tennis/sofascore_calendar.py`; refactor unblocks 131 and future slugs.
 
 ---
 

@@ -1,6 +1,6 @@
 # SofaScore calendar sport slugs
 
-Secondary PPV calendar source behind ESPN tennis ([122](../todos/122-tennis-calendar-event-source.md)). Wired in [126](../todos/126-sofascore-calendar-multi-sport-and-enrichment.md); client/parser in [125](../todos/125-sofascore-tennis-calendar-slice1.md).
+Secondary PPV calendar source behind ESPN tennis ([122](../todos/122-tennis-calendar-event-source.md)). Wired in [126](../todos/126-sofascore-calendar-multi-sport-and-enrichment.md); client/parser in [125](../todos/125-sofascore-tennis-calendar-slice1.md). Football (WC) in PR [#74](https://github.com/klopstack/iptv-proxy-v2/pull/74). **Refactor track:** [133](../todos/133-sofascore-multi-sport-refactor-and-football-followups.md) — move to `services/ppv/calendar_providers/sofascore/`, unified slug config, generic merge path.
 
 ## Endpoint
 
@@ -32,7 +32,7 @@ Additional slugs: discover via SofaScore sport list; add behind per-sport flags 
 
 ## Rate budget
 
-Module limiter: ~20 req/min with jitter (`services/tennis/sofascore_calendar.py`).
+Module limiter: ~20 req/min with jitter (today: `services/tennis/sofascore_calendar.py`; target: [133](../todos/133-sofascore-multi-sport-refactor-and-football-followups.md) → `services/ppv/calendar_providers/sofascore/client.py`).
 
 Rough envelope for tennis-only production:
 
