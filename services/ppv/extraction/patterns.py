@@ -33,14 +33,43 @@ DAY_MONTH_TIME_PATTERN = (
     r"\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+" r"(\d{1,2}):(\d{2})(?:\s*(AM|PM))?"
 )
 
-WEEKDAY_PATTERN = r"\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b"
+WEEKDAY_NAMES_PATTERN = (
+    r"(?:Mon(?:day)?|Tue(?:s(?:day)?)?|Wed(?:nesday)?|Thu(?:rs(?:day)?)?|" r"Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)"
+)
+WEEKDAY_PATTERN = rf"\b({WEEKDAY_NAMES_PATTERN})\b"
+
+_WEEKDAY_TO_ABBREV = {
+    "mon": "mon",
+    "monday": "mon",
+    "tue": "tue",
+    "tues": "tue",
+    "tuesday": "tue",
+    "wed": "wed",
+    "wednesday": "wed",
+    "thu": "thu",
+    "thur": "thu",
+    "thurs": "thu",
+    "thursday": "thu",
+    "fri": "fri",
+    "friday": "fri",
+    "sat": "sat",
+    "saturday": "sat",
+    "sun": "sun",
+    "sunday": "sun",
+}
+
+
+def normalize_weekday(name: str) -> str | None:
+    """Map weekday abbreviations and full names to three-letter lowercase."""
+    return _WEEKDAY_TO_ABBREV.get(name.lower())
+
 
 TIME_ONLY_PATTERN = r"\b(\d{1,2}):(\d{2})(?:\s*(am|pm))?\b"
 
 STOP_TIME_PATTERN = r"stop:(\d{4}-\d{1,2}-\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?)"
 
 PIPE_DATE_PATTERN = (
-    r"\|\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+"
+    rf"\|\s*{WEEKDAY_NAMES_PATTERN}\s+(\d{{1,2}})\s+"
     r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}):(\d{2})"
 )
 

@@ -93,7 +93,15 @@ def detect_separator(cleaned_name: str) -> Optional[str]:
     return None
 
 
+def _strip_tournament_slot_prefix(name: str) -> str:
+    """Drop numbered tournament slot prefix (e.g. 'World Cup 01 - Mexico' -> 'Mexico')."""
+    if " - " in name:
+        return name.rsplit(" - ", 1)[-1].strip()
+    return name
+
+
 def clean_team_name(name: str) -> str:
+    name = re.sub(r",?\s*kick-?off.*$", "", name, flags=re.IGNORECASE)
     name = re.sub(TRAILING_TIME_PATTERN, "", name, flags=re.IGNORECASE)
     name = re.sub(r":\w+.*$", "", name)
     name = re.sub(r"^#?\s*\d+\s+", "", name)
@@ -159,7 +167,7 @@ def extract_competitors_detail(channel_name: str) -> Optional[ExtractedCompetito
         return None
 
     if match.group(1) is not None:
-        comp1 = match.group(1).strip()
+        comp1 = _strip_tournament_slot_prefix(match.group(1).strip())
         comp2 = match.group(2).strip()
     elif match.group(3) is not None:
         comp1 = match.group(3).strip()
