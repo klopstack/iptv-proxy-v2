@@ -11,6 +11,56 @@ from services.ppv.constants import GENERIC_CHANNEL_PATTERNS, PPV_CATEGORY_PATTER
 
 logger = logging.getLogger(__name__)
 
+# Studio / analysis shows mis-parsed as vs events (e.g. "NHL Tonight @ Jun 10")
+STUDIO_SHOW_PATTERNS = [
+    re.compile(r"\bnhl\s+tonight\b", re.IGNORECASE),
+    re.compile(r"\bnba\s+today\b", re.IGNORECASE),
+    re.compile(r"\bnfl\s+today\b", re.IGNORECASE),
+    re.compile(r"\bmlb\s+tonight\b", re.IGNORECASE),
+    re.compile(r"\bjays\s+talk\s+plus\b", re.IGNORECASE),
+    re.compile(r"\btalk\s+plus\b", re.IGNORECASE),
+    re.compile(r"\bsport\s+news\b", re.IGNORECASE),
+    re.compile(r"\bsports?\s+cent(?:er|re)\b", re.IGNORECASE),
+    re.compile(r"\bhockey\s+central\b", re.IGNORECASE),
+    re.compile(r"\bfirst\s+take\b", re.IGNORECASE),
+    re.compile(r"\b(?:pre|post)[- ]?game\s+show\b", re.IGNORECASE),
+    re.compile(r"\b(?:talk\s+show|sports?\s+magazine|sports?\s+analysis)\b", re.IGNORECASE),
+]
+
+_MONTH_ABBREVS = frozenset({"jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"})
+_BOGUS_COMPETITOR_TOKENS = frozenset({"tonight", "today", "news", "talk", "show", "plus", "sport", "sports", "ended"})
+
+
+def is_studio_show_title(name: str) -> bool:
+    """Return True for studio/analysis programs that are not calendar matchable."""
+    if not name:
+        return False
+    for pattern in STUDIO_SHOW_PATTERNS:
+        if pattern.search(name):
+            return True
+    return False
+
+
+def is_bogus_extracted_competitors(competitors: tuple) -> bool:
+    """
+    Detect date-fragment pairs from @-style titles (e.g. Tonight vs Jun).
+
+    Extraction sometimes treats "NHL Tonight @ Jun 10" as a two-team event.
+    """
+    if not competitors or len(competitors) != 2:
+        return False
+    left = (competitors[0] or "").strip().lower()
+    right = (competitors[1] or "").strip().lower()
+    if not left or not right:
+        return False
+    if right in _MONTH_ABBREVS and any(token in left.split() for token in _BOGUS_COMPETITOR_TOKENS):
+        return True
+    if left in _MONTH_ABBREVS and any(token in right.split() for token in _BOGUS_COMPETITOR_TOKENS):
+        return True
+    if right in _MONTH_ABBREVS and len(left.split()) <= 3 and not any(sep in left for sep in (" vs ", " at ", " v ")):
+        return True
+    return False
+
 
 def is_ppv_category(category_name: str) -> bool:
     """Return True if category name matches PPV patterns."""
