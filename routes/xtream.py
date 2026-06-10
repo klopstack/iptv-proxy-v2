@@ -30,6 +30,7 @@ xtream_bp = Blueprint("xtream", __name__)
 PPV_EVENTS_CATEGORY_ID = "-1"
 PPV_LIVE_CATEGORY_ID = "-10"
 PPV_REPLAY_CATEGORY_ID = "-11"
+PPV_HISTORICAL_CATEGORY_ID = "-12"
 
 
 def _as_utc_aware(dt):
@@ -149,12 +150,14 @@ def _ppv_group_services(channels, account=None):
 
 
 def _build_ppv_grouping(channels, account=None):
-    """Map channel IDs to virtual Live/Replay PPV categories and linked events."""
+    """Map channel IDs to virtual Live/Replay/Historical PPV categories and linked events."""
     services = _ppv_group_services(channels, account=account)
     grouped = {}
     for channel in channels:
         service = services.get(channel.account_id)
         if not service:
+            continue
+        if not service.should_show_channel(channel):
             continue
         classification = service.classify_live_replay_channel(channel)
         if classification == PPVVisibilityService.PPV_GROUP_LIVE:
@@ -167,12 +170,17 @@ def _build_ppv_grouping(channels, account=None):
                 "category_id": PPV_REPLAY_CATEGORY_ID,
                 "event": service.get_linked_event(channel),
             }
+        elif classification == PPVVisibilityService.PPV_GROUP_HISTORICAL:
+            grouped[channel.id] = {
+                "category_id": PPV_HISTORICAL_CATEGORY_ID,
+                "event": service.get_linked_event(channel),
+            }
     return grouped
 
 
 def _sort_grouped_ppv_channels(channels, grouped_ppv, category_id):
-    """Sort PPV Live by soonest first and Replay by most recent first, with missing dates falling last."""
-    reverse = category_id == PPV_REPLAY_CATEGORY_ID
+    """Sort PPV Live by soonest first; Replay/Historical by most recent first."""
+    reverse = category_id in (PPV_REPLAY_CATEGORY_ID, PPV_HISTORICAL_CATEGORY_ID)
     fallback = datetime.max.replace(tzinfo=timezone.utc) if not reverse else datetime.min.replace(tzinfo=timezone.utc)
 
     def sort_key(channel):
@@ -350,7 +358,7 @@ def get_live_categories(xtream_cred, account, playlist_config):
         categories.append(
             {
                 "category_id": PPV_LIVE_CATEGORY_ID,
-                "category_name": "Live",
+                "category_name": PPVVisibilityService.ppv_group_display_title(PPVVisibilityService.PPV_GROUP_LIVE),
                 "parent_id": 0,
             }
         )
@@ -359,7 +367,18 @@ def get_live_categories(xtream_cred, account, playlist_config):
         categories.append(
             {
                 "category_id": PPV_REPLAY_CATEGORY_ID,
-                "category_name": "Replay",
+                "category_name": PPVVisibilityService.ppv_group_display_title(PPVVisibilityService.PPV_GROUP_REPLAY),
+                "parent_id": 0,
+            }
+        )
+
+    if any(data["category_id"] == PPV_HISTORICAL_CATEGORY_ID for data in grouped_ppv.values()):
+        categories.append(
+            {
+                "category_id": PPV_HISTORICAL_CATEGORY_ID,
+                "category_name": PPVVisibilityService.ppv_group_display_title(
+                    PPVVisibilityService.PPV_GROUP_HISTORICAL
+                ),
                 "parent_id": 0,
             }
         )
@@ -406,7 +425,7 @@ def get_live_streams(xtream_cred, account, playlist_config):
 
     # Filter by category if requested
     if category_id:
-        if category_id in (PPV_LIVE_CATEGORY_ID, PPV_REPLAY_CATEGORY_ID):
+        if category_id in (PPV_LIVE_CATEGORY_ID, PPV_REPLAY_CATEGORY_ID, PPV_HISTORICAL_CATEGORY_ID):
             channels = [ch for ch in channels if grouped_ppv.get(ch.id, {}).get("category_id") == category_id]
             channels = _sort_grouped_ppv_channels(channels, grouped_ppv, category_id)
         elif category_id == PPV_EVENTS_CATEGORY_ID:

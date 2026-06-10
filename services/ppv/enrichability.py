@@ -1,4 +1,17 @@
-"""Classify PPV channels as enrichable vs skippable before calendar matching."""
+"""Classify PPV channels as enrichable vs skippable before calendar matching.
+
+Stale archive policy (TODO 123 Track D, refined in TODO 129 Track D / TODO 134):
+
+| Content type | Enrichability | Playlist bucket |
+|--------------|---------------|-----------------|
+| ESPN Play 2023, no replay provider | ``stale_archive`` skip | Hidden / not enriched |
+| Flo/FLSP Oct 2025 replay, enrichable | Enrich → link | PPV - Historical or PPV - Replay by age |
+| Recent tennis replay (linked, 3 days ago) | Enrichable | PPV - Replay |
+| Upcoming within 24h | Enrichable | PPV - Live |
+
+Replay/archive providers (Flo/FLSP) are never ``stale_archive`` solely because the title date
+is in the past; they remain enrichable when competitors and a parseable date exist.
+"""
 
 from __future__ import annotations
 

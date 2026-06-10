@@ -903,3 +903,201 @@ class TestFarFutureVisibility:
             db.session.add(channel)
             db.session.commit()
             assert service.should_show_channel(channel) is True
+
+
+class TestGroupLiveReplayHistoricalSplit:
+    """PPV - Replay vs PPV - Historical classification (TODO 134)."""
+
+    def test_event_25_days_past_is_historical(self):
+        now = datetime(2026, 6, 10, 12, 0, 0)
+        event = Event(
+            external_id="historical-event",
+            scheduled_at=now - timedelta(days=25),
+            home_team_id="h",
+            home_team_name="Home",
+            away_team_id="a",
+            away_team_name="Away",
+            status=Event.STATUS_FINISHED,
+        )
+        assert (
+            PPVVisibilityService.classify_live_replay_event(event, current_time=now)
+            == PPVVisibilityService.PPV_GROUP_HISTORICAL
+        )
+
+    def test_event_5_days_past_is_replay(self):
+        now = datetime(2026, 6, 10, 12, 0, 0)
+        event = Event(
+            external_id="replay-event",
+            scheduled_at=now - timedelta(days=5),
+            home_team_id="h",
+            home_team_name="Home",
+            away_team_id="a",
+            away_team_name="Away",
+            status=Event.STATUS_FINISHED,
+        )
+        assert (
+            PPVVisibilityService.classify_live_replay_event(event, current_time=now)
+            == PPVVisibilityService.PPV_GROUP_REPLAY
+        )
+
+    def test_event_in_12_hours_is_live(self):
+        now = datetime(2026, 6, 10, 12, 0, 0)
+        event = Event(
+            external_id="live-event",
+            scheduled_at=now + timedelta(hours=12),
+            home_team_id="h",
+            home_team_name="Home",
+            away_team_id="a",
+            away_team_name="Away",
+            status=Event.STATUS_SCHEDULED,
+        )
+        assert (
+            PPVVisibilityService.classify_live_replay_event(event, current_time=now)
+            == PPVVisibilityService.PPV_GROUP_LIVE
+        )
+
+    def test_event_exactly_21_days_past_is_replay(self):
+        now = datetime(2026, 6, 10, 12, 0, 0)
+        event = Event(
+            external_id="boundary-replay",
+            scheduled_at=now - timedelta(days=21),
+            home_team_id="h",
+            home_team_name="Home",
+            away_team_id="a",
+            away_team_name="Away",
+            status=Event.STATUS_FINISHED,
+        )
+        assert (
+            PPVVisibilityService.classify_live_replay_event(event, current_time=now)
+            == PPVVisibilityService.PPV_GROUP_REPLAY
+        )
+
+    def test_ppv_group_display_titles(self):
+        assert PPVVisibilityService.ppv_group_display_title(PPVVisibilityService.PPV_GROUP_LIVE) == "PPV - Live"
+        assert PPVVisibilityService.ppv_group_display_title(PPVVisibilityService.PPV_GROUP_REPLAY) == "PPV - Replay"
+        assert (
+            PPVVisibilityService.ppv_group_display_title(PPVVisibilityService.PPV_GROUP_HISTORICAL)
+            == "PPV - Historical"
+        )
+
+
+class TestGroupVisibilityToggles:
+    """Per-group show/hide toggles for group_live_replay accounts (TODO 134)."""
+
+    def test_historical_hidden_when_toggle_off(self, app):
+        with app.app_context():
+            account = Account(
+                name="Toggle Test",
+                server="http://test.com",
+                ppv_visibility="group_live_replay",
+                ppv_show_historical=False,
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="hist-1",
+                name="Old Flo Replay",
+                is_ppv=True,
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            event = Event(
+                external_id="hist-event",
+                scheduled_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30),
+                home_team_id="h",
+                home_team_name="Home",
+                away_team_id="a",
+                away_team_name="Away",
+                status=Event.STATUS_FINISHED,
+            )
+            db.session.add(event)
+            db.session.flush()
+            db.session.add(EventChannelLink(event_id=event.id, channel_id=channel.id))
+            db.session.commit()
+
+            service = PPVVisibilityService(account)
+            assert service.classify_live_replay_channel(channel) == PPVVisibilityService.PPV_GROUP_HISTORICAL
+            assert service.should_show_channel(channel) is False
+
+    def test_replay_hidden_when_toggle_off(self, app):
+        with app.app_context():
+            account = Account(
+                name="Replay Toggle",
+                server="http://test.com",
+                ppv_visibility="group_live_replay",
+                ppv_show_replay=False,
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="replay-1",
+                name="Recent Replay",
+                is_ppv=True,
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            event = Event(
+                external_id="replay-event",
+                scheduled_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=3),
+                home_team_id="h",
+                home_team_name="Home",
+                away_team_id="a",
+                away_team_name="Away",
+                status=Event.STATUS_FINISHED,
+            )
+            db.session.add(event)
+            db.session.flush()
+            db.session.add(EventChannelLink(event_id=event.id, channel_id=channel.id))
+            db.session.commit()
+
+            service = PPVVisibilityService(account)
+            assert service.classify_live_replay_channel(channel) == PPVVisibilityService.PPV_GROUP_REPLAY
+            assert service.should_show_channel(channel) is False
+
+    def test_live_still_shown_when_replay_and_historical_toggled_off(self, app):
+        with app.app_context():
+            account = Account(
+                name="Live Always",
+                server="http://test.com",
+                ppv_visibility="group_live_replay",
+                ppv_show_replay=False,
+                ppv_show_historical=False,
+            )
+            db.session.add(account)
+            db.session.commit()
+
+            channel = Channel(
+                account_id=account.id,
+                stream_id="live-1",
+                name="Soon Live",
+                is_ppv=True,
+                is_active=True,
+            )
+            db.session.add(channel)
+            db.session.commit()
+
+            event = Event(
+                external_id="live-soon",
+                scheduled_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=6),
+                home_team_id="h",
+                home_team_name="Home",
+                away_team_id="a",
+                away_team_name="Away",
+                status=Event.STATUS_SCHEDULED,
+            )
+            db.session.add(event)
+            db.session.flush()
+            db.session.add(EventChannelLink(event_id=event.id, channel_id=channel.id))
+            db.session.commit()
+
+            service = PPVVisibilityService(account)
+            assert service.classify_live_replay_channel(channel) == PPVVisibilityService.PPV_GROUP_LIVE
+            assert service.should_show_channel(channel) is True

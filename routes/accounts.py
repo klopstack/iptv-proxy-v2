@@ -157,13 +157,15 @@ def update_ppv_visibility(account_id):
 
     Request body:
     {
-        "ppv_visibility": "hide_all" | "hide_inactive" | "group_live_replay" | "show_all"
+        "ppv_visibility": "hide_all" | "hide_inactive" | "group_live_replay" | "show_all",
+        "ppv_show_replay": true,      // optional, group_live_replay only
+        "ppv_show_historical": true   // optional, group_live_replay only
     }
     """
     account = Account.query.get_or_404(account_id)
-    data = request.get_json()
+    data = request.get_json() or {}
 
-    ppv_visibility = data.get("ppv_visibility", "hide_inactive")
+    ppv_visibility = data.get("ppv_visibility", account.ppv_visibility)
 
     # Validate the value
     from services.ppv.visibility import PPVVisibilityService
@@ -175,9 +177,22 @@ def update_ppv_visibility(account_id):
         )
 
     account.ppv_visibility = ppv_visibility
+
+    if "ppv_show_replay" in data:
+        account.ppv_show_replay = bool(data["ppv_show_replay"])
+    if "ppv_show_historical" in data:
+        account.ppv_show_historical = bool(data["ppv_show_historical"])
+
     db.session.commit()
 
-    return jsonify({"id": account.id, "ppv_visibility": account.ppv_visibility})
+    return jsonify(
+        {
+            "id": account.id,
+            "ppv_visibility": account.ppv_visibility,
+            "ppv_show_replay": account.ppv_show_replay,
+            "ppv_show_historical": account.ppv_show_historical,
+        }
+    )
 
 
 @accounts_bp.route("/api/ppv-visibility-options", methods=["GET"])

@@ -27,6 +27,9 @@ class Account(db.Model):  # type: ignore[name-defined]
 
     # PPV visibility settings: 'hide_all' | 'hide_inactive' (default) | 'group_live_replay' | 'show_all'
     ppv_visibility = db.Column(db.String(20), default="hide_inactive", nullable=False)
+    # Per-group toggles for group_live_replay mode (Live always shown)
+    ppv_show_replay = db.Column(db.Boolean, default=True, nullable=False)
+    ppv_show_historical = db.Column(db.Boolean, default=True, nullable=False)
 
     # Channel rename format templates (None = use original cleaned_name)
     # PPV template tokens: {league}, {sport}, {home_team}, {away_team}, {start_time}, {date}

@@ -218,15 +218,13 @@ def _build_channel_fcc_map(channels: List[Channel]) -> Dict[int, Any]:
 
 
 def _ppv_group_title(category_name: str, *, channel: Channel, event: Any, account: Optional[Account]) -> str:
-    """Return 'Live', 'Replay', or the original category name for grouped PPV channels."""
+    """Return PPV - Live/Replay/Historical or the original category name for grouped PPV channels."""
     if not account or account.ppv_visibility != PPVVisibilityService.GROUP_LIVE_REPLAY or not channel.is_ppv:
         return category_name
 
     classification = PPVVisibilityService.classify_live_replay_event(event)
-    if classification == PPVVisibilityService.PPV_GROUP_LIVE:
-        return "Live"
-    if classification == PPVVisibilityService.PPV_GROUP_REPLAY:
-        return "Replay"
+    if classification in PPVVisibilityService.PPV_GROUP_DISPLAY_TITLES:
+        return PPVVisibilityService.ppv_group_display_title(classification)
     return category_name
 
 

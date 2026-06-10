@@ -399,7 +399,7 @@ class TestXtreamPlayerAPI:
         assert response.status_code == 200
         data = response.json
         category_names = {item["category_name"] for item in data}
-        assert category_names == {"Sports", "Live", "Replay"}
+        assert category_names == {"Sports", "PPV - Live", "PPV - Replay"}
 
     def test_get_live_streams_by_grouped_ppv_category(self, app, client, xtream_credential, test_account):
         """Grouped PPV virtual categories return correctly sorted streams."""
@@ -530,6 +530,118 @@ class TestXtreamPlayerAPI:
         assert replay_response.status_code == 200
         assert [item["stream_id"] for item in replay_response.json] == [1203, 1204]
         assert all(item["category_id"] == "-11" for item in replay_response.json)
+
+    def test_get_live_categories_includes_historical_bucket(self, app, client, xtream_credential, test_account):
+        """Grouped PPV mode exposes PPV - Historical virtual category for old events."""
+        with app.app_context():
+            account = db.session.get(Account, test_account)
+            account.ppv_visibility = "group_live_replay"
+
+            ppv = Category(account_id=test_account, category_id="ppv-hist", category_name="PPV Events")
+            db.session.add(ppv)
+            db.session.flush()
+
+            historical_channel = Channel(
+                account_id=test_account,
+                stream_id="1301",
+                name="Old Archive",
+                cleaned_name="Old Archive",
+                category_id=ppv.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            db.session.add(historical_channel)
+            db.session.flush()
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            historical_event = Event(
+                external_id="xtream-historical",
+                scheduled_at=now - timedelta(days=30),
+                home_team_id="h",
+                home_team_name="Home",
+                away_team_id="a",
+                away_team_name="Away",
+                status=Event.STATUS_FINISHED,
+            )
+            db.session.add(historical_event)
+            db.session.flush()
+            db.session.add(EventChannelLink(event_id=historical_event.id, channel_id=historical_channel.id))
+            db.session.commit()
+
+        response = client.get(
+            "/player_api.php",
+            query_string={
+                "username": "xtream_user",
+                "password": "xtream_pass",
+                "action": "get_live_categories",
+            },
+        )
+        assert response.status_code == 200
+        category_names = {item["category_name"] for item in response.json}
+        assert "PPV - Historical" in category_names
+
+        streams_response = client.get(
+            "/player_api.php",
+            query_string={
+                "username": "xtream_user",
+                "password": "xtream_pass",
+                "action": "get_live_streams",
+                "category_id": "-12",
+            },
+        )
+        assert streams_response.status_code == 200
+        assert len(streams_response.json) == 1
+        assert streams_response.json[0]["category_id"] == "-12"
+
+    def test_historical_toggle_hides_xtream_category(self, app, client, xtream_credential, test_account):
+        with app.app_context():
+            account = db.session.get(Account, test_account)
+            account.ppv_visibility = "group_live_replay"
+            account.ppv_show_historical = False
+
+            ppv = Category(account_id=test_account, category_id="ppv-hide", category_name="PPV Events")
+            db.session.add(ppv)
+            db.session.flush()
+
+            historical_channel = Channel(
+                account_id=test_account,
+                stream_id="1302",
+                name="Hidden Archive",
+                cleaned_name="Hidden Archive",
+                category_id=ppv.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            db.session.add(historical_channel)
+            db.session.flush()
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            historical_event = Event(
+                external_id="xtream-hidden-historical",
+                scheduled_at=now - timedelta(days=30),
+                home_team_id="h2",
+                home_team_name="Home 2",
+                away_team_id="a2",
+                away_team_name="Away 2",
+                status=Event.STATUS_FINISHED,
+            )
+            db.session.add(historical_event)
+            db.session.flush()
+            db.session.add(EventChannelLink(event_id=historical_event.id, channel_id=historical_channel.id))
+            db.session.commit()
+
+        response = client.get(
+            "/player_api.php",
+            query_string={
+                "username": "xtream_user",
+                "password": "xtream_pass",
+                "action": "get_live_categories",
+            },
+        )
+        category_names = {item["category_name"] for item in response.json}
+        assert "PPV - Historical" not in category_names
 
     def test_get_vod_categories(self, app, client, xtream_credential):
         """VOD is not supported; return empty list for client compatibility."""

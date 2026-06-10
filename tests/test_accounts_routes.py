@@ -126,6 +126,24 @@ class TestAccountPpvVisibility:
             account = db.session.get(Account, test_account)
             assert account.ppv_visibility == "show_all"
 
+    def test_update_ppv_group_toggles(self, app, client, test_account):
+        response = client.put(
+            f"/api/accounts/{test_account}/ppv-visibility",
+            json={
+                "ppv_visibility": "group_live_replay",
+                "ppv_show_replay": False,
+                "ppv_show_historical": True,
+            },
+        )
+        assert response.status_code == 200
+        assert response.json["ppv_show_replay"] is False
+        assert response.json["ppv_show_historical"] is True
+
+        with app.app_context():
+            account = db.session.get(Account, test_account)
+            assert account.ppv_show_replay is False
+            assert account.ppv_show_historical is True
+
     def test_update_ppv_visibility_invalid_mode(self, app, client, test_account):
         response = client.put(
             f"/api/accounts/{test_account}/ppv-visibility",

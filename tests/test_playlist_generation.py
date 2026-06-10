@@ -17,6 +17,7 @@ import pytest
 
 from models import Account, Category, Channel, ChannelTag, Event, EventChannelLink, PlaylistConfig, Tag, db
 from services.playlist_format_service import render_account_m3u_playlist, sanitize_m3u_value
+from services.ppv.visibility import PPVVisibilityService
 from services.url_service import get_proxy_base_url
 
 
@@ -529,8 +530,101 @@ class TestPPVVisibility:
                     primary_cred=None,
                 )
 
-            assert 'group-title="Live"' in content
-            assert 'group-title="Replay"' in content
+            assert 'group-title="PPV - Live"' in content
+            assert 'group-title="PPV - Replay"' in content
+
+    def test_group_live_replay_historical_group_title(self, app, client, test_account1):
+        """Events older than 21 days emit PPV - Historical group title."""
+        with app.app_context():
+            account = db.session.get(Account, test_account1)
+            account.ppv_visibility = "group_live_replay"
+
+            ppv_category = Category(account_id=account.id, category_id="ppv-h", category_name="PPV Events")
+            db.session.add(ppv_category)
+            db.session.flush()
+
+            historical_channel = Channel(
+                account_id=account.id,
+                stream_id="201",
+                name="Historical PPV",
+                cleaned_name="Historical PPV",
+                category_id=ppv_category.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            db.session.add(historical_channel)
+            db.session.flush()
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            historical_event = Event(
+                external_id="playlist-historical",
+                scheduled_at=now - timedelta(days=30),
+                home_team_id="h3",
+                home_team_name="Home 3",
+                away_team_id="a3",
+                away_team_name="Away 3",
+                status=Event.STATUS_FINISHED,
+            )
+            db.session.add(historical_event)
+            db.session.flush()
+            db.session.add(EventChannelLink(event_id=historical_event.id, channel_id=historical_channel.id))
+            db.session.commit()
+
+            with app.test_request_context("/"):
+                content = render_account_m3u_playlist(
+                    [historical_channel],
+                    account=account,
+                    proxy_base=get_proxy_base_url(),
+                    use_proxy=True,
+                    proxy_icons=False,
+                    primary_cred=None,
+                )
+
+            assert 'group-title="PPV - Historical"' in content
+
+    def test_group_live_replay_historical_toggle_hides_channel(self, app, client, test_account1):
+        """Unchecking ppv_show_historical omits historical channels from M3U output."""
+        with app.app_context():
+            account = db.session.get(Account, test_account1)
+            account.ppv_visibility = "group_live_replay"
+            account.ppv_show_historical = False
+
+            ppv_category = Category(account_id=account.id, category_id="ppv-t", category_name="PPV Events")
+            db.session.add(ppv_category)
+            db.session.flush()
+
+            historical_channel = Channel(
+                account_id=account.id,
+                stream_id="202",
+                name="Hidden Historical",
+                cleaned_name="Hidden Historical",
+                category_id=ppv_category.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            db.session.add(historical_channel)
+            db.session.flush()
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            historical_event = Event(
+                external_id="hidden-historical",
+                scheduled_at=now - timedelta(days=30),
+                home_team_id="h4",
+                home_team_name="Home 4",
+                away_team_id="a4",
+                away_team_name="Away 4",
+                status=Event.STATUS_FINISHED,
+            )
+            db.session.add(historical_event)
+            db.session.flush()
+            db.session.add(EventChannelLink(event_id=historical_event.id, channel_id=historical_channel.id))
+            db.session.commit()
+
+            channels = Channel.query.filter_by(account_id=account.id, is_ppv=True).all()
+            visible = [ch for ch in channels if PPVVisibilityService(account).should_show_channel(ch)]
+            assert historical_channel not in visible
 
 
 class TestUnsyncedAccounts:
