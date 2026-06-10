@@ -63,7 +63,7 @@ Registry output drops **fb** (and **wnba**) coverage (~344 entries vs ~5541 with
    - Refactor build script to avoid Flask/SQLAlchemy imports for offline registry build (preferred long-term)
 3. **Validate in CI** — Add to [88](./88-expand-ci-quality-gates.md) or this PR:
    - `actionlint` / YAML parse check on workflow files
-   - Optional job: `python scripts/build_team_locations.py` without `--refresh` (uses cache) on PR when `data/team_locations/**` or build script changes
+   - Optional job: `python scripts/build_team_locations.py` without `--refresh` (uses cache) on PR when `assets/team_locations/**` or build script changes
 4. **Secrets & docs** — Document `THESPORTSDB_API_KEY` in deployment runbook; note WNBA requires premium V2 key
 5. **Manual verification** — `workflow_dispatch` on default branch; confirm bot commit or “no changes” path
 

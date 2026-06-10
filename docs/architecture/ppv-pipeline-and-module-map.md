@@ -88,7 +88,7 @@ flowchart TD
 | `services/mlb_stats_api.py` | MiLB schedule/detail |
 | `services/team_location_registry.py` | fb/wnba/milb home timezones |
 | `services/sportsipy_service.py` | Team metadata refresh |
-| `data/team_locations/*.json` | Built by `scripts/build_team_locations.py` |
+| `assets/team_locations/*.json` | Built by `scripts/build_team_locations.py` |
 
 ---
 

@@ -2,7 +2,7 @@
 """
 Build bundled team location registry from authoritative open datasets.
 
-Offline build only — output is committed to data/team_locations/registry.json.
+Offline build only — output is committed to assets/team_locations/registry.json.
 Run: python scripts/build_team_locations.py [--refresh]
 
 MiLB teams (sportIds 11-14) are loaded from MLB Stats API (statsapi.mlb.com).
@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-DATA_DIR = ROOT / "data" / "team_locations"
+DATA_DIR = ROOT / "assets" / "team_locations"
 RAW_DIR = DATA_DIR / "raw"
 REGISTRY_PATH = DATA_DIR / "registry.json"
 META_PATH = DATA_DIR / "registry.meta.json"

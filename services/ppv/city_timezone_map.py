@@ -1,6 +1,6 @@
 """Legacy city/country → IANA map when team_location_registry has no entry.
 
-Prefer ``SportsTeam.iana_timezone`` and ``data/team_locations/registry.json`` for
+Prefer ``SportsTeam.iana_timezone`` and ``assets/team_locations/registry.json`` for
 US/FB/WNBA/MiLB; this module remains a fallback for older sportsipy-only paths.
 """
 
