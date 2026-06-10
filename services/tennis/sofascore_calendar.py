@@ -1,8 +1,8 @@
 """
-SofaScore tennis schedule → CalendarEvent mapping.
+SofaScore schedule → CalendarEvent mapping (tennis + football).
 
 Public endpoint (no API key):
-  https://api.sofascore.com/api/v1/sport/tennis/scheduled-events/{YYYY-MM-DD}
+  https://api.sofascore.com/api/v1/sport/{sport}/scheduled-events/{YYYY-MM-DD}
 
 Included status types: notstarted, inprogress, finished.
 Excluded: cancelled, postponed, suspended, interrupted (no reliable PPV match window).
@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 
 from models.sync import Settings
-from services.ppv.constants import SETTING_PPV_SOFASCORE_CALENDAR_ENABLED
+from services.ppv.constants import SETTING_PPV_SOFASCORE_CALENDAR_ENABLED, SETTING_PPV_SOFASCORE_FOOTBALL_ENABLED
 from services.thesportsdb_calendar_scraper import (
     MAX_API_SUPPLEMENT_DAYS_AHEAD,
     MAX_API_SUPPLEMENT_DAYS_BACK,
@@ -42,13 +42,16 @@ _sofascore_cache: Dict[str, Tuple[List[CalendarEvent], float]] = {}
 _last_request_time = 0.0
 
 
+def _setting_enabled(key: str, *, default: str) -> bool:
+    return Settings.get(key, default).lower() in ("true", "1", "yes", "on")
+
+
 def _sofascore_calendar_enabled() -> bool:
-    return Settings.get(SETTING_PPV_SOFASCORE_CALENDAR_ENABLED, "false").lower() in (
-        "true",
-        "1",
-        "yes",
-        "on",
-    )
+    return _setting_enabled(SETTING_PPV_SOFASCORE_CALENDAR_ENABLED, default="false")
+
+
+def _sofascore_football_enabled() -> bool:
+    return _setting_enabled(SETTING_PPV_SOFASCORE_FOOTBALL_ENABLED, default="true")
 
 
 def _is_date_in_window(date_str: str) -> bool:
@@ -92,7 +95,12 @@ def _tournament_label(event: dict) -> str:
     return unique.get("name") or tournament.get("name") or ""
 
 
-def scheduled_event_to_calendar_event(event: dict, *, fallback_date: str) -> Optional[CalendarEvent]:
+def scheduled_event_to_calendar_event(
+    event: dict,
+    *,
+    fallback_date: str,
+    sport: str = "Tennis",
+) -> Optional[CalendarEvent]:
     """Map one SofaScore scheduled event to CalendarEvent."""
     event_id = event.get("id")
     if event_id is None:
@@ -136,7 +144,7 @@ def scheduled_event_to_calendar_event(event: dict, *, fallback_date: str) -> Opt
         home_team=home_name,
         away_team=away_name,
         source=EVENT_SOURCE_SOFASCORE,
-        sport="Tennis",
+        sport=sport,
     )
     if scheduled:
         cal._scheduled_at_cached = scheduled.replace(tzinfo=None)
@@ -150,23 +158,75 @@ def parse_tennis_scheduled_events(payload: dict, *, date_str: str) -> List[Calen
     for raw in payload.get("events") or []:
         if not isinstance(raw, dict):
             continue
-        ev = scheduled_event_to_calendar_event(raw, fallback_date=date_str)
+        ev = scheduled_event_to_calendar_event(raw, fallback_date=date_str, sport="Tennis")
         if ev:
             events.append(ev)
     return events
 
 
-def fetch_scheduled_events(
+def football_scheduled_event_to_calendar_event(event: dict, *, fallback_date: str) -> Optional[CalendarEvent]:
+    """Map one SofaScore football event; use API day bucket for date (not strict UTC midnight)."""
+    event_id = event.get("id")
+    if event_id is None:
+        return None
+
+    status = event.get("status") or {}
+    status_type = (status.get("type") or "").lower()
+    if status_type in _EXCLUDED_STATUS_TYPES:
+        return None
+    if status_type and status_type not in _INCLUDED_STATUS_TYPES:
+        return None
+
+    home_name = _team_display_name(event.get("homeTeam") or {})
+    away_name = _team_display_name(event.get("awayTeam") or {})
+    if not home_name or not away_name:
+        return None
+
+    scheduled = _parse_start_timestamp(event.get("startTimestamp"))
+    time_utc = scheduled.strftime("%H:%M") if scheduled else ""
+
+    tournament = _tournament_label(event)
+    category = ((event.get("tournament") or {}).get("category") or {}).get("name") or ""
+    league_name = tournament
+    if category and category not in league_name:
+        league_name = f"{tournament} | {category}" if tournament else category
+
+    cal = CalendarEvent(
+        event_id=str(event_id),
+        event_name=f"{home_name} vs {away_name}",
+        league_name=league_name,
+        time_utc=time_utc,
+        date=fallback_date,
+        home_team=home_name,
+        away_team=away_name,
+        source=EVENT_SOURCE_SOFASCORE,
+        sport="Soccer",
+    )
+    if scheduled:
+        cal._scheduled_at_cached = scheduled.replace(tzinfo=None)
+        cal._scheduled_at_computed = True
+    return cal
+
+
+def parse_football_scheduled_events(payload: dict, *, date_str: str) -> List[CalendarEvent]:
+    """Parse SofaScore football scheduled-events JSON into CalendarEvent rows."""
+    events: List[CalendarEvent] = []
+    for raw in payload.get("events") or []:
+        if not isinstance(raw, dict):
+            continue
+        ev = football_scheduled_event_to_calendar_event(raw, fallback_date=date_str)
+        if ev:
+            events.append(ev)
+    return events
+
+
+def _fetch_scheduled_events_http(
     sport: str,
     date_str: str,
     *,
-    force_refresh: bool = False,
     session: Optional[requests.Session] = None,
 ) -> dict:
-    """Fetch raw SofaScore scheduled-events JSON for a sport and calendar date."""
-    if not _sofascore_calendar_enabled():
-        return {"events": []}
-
+    """Fetch raw SofaScore scheduled-events JSON (no feature-flag gate)."""
     if not _is_date_in_window(date_str):
         return {"events": []}
 
@@ -184,6 +244,19 @@ def fetch_scheduled_events(
     except Exception as exc:
         logger.warning("SofaScore scheduled-events fetch failed for %s %s: %s", sport, date_str, exc)
         return {"events": []}
+
+
+def fetch_scheduled_events(
+    sport: str,
+    date_str: str,
+    *,
+    force_refresh: bool = False,
+    session: Optional[requests.Session] = None,
+) -> dict:
+    """Fetch raw SofaScore scheduled-events JSON for a sport and calendar date."""
+    if not _sofascore_calendar_enabled():
+        return {"events": []}
+    return _fetch_scheduled_events_http(sport, date_str, session=session)
 
 
 def fetch_tennis_events_for_date(
@@ -212,7 +285,37 @@ def fetch_tennis_events_for_date(
     return events
 
 
+def fetch_football_events_for_date(
+    date_str: str,
+    *,
+    force_refresh: bool = False,
+    session: Optional[requests.Session] = None,
+) -> List[CalendarEvent]:
+    """Fetch football/soccer matches for a calendar date. Returns [] when feature flag is off."""
+    if not _sofascore_football_enabled():
+        return []
+
+    if not _is_date_in_window(date_str):
+        return []
+
+    cache_key = f"sofascore-football:{date_str}"
+    if not force_refresh and cache_key in _sofascore_cache:
+        cached_events, cached_at = _sofascore_cache[cache_key]
+        if time.time() - cached_at < CACHE_TTL_SECONDS:
+            return list(cached_events)
+
+    payload = _fetch_scheduled_events_http("football", date_str, session=session)
+    events = parse_football_scheduled_events(payload, date_str=date_str)
+    _sofascore_cache[cache_key] = (events, time.time())
+    logger.debug("Fetched %d SofaScore football events for %s", len(events), date_str)
+    return events
+
+
 def clear_sofascore_tennis_calendar_cache() -> None:
+    _sofascore_cache.clear()
+
+
+def clear_sofascore_football_calendar_cache() -> None:
     _sofascore_cache.clear()
 
 
@@ -220,6 +323,7 @@ def get_sofascore_calendar_stats() -> Dict[str, Any]:
     """Expose SofaScore calendar cache stats for enrichment status API."""
     return {
         "enabled": _sofascore_calendar_enabled(),
+        "football_enabled": _sofascore_football_enabled(),
         "cache_entries": len(_sofascore_cache),
         "cached_events": sum(len(events) for events, _ in _sofascore_cache.values()),
     }
