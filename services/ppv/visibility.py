@@ -123,6 +123,16 @@ class PPVVisibilityService:
         if not event.scheduled_at:
             return None
         if event.scheduled_at < current_time:
+            if event.status == Event.STATUS_FINISHED:
+                age = current_time - event.scheduled_at
+                if age > timedelta(days=PPV_HISTORICAL_THRESHOLD_DAYS):
+                    return cls.PPV_GROUP_HISTORICAL
+                return cls.PPV_GROUP_REPLAY
+            if event.end_at and current_time < event.end_at:
+                return cls.PPV_GROUP_LIVE
+            grace_hours = get_sport_grace_hours(event.sport)
+            if current_time < event.scheduled_at + timedelta(hours=grace_hours):
+                return cls.PPV_GROUP_LIVE
             age = current_time - event.scheduled_at
             if age > timedelta(days=PPV_HISTORICAL_THRESHOLD_DAYS):
                 return cls.PPV_GROUP_HISTORICAL

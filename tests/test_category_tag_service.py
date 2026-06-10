@@ -11,6 +11,7 @@ from services.category_tag_service import (
     build_virtual_category_map,
     effective_grouping,
     format_tag_value,
+    is_xtream_virtual_category_id,
     parse_grouping_config,
     resolve_output_category,
     serialize_grouping_for_db,
@@ -236,8 +237,16 @@ class TestEffectiveGrouping:
 
 
 class TestVirtualCategoryId:
-    def test_slug_format(self):
-        assert virtual_category_id("Los Angeles", "DMA:") == "tag:dma:los_angeles"
+    def test_stable_negative_numeric_id(self):
+        cat_id = virtual_category_id("Los Angeles", "DMA:")
+        assert int(cat_id) < 0
+        assert virtual_category_id("Los Angeles", "DMA:") == cat_id
+
+    def test_is_xtream_virtual_category_id(self):
+        cat_id = virtual_category_id("Los Angeles", "DMA:")
+        assert is_xtream_virtual_category_id(cat_id)
+        assert not is_xtream_virtual_category_id(XTREAM_LOCAL_CHANNELS_PARENT_ID)
+        assert not is_xtream_virtual_category_id("tag:dma:los_angeles")
 
     def test_local_channels_parent(self):
         parent = xtream_local_channels_parent_category()
@@ -272,7 +281,7 @@ class TestBuildVirtualCategoryMap:
             )
             assert ch.id in result
             assert result[ch.id]["category_name"] == "Los Angeles"
-            assert result[ch.id]["category_id"] == "tag:dma:los_angeles"
+            assert is_xtream_virtual_category_id(result[ch.id]["category_id"])
 
 
 class TestSerializeGrouping:

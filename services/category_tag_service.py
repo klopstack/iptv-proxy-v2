@@ -3,6 +3,7 @@ Tag-based output category resolution for M3U group-title and Xtream categories.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -22,8 +23,11 @@ PRESET_DMA = {
 }
 
 # Xtream-only parent folder for tag-derived market/local categories (M3U stays flat).
-XTREAM_LOCAL_CHANNELS_PARENT_ID = "tag:parent:local_channels"
+# Negative numeric IDs match Xtream FlexInt expectations (see PPV virtual categories).
+XTREAM_LOCAL_CHANNELS_PARENT_ID = "-20"
 XTREAM_LOCAL_CHANNELS_PARENT_NAME = "Local Channels"
+XTREAM_VIRTUAL_CATEGORY_ID_MIN = -8999
+XTREAM_VIRTUAL_CATEGORY_ID_MAX = -1000
 
 
 @dataclass(frozen=True)
@@ -248,12 +252,20 @@ def xtream_local_channels_parent_category() -> dict:
 
 
 def virtual_category_id(category_name: str, prefix: str = "") -> str:
-    """Stable virtual category ID for Xtream API."""
-    slug = re.sub(r"[^a-z0-9]+", "_", category_name.lower()).strip("_")
-    prefix_slug = re.sub(r"[^a-z0-9]+", "_", prefix.lower().rstrip(":")).strip("_")
-    if prefix_slug:
-        return f"tag:{prefix_slug}:{slug}"
-    return f"tag:{slug}"
+    """Stable negative numeric virtual category ID for Xtream API."""
+    key = f"{prefix}:{category_name}".lower().strip()
+    span = XTREAM_VIRTUAL_CATEGORY_ID_MAX - XTREAM_VIRTUAL_CATEGORY_ID_MIN + 1
+    slot = int(hashlib.sha256(key.encode()).hexdigest()[:8], 16) % span
+    return str(XTREAM_VIRTUAL_CATEGORY_ID_MIN + slot)
+
+
+def is_xtream_virtual_category_id(category_id) -> bool:
+    """True for tag-derived Xtream virtual category IDs (not the Local Channels parent)."""
+    try:
+        value = int(category_id)
+    except (TypeError, ValueError):
+        return False
+    return XTREAM_VIRTUAL_CATEGORY_ID_MIN <= value <= XTREAM_VIRTUAL_CATEGORY_ID_MAX
 
 
 def build_virtual_category_map(

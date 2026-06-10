@@ -9,6 +9,7 @@ from services.category_tag_service import effective_grouping, grouping_needs_fcc
 from services.channel_query_service import ChannelQueryService
 from services.datetime_utils import resolve_ppv_rename_timezone, to_display_timezone
 from services.image_cache_service import ImageCacheService
+from services.ppv.ordering import build_ppv_grouping, reorder_grouped_ppv_in_channel_list
 from services.ppv.visibility import PPVVisibilityService
 
 
@@ -345,6 +346,9 @@ def render_account_m3u_playlist(
     fcc_map = _build_channel_fcc_map(channels) if needs_fcc_map else {}
     tags_map = ChannelQueryService.load_tags_for_channels(channels) if grouping else {}
 
+    grouped_ppv = build_ppv_grouping(channels, account=account)
+    channels = reorder_grouped_ppv_in_channel_list(channels, grouped_ppv)
+
     m3u_lines = ["#EXTM3U"]
     for channel in channels:
         event = event_map.get(channel.id) if needs_event_map else None
@@ -422,6 +426,12 @@ def render_config_m3u_playlist(
             event_maps[aid] = _build_channel_event_map(acc_channels)
         if acc and (acc.fcc_rename_format or grouping_needs_fcc_facility(acc_grouping)):
             fcc_maps[aid] = _build_channel_fcc_map(acc_channels)
+
+    all_channels = [d["channel"] for d in channel_data]
+    grouped_ppv = build_ppv_grouping(all_channels)
+    reordered_channels = reorder_grouped_ppv_in_channel_list(all_channels, grouped_ppv)
+    channel_data_by_id = {d["channel"].id: d for d in channel_data}
+    channel_data = [channel_data_by_id[ch.id] for ch in reordered_channels]
 
     m3u_lines = ["#EXTM3U", f"# Playlist: {config_name}"]
     if config_description:

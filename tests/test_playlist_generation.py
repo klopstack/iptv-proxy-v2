@@ -533,6 +533,85 @@ class TestPPVVisibility:
             assert 'group-title="PPV - Live"' in content
             assert 'group-title="PPV - Replay"' in content
 
+    def test_group_live_replay_m3u_orders_live_by_scheduled_at(self, app, client, test_account1):
+        """M3U PPV - Live entries appear soonest-first, not alphabetically by channel name."""
+        with app.app_context():
+            account = db.session.get(Account, test_account1)
+            account.ppv_visibility = "group_live_replay"
+
+            ppv_category = Category(account_id=account.id, category_id="ppv", category_name="PPV Events")
+            db.session.add(ppv_category)
+            db.session.flush()
+
+            live_soon = Channel(
+                account_id=account.id,
+                stream_id="301",
+                name="Z PPV Soon",
+                cleaned_name="Z PPV Soon",
+                category_id=ppv_category.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            live_later = Channel(
+                account_id=account.id,
+                stream_id="302",
+                name="A PPV Later",
+                cleaned_name="A PPV Later",
+                category_id=ppv_category.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            db.session.add_all([live_later, live_soon])
+            db.session.flush()
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            events = [
+                Event(
+                    external_id="m3u-soon",
+                    scheduled_at=now + timedelta(hours=1),
+                    home_team_id="h1",
+                    home_team_name="Home 1",
+                    away_team_id="a1",
+                    away_team_name="Away 1",
+                    status=Event.STATUS_SCHEDULED,
+                ),
+                Event(
+                    external_id="m3u-later",
+                    scheduled_at=now + timedelta(hours=6),
+                    home_team_id="h2",
+                    home_team_name="Home 2",
+                    away_team_id="a2",
+                    away_team_name="Away 2",
+                    status=Event.STATUS_SCHEDULED,
+                ),
+            ]
+            db.session.add_all(events)
+            db.session.flush()
+            db.session.add_all(
+                [
+                    EventChannelLink(event_id=events[0].id, channel_id=live_soon.id),
+                    EventChannelLink(event_id=events[1].id, channel_id=live_later.id),
+                ]
+            )
+            db.session.commit()
+
+            channels = [live_later, live_soon]
+            with app.test_request_context("/"):
+                content = render_account_m3u_playlist(
+                    channels,
+                    account=account,
+                    proxy_base=get_proxy_base_url(),
+                    use_proxy=True,
+                    proxy_icons=False,
+                    primary_cred=None,
+                )
+
+            live_lines = [line for line in content.splitlines() if 'group-title="PPV - Live"' in line]
+            assert len(live_lines) == 2
+            assert content.index("Z PPV Soon") < content.index("A PPV Later")
+
     def test_group_live_replay_historical_group_title(self, app, client, test_account1):
         """Events older than 21 days emit PPV - Historical group title."""
         with app.app_context():
