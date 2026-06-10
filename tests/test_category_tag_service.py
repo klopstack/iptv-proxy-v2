@@ -145,6 +145,79 @@ class TestResolveOutputCategory:
             )
             assert result == "Los Angeles"
 
+    def test_fcc_without_dma_groups_by_city(self, app, test_account, channel_with_category):
+        ch_id, _ = channel_with_category
+        with app.app_context():
+            facility = FccFacility(
+                facility_id=99902,
+                callsign="KAKM",
+                community_city="ANCHORAGE",
+                community_state="AK",
+                nielsen_dma=None,
+            )
+            db.session.add(facility)
+            db.session.flush()
+            ch = db.session.get(Channel, ch_id)
+            ch.fcc_facility_id = facility.id
+            account = db.session.get(Account, test_account)
+            account.category_tag_grouping = json.dumps(PRESET_DMA)
+            db.session.commit()
+            result = resolve_output_category(
+                ch,
+                ["NETWORK:PB"],
+                account=account,
+                facility=facility,
+            )
+            assert result == "Anchorage"
+
+    def test_fcc_with_dma_on_facility_still_uses_dma_tag(self, app, test_account, channel_with_category):
+        ch_id, _ = channel_with_category
+        with app.app_context():
+            facility = FccFacility(
+                facility_id=99903,
+                callsign="KABC",
+                community_city="LOS ANGELES",
+                nielsen_dma="Los Angeles",
+            )
+            db.session.add(facility)
+            db.session.flush()
+            ch = db.session.get(Channel, ch_id)
+            ch.fcc_facility_id = facility.id
+            account = db.session.get(Account, test_account)
+            account.category_tag_grouping = json.dumps(PRESET_DMA)
+            db.session.commit()
+            result = resolve_output_category(
+                ch,
+                ["DMA:LOS ANGELES"],
+                account=account,
+                facility=facility,
+            )
+            assert result == "Los Angeles"
+
+    def test_fcc_without_dma_and_no_city_falls_back_to_provider(self, app, test_account, channel_with_category):
+        ch_id, _ = channel_with_category
+        with app.app_context():
+            facility = FccFacility(
+                facility_id=99904,
+                callsign="TEST",
+                community_city=None,
+                nielsen_dma=None,
+            )
+            db.session.add(facility)
+            db.session.flush()
+            ch = db.session.get(Channel, ch_id)
+            ch.fcc_facility_id = facility.id
+            account = db.session.get(Account, test_account)
+            account.category_tag_grouping = json.dumps(PRESET_DMA)
+            db.session.commit()
+            result = resolve_output_category(
+                ch,
+                ["NETWORK:ABC"],
+                account=account,
+                facility=facility,
+            )
+            assert result == "US Locals"
+
 
 class TestEffectiveGrouping:
     def test_config_override_wins(self, app, test_account):

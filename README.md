@@ -255,7 +255,7 @@ Beyond filtering channels by tags, you can use tags to set M3U `group-title` and
 
 Account setting applies to single-account M3U and Xtream credentials. Playlist configs can override grouping for combined playlists.
 
-On Xtream (e.g. TiviMate), tag-grouped categories are nested under a **Local Channels** parent; M3U `group-title` remains flat per market.
+On Xtream (e.g. TiviMate), tag-grouped categories are nested under a **Local Channels** parent; M3U `group-title` remains flat per market. FCC-matched channels without a Nielsen DMA are grouped by licensed city name instead of their provider category.
 
 ```bash
 PUT /api/accounts/<id>/category-tag-grouping

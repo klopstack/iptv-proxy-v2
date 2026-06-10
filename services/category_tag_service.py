@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 from models import Account, Channel, PlaylistConfig
 
 DMA_PREFIX = "DMA:"
+CITY_GROUP_PREFIX = "city"
 DISPLAY_STRIP_PREFIX_TITLE = "strip_prefix_title"
 DISPLAY_AS_TAG = "as_tag"
 
@@ -90,8 +91,37 @@ def grouping_from_db_column(column_value: Union[str, None]) -> Optional[Category
 
 
 def grouping_needs_fcc_facility(grouping: Optional[CategoryTagGrouping]) -> bool:
-    """Whether FCC facility data should be loaded for canonical DMA labels."""
+    """Whether FCC facility data should be loaded for DMA labels and city fallbacks."""
     return grouping is not None and DMA_PREFIX in grouping.prefixes
+
+
+def _has_dma_tag(tags: Sequence[str]) -> bool:
+    return _find_matching_tag(tags, [DMA_PREFIX]) is not None
+
+
+def _fcc_city_category_name(
+    channel: Channel,
+    tags: Sequence[str],
+    facility: Any,
+    grouping: CategoryTagGrouping,
+) -> Optional[str]:
+    """City-based category for FCC-matched channels that have no Nielsen DMA."""
+    if DMA_PREFIX not in grouping.prefixes:
+        return None
+    if not channel.fcc_facility_id:
+        return None
+    if _has_dma_tag(tags):
+        return None
+    if facility is None:
+        return None
+    if getattr(facility, "nielsen_dma", None):
+        return None
+
+    city = (getattr(facility, "community_city", None) or "").strip()
+    if not city:
+        return None
+
+    return _title_case_dma(city.replace("_", " "))
 
 
 def effective_grouping(
@@ -166,6 +196,28 @@ def _find_matching_tag(tags: Sequence[str], prefixes: Sequence[str]) -> Optional
     return None
 
 
+def _resolve_grouped_category(
+    channel: Channel,
+    tags: Sequence[str],
+    grouping: CategoryTagGrouping,
+    *,
+    facility: Any = None,
+) -> Optional[tuple[str, str]]:
+    """Return (display_name, virtual_id_prefix) when tag/FCC grouping applies."""
+    match = _find_matching_tag(tags, grouping.prefixes)
+    if match:
+        tag, prefix = match
+        name = format_tag_value(tag, prefix, grouping.display, facility=facility)
+        prefix_slug = prefix.rstrip(":").lower() or "tag"
+        return name, prefix_slug
+
+    city_name = _fcc_city_category_name(channel, tags, facility, grouping)
+    if city_name:
+        return city_name, CITY_GROUP_PREFIX
+
+    return None
+
+
 def resolve_output_category(
     channel: Channel,
     tags: Sequence[str],
@@ -179,12 +231,11 @@ def resolve_output_category(
     if grouping is None:
         return _provider_category_name(channel)
 
-    match = _find_matching_tag(tags, grouping.prefixes)
-    if match is None:
+    grouped = _resolve_grouped_category(channel, tags, grouping, facility=facility)
+    if grouped is None:
         return _provider_category_name(channel)
 
-    tag, prefix = match
-    return format_tag_value(tag, prefix, grouping.display, facility=facility)
+    return grouped[0]
 
 
 def xtream_local_channels_parent_category() -> dict:
@@ -229,17 +280,16 @@ def build_virtual_category_map(
             continue
 
         tags = tags_map.get((channel.account_id, channel.stream_id), [])
-        match = _find_matching_tag(tags, grouping.prefixes)
-        if match is None:
+        facility = facilities_by_channel_id.get(channel.id)
+        grouped = _resolve_grouped_category(channel, tags, grouping, facility=facility)
+        if grouped is None:
             continue
 
-        tag, prefix = match
-        facility = facilities_by_channel_id.get(channel.id)
-        category_name = format_tag_value(tag, prefix, grouping.display, facility=facility)
+        category_name, id_prefix = grouped
         result[channel.id] = {
-            "category_id": virtual_category_id(category_name, prefix),
+            "category_id": virtual_category_id(category_name, id_prefix),
             "category_name": category_name,
-            "prefix": prefix,
+            "prefix": id_prefix,
         }
 
     return result

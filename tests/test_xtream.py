@@ -21,6 +21,7 @@ from models import (
     ChannelTag,
     Event,
     EventChannelLink,
+    FccFacility,
     PlaylistConfig,
     Tag,
     XtreamCredential,
@@ -276,6 +277,64 @@ class TestXtreamPlayerAPI:
             assert len(data) == 3
             assert data[0]["name"] == "Channel 1"
             assert data[0]["stream_type"] == "live"
+
+    def test_get_live_categories_fcc_city_without_dma(
+        self, app, client, xtream_credential, test_channels, test_account
+    ):
+        """FCC-matched channels without a DMA nest under Local Channels by city name."""
+        with app.app_context():
+            account = db.session.get(Account, test_account)
+            account.category_tag_grouping = json.dumps(
+                {"enabled": True, "prefixes": ["DMA:"], "display": "strip_prefix_title"}
+            )
+            facility = FccFacility(
+                facility_id=88001,
+                callsign="KAKM",
+                community_city="JUNEAU",
+                community_state="AK",
+                nielsen_dma=None,
+            )
+            db.session.add(facility)
+            db.session.flush()
+            ch = db.session.get(Channel, test_channels[0].id)
+            ch.fcc_facility_id = facility.id
+            network_tag = Tag(name="NETWORK:AK")
+            db.session.add(network_tag)
+            db.session.flush()
+            db.session.add(
+                ChannelTag(
+                    account_id=test_account,
+                    stream_id=ch.stream_id,
+                    tag_id=network_tag.id,
+                    source=ChannelTag.SOURCE_ENRICHMENT,
+                )
+            )
+            db.session.commit()
+
+            response = client.get(
+                "/player_api.php",
+                query_string={
+                    "username": "xtream_user",
+                    "password": "xtream_pass",
+                    "action": "get_live_categories",
+                },
+            )
+            assert response.status_code == 200
+            data = response.json
+            juneau = next(item for item in data if item["category_name"] == "Juneau")
+            assert juneau["parent_id"] == "tag:parent:local_channels"
+
+            streams_response = client.get(
+                "/player_api.php",
+                query_string={
+                    "username": "xtream_user",
+                    "password": "xtream_pass",
+                    "action": "get_live_streams",
+                    "category_id": juneau["category_id"],
+                },
+            )
+            assert len(streams_response.json) == 1
+            assert streams_response.json[0]["stream_id"] == int(test_channels[0].stream_id)
 
     def test_get_live_categories_dma_tag_grouping(self, app, client, xtream_credential, test_channels, test_account):
         """Tag-based DMA grouping emits virtual Xtream categories."""
