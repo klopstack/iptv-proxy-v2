@@ -144,7 +144,7 @@ class TestTagRuleIsPpv:
             # Channel not marked as PPV initially
             channel = Channel(
                 account_id=account.id,
-                stream_id=1001,
+                stream_id="1001",
                 name="UFC Fight",
                 category_id=category.id,
                 is_active=True,
@@ -200,7 +200,7 @@ class TestTagRuleIsPpv:
             # Channel inherits PPV from category
             channel = Channel(
                 account_id=account.id,
-                stream_id=1001,
+                stream_id="1001",
                 name="Wild vs Avalanche",
                 category_id=category.id,
                 is_active=True,
@@ -256,7 +256,7 @@ class TestTagRuleIsPpv:
             # Channel marked as PPV
             channel = Channel(
                 account_id=account.id,
-                stream_id=1001,
+                stream_id="1001",
                 name="ESPN",
                 category_id=category.id,
                 is_active=True,
@@ -312,7 +312,7 @@ class TestTagRuleIsPpv:
             # Channel already marked as PPV
             channel = Channel(
                 account_id=account.id,
-                stream_id=1001,
+                stream_id="1001",
                 name="UFC Fight",
                 category_id=category.id,
                 is_active=True,

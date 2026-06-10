@@ -48,6 +48,7 @@ def migrated_db():
 
 
 @pytest.mark.migrations
+@pytest.mark.sqlite_only
 class TestSchemaParity:
     def test_critical_tables_exist(self, migrated_db):
         conn = sqlite3.connect(migrated_db)

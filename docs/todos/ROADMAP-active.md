@@ -13,7 +13,7 @@ Open work only. Completed waves **1–10** (PRs #10–51) and **Wave 12** (PRs #
 | Track | TODOs | Open | Notes |
 |-------|-------|------|-------|
 | Dashboard follow-ups | 107–110 | **0** | 107–109 ✅; [110](./110-dashboard-optional-ux-follow-ups.md) won't do |
-| Wave 11 — PostgreSQL | 111–119 | **9** | Series A + Series B |
+| Wave 11 — PostgreSQL | 111–119 | **4** | Series A ✅; Series B open |
 | Wave 12 — PPV matching | 120–126, 123 | **0** | ✅ complete June 2026; 123 A/B in review [#62](https://github.com/klopstack/iptv-proxy-v2/pull/62)/[#63](https://github.com/klopstack/iptv-proxy-v2/pull/63) |
 | Wave 13 — PPV follow-ups | 127–131, 133, 134 | **4** | 127–128 ✅; 129 Track B; 131 college wire; 133 P0 WC ops |
 | Wave 14 — Admin UX | 132 | **0** | ✅ [#71](https://github.com/klopstack/iptv-proxy-v2/pull/71) |
@@ -70,7 +70,7 @@ Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMA
 |----|------|---------|------|
 | **PG-A1** | [111](./111-pg-prep-raw-sqlite3-audit.md), [112](./112-pg-prep-json-column-types.md) | Raw sqlite3 audit; JSON columns | S–M |
 | **PG-A2** | [113](./113-pg-prep-alembic-migration-system.md) | Alembic replaces custom runner | **L** |
-| **PG-A3** | [114](./114-pg-prep-test-db-hardening.md), [115](./115-pg-prep-ci-docker-config.md) | Test DB + CI/Docker PG | M |
+| **PG-A3** | [114](./114-pg-prep-test-db-hardening.md), [115](./115-pg-prep-ci-docker-config.md) | Test DB + CI/Docker PG | M ✅ |
 
 ### Series B — Switchover (after Series A)
 
@@ -148,11 +148,15 @@ Full historical rules (55 before 62, etc.) are in the [archive](./archive/ROADMA
 
 ## Recommended “next five” (non-PG)
 
-1. **[131](./131-sofascore-college-amateur-calendar-provider.md)** — SofaScore `ice-hockey` + replay window + Sportsipy supplement ([130](./130-ncaa-college-calendar-source-spike.md) ✅)
-2. **[129](./129-ppv-replay-archive-enrichment-flosp.md) Track B** — historical calendar matching (after 131)
-3. **[133](./133-sofascore-multi-sport-refactor-and-football-followups.md) P0** — WC deploy + requeue ops
-4. **[111](./111-pg-prep-raw-sqlite3-audit.md)** — PostgreSQL prep (batch **PG-A1**, when #72 lands)
-5. **[112](./112-pg-prep-json-column-types.md)** — JSON column types (batch **PG-A1**)
+1. **[117](./117-pg-migration-schema-creation.md)** — PostgreSQL schema creation (batch **PG-B1**)
+2. **[116](./116-pg-migration-data-export-tooling.md)** — Data export/import tooling (batch **PG-B1**)
+3. **[118](./118-pg-migration-cutover-procedure.md)** — Production cutover (batch **PG-B2**)
+4. **[119](./119-pg-migration-cleanup-and-docs.md)** — Post-cutover cleanup (batch **PG-B3**)
+5. **[131](./131-sofascore-college-amateur-calendar-provider.md)** — SofaScore `ice-hockey` + replay window + Sportsipy supplement ([130](./130-ncaa-college-calendar-source-spike.md) ✅)
+6. **[129](./129-ppv-replay-archive-enrichment-flosp.md) Track B** — historical calendar matching (after 131)
+7. **[133](./133-sofascore-multi-sport-refactor-and-football-followups.md) P0** — WC deploy + requeue ops
+8. **[111](./111-pg-prep-raw-sqlite3-audit.md)** — PostgreSQL prep (batch **PG-A1**, when #72 lands)
+9. **[112](./112-pg-prep-json-column-types.md)** — JSON column types (batch **PG-A1**)
 
 **Ops (post Wave 12 deploy):** Requeue `no_match` channels via [124](./124-ppv-enrichment-attempt-tracking-and-requeue.md).
 

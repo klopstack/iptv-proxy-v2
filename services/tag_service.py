@@ -751,7 +751,7 @@ class TagService:
         # Build lookup of existing extraction-sourced channel tags
         existing_tags = {}
         for ct in ChannelTag.query.filter_by(account_id=account_id, source=ChannelTag.SOURCE_EXTRACTION).all():
-            key = (ct.stream_id, ct.tag_id)
+            key = (str(ct.stream_id), ct.tag_id)
             existing_tags[key] = ct
 
         # Process each channel
@@ -763,6 +763,7 @@ class TagService:
         is_ppv_changed = 0
 
         for channel in db_channels:
+            stream_id = str(channel.stream_id)
             category_name = channel.category.category_name if channel.category else ""
 
             # Extract tags, cleaned names, and is_ppv directive
@@ -805,21 +806,21 @@ class TagService:
                     db.session.flush()
 
                 # Check if channel tag association exists (from extraction)
-                key = (channel.stream_id, tag.id)
+                key = (stream_id, tag.id)
                 if key in existing_tags:
                     existing_tags[key].updated_at = processing_start
                     tags_updated += 1
                 else:
                     # Check if this tag exists from another source
                     existing_other = ChannelTag.query.filter_by(
-                        account_id=account_id, stream_id=channel.stream_id, tag_id=tag.id
+                        account_id=account_id, stream_id=stream_id, tag_id=tag.id
                     ).first()
                     if existing_other:
                         tags_updated += 1
                     else:
                         channel_tag = ChannelTag(
                             account_id=account_id,
-                            stream_id=channel.stream_id,
+                            stream_id=stream_id,
                             tag_id=tag.id,
                             source=ChannelTag.SOURCE_EXTRACTION,
                             created_at=processing_start,

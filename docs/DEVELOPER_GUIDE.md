@@ -277,7 +277,22 @@ Define indexes on SQLAlchemy models or in Alembic revisions. Apply with `flask d
 
 Migrations live in [`alembic_migrations/`](../alembic_migrations/) (Flask-Migrate + Alembic). Legacy SQLite-only files are archived in [`migrations/legacy_sqlite/`](../migrations/legacy_sqlite/).
 
-> **PostgreSQL / Alembic:** After [PR #67](https://github.com/klopstack/iptv-proxy-v2/pull/67) merges, schema moves to Alembic (`alembic_migrations/`). Production migration steps: [architecture/pg-migration-guide.md](architecture/pg-migration-guide.md).
+> **PostgreSQL / Alembic:** Schema is managed by Alembic (`alembic_migrations/`). Production migration steps: [architecture/pg-migration-guide.md](architecture/pg-migration-guide.md).
+
+### Running tests against PostgreSQL
+
+CI runs a dedicated PostgreSQL job (`test-postgres` in `.github/workflows/build.yml`). Locally:
+
+```bash
+docker compose --profile postgres up -d postgres
+export DATABASE_URL=postgresql://iptv:changeme@localhost:5432/iptv_proxy
+FLASK_APP=app.py flask db upgrade
+pytest tests/ -m "not sqlite_only" -x -v
+```
+
+Do not use `pytest-xdist` (`-n auto`) with PostgreSQL — workers share one database. SQLite tests use per-worker files automatically.
+
+Override the test database by exporting `DATABASE_URL` before `pytest`; when unset, tests default to `instance/pytest.db` (SQLite).
 
 ### Creating a Migration
 

@@ -231,7 +231,7 @@ class SportsTeam(db.Model):  # type: ignore[name-defined]
     # Team metadata
     city = db.Column(db.String(100))
     state = db.Column(db.String(10))
-    country = db.Column(db.String(10))
+    country = db.Column(db.String(100))
     venue_name = db.Column(db.String(200))
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)

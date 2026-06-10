@@ -1095,7 +1095,7 @@ class TestProcessAccountTags:
             channels = [
                 Channel(
                     account_id=sample_account,
-                    stream_id=1,
+                    stream_id="1",
                     stream_type="live",
                     name="US| ESPN 4K",
                     category_id=category.id,
@@ -1103,7 +1103,7 @@ class TestProcessAccountTags:
                 ),
                 Channel(
                     account_id=sample_account,
-                    stream_id=2,
+                    stream_id="2",
                     stream_type="live",
                     name="CNN News",
                     category_id=category.id,
@@ -1135,7 +1135,7 @@ class TestProcessAccountTags:
 
             channel = Channel(
                 account_id=sample_account,
-                stream_id=1,
+                stream_id="1",
                 stream_type="live",
                 name="US| CNN Breaking News",
                 category_id=category.id,
@@ -1164,7 +1164,7 @@ class TestProcessAccountTags:
 
             channel = Channel(
                 account_id=sample_account,
-                stream_id=1,
+                stream_id="1",
                 stream_type="live",
                 name="US| ESPN 4K",
                 category_id=category.id,
@@ -1200,7 +1200,7 @@ class TestProcessAccountTags:
 
             channel = Channel(
                 account_id=sample_account,
-                stream_id=1,
+                stream_id="1",
                 stream_type="live",
                 name="US| ESPN",
                 category_id=category.id,
@@ -1214,7 +1214,7 @@ class TestProcessAccountTags:
 
             # Check that ChannelTag associations exist
             channel_tags = ChannelTag.query.filter_by(
-                account_id=sample_account, stream_id=1, source=ChannelTag.SOURCE_EXTRACTION
+                account_id=sample_account, stream_id="1", source=ChannelTag.SOURCE_EXTRACTION
             ).all()
             assert len(channel_tags) > 0
 
@@ -1230,7 +1230,7 @@ class TestProcessAccountTags:
             # Create one active and one inactive channel
             active = Channel(
                 account_id=sample_account,
-                stream_id=1,
+                stream_id="1",
                 stream_type="live",
                 name="US| ESPN",
                 category_id=category.id,
@@ -1238,7 +1238,7 @@ class TestProcessAccountTags:
             )
             inactive = Channel(
                 account_id=sample_account,
-                stream_id=2,
+                stream_id="2",
                 stream_type="live",
                 name="US| NFL",
                 category_id=category.id,
@@ -1262,7 +1262,7 @@ class TestProcessAccountTags:
             # Create channel without category
             channel = Channel(
                 account_id=sample_account,
-                stream_id=1,
+                stream_id="1",
                 stream_type="live",
                 name="US| ESPN",
                 category_id=None,
@@ -1290,7 +1290,7 @@ class TestProcessAccountTags:
             for i in range(3):
                 channel = Channel(
                     account_id=sample_account,
-                    stream_id=i + 1,
+                    stream_id=str(i + 1),
                     stream_type="live",
                     name="US| Channel " + str(i),
                     category_id=category.id,

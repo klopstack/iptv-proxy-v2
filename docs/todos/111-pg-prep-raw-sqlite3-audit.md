@@ -1,6 +1,6 @@
 # Audit and remove raw `sqlite3` usage in services and migrations
 
-**Status:** ⬜ Open  
+**Status:** ✅ Complete (PR #65)  
 **Priority:** P1  
 **Track:** Database Migration — Series A (Preparation)
 

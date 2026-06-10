@@ -639,9 +639,11 @@ def test_stale_is_visible_does_not_block_epg_channel_selection(app, filter_test_
 
         # Simulate stale admin cache: sports channels marked hidden though filters allow them.
         sports_ids = {"1001", "1002"}
-        for channel in test_channels:
-            if channel.stream_id in sports_ids:
-                channel.is_visible = False
+        for channel in Channel.query.filter(
+            Channel.account_id == filter_test_account.id,
+            Channel.stream_id.in_(sports_ids),
+        ).all():
+            channel.is_visible = False
         db.session.commit()
 
         all_channels = Channel.query.filter_by(
@@ -671,7 +673,7 @@ def test_stale_is_visible_true_does_not_include_filtered_out_channels(app, filte
         db.session.commit()
 
         # Stale cache: movie channels still marked visible.
-        for channel in test_channels:
+        for channel in Channel.query.filter_by(account_id=filter_test_account.id).all():
             channel.is_visible = True
         db.session.commit()
 
@@ -690,7 +692,7 @@ def test_stale_is_visible_true_does_not_include_filtered_out_channels(app, filte
 def test_stale_is_visible_does_not_block_playlist(app, client, filter_test_account, test_channels):
     """Stale is_visible=False must not hide channels when live filters would include them."""
     with app.app_context():
-        for channel in test_channels:
+        for channel in Channel.query.filter_by(account_id=filter_test_account.id).all():
             channel.is_visible = False
         db.session.commit()
 

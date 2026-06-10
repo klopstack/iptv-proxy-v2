@@ -436,11 +436,11 @@ Identified June 2026. Two series: **A (preparation, on SQLite)** and **B (switch
 
 | # | Document | Status | Summary |
 |---|----------|--------|---------|
-| 111 | [111-pg-prep-raw-sqlite3-audit.md](./111-pg-prep-raw-sqlite3-audit.md) | ⬜ | Remove raw `sqlite3` usage from services and migration infrastructure |
-| 112 | [112-pg-prep-json-column-types.md](./112-pg-prep-json-column-types.md) | ⬜ | Replace `db.Text`-as-JSON columns with `db.JSON` and remove manual serialization |
-| 113 | [113-pg-prep-alembic-migration-system.md](./113-pg-prep-alembic-migration-system.md) | ⬜ | Replace bespoke SQLite migration runner with Alembic |
-| 114 | [114-pg-prep-test-db-hardening.md](./114-pg-prep-test-db-hardening.md) | ⬜ | Harden test DB fixtures for PostgreSQL compatibility (injectable `DATABASE_URL`, `sqlite_only` markers) |
-| 115 | [115-pg-prep-ci-docker-config.md](./115-pg-prep-ci-docker-config.md) | ⬜ | PostgreSQL in CI, Docker Compose service, dialect-aware engine config |
+| 111 | [111-pg-prep-raw-sqlite3-audit.md](./111-pg-prep-raw-sqlite3-audit.md) | ✅ | Remove raw `sqlite3` usage from services and migration infrastructure |
+| 112 | [112-pg-prep-json-column-types.md](./112-pg-prep-json-column-types.md) | ✅ | Replace `db.Text`-as-JSON columns with `db.JSON` and remove manual serialization |
+| 113 | [113-pg-prep-alembic-migration-system.md](./113-pg-prep-alembic-migration-system.md) | ✅ | Replace bespoke SQLite migration runner with Alembic |
+| 114 | [114-pg-prep-test-db-hardening.md](./114-pg-prep-test-db-hardening.md) | ✅ | Harden test DB fixtures for PostgreSQL compatibility (injectable `DATABASE_URL`, `sqlite_only` markers) |
+| 115 | [115-pg-prep-ci-docker-config.md](./115-pg-prep-ci-docker-config.md) | ✅ | PostgreSQL in CI, Docker Compose service, dialect-aware engine config |
 
 ### Series B — Switchover (after Series A complete)
 

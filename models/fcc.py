@@ -170,7 +170,7 @@ class FccMatchChannelPattern(db.Model):  # type: ignore[name-defined]
     description = db.Column(db.Text)
 
     # Regex pattern for extracting channel number
-    pattern = db.Column(db.String(500), nullable=False)
+    pattern = db.Column(db.Text, nullable=False)
     pattern_type = db.Column(db.String(20), default="regex")  # regex, prefix, suffix
 
     # Which capture group contains the channel number (1-based)
@@ -211,7 +211,7 @@ class FccMatchLocationPattern(db.Model):  # type: ignore[name-defined]
     description = db.Column(db.Text)
 
     # Regex pattern to match location format
-    pattern = db.Column(db.String(500), nullable=False)
+    pattern = db.Column(db.Text, nullable=False)
     pattern_type = db.Column(db.String(20), default="regex")
 
     # What this pattern extracts

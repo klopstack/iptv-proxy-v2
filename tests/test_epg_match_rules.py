@@ -1430,7 +1430,7 @@ class TestNameMappingPreview:
             # Create a test channel
             channel = Channel(
                 account_id=sample_account.id,
-                stream_id=123,
+                stream_id="123",
                 name="ESPN HD Sports",
                 cleaned_name="ESPN HD Sports",
                 is_active=True,
@@ -1459,7 +1459,7 @@ class TestNameMappingPreview:
 
             channel = Channel(
                 account_id=sample_account.id,
-                stream_id=124,
+                stream_id="124",
                 name="CNN",
                 cleaned_name="CNN",
                 is_active=True,
@@ -1490,7 +1490,7 @@ class TestNameMappingPreview:
 
             channel = Channel(
                 account_id=sample_account.id,
-                stream_id=125,
+                stream_id="125",
                 name="HBO Max",
                 cleaned_name="HBO Max",
                 is_active=True,
@@ -1518,7 +1518,7 @@ class TestNameMappingPreview:
 
             channel = Channel(
                 account_id=sample_account.id,
-                stream_id=126,
+                stream_id="126",
                 name="Sports HD",
                 cleaned_name="Sports HD",
                 is_active=True,
@@ -1546,7 +1546,7 @@ class TestNameMappingPreview:
 
             channel = Channel(
                 account_id=sample_account.id,
-                stream_id=127,
+                stream_id="127",
                 name="ABC 4K Sports",
                 cleaned_name="ABC 4K Sports",
                 is_active=True,
@@ -1586,7 +1586,7 @@ class TestExclusionPreviewExtended:
 
             channel = Channel(
                 account_id=sample_account.id,
-                stream_id=200,
+                stream_id="200",
                 name="Big Fight",
                 cleaned_name="Big Fight",
                 category_id=category.id,
@@ -1614,7 +1614,7 @@ class TestExclusionPreviewExtended:
 
             channel = Channel(
                 account_id=sample_account.id,
-                stream_id=201,
+                stream_id="201",
                 name="PPV Event 123",
                 cleaned_name="PPV Event 123",
                 is_active=True,
@@ -1653,7 +1653,7 @@ class TestRulePreviewExtended:
 
             channel = Channel(
                 account_id=sample_account.id,
-                stream_id=300,
+                stream_id="300",
                 name="ESPN",
                 cleaned_name="ESPN",
                 category_id=category.id,
@@ -1690,7 +1690,7 @@ class TestRulePreviewExtended:
 
             channel = Channel(
                 account_id=sample_account.id,
-                stream_id=301,
+                stream_id="301",
                 name="ESPN UK",
                 cleaned_name="ESPN UK",
                 category_id=category.id,

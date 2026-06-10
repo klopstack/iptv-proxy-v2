@@ -79,7 +79,7 @@ def sample_events(app):
         # Create channels
         channel1 = Channel(
             account_id=account.id,
-            stream_id=1001,
+            stream_id="1001",
             name="Arsenal vs Chelsea PPV",
             cleaned_name="Arsenal vs Chelsea",
             category_id=category.id,
@@ -90,7 +90,7 @@ def sample_events(app):
 
         channel2 = Channel(
             account_id=account.id,
-            stream_id=1002,
+            stream_id="1002",
             name="Lakers vs Warriors PPV",
             cleaned_name="Lakers vs Warriors",
             category_id=category.id,
@@ -101,7 +101,7 @@ def sample_events(app):
         # Inactive channel (should be excluded)
         channel3 = Channel(
             account_id=account.id,
-            stream_id=1003,
+            stream_id="1003",
             name="PPV Placeholder",
             category_id=category.id,
             is_active=False,
@@ -580,7 +580,7 @@ class TestPPVEpgRoutes:
             from models import Account
 
             account = Account.query.first()
-            channel = Channel.query.filter_by(stream_id=1001).first()
+            channel = Channel.query.filter_by(stream_id="1001").first()
             channel.is_ppv = True
             channel.ppv_enrichment_status = "matched"
             db.session.commit()
@@ -736,8 +736,8 @@ def test_ppv_channel_epg_matching(app, sample_events):
         from services.epg.match_rules import EpgMatchRulesService
         from services.ppv.epg import PPVEpgService
 
-        # Get the event created by fixture
-        event = Event.query.first()
+        # Get the event created by fixture (deterministic — PG has no implicit row order)
+        event = Event.query.filter_by(external_id="12345").one()
         assert event is not None
 
         # Create a PPV channel
@@ -746,7 +746,7 @@ def test_ppv_channel_epg_matching(app, sample_events):
 
         channel = Channel(
             account_id=account.id,
-            stream_id=9999,
+            stream_id="9999",
             name="UFC 300 Main Event",
             category_id=category.id,
             stream_type="live",
@@ -768,7 +768,10 @@ def test_ppv_channel_epg_matching(app, sample_events):
         assert created > 0
 
         # Verify EPG channel was created with event-based ID
-        epg_channel = EpgChannel.query.filter_by(source_id=source_id).first()
+        epg_channel = EpgChannel.query.filter_by(
+            source_id=source_id,
+            channel_id=f"ppv-event-{event.external_id}",
+        ).one()
         assert epg_channel is not None
         assert epg_channel.channel_id == f"ppv-event-{event.external_id}"
 

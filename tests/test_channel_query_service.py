@@ -110,7 +110,7 @@ def test_channels_for_account_consistency(app):
         account = Account(name="CQ", server="s", username="u", password="p", enabled=True)
         db.session.add(account)
         db.session.commit()
-        db.session.add(Channel(account_id=account.id, stream_id=42, name="Test Ch", is_active=True))
+        db.session.add(Channel(account_id=account.id, stream_id="42", name="Test Ch", is_active=True))
         db.session.commit()
 
         channels = ChannelQueryService.channels_for_account(

@@ -8,6 +8,8 @@ import sqlite3
 from datetime import datetime, timezone
 from unittest.mock import patch
 
+import pytest
+
 import app as app_module
 from models import EpgSource, db
 
@@ -201,6 +203,8 @@ class TestEpgSyncApi:
             assert any(s["source_id"] == source_id for s in data["epg_sources"])
 
 
+@pytest.mark.legacy_migrations
+@pytest.mark.sqlite_only
 class TestEpgSyncMigration:
     def test_migration_adds_progress_columns(self, tmp_path):
         db_path = tmp_path / "test.db"

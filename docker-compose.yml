@@ -7,10 +7,11 @@ services:
     # ports: # Not needed in host mode - service runs directly on host port 8000
     #   - "8889:8000"
     volumes:
-      - ./data:/app/data  # Persist database
+      - ./data:/app/data  # Persist database (SQLite file; kept as backup when using PostgreSQL)
     environment:
       PORT: "8000"
       DEBUG: "False"
+      DATABASE_URL: "${DATABASE_URL:-sqlite:////app/data/iptv_proxy.db}"
       # Stream backend configuration: "ffmpeg" (default) or "mediaflow"
       STREAM_BACKEND: "${STREAM_BACKEND:-ffmpeg}"
       # MediaFlow Proxy configuration (only used when STREAM_BACKEND=mediaflow)
@@ -29,6 +30,31 @@ services:
       mediaflow-proxy:
         condition: service_healthy
         required: false  # Optional dependency - only if using mediaflow backend
+      postgres:
+        condition: service_healthy
+        required: false  # Optional — use --profile postgres
+
+  # PostgreSQL — opt-in via: docker compose --profile postgres up
+  # App uses host networking; connect via localhost:5432 when postgres publishes the port below.
+  postgres:
+    image: postgres:16-alpine
+    container_name: iptv-proxy-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-iptv_proxy}"
+      POSTGRES_USER: "${POSTGRES_USER:-iptv}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-changeme}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-iptv} -d ${POSTGRES_DB:-iptv_proxy}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - postgres
 
   # MediaFlow Proxy - high-performance HLS/MPEG-TS stream proxy
   # Only needed when STREAM_BACKEND=mediaflow
@@ -65,5 +91,8 @@ services:
     # Use: docker-compose --profile mediaflow up -d
     profiles:
       - mediaflow
+
+volumes:
+  postgres_data:
 
 # networks section removed - not compatible with host networking

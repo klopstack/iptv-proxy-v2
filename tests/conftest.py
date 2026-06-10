@@ -9,46 +9,97 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import text
 
 # Add parent directory to path so we can import app modules
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# Use an absolute, dedicated test DB path so stale repo-root or instance/test.db
-# files cannot interfere regardless of working directory or leftover WAL files.
-# Under pytest-xdist, each worker gets its own file to avoid SQLite contention.
+_DEFAULT_SQLITE_PATH = PROJECT_ROOT / "instance" / "pytest.db"
 
 
-def _resolve_test_db_path() -> Path:
-    worker = os.environ.get("PYTEST_XDIST_WORKER")
-    if worker and worker != "master":
-        return PROJECT_ROOT / "instance" / f"pytest_{worker}.db"
-    return PROJECT_ROOT / "instance" / "pytest.db"
+def _resolve_test_db_url() -> str:
+    """Resolve test DATABASE_URL; SQLite gets per-xdist-worker files."""
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        worker = os.environ.get("PYTEST_XDIST_WORKER")
+        if worker and worker != "master":
+            path = PROJECT_ROOT / "instance" / f"pytest_{worker}.db"
+        else:
+            path = _DEFAULT_SQLITE_PATH
+        return f"sqlite:///{path}"
+
+    if url.startswith("sqlite:///"):
+        worker = os.environ.get("PYTEST_XDIST_WORKER")
+        if worker and worker != "master":
+            base = Path(url.replace("sqlite:///", ""))
+            path = base.with_name(f"{base.stem}_{worker}{base.suffix}")
+            return f"sqlite:///{path}"
+    return url
 
 
-TEST_DB_PATH = _resolve_test_db_path()
+TEST_DB_URL = _resolve_test_db_url()
+
+
+def is_sqlite_backend() -> bool:
+    return TEST_DB_URL.startswith("sqlite")
+
+
+def _sqlite_path_from_url() -> Path:
+    return Path(TEST_DB_URL.replace("sqlite:///", ""))
 
 
 def _cleanup_test_db() -> None:
-    """Remove the test database and any SQLite WAL/SHM sidecar files."""
+    """Remove SQLite test database and WAL/SHM sidecar files."""
+    if not is_sqlite_backend():
+        return
+    path = _sqlite_path_from_url()
     for suffix in ("", "-wal", "-shm"):
-        db_file = Path(f"{TEST_DB_PATH}{suffix}")
+        db_file = Path(f"{path}{suffix}")
         if db_file.exists():
             db_file.unlink()
 
 
+def _reset_pg_database(engine) -> None:
+    """Drop and recreate public schema (cleaner than drop_all on PostgreSQL)."""
+    engine.dispose()
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+        conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
+        conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
+        db_user = engine.url.username
+        if db_user:
+            conn.execute(text(f'GRANT ALL ON SCHEMA public TO "{db_user}"'))
+
+
 def _reset_test_db(flask_app) -> None:
-    """Close all DB connections, then remove the test database files."""
+    """Close connections and reset the test database."""
     with flask_app.app_context():
         _db.session.remove()
         _db.engine.dispose()
+        if not is_sqlite_backend():
+            _reset_pg_database(_db.engine)
+            _db.engine.dispose()
+            return
     _cleanup_test_db()
 
 
+def pytest_configure(config):
+    config.addinivalue_line("markers", "sqlite_only: test requires SQLite backend")
+
+
+def pytest_runtest_setup(item):
+    if "sqlite_only" in item.keywords and not is_sqlite_backend():
+        pytest.skip("requires SQLite backend")
+
+
 # Set test database URI BEFORE importing app
-os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
+os.environ["DATABASE_URL"] = TEST_DB_URL
 os.environ["DISABLE_IN_WORKER_SCHEDULER"] = "true"
-TEST_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+if not is_sqlite_backend():
+    os.environ["IPTV_PG_TEST"] = "1"
+if is_sqlite_backend():
+    _sqlite_path_from_url().parent.mkdir(parents=True, exist_ok=True)
 
 # Import app and models AFTER setting environment
 import app as app_module
@@ -61,7 +112,7 @@ def app():
     """
     Create Flask app configured for testing
 
-    Uses SQLite file-based database that's reset between tests.
+    Uses SQLite file-based database or PostgreSQL per DATABASE_URL.
     """
     flask_app = app_module.app
     flask_app.config["TESTING"] = True
@@ -76,10 +127,13 @@ def app():
         # This prevents "database is locked" errors with SQLite
         _db.session.remove()
         _db.engine.dispose()
-        _db.drop_all()
-        _db.engine.dispose()
+        if is_sqlite_backend():
+            _db.drop_all()
+            _db.engine.dispose()
+        # PostgreSQL: next test's setup resets via DROP SCHEMA; skip teardown to avoid deadlocks
 
-    _cleanup_test_db()
+    if is_sqlite_backend():
+        _cleanup_test_db()
 
 
 @pytest.fixture(scope="function")

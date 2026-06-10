@@ -253,6 +253,26 @@ docker exec -it iptv-proxy-v2 alembic current
 
 Set `DATABASE_URL` when running Alembic on the host outside Docker (default in container: `sqlite:////app/data/iptv_proxy.db`).
 
+### PostgreSQL (optional)
+
+Production default remains SQLite until Wave 11 Series B cutover. To run against PostgreSQL locally or on klopstack:
+
+1. Provision a database (klopstack: `./create_iptv_proxy_database.sh`; local: `docker compose --profile postgres up -d postgres`).
+2. Set `DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DBNAME` (klopstack: `IPTV_PROXY_DATABASE_URL` + `IPTV_PROXY_USE_POSTGRES=true`).
+3. Start the app — `entrypoint.sh` runs `flask db upgrade` on the empty PostgreSQL database.
+
+Local Docker Compose with the bundled PostgreSQL profile:
+
+```bash
+export DATABASE_URL=postgresql://iptv:changeme@localhost:5432/iptv_proxy
+docker compose --profile postgres up --build -d
+docker exec iptv-proxy-v2 alembic current
+```
+
+Connection pool sizing (PostgreSQL only): `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `DB_POOL_TIMEOUT`.
+
+Full operator steps: [architecture/pg-migration-guide.md](architecture/pg-migration-guide.md).
+
 ## Related documentation
 
 - [architecture/admin-auth-and-deployment-security.md](architecture/admin-auth-and-deployment-security.md)

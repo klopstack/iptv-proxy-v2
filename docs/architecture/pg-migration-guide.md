@@ -8,7 +8,7 @@ Operator guide for moving IPTV Proxy v2 from SQLite to PostgreSQL. Part of **Wav
 
 | Series | TODOs | Scope | Status (June 2026) |
 |--------|-------|-------|---------------------|
-| **A — Preparation** | 111–115 | SQLite-safe prep: remove raw sqlite3, JSON columns, Alembic, CI/Docker PG | #65, #66 merged; #67 (Alembic) open |
+| **A — Preparation** | 111–115 | SQLite-safe prep: remove raw sqlite3, JSON columns, Alembic, CI/Docker PG | #65–#67, PG-A3 merged |
 | **B — Switchover** | 116–119 | PG schema, data export/import, cutover, cleanup | Blocked on Series A |
 
 Series A keeps existing SQLite deployments working. Series B moves production data and flips `DATABASE_URL` to PostgreSQL.
@@ -34,8 +34,7 @@ Merged Wave 11 prep (already on `main`):
 
 Open / upcoming:
 
-- [#67](https://github.com/klopstack/iptv-proxy-v2/pull/67) — Alembic (TODO 113)
-- [TODO 115](../todos/115-pg-prep-ci-docker-config.md) — CI PostgreSQL job, dialect-aware engine options, optional compose `postgres` profile
+- Series B (TODOs 116–119) — schema parity, data export, cutover, cleanup
 
 ## Existing SQLite deployments
 

@@ -527,7 +527,7 @@ class TestLinkChannelToEvent:
 
             channel = Channel(
                 account_id=account.id,
-                stream_id=100,
+                stream_id="100",
                 name="Test PPV Channel",
                 category_id=category.id,
             )
@@ -572,7 +572,7 @@ class TestLinkChannelToEvent:
 
             channel = Channel(
                 account_id=account.id,
-                stream_id=100,
+                stream_id="100",
                 name="Test PPV Channel",
                 category_id=category.id,
             )
@@ -974,7 +974,7 @@ class TestRefreshUpcomingEventTimes:
 
             channel = Channel(
                 account_id=account.id,
-                stream_id=100,
+                stream_id="100",
                 name="Test PPV Channel",
                 category_id=category.id,
                 is_ppv=True,

@@ -41,7 +41,7 @@ def test_account1(app):
         # Add channels
         channel1 = Channel(
             account_id=account.id,
-            stream_id=1,
+            stream_id="1",
             name="ESPN HD",
             cleaned_name="ESPN",
             category_id=category.id,
@@ -51,7 +51,7 @@ def test_account1(app):
         )
         channel2 = Channel(
             account_id=account.id,
-            stream_id=2,
+            stream_id="2",
             name="FOX Sports",
             cleaned_name="FOX Sports",
             category_id=category.id,
@@ -69,9 +69,9 @@ def test_account1(app):
         db.session.commit()
 
         # Tag associations
-        db.session.add(ChannelTag(account_id=account.id, stream_id=1, tag_id=tag_hd.id))
-        db.session.add(ChannelTag(account_id=account.id, stream_id=1, tag_id=tag_sports.id))
-        db.session.add(ChannelTag(account_id=account.id, stream_id=2, tag_id=tag_sports.id))
+        db.session.add(ChannelTag(account_id=account.id, stream_id="1", tag_id=tag_hd.id))
+        db.session.add(ChannelTag(account_id=account.id, stream_id="1", tag_id=tag_sports.id))
+        db.session.add(ChannelTag(account_id=account.id, stream_id="2", tag_id=tag_sports.id))
         db.session.commit()
 
         yield account.id
@@ -98,7 +98,7 @@ def test_account2(app):
         # Add channel (duplicate of ESPN)
         channel = Channel(
             account_id=account.id,
-            stream_id=10,
+            stream_id="10",
             name="ESPN",
             cleaned_name="ESPN",
             category_id=category.id,
@@ -116,7 +116,7 @@ def test_account2(app):
             db.session.add(tag_hd)
             db.session.commit()
 
-        db.session.add(ChannelTag(account_id=account.id, stream_id=10, tag_id=tag_hd.id))
+        db.session.add(ChannelTag(account_id=account.id, stream_id="10", tag_id=tag_hd.id))
         db.session.commit()
 
         yield account.id
@@ -325,7 +325,7 @@ class TestMultiAccountPlaylists:
             # Mock collapse_duplicates to return only unique channels
             mock_quality.collapse_duplicates.return_value = [
                 {
-                    "channel": Channel.query.filter_by(stream_id=1).first(),
+                    "channel": Channel.query.filter_by(stream_id="1").first(),
                     "account_data": {
                         "id": 1,
                         "name": "Provider 1",
@@ -335,7 +335,7 @@ class TestMultiAccountPlaylists:
                         "primary_username": "user1",
                         "primary_password": "pass1",
                     },
-                    "stream_id": 1,
+                    "stream_id": "1",
                     "cleaned_name": "ESPN",
                     "tags": ["HD", "SPORTS"],
                 }
@@ -468,7 +468,7 @@ class TestPPVVisibility:
 
             live_channel = Channel(
                 account_id=account.id,
-                stream_id=101,
+                stream_id="101",
                 name="Live PPV",
                 cleaned_name="Live PPV",
                 category_id=ppv_category.id,
@@ -478,7 +478,7 @@ class TestPPVVisibility:
             )
             replay_channel = Channel(
                 account_id=account.id,
-                stream_id=102,
+                stream_id="102",
                 name="Replay PPV",
                 cleaned_name="Replay PPV",
                 category_id=ppv_category.id,
@@ -669,7 +669,7 @@ class TestChannelMetadata:
             category = Category.query.filter_by(account_id=test_account1).first()
             channel = Channel(
                 account_id=test_account1,
-                stream_id=99,
+                stream_id="99",
                 name='Test "Channel" with\'quotes',
                 cleaned_name="Test Channel",
                 category_id=category.id,
