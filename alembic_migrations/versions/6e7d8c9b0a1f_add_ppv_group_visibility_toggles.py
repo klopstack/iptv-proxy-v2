@@ -22,12 +22,12 @@ depends_on = None
 def upgrade():
     if not column_exists("accounts", "ppv_show_replay"):
         with op.batch_alter_table("accounts", schema=None) as batch_op:
-            batch_op.add_column(sa.Column("ppv_show_replay", sa.Boolean(), nullable=False, server_default=sa.text("1")))
+            batch_op.add_column(sa.Column("ppv_show_replay", sa.Boolean(), nullable=False, server_default=sa.true()))
 
     if not column_exists("accounts", "ppv_show_historical"):
         with op.batch_alter_table("accounts", schema=None) as batch_op:
             batch_op.add_column(
-                sa.Column("ppv_show_historical", sa.Boolean(), nullable=False, server_default=sa.text("1"))
+                sa.Column("ppv_show_historical", sa.Boolean(), nullable=False, server_default=sa.true())
             )
 
 
