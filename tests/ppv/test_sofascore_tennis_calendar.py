@@ -73,7 +73,7 @@ class TestHttpGet:
 
     def test_falls_back_to_requests_when_curl_cffi_missing(self):
         mock_response = MagicMock()
-        with patch("services.tennis.sofascore_calendar.requests.get", return_value=mock_response) as mock_requests:
+        with patch("services.ppv.calendar_providers.sofascore.client.requests.get", return_value=mock_response) as mock_requests:
             import builtins
 
             real_import = builtins.__import__
@@ -97,7 +97,7 @@ class TestFetchTennisEventsForDate:
 
     def test_flag_off_returns_empty_without_http(self, app):
         Settings.set(SETTING_PPV_SOFASCORE_CALENDAR_ENABLED, "false")
-        with patch("services.tennis.sofascore_calendar._http_get") as mock_get:
+        with patch("services.ppv.calendar_providers.sofascore.client.http_get") as mock_get:
             assert fetch_tennis_events_for_date("2026-06-03") == []
             mock_get.assert_not_called()
 
@@ -108,7 +108,7 @@ class TestFetchTennisEventsForDate:
         mock_response.json.return_value = payload
         mock_response.raise_for_status = MagicMock()
 
-        with patch("services.tennis.sofascore_calendar._http_get", return_value=mock_response) as mock_get:
+        with patch("services.ppv.calendar_providers.sofascore.client.http_get", return_value=mock_response) as mock_get:
             first = fetch_tennis_events_for_date("2026-06-03", force_refresh=True)
             second = fetch_tennis_events_for_date("2026-06-03")
             assert len(first) >= 1
@@ -125,11 +125,11 @@ class TestFetchTennisEventsForDate:
         # First request at t=100 (no sleep); second at t=100.5 after 0.5s elapsed.
         time_values = iter([100.0, 100.0, 100.5, 100.5])
 
-        with patch("services.tennis.sofascore_calendar._http_get", return_value=mock_response):
-            with patch("services.tennis.sofascore_calendar.time.sleep") as mock_sleep:
-                with patch("services.tennis.sofascore_calendar.time.time", side_effect=lambda: next(time_values)):
-                    with patch("services.tennis.sofascore_calendar.random.uniform", return_value=0.0):
-                        with patch("services.tennis.sofascore_calendar._last_request_time", 0.0):
+        with patch("services.ppv.calendar_providers.sofascore.client.http_get", return_value=mock_response):
+            with patch("services.ppv.calendar_providers.sofascore.client.time.sleep") as mock_sleep:
+                with patch("services.ppv.calendar_providers.sofascore.client.time.time", side_effect=lambda: next(time_values)):
+                    with patch("services.ppv.calendar_providers.sofascore.client.random.uniform", return_value=0.0):
+                        with patch("services.ppv.calendar_providers.sofascore.client._last_request_time", 0.0):
                             fetch_scheduled_events("tennis", "2026-06-03", force_refresh=True)
                             fetch_scheduled_events("tennis", "2026-06-03", force_refresh=True)
                             assert mock_sleep.call_count == 1
