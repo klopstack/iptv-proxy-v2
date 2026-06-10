@@ -265,7 +265,7 @@ Identified from live analysis on `docker.klopnet.com` (18,625 active PPV channel
 | 126 | [126-sofascore-calendar-multi-sport-and-enrichment.md](./126-sofascore-calendar-multi-sport-and-enrichment.md) | ✅ | SofaScore merge + doc — PR [#60](https://github.com/klopstack/iptv-proxy-v2/pull/60) |
 | 127 | [127-ppv-multi-player-competitor-extraction.md](./127-ppv-multi-player-competitor-extraction.md) | ⬜ | Tennis doubles / 2v2 channel names → four-player extract + match |
 | 128 | [128-fix-ppv-year-inference-recent-past-dates.md](./128-fix-ppv-year-inference-recent-past-dates.md) | ⬜ | `@ Jun 3` recent-past year rollover — production still skips tennis as `far_future` |
-| 129 | [129-ppv-replay-archive-enrichment-flosp.md](./129-ppv-replay-archive-enrichment-flosp.md) | ⬜ | Flo/FLSP archive replays → enrich + **Replay** category (not skip / live) |
+| 129 | [129-ppv-replay-archive-enrichment-flosp.md](./129-ppv-replay-archive-enrichment-flosp.md) | 🟡 | Track A+C: Flo enrichability + Replay group; Track B → [131](./131-sofascore-college-amateur-calendar-provider.md) |
 | 130 | [130-ncaa-college-calendar-source-spike.md](./130-ncaa-college-calendar-source-spike.md) | ⬜ | Spike: NCAA / college / amateur calendar APIs (SofaScore slugs, Sportsipy, …) |
 | 131 | [131-sofascore-college-amateur-calendar-provider.md](./131-sofascore-college-amateur-calendar-provider.md) | ⬜ | Wire SofaScore multi-sport + historical window for Flo replay matching |
 | 133 | [133-sofascore-multi-sport-refactor-and-football-followups.md](./133-sofascore-multi-sport-refactor-and-football-followups.md) | ⬜ | Refactor SofaScore to generic multi-sport provider; WC football ops + MLS/UEFA follow-ups |
