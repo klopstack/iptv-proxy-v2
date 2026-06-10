@@ -118,6 +118,31 @@
             </div>
         </div>
 
+        <!-- Tag-Based Category Grouping Card -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-folder2-open"></i> Tag-Based Category Grouping
+            </div>
+            <div class="card-body">
+                <p class="mb-3">
+                    Group channels in M3U and Xtream output by tag prefix (e.g. FCC <code>DMA:</code> tags for per-market categories).
+                    Channels without a matching tag keep their provider category.
+                </p>
+                <div id="category-grouping-list" class="mb-3">
+                    <div class="text-center py-3">
+                        <div class="spinner-border spinner-border-sm" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-info small mt-3 mb-0">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>By DMA (markets):</strong> uses <code>DMA:LOS ANGELES</code> tags from FCC enrichment.
+                    Combine with tag playlists to filter which markets appear; grouping controls how they are labeled.
+                </div>
+            </div>
+        </div>
+
         <!-- Station Lookup Card -->
         <div class="card mb-4">
             <div class="card-header">
@@ -194,7 +219,7 @@
                     <li><strong>Callsign → City</strong>: Find the city for an EPG callsign to match channel names</li>
                     <li><strong>City → Callsigns</strong>: Find all stations in a city for playlist filtering</li>
                     <li><strong>Tag enrichment</strong>: Auto-add location/network tags to channels</li>
-                    <li><strong>Market playlists</strong>: Create playlists for specific DMAs (markets)</li>
+                    <li><strong>Market playlists</strong>: Filter by <code>DMA:</code> tags, then enable per-market category grouping</li>
                 </ul>
                 <h6>Data Fields</h6>
                 <ul class="small mb-0">
@@ -703,9 +728,110 @@ async function loadAccounts() {
         });
 
         loadFccRenameFormats(accounts);
+        loadCategoryGrouping(accounts);
     } catch (error) {
         console.error('Failed to load accounts:', error);
     }
+}
+
+function categoryGroupingPreset(grouping) {
+    if (!grouping || grouping.enabled === false) return 'off';
+    const prefixes = (grouping.prefixes || []).map(p => p.toUpperCase());
+    if (prefixes.length === 1 && prefixes[0] === 'DMA:') return 'dma';
+    return 'custom';
+}
+
+function categoryGroupingFromPreset(preset, customPrefixes) {
+    if (preset === 'off') return { enabled: false };
+    if (preset === 'dma') {
+        return { enabled: true, prefixes: ['DMA:'], display: 'strip_prefix_title' };
+    }
+    const prefixes = (customPrefixes || '').split(',').map(s => s.trim()).filter(Boolean);
+    return { enabled: true, prefixes, display: 'strip_prefix_title' };
+}
+
+async function loadCategoryGrouping(accounts) {
+    const container = document.getElementById('category-grouping-list');
+    if (!accounts || !accounts.length) {
+        container.innerHTML = '<p class="text-muted small">No accounts configured.</p>';
+        return;
+    }
+
+    let html = '<div class="list-group">';
+    for (const account of accounts) {
+        const grouping = account.category_tag_grouping || null;
+        const preset = categoryGroupingPreset(grouping);
+        const customPrefixes = preset === 'custom' ? (grouping.prefixes || []).join(', ') : '';
+        html += `
+            <div class="list-group-item">
+                <div class="row align-items-center g-2">
+                    <div class="col-md-3">
+                        <h6 class="mb-0">${escapeHtml(account.name)}</h6>
+                    </div>
+                    <div class="col-md-4">
+                        <select class="form-select form-select-sm category-grouping-preset"
+                                data-account-id="${account.id}">
+                            <option value="off" ${preset === 'off' ? 'selected' : ''}>Off (provider categories)</option>
+                            <option value="dma" ${preset === 'dma' ? 'selected' : ''}>Group by DMA (markets)</option>
+                            <option value="custom" ${preset === 'custom' ? 'selected' : ''}>Custom prefixes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <input type="text" class="form-control form-control-sm category-grouping-prefixes"
+                               data-account-id="${account.id}"
+                               value="${escapeHtml(customPrefixes)}"
+                               placeholder="e.g. DMA:, NETWORK:"
+                               ${preset === 'custom' ? '' : 'disabled'}>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-sm btn-outline-primary w-100 category-grouping-save-btn"
+                                data-account-id="${account.id}">
+                            <i class="bi bi-save"></i> Save
+                        </button>
+                        <small class="category-grouping-status-${account.id}"></small>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    html += '</div>';
+    container.innerHTML = html;
+
+    container.querySelectorAll('.category-grouping-preset').forEach((select) => {
+        select.addEventListener('change', () => {
+            const accountId = select.dataset.accountId;
+            const prefixesInput = container.querySelector(`.category-grouping-prefixes[data-account-id="${accountId}"]`);
+            if (prefixesInput) {
+                prefixesInput.disabled = select.value !== 'custom';
+            }
+        });
+    });
+
+    container.querySelectorAll('.category-grouping-save-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const accountId = btn.dataset.accountId;
+            const preset = container.querySelector(`.category-grouping-preset[data-account-id="${accountId}"]`).value;
+            const prefixesInput = container.querySelector(`.category-grouping-prefixes[data-account-id="${accountId}"]`);
+            const statusEl = container.querySelector(`.category-grouping-status-${accountId}`);
+            const grouping = categoryGroupingFromPreset(preset, prefixesInput ? prefixesInput.value : '');
+            btn.disabled = true;
+            try {
+                const resp = await fetch(`/api/accounts/${accountId}/category-tag-grouping`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category_tag_grouping: grouping.enabled ? grouping : null }),
+                });
+                if (!resp.ok) throw new Error(await resp.text());
+                statusEl.innerHTML = '<i class="bi bi-check-circle text-success"></i>';
+                setTimeout(() => { statusEl.innerHTML = ''; }, 2000);
+            } catch (err) {
+                statusEl.innerHTML = '<i class="bi bi-exclamation-triangle text-danger"></i>';
+                console.error('Error saving category grouping:', err);
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    });
 }
 
 async function loadFccRenameFormats(accounts) {

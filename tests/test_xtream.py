@@ -277,6 +277,53 @@ class TestXtreamPlayerAPI:
             assert data[0]["name"] == "Channel 1"
             assert data[0]["stream_type"] == "live"
 
+    def test_get_live_categories_dma_tag_grouping(self, app, client, xtream_credential, test_channels, test_account):
+        """Tag-based DMA grouping emits virtual Xtream categories."""
+        with app.app_context():
+            account = db.session.get(Account, test_account)
+            account.category_tag_grouping = json.dumps(
+                {"enabled": True, "prefixes": ["DMA:"], "display": "strip_prefix_title"}
+            )
+            dma_tag = Tag(name="DMA:CHICAGO")
+            db.session.add(dma_tag)
+            db.session.flush()
+            db.session.add(
+                ChannelTag(
+                    account_id=test_account,
+                    stream_id=test_channels[0].stream_id,
+                    tag_id=dma_tag.id,
+                )
+            )
+            db.session.commit()
+
+            response = client.get(
+                "/player_api.php",
+                query_string={
+                    "username": "xtream_user",
+                    "password": "xtream_pass",
+                    "action": "get_live_categories",
+                },
+            )
+            assert response.status_code == 200
+            data = response.json
+            names = {item["category_name"] for item in data}
+            assert "Chicago" in names
+            assert "Test Category" in names
+
+            tag_cat = next(item for item in data if item["category_name"] == "Chicago")
+            streams_response = client.get(
+                "/player_api.php",
+                query_string={
+                    "username": "xtream_user",
+                    "password": "xtream_pass",
+                    "action": "get_live_streams",
+                    "category_id": tag_cat["category_id"],
+                },
+            )
+            streams = streams_response.json
+            assert len(streams) == 1
+            assert streams[0]["category_id"] == tag_cat["category_id"]
+
     def test_get_live_streams_by_category(self, app, client, xtream_credential, test_channels, test_category):
         """Test get_live_streams filtered by category"""
         with app.app_context():
