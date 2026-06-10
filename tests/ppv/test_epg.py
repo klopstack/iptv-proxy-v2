@@ -768,7 +768,10 @@ def test_ppv_channel_epg_matching(app, sample_events):
         assert created > 0
 
         # Verify EPG channel was created with event-based ID
-        epg_channel = EpgChannel.query.filter_by(source_id=source_id).first()
+        epg_channel = EpgChannel.query.filter_by(
+            source_id=source_id,
+            channel_id=f"ppv-event-{event.external_id}",
+        ).one()
         assert epg_channel is not None
         assert epg_channel.channel_id == f"ppv-event-{event.external_id}"
 

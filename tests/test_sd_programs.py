@@ -359,14 +359,13 @@ class TestSyncSdProgramsIntegration:
         from services.epg.sd_programs import sync_sd_programs_for_source
 
         with app.app_context():
-            ch = sample_sd_channels[0]
-            # Use future date relative to now to avoid cleanup
+            ch = db.session.get(EpgChannel, sample_sd_channels[0].id)
+
+            # Create existing program
             future_date = datetime.now() + timedelta(days=1)
             start = future_date.replace(hour=12, minute=0, second=0, microsecond=0)
             stop = future_date.replace(hour=13, minute=0, second=0, microsecond=0)
             air_date_str = start.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-            # Create existing program
             existing = EpgProgram(
                 epg_channel_id=ch.id,
                 start_time=start,
@@ -426,7 +425,7 @@ class TestSyncSdProgramsIntegration:
         from services.epg.sd_programs import sync_sd_programs_for_source
 
         with app.app_context():
-            ch = sample_sd_channels[0]
+            ch = db.session.get(EpgChannel, sample_sd_channels[0].id)
 
             # Set cached MD5 on the channel
             ch.schedule_md5 = "cached_md5"
@@ -464,7 +463,7 @@ class TestSyncSdProgramsIntegration:
         from services.epg.sd_programs import sync_sd_programs_for_source
 
         with app.app_context():
-            ch = sample_sd_channels[0]
+            ch = db.session.get(EpgChannel, sample_sd_channels[0].id)
 
             # Set cached MD5 on the channel
             ch.schedule_md5 = "cached_md5"
