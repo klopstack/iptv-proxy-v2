@@ -155,6 +155,10 @@ class Settings(db.Model):  # type: ignore[name-defined]
             "false",
             "Merge SofaScore tennis into the PPV calendar after ESPN (wheelchair, ITF, and other gaps).",
         ),
+        "ppv_sofascore_football_enabled": (
+            "true",
+            "Merge SofaScore football/soccer into the PPV calendar when TheSportsDB coverage is incomplete (e.g. World Cup).",
+        ),
         # Stream proxy failover to linked backup channels
         "stream_fallback_enabled": (
             "true",

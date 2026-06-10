@@ -105,6 +105,7 @@ class TestCalendarScraperSofascoreMerge:
         app,
     ):
         Settings.set(SETTING_PPV_SOFASCORE_CALENDAR_ENABLED, "false")
+        Settings.set("ppv_sofascore_football_enabled", "false")
         mock_milb_fetch.return_value = []
         mock_fetch.return_value = []
         mock_api_fetch.return_value = []
