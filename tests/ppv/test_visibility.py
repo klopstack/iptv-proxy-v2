@@ -980,6 +980,98 @@ class TestGroupLiveReplayHistoricalSplit:
             == "PPV - Historical"
         )
 
+    def test_in_progress_soccer_event_is_live_not_replay(self):
+        """Scheduled event that started recently stays Live during sport grace window."""
+        now = datetime(2026, 6, 10, 23, 6, 0)
+        event = Event(
+            external_id="usl-knoxville",
+            scheduled_at=now - timedelta(minutes=6),
+            home_team_id="ok",
+            home_team_name="One Knoxville",
+            away_team_id="crw",
+            away_team_name="Chattanooga Red Wolves",
+            sport="Soccer",
+            league_name="USL Cup",
+            status=Event.STATUS_SCHEDULED,
+        )
+        assert (
+            PPVVisibilityService.classify_live_replay_event(event, current_time=now)
+            == PPVVisibilityService.PPV_GROUP_LIVE
+        )
+
+    def test_in_progress_basketball_event_is_live_not_replay(self):
+        """WNBA-style in-progress game classifies as Live, not Replay."""
+        now = datetime(2026, 6, 10, 23, 6, 0)
+        event = Event(
+            external_id="wnba-tempo-sun",
+            scheduled_at=now - timedelta(minutes=6),
+            home_team_id="tor",
+            home_team_name="Toronto Tempo",
+            away_team_id="con",
+            away_team_name="Connecticut Sun",
+            sport="Basketball",
+            league_name="WNBA",
+            status=Event.STATUS_SCHEDULED,
+        )
+        assert (
+            PPVVisibilityService.classify_live_replay_event(event, current_time=now)
+            == PPVVisibilityService.PPV_GROUP_LIVE
+        )
+
+    def test_finished_event_past_start_is_replay_not_live(self):
+        """Finished events stay Replay even when within the grace window."""
+        now = datetime(2026, 6, 10, 23, 6, 0)
+        event = Event(
+            external_id="finished-recent",
+            scheduled_at=now - timedelta(hours=2),
+            home_team_id="h",
+            home_team_name="Home",
+            away_team_id="a",
+            away_team_name="Away",
+            sport="Soccer",
+            status=Event.STATUS_FINISHED,
+        )
+        assert (
+            PPVVisibilityService.classify_live_replay_event(event, current_time=now)
+            == PPVVisibilityService.PPV_GROUP_REPLAY
+        )
+
+    def test_past_grace_window_scheduled_event_is_replay(self):
+        """Scheduled event well past sport grace window classifies as Replay."""
+        now = datetime(2026, 6, 10, 23, 6, 0)
+        event = Event(
+            external_id="expired-soccer",
+            scheduled_at=now - timedelta(hours=3),
+            home_team_id="h",
+            home_team_name="Home",
+            away_team_id="a",
+            away_team_name="Away",
+            sport="Soccer",
+            status=Event.STATUS_SCHEDULED,
+        )
+        assert (
+            PPVVisibilityService.classify_live_replay_event(event, current_time=now)
+            == PPVVisibilityService.PPV_GROUP_REPLAY
+        )
+
+    def test_end_at_in_future_keeps_live_classification(self):
+        now = datetime(2026, 6, 10, 23, 6, 0)
+        event = Event(
+            external_id="end-at-future",
+            scheduled_at=now - timedelta(hours=1),
+            end_at=now + timedelta(hours=1),
+            home_team_id="h",
+            home_team_name="Home",
+            away_team_id="a",
+            away_team_name="Away",
+            sport="Soccer",
+            status=Event.STATUS_SCHEDULED,
+        )
+        assert (
+            PPVVisibilityService.classify_live_replay_event(event, current_time=now)
+            == PPVVisibilityService.PPV_GROUP_LIVE
+        )
+
 
 class TestGroupVisibilityToggles:
     """Per-group show/hide toggles for group_live_replay accounts (TODO 134)."""

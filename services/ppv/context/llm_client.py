@@ -18,7 +18,9 @@ Returns None (not raises) on any failure so callers can fall back gracefully.
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import threading
 from typing import Dict, List, Optional
 
 import requests
@@ -38,6 +40,10 @@ _DEFAULT_OPENAI_BASE = "https://api.openai.com/v1"
 _DEFAULT_ANTHROPIC_BASE = "https://api.anthropic.com"
 _ANTHROPIC_VERSION = "2023-06-01"
 _REQUEST_TIMEOUT = 30  # seconds
+_LLM_CACHE_MAX_ENTRIES = 512
+
+_LLM_DESCRIPTION_CACHE: Dict[str, str] = {}
+_LLM_CACHE_LOCK = threading.Lock()
 
 # ---------------------------------------------------------------------------
 # LLM enrichment settings descriptor (not a real provider — no sports coverage)
@@ -117,6 +123,29 @@ class LLMEnrichmentSettings(ContextDataProvider):
         ]
 
 
+def clear_llm_description_cache() -> None:
+    """Clear the in-process LLM description cache (for tests)."""
+    with _LLM_CACHE_LOCK:
+        _LLM_DESCRIPTION_CACHE.clear()
+
+
+def _llm_cache_key(provider: str, model: str, base_url: str, system: str, prompt: str) -> str:
+    payload = "\0".join([provider, model, base_url, system, prompt])
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _get_cached_description(cache_key: str) -> Optional[str]:
+    with _LLM_CACHE_LOCK:
+        return _LLM_DESCRIPTION_CACHE.get(cache_key)
+
+
+def _set_cached_description(cache_key: str, description: str) -> None:
+    with _LLM_CACHE_LOCK:
+        if cache_key not in _LLM_DESCRIPTION_CACHE and len(_LLM_DESCRIPTION_CACHE) >= _LLM_CACHE_MAX_ENTRIES:
+            _LLM_DESCRIPTION_CACHE.pop(next(iter(_LLM_DESCRIPTION_CACHE)))
+        _LLM_DESCRIPTION_CACHE[cache_key] = description
+
+
 def _llm_setting(key: str, default: str = "") -> str:
     """Read an LLM enrichment setting from the provider_settings table."""
     try:
@@ -157,12 +186,25 @@ def generate_event_description(context: EventContext) -> Optional[str]:
 
     prompt = build_prompt(context)
     system = get_system_prompt()
+    resolved_base_url = base_url or (_DEFAULT_ANTHROPIC_BASE if provider == "anthropic" else _DEFAULT_OPENAI_BASE)
+    cache_key = _llm_cache_key(provider, model, resolved_base_url, system, prompt)
+
+    cached = _get_cached_description(cache_key)
+    if cached is not None:
+        logger.debug(
+            "LLM description cache hit for %s vs %s via %s/%s",
+            context.home_team.name,
+            context.away_team.name,
+            provider,
+            model,
+        )
+        return cached
 
     try:
         if provider == "anthropic":
-            description = _call_anthropic(api_key, model, system, prompt, base_url or _DEFAULT_ANTHROPIC_BASE)
+            description = _call_anthropic(api_key, model, system, prompt, resolved_base_url)
         else:
-            description = _call_openai(api_key, model, system, prompt, base_url or _DEFAULT_OPENAI_BASE)
+            description = _call_openai(api_key, model, system, prompt, resolved_base_url)
     except Exception as exc:
         logger.warning("LLM API call failed: %s", exc)
         return None
@@ -178,6 +220,8 @@ def generate_event_description(context: EventContext) -> Optional[str]:
         )
         return None
 
+    result = description.strip()
+    _set_cached_description(cache_key, result)
     logger.info(
         "Generated LLM description for %s vs %s via %s/%s",
         context.home_team.name,
@@ -185,7 +229,7 @@ def generate_event_description(context: EventContext) -> Optional[str]:
         provider,
         model,
     )
-    return description.strip()
+    return result
 
 
 def generate_event_description_or_fallback(context: EventContext) -> str:

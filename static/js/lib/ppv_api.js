@@ -10,6 +10,7 @@
 export const PPV_ENRICHMENT_CONFIG_URL = '/api/ppv-enrichment/config';
 export const PPV_ENRICHMENT_SETTINGS_URL = '/api/ppv-enrichment/settings';
 export const PPV_ENRICHMENT_CHANNELS_URL = '/api/ppv-enrichment/channels';
+export const PPV_PROVIDER_SETTINGS_URL = '/api/ppv-enrichment/provider-settings';
 export const PPV_EPG_EVENTS_URL = '/api/ppv-epg/events';
 
 /**
@@ -135,5 +136,38 @@ export async function fetchPpvEnrichmentChannels(params = {}) {
         const err = await response.json().catch(() => ({}));
         throw new Error(err.error || 'Failed to load PPV enrichment channels');
     }
+    return response.json();
+}
+
+/**
+ * @returns {Promise<{ providers: Array<{ name: string, fields: Array<object> }> }>}
+ */
+export async function fetchProviderSettings() {
+    const response = await fetch(PPV_PROVIDER_SETTINGS_URL);
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to load provider settings');
+    }
+    return response.json();
+}
+
+/**
+ * @param {string} providerName
+ * @param {string} key
+ * @param {string} value
+ * @returns {Promise<{ provider: string, key: string, message: string }>}
+ */
+export async function saveProviderSetting(providerName, key, value) {
+    const response = await fetch(`${PPV_PROVIDER_SETTINGS_URL}/${providerName}/${key}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value }),
+    });
+
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `Failed to save ${providerName}/${key}`);
+    }
+
     return response.json();
 }

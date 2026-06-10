@@ -27,6 +27,7 @@ from models import (
     XtreamCredential,
     db,
 )
+from services.category_tag_service import XTREAM_LOCAL_CHANNELS_PARENT_ID
 
 # ============================================================================
 # Fixtures
@@ -322,7 +323,7 @@ class TestXtreamPlayerAPI:
             assert response.status_code == 200
             data = response.json
             juneau = next(item for item in data if item["category_name"] == "Juneau")
-            assert juneau["parent_id"] == "tag:parent:local_channels"
+            assert juneau["parent_id"] == int(XTREAM_LOCAL_CHANNELS_PARENT_ID)
 
             streams_response = client.get(
                 "/player_api.php",
@@ -374,7 +375,7 @@ class TestXtreamPlayerAPI:
             assert parent["parent_id"] == 0
 
             tag_cat = next(item for item in data if item["category_name"] == "Chicago")
-            assert tag_cat["parent_id"] == parent["category_id"]
+            assert tag_cat["parent_id"] == int(parent["category_id"])
             streams_response = client.get(
                 "/player_api.php",
                 query_string={
@@ -510,7 +511,16 @@ class TestXtreamPlayerAPI:
         assert response.status_code == 200
         data = response.json
         category_names = {item["category_name"] for item in data}
-        assert category_names == {"Sports", "PPV - Live", "PPV - Replay"}
+        assert category_names == {"Sports", "PPV Events", "PPV - Live", "PPV - Replay"}
+
+        parent = next(item for item in data if item["category_name"] == "PPV Events")
+        assert parent["category_id"] == "-1"
+        assert parent["parent_id"] == 0
+
+        live_cat = next(item for item in data if item["category_name"] == "PPV - Live")
+        replay_cat = next(item for item in data if item["category_name"] == "PPV - Replay")
+        assert live_cat["parent_id"] == int(parent["category_id"])
+        assert replay_cat["parent_id"] == int(parent["category_id"])
 
     def test_get_live_streams_by_grouped_ppv_category(self, app, client, xtream_credential, test_account):
         """Grouped PPV virtual categories return correctly sorted streams."""
@@ -642,6 +652,93 @@ class TestXtreamPlayerAPI:
         assert [item["stream_id"] for item in replay_response.json] == [1203, 1204]
         assert all(item["category_id"] == "-11" for item in replay_response.json)
 
+    def test_get_live_streams_unfiltered_preserves_ppv_live_order(self, app, client, xtream_credential, test_account):
+        """Unfiltered get_live_streams keeps PPV Live in soonest-first order for client-side filtering."""
+        with app.app_context():
+            account = db.session.get(Account, test_account)
+            account.ppv_visibility = "group_live_replay"
+
+            ppv = Category(account_id=test_account, category_id="ppv", category_name="PPV Events")
+            regular = Category(account_id=test_account, category_id="sports", category_name="Sports")
+            db.session.add_all([ppv, regular])
+            db.session.flush()
+
+            regular_channel = Channel(
+                account_id=test_account,
+                stream_id="1100",
+                name="Regular Sports",
+                cleaned_name="Regular Sports",
+                category_id=regular.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=False,
+            )
+            live_soon = Channel(
+                account_id=test_account,
+                stream_id="1201",
+                name="Z PPV Soon",
+                cleaned_name="Z PPV Soon",
+                category_id=ppv.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            live_later = Channel(
+                account_id=test_account,
+                stream_id="1202",
+                name="A PPV Later",
+                cleaned_name="A PPV Later",
+                category_id=ppv.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            db.session.add_all([regular_channel, live_later, live_soon])
+            db.session.flush()
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            events = [
+                Event(
+                    external_id="soon-event",
+                    scheduled_at=now + timedelta(hours=1),
+                    home_team_id="a1",
+                    home_team_name="A1",
+                    away_team_id="b1",
+                    away_team_name="B1",
+                    status=Event.STATUS_SCHEDULED,
+                ),
+                Event(
+                    external_id="later-event",
+                    scheduled_at=now + timedelta(hours=6),
+                    home_team_id="a2",
+                    home_team_name="A2",
+                    away_team_id="b2",
+                    away_team_name="B2",
+                    status=Event.STATUS_SCHEDULED,
+                ),
+            ]
+            db.session.add_all(events)
+            db.session.flush()
+            db.session.add_all(
+                [
+                    EventChannelLink(event_id=events[0].id, channel_id=live_soon.id),
+                    EventChannelLink(event_id=events[1].id, channel_id=live_later.id),
+                ]
+            )
+            db.session.commit()
+
+        response = client.get(
+            "/player_api.php",
+            query_string={
+                "username": "xtream_user",
+                "password": "xtream_pass",
+                "action": "get_live_streams",
+            },
+        )
+        assert response.status_code == 200
+        live_streams = [item for item in response.json if item["category_id"] == "-10"]
+        assert [item["stream_id"] for item in live_streams] == [1201, 1202]
+
     def test_get_live_categories_includes_historical_bucket(self, app, client, xtream_credential, test_account):
         """Grouped PPV mode exposes PPV - Historical virtual category for old events."""
         with app.app_context():
@@ -689,8 +786,14 @@ class TestXtreamPlayerAPI:
             },
         )
         assert response.status_code == 200
-        category_names = {item["category_name"] for item in response.json}
-        assert "PPV - Historical" in category_names
+        data = response.json
+        category_names = {item["category_name"] for item in data}
+        assert category_names == {"PPV Events", "PPV - Historical"}
+
+        parent = next(item for item in data if item["category_name"] == "PPV Events")
+        assert parent["parent_id"] == 0
+        historical_cat = next(item for item in data if item["category_name"] == "PPV - Historical")
+        assert historical_cat["parent_id"] == int(parent["category_id"])
 
         streams_response = client.get(
             "/player_api.php",
@@ -704,6 +807,85 @@ class TestXtreamPlayerAPI:
         assert streams_response.status_code == 200
         assert len(streams_response.json) == 1
         assert streams_response.json[0]["category_id"] == "-12"
+
+    def test_get_live_streams_by_ppv_events_parent_in_grouped_mode(self, app, client, xtream_credential, test_account):
+        """Grouped PPV mode: category_id=-1 returns union of all grouped buckets."""
+        with app.app_context():
+            account = db.session.get(Account, test_account)
+            account.ppv_visibility = "group_live_replay"
+
+            ppv = Category(account_id=test_account, category_id="ppv", category_name="PPV Events")
+            db.session.add(ppv)
+            db.session.flush()
+
+            live_channel = Channel(
+                account_id=test_account,
+                stream_id="1401",
+                name="Live",
+                cleaned_name="Live",
+                category_id=ppv.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            replay_channel = Channel(
+                account_id=test_account,
+                stream_id="1402",
+                name="Replay",
+                cleaned_name="Replay",
+                category_id=ppv.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+            )
+            db.session.add_all([live_channel, replay_channel])
+            db.session.flush()
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            events = [
+                Event(
+                    external_id="parent-live",
+                    scheduled_at=now + timedelta(hours=2),
+                    home_team_id="h1",
+                    home_team_name="H1",
+                    away_team_id="a1",
+                    away_team_name="A1",
+                    status=Event.STATUS_SCHEDULED,
+                ),
+                Event(
+                    external_id="parent-replay",
+                    scheduled_at=now - timedelta(hours=2),
+                    home_team_id="h2",
+                    home_team_name="H2",
+                    away_team_id="a2",
+                    away_team_name="A2",
+                    status=Event.STATUS_FINISHED,
+                ),
+            ]
+            db.session.add_all(events)
+            db.session.flush()
+            db.session.add_all(
+                [
+                    EventChannelLink(event_id=events[0].id, channel_id=live_channel.id),
+                    EventChannelLink(event_id=events[1].id, channel_id=replay_channel.id),
+                ]
+            )
+            db.session.commit()
+
+        response = client.get(
+            "/player_api.php",
+            query_string={
+                "username": "xtream_user",
+                "password": "xtream_pass",
+                "action": "get_live_streams",
+                "category_id": "-1",
+            },
+        )
+        assert response.status_code == 200
+        stream_ids = {item["stream_id"] for item in response.json}
+        assert stream_ids == {1401, 1402}
+        category_ids = {item["category_id"] for item in response.json}
+        assert category_ids == {"-10", "-11"}
 
     def test_historical_toggle_hides_xtream_category(self, app, client, xtream_credential, test_account):
         with app.app_context():
