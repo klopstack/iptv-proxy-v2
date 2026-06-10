@@ -1,5 +1,6 @@
 ---
-alwaysApply: true
+description: Any task that changes the database schema
+alwaysApply: false
 ---
 # Database migrations
 

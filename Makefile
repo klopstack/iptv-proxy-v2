@@ -1,4 +1,4 @@
-.PHONY: help install install-js install-hooks test test-js test-fast test-parallel test-clean lint lint-py lint-py-ci lint-js format clean run debug docker-build docker-run venv vulture vulture-all
+.PHONY: help install install-js install-hooks test test-js test-fast test-parallel test-postgres test-clean lint lint-py lint-py-ci lint-js format clean run debug docker-build docker-run venv vulture vulture-all
 
 VENV = venv
 PYTHON = $(VENV)/bin/python
@@ -49,6 +49,10 @@ test-fast: install test-clean ## Run tests without coverage in venv (parallel)
 	$(PYTEST) tests/ -q --no-cov -n auto
 
 test-parallel: test-fast ## Alias for parallel no-coverage run
+
+test-postgres: install ## Run non-SQLite tests against PostgreSQL (requires DATABASE_URL)
+	@test -n "$$DATABASE_URL" || (echo "Set DATABASE_URL to a postgresql:// URL" && exit 1)
+	$(PYTEST) tests/ -m "not sqlite_only" -n auto -q --no-cov
 
 lint-py: venv ## Run Python linting checks in venv (run make install-py once after clone)
 	$(FLAKE8) . --count --select=E9,F63,F7,F82 --show-source --statistics

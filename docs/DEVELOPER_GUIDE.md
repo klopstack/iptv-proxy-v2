@@ -292,10 +292,10 @@ CI runs a dedicated PostgreSQL job (`test-postgres` in `.github/workflows/build.
 docker compose --profile postgres up -d postgres
 export DATABASE_URL=postgresql://iptv:changeme@localhost:5432/iptv_proxy
 FLASK_APP=app.py flask db upgrade
-pytest tests/ -m "not sqlite_only" -x -v
+pytest tests/ -m "not sqlite_only" -n auto -v
 ```
 
-Do not use `pytest-xdist` (`-n auto`) with PostgreSQL — workers share one database. SQLite tests use per-worker files automatically.
+Parallel runs (`-n auto`) are supported on PostgreSQL: each xdist worker gets its own schema (`pytest_gw0`, …) and tests reset via `TRUNCATE` instead of `DROP SCHEMA` per test.
 
 Override the test database by exporting `DATABASE_URL` before `pytest`; when unset, tests default to `instance/pytest.db` (SQLite).
 

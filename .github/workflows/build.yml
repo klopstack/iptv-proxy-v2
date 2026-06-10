@@ -100,8 +100,10 @@ jobs:
     - name: Run JavaScript unit tests
       run: make test-js
 
-  test:
+  test-sqlite:
+    name: Tests (SQLite)
     runs-on: ubuntu-latest
+    needs: [lint-py]
     steps:
       - uses: actions/checkout@v4
 
@@ -161,7 +163,7 @@ jobs:
         run: venv/bin/flask db upgrade
 
       - name: Run tests (non-SQLite)
-        run: venv/bin/pytest tests/ -m "not sqlite_only" -x -v --cov=. --cov-report=term-missing --cov-fail-under=75
+        run: venv/bin/pytest tests/ -m "not sqlite_only" -n 2 -x -v --cov=. --cov-report=term-missing --cov-fail-under=75
 
   vulture:
     name: Dead code scan (vulture)
@@ -186,7 +188,7 @@ jobs:
     name: Docker build (PR smoke)
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
-    needs: [validate-workflows, lint-py, lint-js, test-js, test]
+    needs: [validate-workflows, lint-py, lint-js, test-js, test-sqlite, test-postgres]
     steps:
       - uses: actions/checkout@v4
 
@@ -211,7 +213,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    needs: [validate-workflows, lint-py, lint-js, test-js, test]
+    needs: [validate-workflows, lint-py, lint-js, test-js, test-sqlite, test-postgres]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
