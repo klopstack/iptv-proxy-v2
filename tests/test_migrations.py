@@ -70,8 +70,39 @@ class TestAlembicMigrations:
 
         conn = sqlite3.connect(temp_db)
         version_count = conn.execute("SELECT COUNT(*) FROM alembic_version").fetchone()[0]
+        head = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
         conn.close()
         assert version_count == 1
+        assert head == "6e7d8c9b0a1f"
+
+    @pytest.mark.sqlite_only
+    def test_upgrade_is_idempotent_when_legacy_columns_already_exist(self):
+        """DBs manually patched via legacy_sqlite must survive flask db upgrade."""
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            path = f.name
+
+        try:
+            alembic_upgrade_sqlite(path, revision="40ca71c79446")
+
+            conn = sqlite3.connect(path)
+            conn.execute("ALTER TABLE accounts ADD COLUMN category_tag_grouping TEXT")
+            conn.execute("ALTER TABLE accounts ADD COLUMN ppv_show_replay BOOLEAN DEFAULT 1 NOT NULL")
+            conn.execute("ALTER TABLE accounts ADD COLUMN ppv_show_historical BOOLEAN DEFAULT 1 NOT NULL")
+            conn.execute("ALTER TABLE playlist_configs ADD COLUMN category_tag_grouping TEXT")
+            conn.commit()
+            conn.close()
+
+            alembic_upgrade_sqlite(path)
+
+            conn = sqlite3.connect(path)
+            head = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+            conn.close()
+            assert head == "6e7d8c9b0a1f"
+        finally:
+            for suffix in ("", "-wal", "-shm"):
+                p = Path(f"{path}{suffix}")
+                if p.exists():
+                    p.unlink()
 
 
 @pytest.mark.legacy_migrations

@@ -93,6 +93,19 @@ class TestSchemaParity:
         assert "sync_started_at" in columns
         conn.close()
 
+    def test_post_baseline_account_columns(self, migrated_db):
+        conn = sqlite3.connect(migrated_db)
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)").fetchall()}
+        for name in ("category_tag_grouping", "ppv_show_replay", "ppv_show_historical"):
+            assert name in columns, f"missing accounts.{name}"
+        conn.close()
+
+    def test_post_baseline_playlist_config_columns(self, migrated_db):
+        conn = sqlite3.connect(migrated_db)
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(playlist_configs)").fetchall()}
+        assert "category_tag_grouping" in columns
+        conn.close()
+
     def test_channel_ppv_queue_index_after_migrations(self, migrated_db):
         conn = sqlite3.connect(migrated_db)
         indexes = _channel_indexes(conn)
