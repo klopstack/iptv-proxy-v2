@@ -14,6 +14,7 @@ from services.ppv.enrichability import (
     is_unsupported_league_title,
     stale_archive_date_from_title,
 )
+from services.ppv.detection import is_bogus_extracted_competitors, is_studio_show_title
 from services.ppv.enrichment import PPVCalendarEnrichmentService
 from services.ppv.extraction import PPVEventExtractor
 
@@ -138,6 +139,33 @@ class TestTrackBUnsupportedLeague:
         row = next(r for r in championship_channels if r["id"] == "charlton_leicester")
         assert classify_ppv_enrichment(row["name"]) is None
         assert is_unsupported_league_title(row["name"]) is False
+
+
+class TestStudioShowSkip:
+    """Studio/analysis programs should skip enrichment, not no_match."""
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "NHL Tonight @ Jun 10 12:00 PM :Viaplay SE  01",
+            "Jays Talk Plus June 10 @ Jun 10 10:00 AM :Sportsnet+  04",
+            "NBA Today A @ Jun 10 3:00 PM :TSN+  51",
+            "US | Sport News Live @ Jun 10 6:00 PM",
+        ],
+    )
+    def test_studio_show_titles_skipped(self, name):
+        assert is_studio_show_title(name) is True
+        assert classify_ppv_enrichment(name) == "no_competitors"
+
+    def test_bogus_competitor_pair_detection(self):
+        assert is_bogus_extracted_competitors(("Tonight", "Jun")) is True
+        assert is_bogus_extracted_competitors(("Jays Talk Plus June", "Jun")) is True
+        assert is_bogus_extracted_competitors(("Arsenal", "Brighton")) is False
+
+    def test_real_vs_event_not_studio_show(self):
+        name = "UK: DAZN PPV 1 - Arsenal vs Brighton | 2026-06-15 | 17:15"
+        assert is_studio_show_title(name) is False
+        assert classify_ppv_enrichment(name) is None
 
 
 class TestTrackAUnsupportedCollegeSport:

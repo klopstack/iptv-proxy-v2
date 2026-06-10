@@ -20,7 +20,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from services.ppv.constants import FAR_FUTURE_VISIBILITY_DAYS, STALE_ARCHIVE_ENRICHMENT_DAYS
-from services.ppv.detection import is_generic_channel_name, is_ppv_placeholder_name
+from services.ppv.detection import (
+    is_bogus_extracted_competitors,
+    is_generic_channel_name,
+    is_ppv_placeholder_name,
+    is_studio_show_title,
+)
 from services.ppv.extraction import PPVEventExtractor
 from services.ppv.replay_providers import is_replay_archive_provider
 
@@ -200,6 +205,9 @@ def classify_ppv_enrichment(
     if is_unsupported_college_sport_title(channel_name):
         return "unsupported_sport"
 
+    if is_studio_show_title(channel_name):
+        return "no_competitors"
+
     if cheap_only:
         return None
 
@@ -209,7 +217,11 @@ def classify_ppv_enrichment(
     if extraction.get("inferred_how") == "date_too_far_future":
         return "far_future"
 
-    if not extraction.get("competitors"):
+    competitors = extraction.get("competitors")
+    if competitors and is_bogus_extracted_competitors(competitors):
+        return "no_competitors"
+
+    if not competitors:
         if extraction.get("date") or extraction.get("time_only"):
             return "date_but_no_competitors"
         return "no_competitors"

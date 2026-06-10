@@ -160,6 +160,29 @@ class TestCompetitorValidation:
         assert is_weak_match_type("league_plus_word")
         assert not is_weak_match_type("both_teams")
 
+    def test_team_names_match_accent_variants(self):
+        assert team_names_match("Malaga", "Málaga")
+        assert team_names_match("Málaga", "Malaga CF")
+        assert team_names_match("Orebro", "Örebro")
+        assert team_names_match("Örebro HK", "Orebro")
+
+    def test_competitors_match_accent_variants(self):
+        event = _event("Málaga CF", "Real Zaragoza", event_id="malaga")
+        assert competitors_match_event(("Malaga", "Real Zaragoza"), event)
+        assert competitors_match_event(("Real Zaragoza", "Malaga CF"), event)
+
+        hockey = CalendarEvent(
+            event_id="orebro",
+            event_name="Örebro HK vs Linköping HC",
+            league_name="SHL",
+            time_utc="18:00",
+            date="2026-06-16",
+            home_team="Örebro HK",
+            away_team="Linköping HC",
+        )
+        assert competitors_match_event(("Orebro", "Linkoping"), hockey)
+        assert competitors_match_event(("Linköping HC", "Orebro HK"), hockey)
+
 
 class TestTennisDoublesValidation:
     """Parametrized doubles cases (TODO 127)."""

@@ -15,6 +15,13 @@ class TestTextProcessor:
         assert processor.normalize_text("Hello, World!") == "hello world"
         assert processor.normalize_text("  Multiple   Spaces  ") == "multiple spaces"
 
+    def test_normalize_text_strips_diacritics(self):
+        """Accent/diacritic variants fold to ASCII for matching."""
+        processor = TextProcessor()
+        assert processor.normalize_text("Málaga CF") == "malaga cf"
+        assert processor.normalize_text("Örebro HK") == "orebro hk"
+        assert processor.normalize_text("Linköping HC") == "linkoping hc"
+
     def test_normalize_text_timestamps(self):
         """Test removal of timestamps."""
         processor = TextProcessor()

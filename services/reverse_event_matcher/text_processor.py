@@ -8,6 +8,7 @@ Handles all text normalization and word extraction with optimization:
 """
 
 import re
+import unicodedata
 from typing import Dict, Optional, Set
 
 from services.ppv.matching.mlb_teams import resolve_mlb_abbrev
@@ -172,6 +173,12 @@ STOP_WORDS = {
 MIN_WORD_LENGTH = 4
 
 
+def _strip_diacritics(text: str) -> str:
+    """Fold accented characters to ASCII (Málaga → malaga, Örebro → orebro)."""
+    normalized = unicodedata.normalize("NFKD", text)
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+
+
 class TextProcessor:
     """
     Handles text normalization and word extraction with caching.
@@ -222,8 +229,9 @@ class TextProcessor:
         ):
             result = pattern.sub("", result)
 
-        # Lowercase, remove punctuation, normalize whitespace
+        # Lowercase, strip diacritics, remove punctuation, normalize whitespace
         result = result.lower()
+        result = _strip_diacritics(result)
         result = _COMPILED_PATTERNS["punctuation"].sub(" ", result)
         result = _COMPILED_PATTERNS["whitespace"].sub(" ", result).strip()
 
