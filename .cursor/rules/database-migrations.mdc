@@ -1,0 +1,30 @@
+---
+alwaysApply: true
+---
+# Database migrations
+
+Schema changes are **Alembic-only**. Production and Docker boot run `flask db upgrade` via [`entrypoint.sh`](../entrypoint.sh) — not `migrations/legacy_sqlite/run_migrations.py`.
+
+## Required workflow for every schema change
+
+1. Update SQLAlchemy models in `models/`
+2. `flask db revision --autogenerate -m "describe_change"` (or hand-write incremental revision)
+3. Review `alembic_migrations/versions/` — confirm `down_revision` chains to current head
+4. `flask db upgrade` locally
+5. Extend `tests/test_migrations.py` and/or `tests/test_schema_parity.py`
+
+## Do not
+
+- Add executable DDL only under `migrations/legacy_sqlite/` — that directory is archived reference; boot will skip it
+- Ship model columns without a matching Alembic revision in the same PR
+- Assume `alembic stamp head` alone upgrades schema — it only records revision, no DDL
+
+## Legacy transition
+
+Existing SQLite DBs may have `schema_migrations` from the pre-Alembic runner. New Alembic revisions after the baseline must be **idempotent** when practical (`column_exists` in [`alembic_migrations/migration_helpers.py`](../alembic_migrations/migration_helpers.py)) so databases manually patched via legacy files still upgrade cleanly.
+
+## References
+
+- [`migrations/README.md`](../migrations/README.md)
+- [`docs/DEVELOPER_GUIDE.md`](../docs/DEVELOPER_GUIDE.md) — Database Migrations section
+- [`docs/architecture/schema-lifecycle-and-test-parity.md`](../docs/architecture/schema-lifecycle-and-test-parity.md)

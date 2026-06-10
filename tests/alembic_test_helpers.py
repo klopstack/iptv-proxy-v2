@@ -10,14 +10,14 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def alembic_upgrade_sqlite(db_path: str | Path) -> None:
+def alembic_upgrade_sqlite(db_path: str | Path, revision: str = "head") -> None:
     """Apply Alembic migrations to a SQLite file in an isolated subprocess."""
     uri = f"sqlite:///{db_path}"
     env = os.environ.copy()
     env["DATABASE_URL"] = uri
     env.setdefault("DISABLE_IN_WORKER_SCHEDULER", "true")
     result = subprocess.run(
-        [sys.executable, "-m", "flask", "db", "upgrade"],
+        [sys.executable, "-m", "flask", "db", "upgrade", revision],
         cwd=PROJECT_ROOT,
         env=env,
         capture_output=True,
@@ -25,4 +25,6 @@ def alembic_upgrade_sqlite(db_path: str | Path) -> None:
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"flask db upgrade failed for {uri}:\nstdout: {result.stdout}\nstderr: {result.stderr}")
+        raise RuntimeError(
+            f"flask db upgrade {revision} failed for {uri}:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        )

@@ -7,14 +7,15 @@
 
 ```
 entrypoint.sh:
-  1. create_all()     — ORM creates tables from models
-  2. run_migrations() — idempotent DDL patches + schema_migrations tracking
-  3. App starts with PRAGMA foreign_keys=ON
+  1. flask db upgrade — Alembic applies pending revisions (alembic_version)
+  2. App starts with PRAGMA foreign_keys=ON
 ```
 
 Documented in `migrations/README.md` and `DEVELOPER_GUIDE.md`.
 
-**Rule:** every schema change needs **both** model update and idempotent migration.
+**Rule:** every schema change needs **both** model update and an **Alembic revision**. Do not add executable DDL only under `migrations/legacy_sqlite/` — boot does not run that runner.
+
+**Legacy gap (June 2026):** Post-baseline model columns shipped with only `legacy_sqlite/` migrations caused staging `no such column` errors until Alembic revisions `7f8e9d0c1b2a` and `6e7d8c9b0a1f` were added. Post-baseline revisions use idempotent column checks for DBs already patched manually.
 
 ## Test path divergence
 
@@ -36,11 +37,9 @@ Documented in `migrations/README.md` and `DEVELOPER_GUIDE.md`.
 | SQLite table-rebuild migrations | Medium | Document fragility |
 | `channel_tags` without channel FK | Medium | Denormalized by design — see `ChannelTag` docstring; cleaned by AccountDeleteService / retention |
 
-## schema_migrations table
+## schema_migrations table (legacy, historical)
 
-Raw SQL tracking in `run_migrations.py` — not an ORM model. ~55 executable migrations, lexicographic ordering by filename.
-
-**Edge case:** `run_migrations()` succeeds when DB file missing (no-op) — can leave ops confused.
+Pre-Alembic tracking in `migrations/legacy_sqlite/run_migrations.py` — not an ORM model. Existing production DBs may still have this table; Alembic uses `alembic_version` going forward. Do not add new migrations to the legacy runner.
 
 ## Test coverage
 
