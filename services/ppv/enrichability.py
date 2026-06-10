@@ -9,6 +9,7 @@ from typing import Optional
 from services.ppv.constants import FAR_FUTURE_VISIBILITY_DAYS, STALE_ARCHIVE_ENRICHMENT_DAYS
 from services.ppv.detection import is_generic_channel_name, is_ppv_placeholder_name
 from services.ppv.extraction import PPVEventExtractor
+from services.ppv.replay_providers import is_replay_archive_provider
 
 # Section headers / category dividers in IPTV feeds (e.g. "##### DAZN PPV #####")
 PPV_SECTION_HEADER_PATTERN = re.compile(r"^#+\s*.+\s*#+\s*$", re.IGNORECASE)
@@ -177,7 +178,7 @@ def classify_ppv_enrichment(
         return "inactive"
 
     archive_date = stale_archive_date_from_title(channel_name)
-    if archive_date and _is_stale_archive_date(archive_date):
+    if archive_date and _is_stale_archive_date(archive_date) and not is_replay_archive_provider(channel_name):
         return "stale_archive"
 
     if is_unsupported_league_title(channel_name):

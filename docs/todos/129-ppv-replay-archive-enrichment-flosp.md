@@ -1,6 +1,6 @@
 # PPV replay/archive enrichment (FloSports and similar providers)
 
-**Status:** ⬜ Not started  
+**Status:** 🟡 Track A+C implemented — PR pending; Track B deferred to [131](./131-sofascore-college-amateur-calendar-provider.md)  
 **Priority:** P1  
 **Audit:** PPV production report, June 4 2026 (`docker.klopnet.com`)
 
@@ -72,7 +72,7 @@ The gap is **getting archive channels matched and linked** with correct `schedul
 
 **Acceptance:**
 
-- [ ] Flo production examples classify as enrichable, not `stale_archive` / `far_future`.
+- [x] Flo production examples classify as enrichable, not `stale_archive` / `far_future`.
 - [ ] `/api/ppv-enrichment/channels` exposes replay-provider flag or filter (optional).
 
 ### Track B — Historical calendar matching
@@ -97,8 +97,8 @@ The gap is **getting archive channels matched and linked** with correct `schedul
 
 **Acceptance:**
 
-- [ ] Integration test: Flo channel linked to past event → playlist category **Replay**, not Live.
-- [ ] Integration test: same event would be **Live** if `scheduled_at` within 24h window (regression guard).
+- [x] Integration test: Flo channel linked to past event → playlist category **Replay**, not Live.
+- [x] Integration test: same event would be **Live** if `scheduled_at` within 24h window (regression guard).
 
 ### Track D — Reconcile with TODO 123 stale archive policy
 
