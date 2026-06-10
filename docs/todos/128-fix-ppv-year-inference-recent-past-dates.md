@@ -1,6 +1,6 @@
 # Fix PPV year inference for recent past month/day titles
 
-**Status:** ⬜ Not started  
+**Status:** ✅ Implemented — PR pending  
 **Priority:** P1  
 **Audit:** PPV production report, June 4 2026 (`docker.klopnet.com`)
 
@@ -64,11 +64,11 @@ This is distinct from [129](./129-ppv-replay-archive-enrichment-flosp.md) (inten
 
 ## Acceptance criteria
 
-- [ ] Production fixture `Tennis: … @ Jun 3 …` with reference `2026-06-04` → **`2026-06-03`**, `classify_ppv_enrichment` → **`None`** (enrichable), not `far_future`.
-- [ ] Existing `tests/ppv/test_date_extraction_production_fixtures.py` tennis case passes on **both** extractors (re-verify CI green).
-- [ ] New parametrized cases: yesterday, 6 days ago, 8 days ago (rollover), tomorrow — documented expected year.
+- [x] Production fixture `Tennis: … @ Jun 3 …` with reference `2026-06-04` → **`2026-06-03`**, `classify_ppv_enrichment` → **`None`** (enrichable), not `far_future`.
+- [x] Existing `tests/ppv/test_date_extraction_production_fixtures.py` tennis case passes on **both** extractors (re-verify CI green).
+- [x] New parametrized cases: yesterday, 6 days ago, 8 days ago (rollover), tomorrow — documented expected year.
 - [ ] After deploy + requeue on production: tennis `skipped:far_future` count drops from **~331** toward **0** (remaining gaps are calendar/matching, not date skip).
-- [ ] No regression on Peacock ISO dates, EPL `19:30` same-day titles, or WCWS `@ Jun 4` cases from TODO 120.
+- [x] No regression on Peacock ISO dates, EPL `19:30` same-day titles, or WCWS `@ Jun 4` cases from TODO 120.
 
 ## Test plan
 

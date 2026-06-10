@@ -159,3 +159,44 @@ class TestCompetitorValidation:
     def test_weak_match_types(self):
         assert is_weak_match_type("league_plus_word")
         assert not is_weak_match_type("both_teams")
+
+
+class TestTennisDoublesValidation:
+    """Parametrized doubles cases (TODO 127)."""
+
+    @pytest.mark.parametrize(
+        "players,home,away,expected",
+        [
+            (
+                ("Cornet", "Hantuchova", "Hingis", "Kerber"),
+                "Alize Cornet / Daniela Hantuchova",
+                "Martina Hingis / Angelique Kerber",
+                True,
+            ),
+            (
+                ("Kamiji", "Zhu", "Bernal", "Griffioen"),
+                "Yui Kamiji / Zhenxu Zhu",
+                "Angela Bernal / J Griffioen",
+                True,
+            ),
+            (
+                ("Cornet", "Hantuchova", "Hingis", "Kerber"),
+                "Iga Swiatek",
+                "Coco Gauff",
+                False,
+            ),
+        ],
+        ids=["cornet_hingis", "wheelchair", "singles_reject"],
+    )
+    def test_doubles_competitors_match_event(self, players, home, away, expected):
+        event = CalendarEvent(
+            event_id="dbl",
+            event_name=f"{home} vs {away}",
+            league_name="WTA",
+            time_utc="12:00",
+            date="2026-06-03",
+            home_team=home,
+            away_team=away,
+            sport="Tennis",
+        )
+        assert competitors_match_event(("side1", "side2"), event, players=players) is expected
