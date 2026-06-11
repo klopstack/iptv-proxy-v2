@@ -73,7 +73,7 @@ PIPE_DATE_PATTERN = (
     r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}):(\d{2})"
 )
 
-COUNTRY_PREFIX_RE = re.compile(r"^[A-Z]{2,3}:\s*", re.IGNORECASE)
+COUNTRY_PREFIX_RE = re.compile(r"^[A-Z]{2,3}[:|]\s*", re.IGNORECASE)
 PROVIDER_SLOT_RE = re.compile(
     r"^(?:DAZN|ESPN\s*(?:PLUS?|\+?)|MAX|TNT|FOX|SKY|BT\s*SPORT|beIN|ELEVEN)\s*(?:PPV\s*)?\d+\s*[-\u2013]\s*",
     re.IGNORECASE,
