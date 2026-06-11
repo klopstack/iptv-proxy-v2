@@ -167,9 +167,16 @@ class PPVEventExtractor:
         date_midnight = date.replace(hour=0, minute=0, second=0, microsecond=0)
         return date_midnight + timedelta(hours=hour, minutes=minute)
 
-    def extract_all(self, channel_name: str) -> Dict[str, Any]:
+    def extract_all(
+        self,
+        channel_name: str,
+        *,
+        category_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
         inline_sport, _ = self.extract_sport(channel_name)
-        country_prefix = self.extract_country_prefix(channel_name)
+        country_prefix = self.extract_country_prefix(channel_name) or (
+            self.extract_country_prefix(category_name) if category_name else None
+        )
         result: Dict[str, Any] = {
             "is_placeholder": self.is_placeholder(channel_name),
             "is_inactive": self.is_inactive_channel(channel_name),
@@ -204,7 +211,7 @@ class PPVEventExtractor:
 
         channel_tz = parse_title_timezone(channel_name)
         result["timezone"] = channel_tz
-        result["matchup"] = self.extract_matchup(channel_name)
+        result["matchup"] = self.extract_matchup(channel_name, category_name=category_name)
 
         iso_match = re.search(patterns.ISO_DATE_PATTERN, channel_name, re.IGNORECASE)
         if iso_match:

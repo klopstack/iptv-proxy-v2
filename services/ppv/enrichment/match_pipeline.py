@@ -205,9 +205,14 @@ class CalendarMatchPipeline:
         return results, event_ids_to_fetch
 
     def extract_all_channels(self, channels: List[Channel]) -> List[Tuple[Channel, Dict]]:
+        from services.ppv.channel_matching import _category_name
+
         results = []
         for channel in channels:
-            extraction = self.extractor.extract_all(channel.name)
+            extraction = self.extractor.extract_all(
+                channel.name,
+                category_name=_category_name(channel),
+            )
             results.append((channel, extraction))
         return results
 

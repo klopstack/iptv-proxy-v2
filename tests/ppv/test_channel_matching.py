@@ -245,27 +245,59 @@ class TestMlbHomeVenueTimezone:
         assert ctx["timezone_resolution"].timezone == "America/Los_Angeles"
 
     def test_mlb_mascot_home_timezone_bundled_registry(self, app):
+
+      
+      
+class TestExplicitStartTokenCalendarDate:
+    """Channels with start:YYYY-MM-DD must bucket on token wall-clock day."""
+
+    @pytest.mark.parametrize(
+        "channel_name,expected_calendar_date",
+        [
+            pytest.param(
+                "MLB 03 | Nationals x Giants start:2026-06-10 20:45:00 stop:2026-06-11 03:30:00",
+                "2026-06-10",
+                id="nationals_giants_evening_eastern",
+            ),
+            pytest.param(
+                "MLB 10 | Royals x Rangers start:2026-05-31 19:35:00 stop:2026-06-01 02:48:20",
+                "2026-05-31",
+                id="royals_rangers_evening_eastern",
+            ),
+            pytest.param(
+                "MLB 11 | Giants x Rockies start:2026-05-31 19:05:00",
+                "2026-05-31",
+                id="giants_rockies_evening_eastern",
+            ),
+        ],
+    )
+    def test_start_token_uses_wall_clock_calendar_day(self, channel_name, expected_calendar_date):
+        extractor = PPVEventExtractor()
+        extraction = extractor.extract_all(channel_name)
+        ctx = build_matching_context_from_name(channel_name, extraction)
+        assert ctx["calendar_date"] == expected_calendar_date, (
+            f"channel={channel_name!r} expected calendar_date={expected_calendar_date!r}, "
+            f"got {ctx['calendar_date']!r}"
+        )
+
+
+class TestUsCategoryMlbOrdering:
+    def test_us_category_pipe_mlb_home_venue_timezone(self):
         from services.team_location_registry import clear_registry_cache
 
         clear_registry_cache()
         channel_name = "MLB 03 | Nationals x Giants start:2026-06-10 20:45:00 stop:2026-06-11 03:30:00"
         extractor = PPVEventExtractor()
-        extraction = extractor.extract_all(channel_name)
-        extraction["sport"] = "mlb"
-        extraction["matchup"] = MatchupInfo(
-            home_team="Giants",
-            away_team="Nationals",
-            separator="x",
-            ordering_rule="us_away_home",
-            ordering_confidence=0.9,
+        extraction = extractor.extract_all(channel_name, category_name="US| MLB PPV")
+        ctx = build_matching_context_from_name(
+            channel_name,
+            extraction,
+            category_name="US| MLB PPV",
         )
-        extraction["competitors"] = ("Nationals", "Giants")
-        with app.app_context():
-            ctx = build_matching_context_from_name(
-                channel_name,
-                extraction,
-                category_name="US| MLB PPV",
-            )
+        matchup = extraction["matchup"]
+        assert matchup is not None
+        assert matchup.home_team == "Giants"
+        assert matchup.away_team == "Nationals"
         assert ctx["timezone_resolution"].timezone == "America/Los_Angeles"
 
 

@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Set
 
 from models import Channel
+from services.ppv.extraction.date_anchor import has_explicit_start_timestamp
 from services.ppv.replay_providers import METADATA_KEY_REPLAY_ARCHIVE
 from services.ppv.timezone_resolution import (
     ChannelTimezoneResolution,
@@ -66,8 +67,9 @@ def build_matching_context_from_name(
     if isinstance(naive_dt, datetime):
         channel_date_utc = local_channel_datetime_to_utc(naive_dt, resolution)
         channel_date_for_match = channel_date_utc.replace(tzinfo=timezone.utc)
-        if extraction.get(METADATA_KEY_REPLAY_ARCHIVE):
-            # Replay titles use wall-clock DD/MM dates; keep local day for calendar fetch.
+        if extraction.get(METADATA_KEY_REPLAY_ARCHIVE) or has_explicit_start_timestamp(channel_name):
+            # Replay titles use wall-clock DD/MM dates; explicit start: tokens keep the
+            # provider wall-clock calendar day (avoid venue TZ shifting the fetch day).
             calendar_date = naive_dt.strftime("%Y-%m-%d")
         else:
             calendar_date = calendar_date_key_for_channel(naive_dt, resolution)
@@ -110,7 +112,10 @@ def infer_unmatched_timezone_debug(
     from services.datetime_utils import serialize_utc_iso
     from services.ppv.extraction import PPVEventExtractor
 
-    ext = extraction or PPVEventExtractor().extract_all(channel.name)
+    ext = extraction or PPVEventExtractor().extract_all(
+        channel.name,
+        category_name=_category_name(channel),
+    )
     ctx = build_channel_matching_context(channel, ext)
     resolution: ChannelTimezoneResolution = ctx["timezone_resolution"]
     naive_dt = ext.get("date")

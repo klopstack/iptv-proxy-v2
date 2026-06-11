@@ -1,23 +1,19 @@
 ---
-description: Safe git workflow for parallel PRs and agents
+description: Safe git workflow for parallel PRs and sub-agents
 alwaysApply: true
 ---
 
 # Git Workflow for Parallel PRs and Agents
 
-## Prefer temporary full clones over worktrees
+## Prefer worktrees
 
-For parallel PR work, use **isolated clones** (e.g. `/tmp/iptv-proxy-v2-pr-<short-name>` with their own `.git`). Push to `origin` from the clone; do not share `.git/objects` across parallel agents.
+For parallel PR work, use **worktrees** (e.g. `/tmp/iptv-proxy-v2-pr-<short-name>`).
 
 Main repo `/home/benklop/repos/iptv-proxy-v2`: user integration only — avoid agent commits when possible.
 
-## Worktrees only when necessary
+## Worktrees for all sub-agents
 
-If worktrees are required:
-
-- **Max 2** active linked worktrees on one repo
-- **One mutating git operation at a time** per repo (commit, rebase, merge, fetch+prune, worktree add/remove)
-- Parallel read-only ops (status, diff, tests) are OK
+All PR work done by subagents should be done on a separate worktree so that work is clean and isolated from other work that may be ongoing.
 
 ## Cleanup after PR completion
 
