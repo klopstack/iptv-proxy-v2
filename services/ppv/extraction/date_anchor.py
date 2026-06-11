@@ -43,6 +43,7 @@ def has_explicit_start_timestamp(channel_name: str) -> bool:
     """True when the title contains an explicit start:YYYY-MM-DD timestamp."""
     return bool(EXPLICIT_START_PATTERN.search(channel_name or ""))
 
+
 ISO_DATE_LOOSE_PATTERN = re.compile(r"\b(\d{4}[-/]\d{1,2}[-/]\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)\b")
 
 _MONTH_SIGNAL = r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\b"
