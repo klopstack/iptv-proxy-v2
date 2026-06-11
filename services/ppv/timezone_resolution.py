@@ -143,12 +143,38 @@ def _provider_suffix_timezone(channel_name: str) -> Optional[ChannelTimezoneReso
     return None
 
 
+def _mlb_home_timezone_from_registry(home_team: str) -> Optional[str]:
+    from services.team_location_registry import entries_for_sport, lookup_by_name
+
+    entry = lookup_by_name("mlb", home_team)
+    if not entry:
+        mascot = home_team.strip().lower()
+        for ent in entries_for_sport("mlb"):
+            parts = ent.name.split()
+            if parts and parts[-1].lower() == mascot:
+                entry = ent
+                break
+    if not entry:
+        return None
+    if entry.iana_timezone:
+        return entry.iana_timezone
+    if entry.city:
+        return iana_for_team_city(entry.name) or iana_for_team_city(entry.city)
+    return None
+
+
 def _home_team_timezone(
     home_team: str,
     sport: Optional[str],
     *,
     home_team_id: Optional[str] = None,
 ) -> Optional[str]:
+    sport_key = normalize_sport_key(sport)
+    if sport_key == "mlb" and home_team:
+        tz = _mlb_home_timezone_from_registry(home_team)
+        if tz:
+            return tz
+
     try:
         sport_key = normalize_sport_key(sport)
         from models.ppv import SportsTeam
@@ -185,8 +211,9 @@ def _home_team_timezone(
             return None
         return iana_for_team_city(home_team)
     except Exception:
-        sk = normalize_sport_key(sport)
-        if sk in ("fb", "wnba", "milb"):
+        if sport_key == "mlb" and home_team:
+            return _mlb_home_timezone_from_registry(home_team)
+        if sport_key in ("fb", "wnba", "milb"):
             return None
         return iana_for_team_city(home_team)
 

@@ -1202,7 +1202,13 @@ class TestGroupVisibilityToggles:
 class TestUnmatchedLiveClassification:
     """Unmatched PPV channels with enrichable extraction land in PPV - Unmatched Live."""
 
-    NOW = datetime(2026, 6, 10, 12, 0, 0)
+    @staticmethod
+    def _now():
+        return datetime.now(timezone.utc).replace(tzinfo=None)
+
+    @staticmethod
+    def _event_timestamp(dt):
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
 
     def _account_and_service(self, app_ctx, **account_kwargs):
         account = Account(
@@ -1231,69 +1237,78 @@ class TestUnmatchedLiveClassification:
 
     def test_upcoming_no_match_with_competitors_and_date(self, app):
         with app.app_context():
+            now = self._now()
             account, service = self._account_and_service(app)
+            event_at = now + timedelta(hours=8)
             channel = self._channel(
                 account.id,
-                "DAZN 01 | Arsenal vs Brighton (2026-06-10 20:00:00)",
+                f"DAZN 01 | Arsenal vs Brighton ({self._event_timestamp(event_at)})",
             )
             assert (
-                service.classify_unmatched_live_channel(channel, current_time=self.NOW)
+                service.classify_unmatched_live_channel(channel, current_time=now)
                 == PPVVisibilityService.PPV_GROUP_UNMATCHED_LIVE
             )
             assert service.should_show_channel(channel) is True
 
     def test_in_progress_no_match_within_sport_grace(self, app):
         with app.app_context():
+            now = self._now()
             account, service = self._account_and_service(app)
+            event_at = now - timedelta(hours=1)
             channel = self._channel(
                 account.id,
-                "ESPN+ | Lakers vs Celtics (2026-06-10 11:00:00)",
+                f"ESPN+ | Lakers vs Celtics ({self._event_timestamp(event_at)})",
                 stream_id="unmatched-2",
             )
             assert (
-                service.classify_unmatched_live_channel(channel, current_time=self.NOW)
+                service.classify_unmatched_live_channel(channel, current_time=now)
                 == PPVVisibilityService.PPV_GROUP_UNMATCHED_LIVE
             )
 
     def test_generic_slot_not_unmatched_live(self, app):
         with app.app_context():
+            now = self._now()
             account, service = self._account_and_service(app)
             channel = self._channel(account.id, "PPV 1", stream_id="generic-1")
-            assert service.classify_unmatched_live_channel(channel, current_time=self.NOW) is None
+            assert service.classify_unmatched_live_channel(channel, current_time=now) is None
             assert service.should_show_channel(channel) is False
 
     def test_far_future_no_match_not_unmatched_live(self, app):
         with app.app_context():
+            now = self._now()
             account, service = self._account_and_service(app)
             channel = self._channel(
                 account.id,
                 "UFC | Fighter A vs Fighter B start:2099-01-01 01:00:00",
                 stream_id="far-future-1",
             )
-            assert service.classify_unmatched_live_channel(channel, current_time=self.NOW) is None
+            assert service.classify_unmatched_live_channel(channel, current_time=now) is None
 
     def test_stale_archive_no_match_not_unmatched_live(self, app):
         with app.app_context():
+            now = self._now()
             account, service = self._account_and_service(app)
             channel = self._channel(
                 account.id,
                 "ESPN Play | Team A vs Team B | 01-18-2024",
                 stream_id="stale-1",
             )
-            assert service.classify_unmatched_live_channel(channel, current_time=self.NOW) is None
+            assert service.classify_unmatched_live_channel(channel, current_time=now) is None
 
     def test_linked_event_uses_live_not_unmatched(self, app):
         with app.app_context():
+            now = self._now()
+            scheduled_at = now + timedelta(hours=6)
             account, service = self._account_and_service(app)
             channel = self._channel(
                 account.id,
-                "DAZN 02 | Chelsea vs Liverpool (2026-06-10 18:00:00)",
+                f"DAZN 02 | Chelsea vs Liverpool ({self._event_timestamp(scheduled_at)})",
                 stream_id="linked-1",
                 ppv_enrichment_status="matched",
             )
             event = Event(
                 external_id="linked-unmatched-test",
-                scheduled_at=self.NOW + timedelta(hours=6),
+                scheduled_at=scheduled_at,
                 home_team_id="che",
                 home_team_name="Chelsea",
                 away_team_id="liv",
@@ -1306,24 +1321,25 @@ class TestUnmatchedLiveClassification:
             db.session.commit()
 
             assert (
-                service.classify_live_replay_channel(channel, current_time=self.NOW)
-                == PPVVisibilityService.PPV_GROUP_LIVE
+                service.classify_live_replay_channel(channel, current_time=now) == PPVVisibilityService.PPV_GROUP_LIVE
             )
             assert (
-                service.classify_unmatched_live_channel(channel, current_time=self.NOW)
+                service.classify_unmatched_live_channel(channel, current_time=now)
                 != PPVVisibilityService.PPV_GROUP_UNMATCHED_LIVE
             )
 
     def test_unmatched_live_hidden_when_toggle_off(self, app):
         with app.app_context():
+            now = self._now()
             account, service = self._account_and_service(app, ppv_show_unmatched_live=False)
+            event_at = now + timedelta(hours=7)
             channel = self._channel(
                 account.id,
-                "DAZN 03 | Spurs vs Newcastle (2026-06-10 19:00:00)",
+                f"DAZN 03 | Spurs vs Newcastle ({self._event_timestamp(event_at)})",
                 stream_id="toggle-1",
             )
             assert (
-                service.classify_unmatched_live_channel(channel, current_time=self.NOW)
+                service.classify_unmatched_live_channel(channel, current_time=now)
                 == PPVVisibilityService.PPV_GROUP_UNMATCHED_LIVE
             )
             assert service.should_show_channel(channel) is False
