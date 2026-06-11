@@ -183,6 +183,39 @@ class TestBuildMatchingContextFromName:
         assert ctx["date_tolerance_hours"] == 48
 
 
+class TestExplicitStartTokenCalendarDate:
+    """Channels with start:YYYY-MM-DD must bucket on token wall-clock day."""
+
+    @pytest.mark.parametrize(
+        "channel_name,expected_calendar_date",
+        [
+            pytest.param(
+                "MLB 03 | Nationals x Giants start:2026-06-10 20:45:00 stop:2026-06-11 03:30:00",
+                "2026-06-10",
+                id="nationals_giants_evening_eastern",
+            ),
+            pytest.param(
+                "MLB 10 | Royals x Rangers start:2026-05-31 19:35:00 stop:2026-06-01 02:48:20",
+                "2026-05-31",
+                id="royals_rangers_evening_eastern",
+            ),
+            pytest.param(
+                "MLB 11 | Giants x Rockies start:2026-05-31 19:05:00",
+                "2026-05-31",
+                id="giants_rockies_evening_eastern",
+            ),
+        ],
+    )
+    def test_start_token_uses_wall_clock_calendar_day(self, channel_name, expected_calendar_date):
+        extractor = PPVEventExtractor()
+        extraction = extractor.extract_all(channel_name)
+        ctx = build_matching_context_from_name(channel_name, extraction)
+        assert ctx["calendar_date"] == expected_calendar_date, (
+            f"channel={channel_name!r} expected calendar_date={expected_calendar_date!r}, "
+            f"got {ctx['calendar_date']!r}"
+        )
+
+
 class TestUsCategoryMlbOrdering:
     def test_us_category_pipe_mlb_home_venue_timezone(self):
         from services.team_location_registry import clear_registry_cache
