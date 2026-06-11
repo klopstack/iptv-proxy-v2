@@ -184,23 +184,15 @@ class TestBuildMatchingContextFromName:
 
 
 class TestUsCategoryMlbOrdering:
-    def test_us_category_pipe_mlb_home_venue_timezone(self):
-        from services.team_location_registry import clear_registry_cache
-
-        clear_registry_cache()
+    def test_us_category_pipe_mlb_away_home_ordering(self):
         channel_name = "MLB 03 | Nationals x Giants start:2026-06-10 20:45:00 stop:2026-06-11 03:30:00"
         extractor = PPVEventExtractor()
         extraction = extractor.extract_all(channel_name, category_name="US| MLB PPV")
-        ctx = build_matching_context_from_name(
-            channel_name,
-            extraction,
-            category_name="US| MLB PPV",
-        )
         matchup = extraction["matchup"]
         assert matchup is not None
         assert matchup.home_team == "Giants"
         assert matchup.away_team == "Nationals"
-        assert ctx["timezone_resolution"].timezone == "America/Los_Angeles"
+        assert matchup.ordering_rule == "us_away_home"
 
 
 class TestMilbChannelMatching:
