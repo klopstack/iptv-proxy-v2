@@ -117,12 +117,11 @@ def remove_invalid_event_links() -> int:
     )
 
     for link, channel, event in links:
-        extraction = extractor.extract_all(channel.name)
+        category_name = channel.category.category_name if channel.category else None
+        extraction = extractor.extract_all(channel.name, category_name=category_name)
         competitors = extraction.get("competitors")
         if not competitors:
             continue
-
-        category_name = channel.category.category_name if channel.category else None
         sport_context = resolve_sport_league_context(channel.name, category_name)
 
         calendar_event = _event_to_calendar_event(event)

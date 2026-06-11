@@ -22,6 +22,12 @@ class TestCountryPrefixExtraction:
     def test_uk_prefix(self):
         assert PPVEventExtractor.extract_country_prefix("UK: ESPN+ 1 - Game") == "UK"
 
+    def test_us_category_pipe_prefix(self):
+        assert PPVEventExtractor.extract_country_prefix("US| MLB PPV") == "US"
+
+    def test_uk_category_pipe_prefix(self):
+        assert PPVEventExtractor.extract_country_prefix("UK| Sky Sports PPV") == "UK"
+
 
 class TestMatchupOrdering:
     def test_us_away_home(self):
@@ -38,6 +44,25 @@ class TestMatchupOrdering:
         m = ext.extract_matchup("UK: SAINTS - HARLEQUINS | Sat 03 Jan 17:15")
         assert m is not None
         assert m.home_team == "SAINTS"
+
+    def test_us_category_pipe_away_home(self):
+        ext = PPVEventExtractor()
+        channel = "MLB 03 | Nationals x Giants start:2026-06-10 20:45:00"
+        m = ext.extract_matchup(channel, category_name="US| MLB PPV")
+        assert m is not None
+        assert m.ordering_rule in ("us_away_home", "metadata_only")
+        if m.ordering_rule == "us_away_home":
+            assert m.away_team == "Nationals"
+            assert m.home_team == "Giants"
+
+    def test_us_channel_colon_away_home(self):
+        ext = PPVEventExtractor()
+        m = ext.extract_matchup("US: Nationals x Giants | Sat 10 Jun 20:45")
+        assert m is not None
+        assert m.ordering_rule in ("us_away_home", "metadata_only")
+        if m.ordering_rule == "us_away_home":
+            assert m.away_team == "Nationals"
+            assert m.home_team == "Giants"
 
 
 class TestTimezoneResolution:

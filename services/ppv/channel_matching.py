@@ -112,7 +112,10 @@ def infer_unmatched_timezone_debug(
     from services.datetime_utils import serialize_utc_iso
     from services.ppv.extraction import PPVEventExtractor
 
-    ext = extraction or PPVEventExtractor().extract_all(channel.name)
+    ext = extraction or PPVEventExtractor().extract_all(
+        channel.name,
+        category_name=_category_name(channel),
+    )
     ctx = build_channel_matching_context(channel, ext)
     resolution: ChannelTimezoneResolution = ctx["timezone_resolution"]
     naive_dt = ext.get("date")

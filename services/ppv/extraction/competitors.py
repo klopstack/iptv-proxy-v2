@@ -77,8 +77,8 @@ def extract_country_prefix(name: str) -> Optional[str]:
     m = COUNTRY_PREFIX_RE.match(name.strip())
     if not m:
         return None
-    raw = name.strip()[: m.end()].rstrip(": ").upper()
-    return raw.rstrip(":")
+    raw = name.strip()[: m.end()].rstrip(":| ").upper()
+    return raw.rstrip(":|")
 
 
 def detect_separator(cleaned_name: str) -> Optional[str]:
