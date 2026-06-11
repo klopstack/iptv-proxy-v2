@@ -533,6 +533,7 @@ def refresh_teams_from_sportsipy(
 
                         if existing:
                             existing.name = team.name
+                            existing.set_aliases(_generate_team_aliases(team.name, team.abbreviation))
                             if location:
                                 apply_location_to_sports_team(existing, location)
                                 source = "sportsipy+location_registry"

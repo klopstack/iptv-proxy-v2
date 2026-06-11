@@ -348,7 +348,7 @@ class SportsTeam(db.Model):  # type: ignore[name-defined]
             return None
 
         sport_l = sport.lower() if sport else None
-        if sport_l in ("fb", "wnba", "milb"):
+        if sport_l in ("fb", "wnba", "milb", "mlb"):
             from services.team_location_registry import lookup, lookup_by_alias, lookup_by_name
 
             key = name_or_alias.strip()
@@ -357,8 +357,13 @@ class SportsTeam(db.Model):  # type: ignore[name-defined]
                 if entry and entry.iana_timezone:
                     return entry.iana_timezone
             entry = lookup_by_name(sport_l, name_or_alias) or lookup_by_alias(sport_l, name_or_alias)
-            if entry and entry.iana_timezone:
-                return entry.iana_timezone
+            if entry:
+                if entry.iana_timezone:
+                    return entry.iana_timezone
+                if sport_l == "mlb" and entry.city:
+                    from services.ppv.city_timezone_map import iana_for_city
+
+                    return iana_for_city(entry.city, entry.country)
             return None
 
         from services.ppv.city_timezone_map import iana_for_team_city

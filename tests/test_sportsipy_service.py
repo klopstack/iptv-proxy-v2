@@ -246,6 +246,12 @@ class TestGenerateTeamAliases:
         aliases = _generate_team_aliases("Portland Trail Blazers", "POR")
         assert "blazers" in aliases
 
+    def test_mlb_mascot_nicknames(self):
+        giants = _generate_team_aliases("San Francisco Giants", "SFG")
+        assert "giants" in giants
+        nationals = _generate_team_aliases("Washington Nationals", "WSN")
+        assert "nationals" in nationals
+
 
 class TestSeedInitialTeamData:
     """Test team data seeding."""
