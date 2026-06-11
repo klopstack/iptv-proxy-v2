@@ -245,9 +245,30 @@ class TestMlbHomeVenueTimezone:
         assert ctx["timezone_resolution"].timezone == "America/Los_Angeles"
 
     def test_mlb_mascot_home_timezone_bundled_registry(self, app):
+        from services.team_location_registry import clear_registry_cache
 
-      
-      
+        clear_registry_cache()
+        channel_name = "MLB 03 | Nationals x Giants start:2026-06-10 20:45:00 stop:2026-06-11 03:30:00"
+        extractor = PPVEventExtractor()
+        extraction = extractor.extract_all(channel_name)
+        extraction["sport"] = "mlb"
+        extraction["matchup"] = MatchupInfo(
+            home_team="Giants",
+            away_team="Nationals",
+            separator="x",
+            ordering_rule="us_away_home",
+            ordering_confidence=0.9,
+        )
+        extraction["competitors"] = ("Nationals", "Giants")
+        with app.app_context():
+            ctx = build_matching_context_from_name(
+                channel_name,
+                extraction,
+                category_name="US| MLB PPV",
+            )
+        assert ctx["timezone_resolution"].timezone == "America/Los_Angeles"
+
+
 class TestExplicitStartTokenCalendarDate:
     """Channels with start:YYYY-MM-DD must bucket on token wall-clock day."""
 
