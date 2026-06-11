@@ -8,11 +8,13 @@ from services.ppv.visibility import PPVVisibilityService
 PPV_LIVE_CATEGORY_ID = "-10"
 PPV_REPLAY_CATEGORY_ID = "-11"
 PPV_HISTORICAL_CATEGORY_ID = "-12"
+PPV_UNMATCHED_LIVE_CATEGORY_ID = "-13"
 
 _GROUPED_PPV_CATEGORY_IDS = (
     PPV_LIVE_CATEGORY_ID,
     PPV_REPLAY_CATEGORY_ID,
     PPV_HISTORICAL_CATEGORY_ID,
+    PPV_UNMATCHED_LIVE_CATEGORY_ID,
 )
 
 
@@ -70,6 +72,12 @@ def build_ppv_grouping(channels, account=None):
                 "category_id": PPV_HISTORICAL_CATEGORY_ID,
                 "event": service.get_linked_event(channel),
             }
+        elif classification == PPVVisibilityService.PPV_GROUP_UNMATCHED_LIVE:
+            grouped[channel.id] = {
+                "category_id": PPV_UNMATCHED_LIVE_CATEGORY_ID,
+                "event": None,
+                "scheduled_at": service.unmatched_live_scheduled_at(channel),
+            }
     return grouped
 
 
@@ -79,8 +87,14 @@ def sort_grouped_ppv_channels(channels, grouped_ppv, category_id):
     fallback = datetime.max.replace(tzinfo=timezone.utc) if not reverse else datetime.min.replace(tzinfo=timezone.utc)
 
     def sort_key(channel):
-        event = grouped_ppv.get(channel.id, {}).get("event")
-        scheduled_at = _as_utc_aware(event.scheduled_at) if event and event.scheduled_at else fallback
+        group_data = grouped_ppv.get(channel.id, {})
+        event = group_data.get("event")
+        if event and event.scheduled_at:
+            scheduled_at = _as_utc_aware(event.scheduled_at)
+        elif group_data.get("scheduled_at"):
+            scheduled_at = _as_utc_aware(group_data["scheduled_at"])
+        else:
+            scheduled_at = fallback
         return scheduled_at
 
     return sorted(channels, key=sort_key, reverse=reverse)

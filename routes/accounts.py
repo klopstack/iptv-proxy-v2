@@ -161,7 +161,8 @@ def update_ppv_visibility(account_id):
     {
         "ppv_visibility": "hide_all" | "hide_inactive" | "group_live_replay" | "show_all",
         "ppv_show_replay": true,      // optional, group_live_replay only
-        "ppv_show_historical": true   // optional, group_live_replay only
+        "ppv_show_historical": true,  // optional, group_live_replay only
+        "ppv_show_unmatched_live": true  // optional, group_live_replay only
     }
     """
     account = Account.query.get_or_404(account_id)
@@ -184,6 +185,8 @@ def update_ppv_visibility(account_id):
         account.ppv_show_replay = bool(data["ppv_show_replay"])
     if "ppv_show_historical" in data:
         account.ppv_show_historical = bool(data["ppv_show_historical"])
+    if "ppv_show_unmatched_live" in data:
+        account.ppv_show_unmatched_live = bool(data["ppv_show_unmatched_live"])
 
     db.session.commit()
 
@@ -193,6 +196,7 @@ def update_ppv_visibility(account_id):
             "ppv_visibility": account.ppv_visibility,
             "ppv_show_replay": account.ppv_show_replay,
             "ppv_show_historical": account.ppv_show_historical,
+            "ppv_show_unmatched_live": account.ppv_show_unmatched_live,
         }
     )
 

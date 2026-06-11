@@ -96,7 +96,7 @@ class TestSchemaParity:
     def test_post_baseline_account_columns(self, migrated_db):
         conn = sqlite3.connect(migrated_db)
         columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)").fetchall()}
-        for name in ("category_tag_grouping", "ppv_show_replay", "ppv_show_historical"):
+        for name in ("category_tag_grouping", "ppv_show_replay", "ppv_show_historical", "ppv_show_unmatched_live"):
             assert name in columns, f"missing accounts.{name}"
         conn.close()
 

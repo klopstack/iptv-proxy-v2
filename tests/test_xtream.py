@@ -808,6 +808,63 @@ class TestXtreamPlayerAPI:
         assert len(streams_response.json) == 1
         assert streams_response.json[0]["category_id"] == "-12"
 
+    def test_get_live_streams_by_unmatched_live_category(self, app, client, xtream_credential, test_account):
+        """Grouped PPV mode exposes no_match channels in PPV - Unmatched Live (-13)."""
+        with app.app_context():
+            account = db.session.get(Account, test_account)
+            account.ppv_visibility = "group_live_replay"
+
+            ppv = Category(account_id=test_account, category_id="ppv-unmatched", category_name="PPV Events")
+            db.session.add(ppv)
+            db.session.flush()
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            start_str = (now + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
+            unmatched_channel = Channel(
+                account_id=test_account,
+                stream_id="1501",
+                name=f"DAZN 01 | Arsenal vs Brighton ({start_str})",
+                cleaned_name=f"DAZN 01 | Arsenal vs Brighton ({start_str})",
+                category_id=ppv.id,
+                is_active=True,
+                is_visible=True,
+                is_ppv=True,
+                ppv_enrichment_status="no_match",
+            )
+            db.session.add(unmatched_channel)
+            db.session.commit()
+
+        categories_response = client.get(
+            "/player_api.php",
+            query_string={
+                "username": "xtream_user",
+                "password": "xtream_pass",
+                "action": "get_live_categories",
+            },
+        )
+        assert categories_response.status_code == 200
+        category_names = {item["category_name"] for item in categories_response.json}
+        assert "PPV - Unmatched Live" in category_names
+
+        unmatched_cat = next(
+            item for item in categories_response.json if item["category_name"] == "PPV - Unmatched Live"
+        )
+        assert unmatched_cat["category_id"] == "-13"
+
+        streams_response = client.get(
+            "/player_api.php",
+            query_string={
+                "username": "xtream_user",
+                "password": "xtream_pass",
+                "action": "get_live_streams",
+                "category_id": "-13",
+            },
+        )
+        assert streams_response.status_code == 200
+        assert len(streams_response.json) == 1
+        assert streams_response.json[0]["category_id"] == "-13"
+        assert streams_response.json[0]["stream_id"] == 1501
+
     def test_get_live_streams_by_ppv_events_parent_in_grouped_mode(self, app, client, xtream_credential, test_account):
         """Grouped PPV mode: category_id=-1 returns union of all grouped buckets."""
         with app.app_context():

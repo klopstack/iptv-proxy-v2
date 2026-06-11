@@ -61,6 +61,7 @@ class AccountAdminService:
                 "ppv_visibility": account.ppv_visibility,
                 "ppv_show_replay": account.ppv_show_replay,
                 "ppv_show_historical": account.ppv_show_historical,
+                "ppv_show_unmatched_live": account.ppv_show_unmatched_live,
                 "ppv_rename_format": account.ppv_rename_format,
                 "ppv_rename_timezone": account.ppv_rename_timezone,
                 "fcc_rename_format": account.fcc_rename_format,

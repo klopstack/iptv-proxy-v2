@@ -73,7 +73,7 @@ class TestAlembicMigrations:
         head = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
         conn.close()
         assert version_count == 1
-        assert head == "6e7d8c9b0a1f"
+        assert head == "b2c3d4e5f6a7"
 
     @pytest.mark.sqlite_only
     def test_upgrade_is_idempotent_when_legacy_columns_already_exist(self):
@@ -97,7 +97,7 @@ class TestAlembicMigrations:
             conn = sqlite3.connect(path)
             head = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
             conn.close()
-            assert head == "6e7d8c9b0a1f"
+            assert head == "b2c3d4e5f6a7"
         finally:
             for suffix in ("", "-wal", "-shm"):
                 p = Path(f"{path}{suffix}")

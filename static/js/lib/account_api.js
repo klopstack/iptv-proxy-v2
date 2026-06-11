@@ -67,8 +67,8 @@ export async function fetchPpvVisibilityOptions() {
 /**
  * @param {number|string} accountId
  * @param {string} ppvVisibility
- * @param {{ ppv_show_replay?: boolean, ppv_show_historical?: boolean }} [options]
- * @returns {Promise<{ id: number, ppv_visibility: string, ppv_show_replay?: boolean, ppv_show_historical?: boolean }>}
+ * @param {{ ppv_show_replay?: boolean, ppv_show_historical?: boolean, ppv_show_unmatched_live?: boolean }} [options]
+ * @returns {Promise<{ id: number, ppv_visibility: string, ppv_show_replay?: boolean, ppv_show_historical?: boolean, ppv_show_unmatched_live?: boolean }>}
  */
 export async function updateAccountPpvVisibility(accountId, ppvVisibility, options = {}) {
     const body = { ppv_visibility: ppvVisibility, ...options };
