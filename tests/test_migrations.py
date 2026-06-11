@@ -76,6 +76,41 @@ class TestAlembicMigrations:
         assert head == "b2c3d4e5f6a7"
 
     @pytest.mark.sqlite_only
+    def test_upgrade_adds_accounts_column_with_foreign_key_children(self):
+        """Legacy production DBs reference accounts via FK; ADD COLUMN must not DROP TABLE."""
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            path = f.name
+
+        try:
+            alembic_upgrade_sqlite(path, revision="6e7d8c9b0a1f")
+
+            conn = _sqlite_connect(path)
+            conn.execute(
+                "INSERT INTO accounts (name, server, ppv_visibility) VALUES ('staging', 'http://example', 'show_all')"
+            )
+            account_id = conn.execute("SELECT id FROM accounts").fetchone()[0]
+            conn.execute(
+                "INSERT INTO credentials (account_id, username, password) VALUES (?, 'user', 'pass')",
+                (account_id,),
+            )
+            conn.commit()
+            conn.close()
+
+            alembic_upgrade_sqlite(path)
+
+            conn = sqlite3.connect(path)
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)").fetchall()}
+            head = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+            conn.close()
+            assert "ppv_show_unmatched_live" in columns
+            assert head == "b2c3d4e5f6a7"
+        finally:
+            for suffix in ("", "-wal", "-shm"):
+                p = Path(f"{path}{suffix}")
+                if p.exists():
+                    p.unlink()
+
+    @pytest.mark.sqlite_only
     def test_upgrade_is_idempotent_when_legacy_columns_already_exist(self):
         """DBs manually patched via legacy_sqlite must survive flask db upgrade."""
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
