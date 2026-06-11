@@ -11,7 +11,7 @@ from services.ppv.channel_matching import (
     build_matching_context_from_name,
     infer_unmatched_timezone_debug,
 )
-from services.ppv.extraction import MatchupInfo
+from services.ppv.extraction import MatchupInfo, PPVEventExtractor
 
 
 def _assert_calendar_date(
@@ -181,6 +181,26 @@ class TestBuildMatchingContextFromName:
             metadata_only=False,
         )
         assert ctx["date_tolerance_hours"] == 48
+
+
+class TestUsCategoryMlbOrdering:
+    def test_us_category_pipe_mlb_home_venue_timezone(self):
+        from services.team_location_registry import clear_registry_cache
+
+        clear_registry_cache()
+        channel_name = "MLB 03 | Nationals x Giants start:2026-06-10 20:45:00 stop:2026-06-11 03:30:00"
+        extractor = PPVEventExtractor()
+        extraction = extractor.extract_all(channel_name, category_name="US| MLB PPV")
+        ctx = build_matching_context_from_name(
+            channel_name,
+            extraction,
+            category_name="US| MLB PPV",
+        )
+        matchup = extraction["matchup"]
+        assert matchup is not None
+        assert matchup.home_team == "Giants"
+        assert matchup.away_team == "Nationals"
+        assert ctx["timezone_resolution"].timezone == "America/Los_Angeles"
 
 
 class TestMilbChannelMatching:
