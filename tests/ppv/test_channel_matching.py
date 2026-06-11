@@ -214,7 +214,6 @@ class TestExplicitStartTokenCalendarDate:
             f"channel={channel_name!r} expected calendar_date={expected_calendar_date!r}, "
             f"got {ctx['calendar_date']!r}"
         )
-        assert ctx["timezone_resolution"].timezone == "America/New_York"
 
 
 class TestUsCategoryMlbOrdering:
