@@ -47,13 +47,21 @@ Requirements:
 
 ## IPTV Proxy v2 — Traefik Docker labels
 
-From klopstack `docker-compose.yaml` service `iptvproxy` (`container_name: iptv-proxy-v2`). Two routers share one backend service on port **8000**:
+The deployment is split into **two services from the same image** so that all live stream state lives in one process (see the Stream Multiplexing Fixes plan):
 
-### 1. Client router (public, priority 100)
+| Service | `container_name` | Workers | Scheduler | Traefik router |
+|---------|------------------|---------|-----------|----------------|
+| `iptvproxy` | `iptv-proxy-v2` | `GUNICORN_WORKERS=10` | enabled | Admin catch-all (`iptv-proxy-v2`, priority 1) |
+| `iptv-proxy-stream` | `iptv-proxy-stream` | `GUNICORN_WORKERS=1` | `DISABLE_SCHEDULER=true` | Client/streaming router (`iptv-streams`, priority 100) |
 
-No Authentik. Matches **only** these path prefixes on `iptv.${CLOUDFLARE_DNS_ZONE}`:
+A single stream worker means two clients watching the same channel share one upstream connection instead of each opening their own across separate workers.
+
+### 1. Client router (public, priority 100) → `iptv-proxy-stream`
+
+No Authentik. Lives on the `iptv-proxy-stream` service and matches **only** these path prefixes on `iptv.${CLOUDFLARE_DNS_ZONE}`:
 
 ```yaml
+traefik.http.routers.iptv-streams.service: iptv-proxy-stream
 traefik.http.routers.iptv-streams.rule: >-
   Host(`iptv.${CLOUDFLARE_DNS_ZONE}`) && (
     PathPrefix(`/playlist`) ||
@@ -89,11 +97,12 @@ traefik.http.routers.iptv-streams.priority: "100"
 
 Client routes use **provisioned Xtream credentials** (or playlist/EPG URL tokens), not Authentik.
 
-### 2. Admin router (Authentik, priority 1)
+### 2. Admin router (Authentik, priority 1) → `iptvproxy`
 
-Catch-all on the same host for everything **not** matched by the higher-priority client router:
+Catch-all on the same host for everything **not** matched by the higher-priority client router. Lives on the `iptvproxy` (API) service:
 
 ```yaml
+traefik.http.routers.iptv-proxy-v2.service: iptv-proxy-v2
 traefik.http.routers.iptv-proxy-v2.rule: Host(`iptv.${CLOUDFLARE_DNS_ZONE}`)
 traefik.http.routers.iptv-proxy-v2.entrypoints: secureweb
 traefik.http.routers.iptv-proxy-v2.middlewares: authentik-forwardauth@file,security-headers@file
@@ -105,11 +114,17 @@ traefik.http.routers.iptv-proxy-v2.priority: "1"
 - `/` — admin HTML pages (`/settings`, `/accounts`, `/ppv`, …)
 - `/api/*` — REST management (accounts, EPG config, PPV enrichment, scheduler, …)
 
-### Backend service
+### Backend services
+
+Each service publishes its own Traefik backend on port **8000**:
 
 ```yaml
+# API service (iptvproxy)
 traefik.http.services.iptv-proxy-v2.loadbalancer.server.scheme: http
 traefik.http.services.iptv-proxy-v2.loadbalancer.server.port: "8000"
+# Stream service (iptv-proxy-stream)
+traefik.http.services.iptv-proxy-stream.loadbalancer.server.scheme: http
+traefik.http.services.iptv-proxy-stream.loadbalancer.server.port: "8000"
 ```
 
 ## Gluetun and port `8889` (often misunderstood)
@@ -132,6 +147,8 @@ Prefer admin access via `https://iptv.${CLOUDFLARE_DNS_ZONE}/` through Traefik.
 
 ## Container environment (klopstack reference)
 
+API service (`iptvproxy`) — runs the scheduler and admin/API routes:
+
 ```yaml
 environment:
   - GUNICORN_WORKERS=10
@@ -140,6 +157,24 @@ environment:
   - STREAM_BACKEND=mediaflow
   - MEDIAFLOW_PROXY_URL=http://mediaflow-proxy:8888
   - MEDIAFLOW_API_PASSWORD=${MEDIAFLOW_API_PASSWORD}
+volumes:
+  - ${FOLDER_FOR_DATA}/iptv-proxy-v2:/app/data
+networks:
+  - mediastack
+```
+
+Stream service (`iptv-proxy-stream`) — single worker, no scheduler, owns all live stream state. It shares the same data volume and database and `depends_on` the API service so migrations run once:
+
+```yaml
+environment:
+  - GUNICORN_WORKERS=1
+  - DISABLE_SCHEDULER=true
+  - PORT=8000
+  - DEBUG=False
+  - STREAM_BACKEND=mediaflow
+  - MEDIAFLOW_PROXY_URL=http://mediaflow-proxy:8888
+  - MEDIAFLOW_API_PASSWORD=${MEDIAFLOW_API_PASSWORD}
+  - STREAM_IDLE_TIMEOUT=0
 volumes:
   - ${FOLDER_FOR_DATA}/iptv-proxy-v2:/app/data
 networks:

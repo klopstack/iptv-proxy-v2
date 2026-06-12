@@ -48,6 +48,26 @@ class ChannelHealthService:
         """Serialize a naive-UTC datetime for JSON (always includes Z suffix)."""
         return serialize_utc_iso(dt)
 
+    # Prefixes used by the scanner/manual tests for their own ActiveStream rows.
+    # These are not real client viewing and must be excluded when detecting it.
+    _NON_VIEWING_STREAM_PREFIXES = ("health_check_", "manual_test_")
+
+    @staticmethod
+    def count_active_viewing_sessions(account_id: int) -> int:
+        """Count real client viewing sessions for an account.
+
+        Excludes the scanner's own ``health_check_*`` and ``manual_test_*``
+        ActiveStream rows so that scanning does not mistake itself for a viewer.
+        """
+        credential_ids = [cred.id for cred in Credential.query.filter_by(account_id=account_id, enabled=True).all()]
+        if not credential_ids:
+            return 0
+
+        query = ActiveStream.query.filter(ActiveStream.credential_id.in_(credential_ids))
+        for prefix in ChannelHealthService._NON_VIEWING_STREAM_PREFIXES:
+            query = query.filter(~ActiveStream.stream_id.like(f"{prefix}%"))
+        return query.count()
+
     @staticmethod
     def get_available_scan_connections(account_id: int) -> int:
         """
@@ -831,8 +851,28 @@ class ChannelHealthService:
         logger.info("Channel health scan pass starting")
         ConnectionManager.cleanup_stale_connections()
 
+        pause_during_viewing = ChannelHealthConfig.get_bool("pause_scan_during_viewing", True)
+
         accounts_summary = []
         for account in Account.query.filter_by(enabled=True).all():
+            if pause_during_viewing:
+                viewing_sessions = ChannelHealthService.count_active_viewing_sessions(account.id)
+                if viewing_sessions > 0:
+                    logger.info(
+                        "Channel health scan for %s: skipped (%s active viewing session(s))",
+                        account.name,
+                        viewing_sessions,
+                    )
+                    accounts_summary.append(
+                        {
+                            "account_id": account.id,
+                            "account_name": account.name,
+                            "scanned": 0,
+                            "message": f"Paused: {viewing_sessions} active viewing session(s)",
+                        }
+                    )
+                    continue
+
             available = ChannelHealthService.get_available_scan_connections(account.id)
             if available <= 0:
                 logger.info(

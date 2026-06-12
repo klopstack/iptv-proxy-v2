@@ -14,6 +14,7 @@ Stream backends (configured via STREAM_BACKEND env var):
 """
 
 import logging
+import time
 from typing import Any, Dict, Generator, Tuple, Union
 from urllib.parse import urlencode
 
@@ -22,7 +23,7 @@ from flask import Blueprint, Response, abort, current_app, render_template, requ
 from werkzeug.exceptions import HTTPException
 
 from models import Account, db
-from services.connection_manager import ConnectionManager
+from services.connection_manager import STREAM_TIMEOUT_SECONDS, ConnectionManager
 from services.hls_manifest_service import rewrite_hls_manifest
 from services.mediaflow_stream_service import MEDIAFLOW_API_PASSWORD, MEDIAFLOW_PROXY_URL
 from services.stream_service_factory import get_stream_backend_name, get_stream_service
@@ -42,6 +43,27 @@ CHUNK_SIZE = 65536
 # Read timeout: time between data chunks (120s for slow streams)
 UPSTREAM_CONNECT_TIMEOUT = 60
 UPSTREAM_READ_TIMEOUT = 120
+
+# How often a streaming response refreshes its ActiveStream heartbeat. Must be
+# comfortably below STREAM_TIMEOUT_SECONDS so a live session is never reaped as
+# stale while data is still flowing.
+STREAM_HEARTBEAT_INTERVAL_SECONDS = 15
+
+
+def _heartbeat_if_due(session_token: str, last_beat: float) -> float:
+    """Refresh the ActiveStream heartbeat if the interval has elapsed.
+
+    Returns the (possibly updated) monotonic timestamp of the last heartbeat so
+    callers can keep throttling without their own bookkeeping.
+    """
+    now = time.monotonic()
+    if now - last_beat < STREAM_HEARTBEAT_INTERVAL_SECONDS:
+        return last_beat
+    try:
+        ConnectionManager.update_activity(session_token)
+    except Exception as exc:  # pragma: no cover - heartbeat must never break a stream
+        logger.debug(f"Heartbeat update failed for session {session_token[:8]}...: {exc}")
+    return now
 
 
 def _prepare_fallback_chain(
@@ -381,11 +403,14 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
             user_agent=account.user_agent or "okhttp/3.14.9",
         )
 
+        shared_session_token = existing_stream.session_token
+
         def generate_shared() -> Generator[bytes, None, None]:
             """Generator function for shared streaming response."""
             logger.info(
                 f"Stream {stream_id}: Shared generator starting for subscriber {subscriber.subscriber_id[:8]}..."
             )
+            last_beat = time.monotonic()
             try:
                 chunk_count = 0
                 for chunk in stream_service.stream_chunks(
@@ -397,6 +422,7 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
                     if chunk_count == 1:
                         logger.info(f"Stream {stream_id}: First chunk yielded from shared service")
                     yield chunk
+                    last_beat = _heartbeat_if_due(shared_session_token, last_beat)
                 logger.info(f"Stream {stream_id}: Shared generator completed ({chunk_count} chunks)")
             finally:
                 stream_service.unsubscribe(existing_stream, subscriber)  # type: ignore[arg-type]
@@ -493,6 +519,7 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
         def generate_new() -> Generator[bytes, None, None]:
             """Generator function for new shared stream."""
             logger.info(f"Stream {stream_id}: Generator starting for subscriber {subscriber.subscriber_id[:8]}...")
+            last_beat = time.monotonic()
             try:
                 chunk_count = 0
                 for chunk in stream_service.stream_chunks(
@@ -504,6 +531,7 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
                     if chunk_count == 1:
                         logger.info(f"Stream {stream_id}: First chunk yielded from service")
                     yield chunk
+                    last_beat = _heartbeat_if_due(session_token, last_beat)
                 logger.info(f"Stream {stream_id}: Generator completed ({chunk_count} chunks)")
             except Exception as e:
                 logger.error(f"Error streaming {stream_id}: {e}", exc_info=True)
@@ -609,7 +637,7 @@ def cleanup_streams():
     Admin endpoint for maintenance.
     """
     account_id = request.args.get("account_id", type=int)
-    timeout = request.args.get("timeout", 30, type=int)
+    timeout = request.args.get("timeout", STREAM_TIMEOUT_SECONDS, type=int)
 
     ConnectionManager.cleanup_stale_connections(account_id, timeout)
     return {"success": True, "message": "Cleanup completed"}

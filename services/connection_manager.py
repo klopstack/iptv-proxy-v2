@@ -9,6 +9,7 @@ This service is responsible for:
 """
 
 import logging
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Tuple
@@ -18,8 +19,11 @@ from services.datetime_utils import serialize_utc_iso
 
 logger = logging.getLogger(__name__)
 
-# Timeout for considering a stream "stale" (no activity)
-STREAM_TIMEOUT_SECONDS = 30
+# Timeout for considering a stream "stale" (no activity).
+# Active streams now emit a heartbeat (ConnectionManager.update_activity) while
+# data flows, so this only reaps genuinely abandoned rows. Configurable via env;
+# default is generous (5 min) to avoid reaping live sessions during brief stalls.
+STREAM_TIMEOUT_SECONDS = int(os.environ.get("STREAM_TIMEOUT_SECONDS", "300"))
 
 
 class ConnectionManager:

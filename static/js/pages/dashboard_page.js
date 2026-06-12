@@ -136,6 +136,121 @@ function renderPpvCard(ppv) {
     `;
 }
 
+function credentialBadgeClass(cred) {
+    if (!cred.enabled) {
+        return 'bg-secondary';
+    }
+    const active = cred.active_connections || 0;
+    const max = cred.max_connections || 1;
+    if (active >= max) {
+        return 'bg-warning text-dark';
+    }
+    if (active > 0) {
+        return 'bg-success';
+    }
+    return 'bg-light text-dark border';
+}
+
+function renderCredentialBadge(cred) {
+    const active = cred.active_connections || 0;
+    const max = cred.max_connections || 1;
+    const label = cred.enabled ? `${escapeHtml(cred.username)} ${active}/${max}` : `${escapeHtml(cred.username)} (disabled)`;
+    return `<span class="badge ${credentialBadgeClass(cred)} me-1 mb-1">${label}</span>`;
+}
+
+function renderStreamingCredentials(streams) {
+    const accounts = streams.accounts || [];
+    const activeStreams = streams.active_streams || [];
+    const backend = streams.backend || 'ffmpeg';
+    const sharedUpstream = streams.shared_upstream || 0;
+    const subscribers = streams.subscribers || 0;
+    const totalActive = streams.total_active_connections ?? streams.active_sessions ?? 0;
+    const totalMax = streams.total_max_connections || 0;
+    const available = streams.available_connections ?? Math.max(0, totalMax - totalActive);
+
+    if (accounts.length === 0) {
+        return '';
+    }
+
+    const accountBlocks = accounts.map((account) => {
+        const creds = (account.credentials || []).map(renderCredentialBadge).join('');
+        const inUse = account.total_active_connections || 0;
+        const capacity = account.total_max_connections || 0;
+        const disabledNote = account.enabled ? '' : ' <span class="badge bg-secondary">account disabled</span>';
+        return `
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                    <strong>${escapeHtml(account.name)}</strong>
+                    <span class="text-muted small">${inUse}/${capacity} slots in use · ${account.available_connections ?? 0} free${disabledNote}</span>
+                </div>
+                <div>${creds || '<span class="text-muted small">No credentials configured</span>'}</div>
+            </div>
+        `;
+    }).join('');
+
+    let activeStreamsTable = '';
+    if (activeStreams.length > 0) {
+        const rows = activeStreams.map((stream) => `
+            <tr>
+                <td><code>${escapeHtml(stream.stream_id)}</code></td>
+                <td>${escapeHtml(stream.credential_username || '—')}</td>
+                <td>${escapeHtml(stream.account_name || '—')}</td>
+                <td><code>${escapeHtml(stream.client_ip || '—')}</code></td>
+                <td class="text-muted small">${escapeHtml(formatRelativeTime(stream.started_at))}</td>
+            </tr>
+        `).join('');
+        activeStreamsTable = `
+            <div class="table-responsive mt-3">
+                <table class="table table-sm table-striped mb-0">
+                    <thead>
+                        <tr>
+                            <th>Stream</th>
+                            <th>Credential</th>
+                            <th>Account</th>
+                            <th>Client</th>
+                            <th>Started</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        `;
+    } else {
+        activeStreamsTable = '<p class="text-muted small mb-0 mt-3">No active streams right now.</p>';
+    }
+
+    let backendDetail = `<span class="text-muted small">Backend: ${escapeHtml(backend)}</span>`;
+    if (backend === 'ffmpeg' && (sharedUpstream > 0 || subscribers > 0)) {
+        backendDetail += `<span class="text-muted small"> · Shared upstream: ${sharedUpstream.toLocaleString()}`;
+        if (subscribers > 0) {
+            backendDetail += ` · Multiplex viewers: ${subscribers.toLocaleString()}`;
+        }
+        backendDetail += '</span>';
+    }
+
+    return `
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <h6 class="mb-0"><i class="bi bi-broadcast"></i> Stream credentials</h6>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="badge bg-dark">${totalActive}/${totalMax} in use</span>
+                            <span class="badge bg-secondary">${available} available</span>
+                            <a href="/accounts" class="btn btn-sm btn-outline-primary">Manage accounts</a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        ${accountBlocks}
+                        ${activeStreamsTable}
+                        <div class="mt-3">${backendDetail}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 function renderTier1(summary) {
     const health = summary.channel_health || {};
     const byStatus = health.by_status || {};
@@ -150,19 +265,10 @@ function renderTier1(summary) {
     const total = (health.total || 0).toLocaleString();
 
     const activeSessions = (streams.active_sessions || 0).toLocaleString();
-    const sharedUpstream = streams.shared_upstream || 0;
+    const totalActive = streams.total_active_connections ?? streams.active_sessions ?? 0;
+    const totalMax = streams.total_max_connections || 0;
+    const available = streams.available_connections ?? Math.max(0, totalMax - totalActive);
     const subscribers = streams.subscribers || 0;
-    const backend = streams.backend || 'ffmpeg';
-    const showMux = backend === 'ffmpeg' && (sharedUpstream > 0 || subscribers > 0);
-
-    let streamDetail = `<small class="opacity-75">Proxied sessions (ActiveStream)</small>`;
-    if (showMux || backend === 'ffmpeg') {
-        streamDetail += `<br><small class="opacity-75">Shared upstream: ${sharedUpstream.toLocaleString()}`;
-        if (subscribers > 0) {
-            streamDetail += ` · Multiplex viewers: ${subscribers.toLocaleString()}`;
-        }
-        streamDetail += ` (${escapeHtml(backend)})</small>`;
-    }
 
     return `
         ${renderSyncAlerts(summary.overview || {})}
@@ -202,23 +308,24 @@ function renderTier1(summary) {
             <div class="col-md-4 mb-3">
                 <div class="card bg-dark text-white h-100">
                     <div class="card-body">
-                        <h6 class="card-subtitle mb-2 opacity-75">Operating streams</h6>
-                        <h2 class="card-title mb-1">${activeSessions}</h2>
-                        ${streamDetail}
+                        <h6 class="card-subtitle mb-2 opacity-75">Connection slots</h6>
+                        <h2 class="card-title mb-1">${totalActive.toLocaleString()} / ${totalMax.toLocaleString()}</h2>
+                        <small class="opacity-75">${available.toLocaleString()} available across upstream credentials</small>
                     </div>
                 </div>
             </div>
             <div class="col-md-4 mb-3">
                 <div class="card bg-secondary text-white h-100">
                     <div class="card-body">
-                        <h6 class="card-subtitle mb-2 opacity-75">Operating clients</h6>
+                        <h6 class="card-subtitle mb-2 opacity-75">Active sessions</h6>
                         <h2 class="card-title mb-1">${activeSessions}</h2>
-                        <small class="opacity-75">Active proxied sessions</small>
+                        <small class="opacity-75">Proxied client streams</small>
                         ${subscribers > 0 ? `<br><small class="opacity-75">Multiplex viewers: ${subscribers.toLocaleString()}</small>` : ''}
                     </div>
                 </div>
             </div>
         </div>
+        ${renderStreamingCredentials(streams)}
         ${renderPpvCard(summary.ppv)}
     `;
 }
