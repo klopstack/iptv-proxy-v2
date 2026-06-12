@@ -198,10 +198,13 @@ def fetch_espn_tennis_events_for_date(
         return []
 
     cache_key = f"espn-tennis:{date_str}"
+    stale_events: Optional[List[CalendarEvent]] = None
     if not force_refresh and cache_key in _espn_cache:
         cached_events, cached_at = _espn_cache[cache_key]
         if time.time() - cached_at < CACHE_TTL_SECONDS:
             return list(cached_events)
+        stale_events = cached_events
+        del _espn_cache[cache_key]
 
     events: List[CalendarEvent] = []
     try:
@@ -210,6 +213,8 @@ def fetch_espn_tennis_events_for_date(
             events.extend(parse_scoreboard_payload(payload, tour=tour, fallback_date=date_str))
     except Exception as exc:
         logger.warning("ESPN tennis scoreboard fetch failed for %s: %s", date_str, exc)
+        if stale_events is not None:
+            return list(stale_events)
         if cache_key in _espn_cache:
             return list(_espn_cache[cache_key][0])
         return []

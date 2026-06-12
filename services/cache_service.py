@@ -26,13 +26,17 @@ class CacheService:
     def get_cached_streams(self, account_id):
         """Get cached streams for account"""
         key = self._cache_key(account_id, "streams")
-        if key in self.cache and not self._is_expired(self.cache[key]):
-            logger.debug(f"Cache hit for streams: {key}")
-            return self.cache[key]["data"]
+        entry = self.cache.get(key)
+        if entry is not None:
+            if not self._is_expired(entry):
+                logger.debug(f"Cache hit for streams: {key}")
+                return entry["data"]
+            del self.cache[key]
         return None
 
     def cache_streams(self, account_id, streams, ttl=None):
         """Cache streams for account"""
+        self.purge_expired()
         key = self._cache_key(account_id, "streams")
         ttl = ttl or self.default_ttl
         self.cache[key] = {"data": streams, "expires_at": time.time() + ttl}
@@ -41,17 +45,40 @@ class CacheService:
     def get_cached_categories(self, account_id):
         """Get cached categories for account"""
         key = self._cache_key(account_id, "categories")
-        if key in self.cache and not self._is_expired(self.cache[key]):
-            logger.debug(f"Cache hit for categories: {key}")
-            return self.cache[key]["data"]
+        entry = self.cache.get(key)
+        if entry is not None:
+            if not self._is_expired(entry):
+                logger.debug(f"Cache hit for categories: {key}")
+                return entry["data"]
+            del self.cache[key]
         return None
 
     def cache_categories(self, account_id, categories, ttl=None):
         """Cache categories for account"""
+        self.purge_expired()
         key = self._cache_key(account_id, "categories")
         ttl = ttl or self.default_ttl
         self.cache[key] = {"data": categories, "expires_at": time.time() + ttl}
         logger.debug(f"Cached categories for {key}: {len(categories)} items")
+
+    def purge_expired(self):
+        """Remove all expired entries; return the number removed."""
+        expired_keys = [key for key, entry in self.cache.items() if self._is_expired(entry)]
+        for key in expired_keys:
+            del self.cache[key]
+        if expired_keys:
+            logger.debug(f"Purged {len(expired_keys)} expired cache entries")
+        return len(expired_keys)
+
+    def get_stats(self):
+        """Return entry counts for observability."""
+        total = len(self.cache)
+        expired = sum(1 for entry in self.cache.values() if self._is_expired(entry))
+        return {
+            "total_entries": total,
+            "expired_entries": expired,
+            "live_entries": total - expired,
+        }
 
     def clear_account_cache(self, account_id):
         """Clear all cache for account"""

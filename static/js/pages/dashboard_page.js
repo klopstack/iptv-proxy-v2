@@ -136,6 +136,60 @@ function renderPpvCard(ppv) {
     `;
 }
 
+function renderMemoryCard(memory) {
+    if (!memory) {
+        return '';
+    }
+
+    const process = memory.process || {};
+    const caches = memory.caches || {};
+    const calendar = caches.calendar || {};
+    const iptv = caches.iptv || {};
+    const streams = caches.streams || {};
+
+    const rss = process.rss_bytes ? formatBytes(process.rss_bytes) : 'n/a';
+    const calendarTotal = (calendar.total_entries || 0).toLocaleString();
+    const calendarValid = (calendar.valid_entries || 0).toLocaleString();
+    const calendarEvents = (calendar.total_events || 0).toLocaleString();
+    const iptvLive = (iptv.live_entries || 0).toLocaleString();
+    const iptvExpired = (iptv.expired_entries || 0).toLocaleString();
+    const activeStreams = (streams.active_streams || 0).toLocaleString();
+    const subscribers = (streams.total_subscribers || 0).toLocaleString();
+
+    return `
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <h6 class="mb-0"><i class="bi bi-memory"></i> Memory &amp; Caches</h6>
+                        <span class="badge bg-dark">Worker RSS: ${rss}</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center g-3">
+                            <div class="col-6 col-md-3">
+                                <div class="h5 mb-0">${calendarValid} / ${calendarTotal}</div>
+                                <small class="text-muted">Calendar cache (valid/total)</small>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="h5 mb-0">${calendarEvents}</div>
+                                <small class="text-muted">Cached calendar events</small>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="h5 mb-0">${iptvLive} <span class="text-muted">/ ${iptvExpired} exp</span></div>
+                                <small class="text-muted">IPTV cache (live/expired)</small>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="h5 mb-0">${activeStreams}${subscribers !== '0' ? ` · ${subscribers}` : ''}</div>
+                                <small class="text-muted">Active streams${subscribers !== '0' ? ' · viewers' : ''}</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 function renderTier1(summary) {
     const health = summary.channel_health || {};
     const byStatus = health.by_status || {};
@@ -220,6 +274,7 @@ function renderTier1(summary) {
             </div>
         </div>
         ${renderPpvCard(summary.ppv)}
+        ${renderMemoryCard(summary.memory)}
     `;
 }
 

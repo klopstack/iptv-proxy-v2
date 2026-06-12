@@ -108,10 +108,13 @@ def fetch_milb_events_for_date(
         return []
 
     cache_key = f"milb:{date_str}"
+    stale_events: Optional[List[CalendarEvent]] = None
     if not force_refresh and cache_key in _milb_cache:
         cached_events, cached_at = _milb_cache[cache_key]
         if time.time() - cached_at < CACHE_TTL_SECONDS:
             return list(cached_events)
+        stale_events = cached_events
+        del _milb_cache[cache_key]
 
     client = get_mlb_stats_client()
     events: List[CalendarEvent] = []
@@ -123,6 +126,8 @@ def fetch_milb_events_for_date(
                 events.append(ev)
     except Exception as exc:
         logger.warning("MiLB schedule fetch failed for %s: %s", date_str, exc)
+        if stale_events is not None:
+            return list(stale_events)
         if cache_key in _milb_cache:
             return list(_milb_cache[cache_key][0])
         return []
