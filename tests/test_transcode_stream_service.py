@@ -1,5 +1,6 @@
 """Tests for transcode stream service stream keys and integration."""
 
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -10,10 +11,13 @@ from services.transcode_stream_service import TranscodeStreamService
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 TEST_CLIP_PATH = FIXTURES_DIR / "test_clip.ts"
+FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None
 
 
 @pytest.fixture(scope="module")
 def test_video():
+    if not FFMPEG_AVAILABLE:
+        pytest.skip("ffmpeg not available")
     FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
     if TEST_CLIP_PATH.exists():
         return TEST_CLIP_PATH
@@ -73,10 +77,7 @@ class TestTranscodeStreamKeys:
         assert mf._get_stream_key(1, "12345", "ts") != transcode._get_stream_key(1, "12345", software_profile)
 
 
-@pytest.mark.skipif(
-    subprocess.run(["ffmpeg", "-version"], capture_output=True).returncode != 0,
-    reason="ffmpeg not available",
-)
+@pytest.mark.skipif(not FFMPEG_AVAILABLE, reason="ffmpeg not available")
 class TestTranscodeStreamIntegration:
     def test_transcode_produces_mpegts_output(self, software_profile, test_video, tmp_path):
         service = TranscodeStreamService()
