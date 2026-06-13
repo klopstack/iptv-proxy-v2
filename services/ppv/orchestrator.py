@@ -193,11 +193,18 @@ class PPVEnrichmentOrchestrator:
             return {"skipped": True, "reason": "disabled"}
 
         from services.ppv.matching.enhanced import EnhancedPPVMatcher
+        from services.thesportsdb_calendar_scraper import get_calendar_scraper
 
-        return EnhancedPPVMatcher.prefetch_all_accounts(
+        result = EnhancedPPVMatcher.prefetch_all_accounts(
             days_ahead=days_ahead,
             days_back=days_back,
         )
+
+        removed = get_calendar_scraper().purge_expired_cache()
+        if removed:
+            logger.info("Purged %d expired calendar cache entries after prefetch", removed)
+
+        return result
 
     def queue_channel(self, channel_id: int) -> bool:
         """Mark a channel for enrichment."""

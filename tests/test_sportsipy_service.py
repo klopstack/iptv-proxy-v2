@@ -201,6 +201,21 @@ class TestSportsipyServiceWithMocks:
 
         assert len(service._cache) == 0
 
+    def test_purge_expired(self):
+        """purge_expired removes only schedule entries past their TTL."""
+        from datetime import datetime, timedelta
+
+        service = SportsipyService()
+        now = datetime.now()
+        service._cache["fresh"] = (now, ["game"])
+        service._cache["stale"] = (now - timedelta(seconds=service._cache_ttl + 1), ["old"])
+
+        removed = service.purge_expired()
+
+        assert removed == 1
+        assert "fresh" in service._cache
+        assert "stale" not in service._cache
+
     def test_get_stats(self, app, seeded_teams):
         """Test getting service statistics."""
         with app.app_context():

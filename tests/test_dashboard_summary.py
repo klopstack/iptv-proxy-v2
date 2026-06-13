@@ -17,9 +17,20 @@ class TestDashboardSummary:
         assert "streams" in data
         assert "overview" in data
         assert "ppv" in data
+        assert "memory" in data
         assert "generated_at" in data
         assert "by_status" in data["channel_health"]
         assert "total" in data["channel_health"]
+
+    def test_dashboard_summary_memory_shape(self, client):
+        data = api_data(client.get("/api/dashboard/summary"))
+        memory = data["memory"]
+        assert "process" in memory
+        assert "caches" in memory
+        assert "rss_bytes" in memory["process"]
+        assert "pid" in memory["process"]
+        for key in ("iptv", "calendar", "streams"):
+            assert key in memory["caches"]
 
     def test_dashboard_summary_streams_shape(self, client):
         data = api_data(client.get("/api/dashboard/summary"))

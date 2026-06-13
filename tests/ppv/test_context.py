@@ -239,6 +239,28 @@ class TestContextCache:
             if original is not None:
                 CACHE_TTL[DataType.STANDINGS] = original
 
+    def test_purge_expired_removes_stale_entries(self):
+        """purge_expired drops only entries past their TTL."""
+        cache = ContextCache()
+        from services.ppv.context.cache import CACHE_TTL
+
+        original = CACHE_TTL.get(DataType.STANDINGS)
+        CACHE_TTL[DataType.STANDINGS] = 0
+        try:
+            cache.set("stale", {"x": 1}, DataType.STANDINGS)
+            time.sleep(0.01)
+        finally:
+            if original is not None:
+                CACHE_TTL[DataType.STANDINGS] = original
+
+        cache.set("fresh", {"y": 2}, DataType.STANDINGS)
+
+        removed = cache.purge_expired()
+
+        assert removed == 1
+        assert cache.get("fresh") == {"y": 2}
+        assert cache.stats()["total_entries"] == 1
+
     def test_thread_safety(self):
         """Multiple threads can write to and read from the cache without error."""
         cache = ContextCache()

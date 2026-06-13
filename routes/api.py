@@ -703,6 +703,7 @@ def get_dashboard_summary():
     from datetime import datetime, timezone
 
     from services.channel_health_service import ChannelHealthService
+    from services.memory_stats import build_memory_stats
     from services.ppv.dashboard_stats import build_dashboard_ppv_stats
 
     t0 = time.perf_counter()
@@ -724,6 +725,8 @@ def get_dashboard_summary():
     ppv = build_dashboard_ppv_stats()
     timings["ppv"] = time.perf_counter() - t_step
 
+    memory = build_memory_stats()
+
     timings["total"] = time.perf_counter() - t0
     _log_dashboard_summary_timings(timings)
 
@@ -732,6 +735,7 @@ def get_dashboard_summary():
         "streams": streams,
         "overview": overview,
         "ppv": ppv,
+        "memory": memory,
         "generated_at": serialize_utc_iso(datetime.now(timezone.utc)),
     }
     return data_response(payload)

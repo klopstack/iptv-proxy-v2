@@ -66,6 +66,15 @@ class ContextCache:
         with self._lock:
             self._store.clear()
 
+    def purge_expired(self) -> int:
+        """Remove expired entries; return the number removed."""
+        now = time.monotonic()
+        with self._lock:
+            expired_keys = [key for key, (_, expiry) in self._store.items() if now > expiry]
+            for key in expired_keys:
+                del self._store[key]
+        return len(expired_keys)
+
     def stats(self) -> Dict[str, int]:
         """Return simple stats for observability."""
         now = time.monotonic()

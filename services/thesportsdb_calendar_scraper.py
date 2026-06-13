@@ -466,13 +466,26 @@ class TheSportsDBCalendarScraper:
         return f"{CACHE_KEY_VERSION}:{date}:{sport}{self._get_auth_cache_suffix()}"
 
     def _is_cache_valid(self, cache_key: str) -> bool:
-        """Check if cached data is still valid."""
+        """Check if cached data is still valid, evicting the entry if expired."""
         if cache_key not in self._cache:
             return False
         events, timestamp = self._cache[cache_key]
         if not events:
             return False
-        return (time.time() - timestamp) < self._cache_ttl
+        if (time.time() - timestamp) >= self._cache_ttl:
+            self._cache.pop(cache_key, None)
+            return False
+        return True
+
+    def purge_expired_cache(self) -> int:
+        """Remove expired in-memory cache entries; return the number removed."""
+        now = time.time()
+        expired_keys = [key for key, (_, ts) in self._cache.items() if (now - ts) >= self._cache_ttl]
+        for key in expired_keys:
+            self._cache.pop(key, None)
+        if expired_keys:
+            logger.debug(f"Purged {len(expired_keys)} expired calendar cache entries")
+        return len(expired_keys)
 
     def get_events_for_date(
         self, date: str, sport: str = "", force_refresh: bool = False, *, replay: bool = False
@@ -490,6 +503,8 @@ class TheSportsDBCalendarScraper:
             List of CalendarEvent objects for the date
         """
         cache_key = self._get_cache_key(date, sport)
+
+        self.purge_expired_cache()
 
         # Check cache first
         if not force_refresh and self._is_cache_valid(cache_key):
@@ -1139,6 +1154,7 @@ class TheSportsDBCalendarScraper:
             "size": valid_entries,
             "total_entries": total,
             "valid_entries": valid_entries,
+            "expired_entries": total - valid_entries,
             "total_events": total_events,
             "hit_rate": hit_rate,
             "cache_hits": self._cache_hits,
