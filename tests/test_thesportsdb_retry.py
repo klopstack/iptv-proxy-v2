@@ -33,7 +33,7 @@ class TestRetryableDetection:
 
 
 class TestCallThesportsdbApi:
-    @patch("services.thesportsdb_retry.time.sleep")
+    @patch("services.thesportsdb_retry._sleep")
     @patch("services.thesportsdb_service.configure_thesportsdb_api_key")
     def test_retries_on_html_then_succeeds(self, mock_configure, mock_sleep):
         fn = MagicMock(
@@ -49,7 +49,7 @@ class TestCallThesportsdbApi:
         assert fn.call_count == 2
         mock_sleep.assert_called_once()
 
-    @patch("services.thesportsdb_retry.time.sleep")
+    @patch("services.thesportsdb_retry._sleep")
     @patch("services.thesportsdb_service.configure_thesportsdb_api_key")
     def test_returns_last_html_after_retries_exhausted(self, mock_configure, mock_sleep):
         fn = MagicMock(return_value="<html>blocked</html>")
@@ -60,7 +60,7 @@ class TestCallThesportsdbApi:
         assert fn.call_count == 3
         assert mock_sleep.call_count == 2
 
-    @patch("services.thesportsdb_retry.time.sleep")
+    @patch("services.thesportsdb_retry._sleep")
     @patch("services.thesportsdb_service.configure_thesportsdb_api_key")
     def test_retries_on_exception(self, mock_configure, mock_sleep):
         fn = MagicMock(side_effect=[requests.Timeout("timed out"), {"events": []}])
@@ -72,7 +72,7 @@ class TestCallThesportsdbApi:
 
 
 class TestFetchUrlWithRetry:
-    @patch("services.thesportsdb_retry.time.sleep")
+    @patch("services.thesportsdb_retry._sleep")
     def test_retries_on_429(self, mock_sleep):
         session = MagicMock()
         bad = MagicMock(status_code=429, text="rate limited")

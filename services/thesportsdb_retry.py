@@ -31,6 +31,11 @@ HTML_BLOCK_INDICATORS = (
 )
 
 
+def _sleep(seconds: float) -> None:
+    """Thin wrapper around time.sleep so tests can patch backoff without affecting global sleep."""
+    time.sleep(seconds)
+
+
 def backoff_delay(attempt: int) -> float:
     """Exponential backoff with jitter for retry attempt index (0-based)."""
     delay = min(MAX_BACKOFF_SECONDS, INITIAL_BACKOFF_SECONDS * (BACKOFF_MULTIPLIER**attempt))
@@ -101,7 +106,7 @@ def call_thesportsdb_api(
                     f"TheSportsDB API non-JSON response (attempt {attempt + 1}/{max_retries + 1}), "
                     f"retrying in {delay:.1f}s"
                 )
-                time.sleep(delay)
+                _sleep(delay)
                 continue
             return result
         except Exception as exc:
@@ -112,7 +117,7 @@ def call_thesportsdb_api(
             logger.info(
                 f"TheSportsDB API error (attempt {attempt + 1}/{max_retries + 1}): {exc}, " f"retrying in {delay:.1f}s"
             )
-            time.sleep(delay)
+            _sleep(delay)
 
     if last_error is not None:
         raise last_error
@@ -157,7 +162,7 @@ def fetch_url_with_retry(
             f"HTTP fetch retry for {url} (status={response.status_code}, "
             f"attempt {attempt + 1}/{max_retries + 1}) in {delay:.1f}s"
         )
-        time.sleep(delay)
+        _sleep(delay)
 
     assert last_response is not None
     last_response.raise_for_status()
