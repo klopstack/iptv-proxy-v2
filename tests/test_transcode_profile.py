@@ -18,6 +18,26 @@ def software_encoder(monkeypatch):
     importlib.reload(transcode_profile_mod)
 
 
+@pytest.fixture
+def vaapi_encoder(monkeypatch):
+    monkeypatch.setenv("TRANSCODE_HWACCEL", "vaapi")
+    importlib.reload(transcode_profile_mod)
+    transcode_profile_mod._encoder_mode = "vaapi"
+    yield transcode_profile_mod
+    transcode_profile_mod._encoder_mode = None
+    importlib.reload(transcode_profile_mod)
+
+
+@pytest.fixture
+def qsv_encoder(monkeypatch):
+    monkeypatch.setenv("TRANSCODE_HWACCEL", "qsv")
+    importlib.reload(transcode_profile_mod)
+    transcode_profile_mod._encoder_mode = "qsv"
+    yield transcode_profile_mod
+    transcode_profile_mod._encoder_mode = None
+    importlib.reload(transcode_profile_mod)
+
+
 class TestTranscodeProfile:
     def test_fingerprint_stable_for_same_settings(self, software_encoder):
         p1 = TranscodeProfile(True, 720, 8000, 2, 128)
@@ -36,6 +56,30 @@ class TestTranscodeProfile:
         assert "http://example.com/stream.ts" in args
         assert "test-ua" in args
         assert "mpegts" in args
+        assert "+genpts+discardcorrupt" in args
+
+    def test_build_ffmpeg_args_vaapi_uses_sw_decode_hw_encode(self, vaapi_encoder):
+        profile = TranscodeProfile(True, 720, 8000, 2, 128)
+        args = profile.build_ffmpeg_args("http://example.com/stream.ts", "test-ua")
+        joined = " ".join(args)
+        assert "h264_vaapi" in args
+        assert "hwupload" in joined
+        assert "-hwaccel" not in args
+        assert "-init_hw_device" in args
+        assert "vaapi=va:" in joined
+
+    def test_build_ffmpeg_args_qsv_uses_vaapi_parent_and_hwupload_pool(self, qsv_encoder):
+        profile = TranscodeProfile(True, 720, 8000, 2, 128)
+        args = profile.build_ffmpeg_args("http://example.com/stream.ts", "test-ua")
+        joined = " ".join(args)
+        assert "h264_qsv" in args
+        assert "qsv=hw@va" in joined
+        assert "extra_hw_frames=" in joined
+        assert "format=qsv" in joined
+        assert "scale_qsv" in joined
+        assert "-hwaccel" not in args
+        assert "-preset" in args
+        assert args[args.index("-preset") + 1] == "veryfast"
 
     def test_from_xtream_credential_disabled_returns_none(self):
         class Cred:
@@ -54,6 +98,32 @@ class TestTranscodeProfile:
         profile = TranscodeProfile.from_xtream_credential(Cred())
         assert profile is not None
         assert profile.max_bitrate_kbps == 5000
+
+
+class TestDetectEncoderMode:
+    def test_auto_prefers_qsv_when_both_available(self, monkeypatch):
+        monkeypatch.setenv("TRANSCODE_HWACCEL", "auto")
+        importlib.reload(transcode_profile_mod)
+        transcode_profile_mod._encoder_mode = None
+        monkeypatch.setattr(transcode_profile_mod, "_probe_qsv_encoder", lambda: True)
+        monkeypatch.setattr(transcode_profile_mod, "_probe_vaapi_encoder", lambda: True)
+        assert transcode_profile_mod.get_encoder_mode() == "qsv"
+
+    def test_auto_falls_back_to_vaapi_when_qsv_unavailable(self, monkeypatch):
+        monkeypatch.setenv("TRANSCODE_HWACCEL", "auto")
+        importlib.reload(transcode_profile_mod)
+        transcode_profile_mod._encoder_mode = None
+        monkeypatch.setattr(transcode_profile_mod, "_probe_qsv_encoder", lambda: False)
+        monkeypatch.setattr(transcode_profile_mod, "_probe_vaapi_encoder", lambda: True)
+        assert transcode_profile_mod.get_encoder_mode() == "vaapi"
+
+    def test_qsv_mode_does_not_select_vaapi(self, monkeypatch):
+        monkeypatch.setenv("TRANSCODE_HWACCEL", "qsv")
+        importlib.reload(transcode_profile_mod)
+        transcode_profile_mod._encoder_mode = None
+        monkeypatch.setattr(transcode_profile_mod, "_probe_qsv_encoder", lambda: False)
+        monkeypatch.setattr(transcode_profile_mod, "_probe_vaapi_encoder", lambda: True)
+        assert transcode_profile_mod.get_encoder_mode() == "software"
 
 
 class TestValidateTranscodeFields:

@@ -4,7 +4,8 @@ WORKDIR /app
 
 ARG TARGETARCH
 
-# Install system dependencies including xmltv tools
+# Install system dependencies including xmltv tools. On amd64, add Intel QSV/VAAPI
+# runtime libraries for per-client transcoding (ffmpeg is built with --enable-libvpl).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     xmltv \
     xmltv-util \
@@ -15,10 +16,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     vainfo \
     git \
     && if [ "$TARGETARCH" = "amd64" ]; then \
-         apt-get install -y --no-install-recommends intel-media-va-driver; \
+         apt-get install -y --no-install-recommends \
+           intel-media-va-driver \
+           libvpl2 \
+           libmfx-gen1.2; \
        fi \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && if [ "$TARGETARCH" = "amd64" ]; then \
+         ffmpeg -hide_banner -encoders 2>/dev/null | grep -q 'h264_qsv' \
+         && ffmpeg -hide_banner -encoders 2>/dev/null | grep -q 'h264_vaapi'; \
+       fi
 
 # Install Python dependencies
 COPY requirements.txt .
