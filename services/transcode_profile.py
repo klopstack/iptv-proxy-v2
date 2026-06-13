@@ -1,7 +1,10 @@
 """
 Per-client transcode profile and FFmpeg encode argument builder.
 
-Hardware acceleration order: VAAPI (Intel Arc) -> QSV -> libx264 software fallback.
+Hardware acceleration order: QSV (Intel Quick Sync) -> VAAPI -> libx264 software.
+Live MPEG-TS is decoded in software (IPTV streams are often corrupt at join); encode
+uses QSV or VAAPI. On Linux, QSV is initialized via a VAAPI parent device (see Intel
+Media SDK wiki: init_hw_device vaapi + qsv@va).
 """
 
 from __future__ import annotations
@@ -19,6 +22,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 TRANSCODE_HWACCEL = os.environ.get("TRANSCODE_HWACCEL", "auto").lower()
+TRANSCODE_DRI_DEVICE = os.environ.get("TRANSCODE_DRI_DEVICE") or os.environ.get(
+    "TRANSCODE_VAAPI_DEVICE", "/dev/dri/renderD128"
+)
+# Frames pre-allocated for QSV hwupload (MFX requires a fixed pool size).
+_QSV_HWUPLOAD_FRAMES = int(os.environ.get("TRANSCODE_QSV_HWUPLOAD_FRAMES", "64"))
+
+# Tuning for live IPTV MPEG-TS (tolerate corrupt packets, start quickly).
+_MPEGTS_INPUT_FLAGS = [
+    "-fflags",
+    "+genpts+discardcorrupt",
+    "-flags",
+    "low_delay",
+    "-probesize",
+    "500000",
+    "-analyzeduration",
+    "1000000",
+]
 
 # Cached encoder mode after first probe: "vaapi", "qsv", or "software"
 _encoder_mode: Optional[str] = None
@@ -111,16 +131,17 @@ class TranscodeProfile:
             return (
                 cmd
                 + [
-                    "-hwaccel",
-                    "vaapi",
-                    "-hwaccel_device",
-                    "/dev/dri/renderD128",
-                    "-hwaccel_output_format",
-                    "vaapi",
+                    "-init_hw_device",
+                    f"vaapi=va:{TRANSCODE_DRI_DEVICE}",
+                    "-filter_hw_device",
+                    "va",
+                ]
+                + _MPEGTS_INPUT_FLAGS
+                + [
                     "-i",
                     upstream_url,
                     "-vf",
-                    f"scale_vaapi=w=-2:h=min(ih\\,{height})",
+                    f"format=nv12,hwupload,scale_vaapi=w=-2:h=min(ih\\,{height})",
                     "-c:v",
                     "h264_vaapi",
                     "-b:v",
@@ -139,16 +160,26 @@ class TranscodeProfile:
             return (
                 cmd
                 + [
-                    "-hwaccel",
-                    "qsv",
-                    "-hwaccel_output_format",
-                    "qsv",
+                    "-init_hw_device",
+                    f"vaapi=va:{TRANSCODE_DRI_DEVICE}",
+                    "-init_hw_device",
+                    "qsv=hw@va",
+                    "-filter_hw_device",
+                    "hw",
+                ]
+                + _MPEGTS_INPUT_FLAGS
+                + [
                     "-i",
                     upstream_url,
                     "-vf",
-                    f"scale_qsv=w=-2:h=min(ih\\,{height})",
+                    (
+                        f"format=nv12,hwupload=extra_hw_frames={_QSV_HWUPLOAD_FRAMES},"
+                        f"format=qsv,scale_qsv=w=-2:h=min(ih\\,{height})"
+                    ),
                     "-c:v",
                     "h264_qsv",
+                    "-preset",
+                    "veryfast",
                     "-b:v",
                     v_bitrate,
                     "-maxrate",
@@ -164,6 +195,7 @@ class TranscodeProfile:
         # Software fallback
         return (
             cmd
+            + _MPEGTS_INPUT_FLAGS
             + [
                 "-i",
                 upstream_url,
@@ -201,24 +233,100 @@ def _ffmpeg_encoders() -> str:
         return ""
 
 
+def _probe_encoder_pipeline(args: List[str]) -> bool:
+    """Return True when ffmpeg can initialize the given encode pipeline."""
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", *args],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
+        logger.warning("Could not probe transcode encoder pipeline: %s", exc)
+        return False
+
+
+def _probe_qsv_encoder() -> bool:
+    if "h264_qsv" not in _ffmpeg_encoders():
+        return False
+    return _probe_encoder_pipeline(
+        [
+            "-init_hw_device",
+            f"vaapi=va:{TRANSCODE_DRI_DEVICE}",
+            "-init_hw_device",
+            "qsv=hw@va",
+            "-filter_hw_device",
+            "hw",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=duration=0.1:size=64x64:rate=1",
+            "-vf",
+            f"hwupload=extra_hw_frames={min(_QSV_HWUPLOAD_FRAMES, 16)},format=qsv",
+            "-c:v",
+            "h264_qsv",
+            "-frames:v",
+            "1",
+            "-f",
+            "null",
+            "-",
+        ]
+    )
+
+
+def _probe_vaapi_encoder() -> bool:
+    if "h264_vaapi" not in _ffmpeg_encoders():
+        return False
+    return _probe_encoder_pipeline(
+        [
+            "-init_hw_device",
+            f"vaapi=va:{TRANSCODE_DRI_DEVICE}",
+            "-filter_hw_device",
+            "va",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=duration=0.1:size=64x64:rate=1",
+            "-vf",
+            "format=nv12,hwupload",
+            "-c:v",
+            "h264_vaapi",
+            "-frames:v",
+            "1",
+            "-f",
+            "null",
+            "-",
+        ]
+    )
+
+
 def _detect_encoder_mode() -> str:
     if TRANSCODE_HWACCEL == "software":
         return "software"
 
-    encoders = _ffmpeg_encoders()
-    prefer_vaapi = TRANSCODE_HWACCEL in ("auto", "vaapi")
-    prefer_qsv = TRANSCODE_HWACCEL in ("auto", "qsv")
+    want_qsv = TRANSCODE_HWACCEL in ("auto", "qsv")
+    want_vaapi = TRANSCODE_HWACCEL in ("auto", "vaapi")
 
-    if prefer_vaapi and "h264_vaapi" in encoders:
-        logger.info("Transcode hardware acceleration: VAAPI (h264_vaapi)")
-        return "vaapi"
-    if prefer_qsv and "h264_qsv" in encoders:
-        logger.info("Transcode hardware acceleration: QSV (h264_qsv)")
+    if want_qsv and _probe_qsv_encoder():
+        logger.info(
+            "Transcode hardware acceleration: QSV (h264_qsv via %s)",
+            TRANSCODE_DRI_DEVICE,
+        )
         return "qsv"
+    if want_vaapi and _probe_vaapi_encoder():
+        logger.info(
+            "Transcode hardware acceleration: VAAPI (h264_vaapi via %s)",
+            TRANSCODE_DRI_DEVICE,
+        )
+        return "vaapi"
 
     logger.warning(
-        "No hardware transcode encoder available (TRANSCODE_HWACCEL=%s); using libx264",
+        "No hardware transcode encoder available (TRANSCODE_HWACCEL=%s, device=%s); using libx264",
         TRANSCODE_HWACCEL,
+        TRANSCODE_DRI_DEVICE,
     )
     return "software"
 

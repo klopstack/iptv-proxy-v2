@@ -113,7 +113,7 @@ make test  # Creates htmlcov/ directory
 
 ### Stream backend tests
 
-Passthrough streaming uses MediaFlow Proxy (required). Per-client transcoding uses a local FFmpeg subprocess with `TRANSCODE_HWACCEL` (`auto`, `vaapi`, `qsv`, or `software`).
+Passthrough streaming uses MediaFlow Proxy (required). Per-client transcoding uses a local FFmpeg subprocess with `TRANSCODE_HWACCEL` (`auto`, `qsv`, `vaapi`, or `software`). In `auto` mode, QSV is preferred over VAAPI on Intel hardware.
 
 | Variable | Purpose |
 |----------|---------|
