@@ -2,6 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+ARG TARGETARCH
+
 # Install system dependencies including xmltv tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     xmltv \
@@ -10,9 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     ffmpeg \
-    intel-media-va-driver \
     vainfo \
     git \
+    && if [ "$TARGETARCH" = "amd64" ]; then \
+         apt-get install -y --no-install-recommends intel-media-va-driver; \
+       fi \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
