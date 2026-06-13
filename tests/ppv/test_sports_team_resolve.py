@@ -62,3 +62,56 @@ class TestResolveTeam:
             mock_query.filter_by.return_value.all.return_value = mock_teams
             team = SportsTeam.resolve_team("Manchester", sport="fb")
             assert team is mock_teams[1]
+
+
+class TestMlbHomeTimezone:
+    def test_mascot_alias_via_db(self, app):
+        from models import SportsTeam, db
+        from services.sportsipy_service import _generate_team_aliases
+
+        with app.app_context():
+            team = SportsTeam(
+                sport=SportsTeam.SPORT_MLB,
+                abbreviation="SFG",
+                name="San Francisco Giants",
+                city="San Francisco",
+            )
+            team.set_aliases(_generate_team_aliases(team.name, team.abbreviation))
+            db.session.add(team)
+            db.session.commit()
+
+            resolved = SportsTeam.resolve_team("giants", sport="mlb")
+            assert resolved is not None
+            assert resolved.name == "San Francisco Giants"
+            assert SportsTeam.home_timezone_for_team("giants", sport="mlb") == "America/Los_Angeles"
+
+    def test_mascot_alias_via_registry(self, app, tmp_path, monkeypatch):
+        import json
+
+        from services.team_location_registry import clear_registry_cache
+
+        registry = {
+            "version": "test",
+            "entries": [
+                {
+                    "sport": "mlb",
+                    "key": "SFG",
+                    "name": "San Francisco Giants",
+                    "city": "San Francisco",
+                    "country": "US",
+                    "iana_timezone": "America/Los_Angeles",
+                    "aliases": ["giants"],
+                }
+            ],
+        }
+        reg_path = tmp_path / "registry.json"
+        reg_path.write_text(json.dumps(registry), encoding="utf-8")
+        monkeypatch.setattr(
+            "services.team_location_registry.DEFAULT_REGISTRY_PATH",
+            reg_path,
+        )
+        clear_registry_cache()
+
+        with app.app_context():
+            assert SportsTeam.home_timezone_for_team("Giants", sport="mlb") == "America/Los_Angeles"
+            assert SportsTeam.home_timezone_for_team("giants", sport="mlb") == "America/Los_Angeles"
