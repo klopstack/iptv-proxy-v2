@@ -107,33 +107,31 @@ make test  # Creates htmlcov/ directory
 - **`tests/test_app.py`**: API endpoints, filter logic, playlist generation
 - **`tests/test_tag_service.py`**: Tag extraction, pattern matching, ruleset logic
 - **`tests/test_rulesets_api.py`**: Ruleset and TagRule CRUD operations
-- **`tests/test_stream_service_factory.py`**: `STREAM_BACKEND` selection (`ffmpeg` vs `mediaflow`)
+- **`tests/test_stream_service_factory.py`**: Stream service factory (MediaFlow passthrough + transcode service)
 - **`tests/test_mediaflow_stream_service.py`**: MediaFlow proxy URL construction and streaming (mocked HTTP)
-- **`tests/test_ffmpeg_stream_service.py`**: FFmpeg stream service (skipped when `ffmpeg` binary absent)
+- **`tests/test_transcode_profile.py`**, **`tests/test_transcode_stream_service.py`**: Per-client transcode profiles and FFmpeg encode pipeline
 
 ### Stream backend tests
 
-Stream proxying supports two backends via `.env` / environment variables (see `.env.example`):
+Passthrough streaming uses MediaFlow Proxy (required). Per-client transcoding uses a local FFmpeg subprocess with `TRANSCODE_HWACCEL` (`auto`, `vaapi`, `qsv`, or `software`).
 
 | Variable | Purpose |
 |----------|---------|
-| `STREAM_BACKEND` | `ffmpeg` (default) or `mediaflow` |
-| `MEDIAFLOW_PROXY_URL` | MediaFlow Proxy base URL when using `mediaflow` |
-| `MEDIAFLOW_API_PASSWORD` | Optional API password for MediaFlow Proxy |
-
-Factory and MediaFlow unit tests use mocked HTTP and run in default CI with no external services:
+| `MEDIAFLOW_PROXY_URL` | MediaFlow Proxy base URL |
+| `MEDIAFLOW_API_PASSWORD` | API password for MediaFlow Proxy |
+| `TRANSCODE_HWACCEL` | Hardware encoder selection for transcode (`auto` default) |
 
 ```bash
-pytest tests/test_stream_service_factory.py tests/test_mediaflow_stream_service.py -v --no-cov
+pytest tests/test_stream_service_factory.py tests/test_mediaflow_stream_service.py tests/test_transcode_profile.py -v --no-cov
 ```
 
-FFmpeg integration tests require the `ffmpeg` and `ffprobe` binaries on `PATH`; they are skipped automatically when missing. To run them locally after installing ffmpeg:
+Transcode integration tests require `ffmpeg` on `PATH` (skipped when missing):
 
 ```bash
-pytest tests/test_ffmpeg_stream_service.py -v --no-cov
+pytest tests/test_transcode_stream_service.py -v --no-cov
 ```
 
-For a live MediaFlow stack, use `docker-compose.mediaflow.yml` and set `STREAM_BACKEND=mediaflow`.
+For local development, start the stack with `docker-compose up -d` (MediaFlow starts by default).
 
 ### Writing Tests
 

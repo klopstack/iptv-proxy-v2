@@ -215,6 +215,13 @@ class XtreamCredential(db.Model):  # type: ignore[name-defined]
     preferred_languages = db.Column(db.Text, default='["en"]')
     language_fallback = db.Column(db.String(20), default="unknown")  # unknown, hide, show_all
 
+    # Per-client stream transcoding (hardware/software FFmpeg encode)
+    transcode_enabled = db.Column(db.Boolean, default=False)
+    transcode_max_height = db.Column(db.Integer, default=720)
+    transcode_max_bitrate_kbps = db.Column(db.Integer, default=8000)
+    transcode_audio_channels = db.Column(db.Integer, default=2)
+    transcode_audio_bitrate_kbps = db.Column(db.Integer, default=128)
+
     # Metadata
     enabled = db.Column(db.Boolean, default=True)
     description = db.Column(db.Text)

@@ -4,13 +4,9 @@ Stream proxy routes - handles proxied stream connections with credential multipl
 This module provides endpoints that:
 1. Accept stream requests from clients
 2. Select an available credential for the connection
-3. Proxy the stream data from the IPTV provider (using configurable backend)
+3. Proxy the stream data from the IPTV provider via MediaFlow (passthrough) or FFmpeg (transcode)
 4. Track connection lifecycle
 5. Share upstream connections across multiple clients (stream multiplexing)
-
-Stream backends (configured via STREAM_BACKEND env var):
-- ffmpeg: Uses FFmpeg for MPEG-TS remuxing (default)
-- mediaflow: Uses MediaFlow Proxy for HLS/TS proxying with pre-buffering
 """
 
 import logging
@@ -26,7 +22,7 @@ from models import Account, db
 from services.connection_manager import STREAM_TIMEOUT_SECONDS, ConnectionManager
 from services.hls_manifest_service import rewrite_hls_manifest
 from services.mediaflow_stream_service import MEDIAFLOW_API_PASSWORD, MEDIAFLOW_PROXY_URL
-from services.stream_service_factory import get_stream_backend_name, get_stream_service
+from services.stream_service_factory import get_stream_service, get_transcode_stream_service
 from services.url_service import get_proxy_base_url
 
 logger = logging.getLogger(__name__)
@@ -341,12 +337,84 @@ def proxy_stream_m3u8(account_id: int, stream_id: str):
     return _proxy_stream(account_id, stream_id, "m3u8")
 
 
+def _load_transcode_profile(xc_param: str | None):
+    """Load transcode profile from Xtream credential id query param."""
+    from models.account import XtreamCredential
+    from services.transcode_profile import TranscodeProfile
+
+    if not xc_param:
+        return None
+    try:
+        cred_id = int(xc_param)
+    except ValueError:
+        return None
+    cred = db.session.get(XtreamCredential, cred_id)
+    if not cred or not cred.enabled:
+        return None
+    return TranscodeProfile.from_xtream_credential(cred)
+
+
+def _resolve_stream_service(app, transcode_profile):
+    """Return (service, is_transcode) for passthrough or transcode paths."""
+    if transcode_profile:
+        return get_transcode_stream_service(app=app), True
+    return get_stream_service(app=app), False
+
+
+def _get_existing_stream(stream_service: Any, account_id: int, stream_id: str, format: str, transcode_profile):
+    if transcode_profile:
+        return stream_service.get_active_stream(account_id, stream_id, format, transcode_profile)
+    return stream_service.get_active_stream(account_id, stream_id, format)
+
+
+def _subscribe_to_stream(
+    stream_service: Any,
+    *,
+    transcode_profile,
+    account_id: int,
+    stream_id: str,
+    format: str,
+    upstream_url: str,
+    credential_id: int | None,
+    session_token: str,
+    client_ip: str | None,
+    user_agent: str,
+    on_stream_closed=None,
+    fallback_sources=None,
+    active_source_index: int = 0,
+):
+    common = dict(
+        account_id=account_id,
+        stream_id=stream_id,
+        format=format,
+        upstream_url=upstream_url,
+        credential_id=credential_id,
+        session_token=session_token,
+        client_ip=client_ip,
+        user_agent=user_agent,
+    )
+    if transcode_profile:
+        return stream_service.subscribe(
+            **common,
+            transcode_profile=transcode_profile,
+            on_stream_closed=on_stream_closed,
+            fallback_sources=fallback_sources,
+            active_source_index=active_source_index,
+        )
+    return stream_service.subscribe(
+        **common,
+        on_stream_closed=on_stream_closed,
+        fallback_sources=fallback_sources,
+        active_source_index=active_source_index,
+    )
+
+
 def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
     """
     Internal function to proxy stream with credential multiplexing and stream sharing.
 
     When multiple clients request the same stream, they share a single upstream
-    connection via the FFmpegStreamService. This reduces load on the upstream server
+    connection via the stream service. This reduces load on the upstream server
     and conserves credential connection slots.
 
     Args:
@@ -375,14 +443,16 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
 
     logger.debug(f"Account {account_id}: server={account.server}, user_agent={account.user_agent}")
 
-    if format == "m3u8" and get_stream_backend_name() == "mediaflow":
+    transcode_profile = _load_transcode_profile(request.args.get("xc"))
+    if transcode_profile:
+        format = "ts"
+
+    if format == "m3u8":
         return _serve_m3u8_mediaflow_manifest(account, account_id, stream_id, client_ip)
 
-    # Get stream service (ffmpeg or multiplexer based on STREAM_BACKEND env var)
-    stream_service = get_stream_service(app=current_app._get_current_object())  # type: ignore[attr-defined]
-
-    # Check if stream is already active (can join without needing a new credential)
-    existing_stream = stream_service.get_active_stream(account_id, stream_id, format)
+    app = current_app._get_current_object()  # type: ignore[attr-defined]
+    stream_service, _is_transcode = _resolve_stream_service(app, transcode_profile)
+    existing_stream = _get_existing_stream(stream_service, account_id, stream_id, format, transcode_profile)
 
     if existing_stream and existing_stream.is_active and not existing_stream.error:
         # Join existing stream - no need for new credential
@@ -392,7 +462,9 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
         )
 
         # Create subscriber for existing stream
-        _, subscriber = stream_service.subscribe(
+        _, subscriber = _subscribe_to_stream(
+            stream_service,
+            transcode_profile=transcode_profile,
             account_id=account_id,
             stream_id=stream_id,
             format=format,
@@ -494,7 +566,9 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
 
     try:
         # Subscribe to create a new shared stream
-        shared_stream, subscriber = stream_service.subscribe(
+        shared_stream, subscriber = _subscribe_to_stream(
+            stream_service,
+            transcode_profile=transcode_profile,
             account_id=account_id,
             stream_id=stream_id,
             format=format,
@@ -513,8 +587,7 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
             f"using credential {credential_id} (session: {session_token[:8]}...)"
         )
 
-        # Note: With FFmpeg-based streaming, we don't need to wait for content type
-        # detection since ffmpeg always outputs MPEG-TS format.
+        # Note: Transcode streams always output MPEG-TS; MediaFlow passthrough may vary.
 
         def generate_new() -> Generator[bytes, None, None]:
             """Generator function for new shared stream."""
@@ -542,8 +615,7 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
                     f"Client {client_ip} disconnected from stream {stream_id} " f"({subscriber.bytes_sent} bytes sent)"
                 )
 
-                # Note: Connection will be released via on_stream_closed_callback
-                # when the FFmpeg stream is actually closed (after idle timeout)
+                # Connection released via on_stream_closed_callback when stream closes
 
         # Check if upstream failed to connect
         if not shared_stream.is_active and shared_stream.error:

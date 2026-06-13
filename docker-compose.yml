@@ -4,21 +4,19 @@ services:
     container_name: iptv-proxy-v2
     restart: unless-stopped
     network_mode: "host"  # Use host network to avoid Docker NAT issues with IPTV streams
-    # ports: # Not needed in host mode - service runs directly on host port 8000
-    #   - "8889:8000"
     volumes:
-      - ./data:/app/data  # Persist database (SQLite file; kept as backup when using PostgreSQL)
+      - ./data:/app/data
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "44"
     environment:
       PORT: "8000"
       DEBUG: "False"
       DATABASE_URL: "${DATABASE_URL:-sqlite:////app/data/iptv_proxy.db}"
-      # Stream backend configuration: "ffmpeg" (default) or "mediaflow"
-      STREAM_BACKEND: "${STREAM_BACKEND:-ffmpeg}"
-      # MediaFlow Proxy configuration (only used when STREAM_BACKEND=mediaflow)
       MEDIAFLOW_PROXY_URL: "${MEDIAFLOW_PROXY_URL:-http://localhost:8888}"
-      MEDIAFLOW_API_PASSWORD: "${MEDIAFLOW_API_PASSWORD:-}"
-    # Run as specific user (optional - defaults to root if not specified)
-    # Ensure ./data directory is owned by this user: sudo chown -R 1000:1000 ./data
+      MEDIAFLOW_API_PASSWORD: "${MEDIAFLOW_API_PASSWORD:-iptv-proxy-secret}"
+      TRANSCODE_HWACCEL: "${TRANSCODE_HWACCEL:-auto}"
     user: "${PUID:-1000}:${PGID:-1000}"
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/', timeout=5)"]
@@ -29,13 +27,10 @@ services:
     depends_on:
       mediaflow-proxy:
         condition: service_healthy
-        required: false  # Optional dependency - only if using mediaflow backend
       postgres:
         condition: service_healthy
-        required: false  # Optional — use --profile postgres
+        required: false
 
-  # PostgreSQL — opt-in via: docker compose --profile postgres up
-  # App uses host networking; connect via localhost:5432 when postgres publishes the port below.
   postgres:
     image: postgres:16-alpine
     container_name: iptv-proxy-postgres
@@ -56,30 +51,21 @@ services:
     profiles:
       - postgres
 
-  # MediaFlow Proxy - high-performance HLS/MPEG-TS stream proxy
-  # Only needed when STREAM_BACKEND=mediaflow
-  # To use: STREAM_BACKEND=mediaflow docker-compose up -d
   mediaflow-proxy:
     image: mhdzumair/mediaflow-proxy:latest
     container_name: mediaflow-proxy
     restart: unless-stopped
-    network_mode: "host"  # Use host network like the main app
-    # ports: # Not needed in host mode
-    #   - "8888:8888"
+    network_mode: "host"
     environment:
-      # API password for security (should match MEDIAFLOW_API_PASSWORD above)
-      API_PASSWORD: "${MEDIAFLOW_API_PASSWORD:-}"
-      # Enable pre-buffering for smoother playback
+      API_PASSWORD: "${MEDIAFLOW_API_PASSWORD:-iptv-proxy-secret}"
       ENABLE_HLS_PREBUFFER: "true"
-      HLS_PREBUFFER_SEGMENTS: "5"
-      HLS_PREBUFFER_CACHE_SIZE: "50"
-      HLS_PREBUFFER_MAX_MEMORY_PERCENT: "80"
-      # DASH pre-buffering
+      HLS_PREBUFFER_SEGMENTS: "8"
+      HLS_PREBUFFER_CACHE_SIZE: "100"
+      HLS_PREBUFFER_MAX_MEMORY_PERCENT: "70"
+      HLS_PREBUFFER_EMERGENCY_THRESHOLD: "85"
       ENABLE_DASH_PREBUFFER: "true"
       DASH_PREBUFFER_SEGMENTS: "5"
-      # Streaming progress logging (set to true for debugging)
       ENABLE_STREAMING_PROGRESS: "false"
-      # Forwarded headers (trust localhost since we're on host network)
       FORWARDED_ALLOW_IPS: "127.0.0.1"
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8888/', timeout=5)"]
@@ -87,12 +73,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    # Profiles allow selective service startup
-    # Use: docker-compose --profile mediaflow up -d
-    profiles:
-      - mediaflow
 
 volumes:
   postgres_data:
-
-# networks section removed - not compatible with host networking

@@ -473,7 +473,7 @@ Response envelope: `{ "data": { ... } }`.
 | `streams.active_sessions` | Count of `ActiveStream` rows (proxied client sessions / upstream slots) |
 | `streams.shared_upstream` | FFmpeg multiplexer shared upstream count (`get_stats().active_streams`); 0 when backend lacks `get_stats` |
 | `streams.subscribers` | Multiplex viewer count (`total_subscribers`) when FFmpeg backend |
-| `streams.backend` | `ffmpeg` or `mediaflow` from `STREAM_BACKEND` |
+| `streams.backend` | Always `mediaflow` (passthrough); transcode uses separate FFmpeg subprocess |
 | `overview.accounts` | Slim account counts + `failed_sync_accounts` for alerts |
 | `overview.scheduler` | Running flag, intervals, `has_sync_issues`, `failed_jobs` |
 | `ppv` | PPV at-a-glance: upcoming event counts (24h/48h), unlinked upcoming events, channel link total, enrichment queue/no-match/recent counts, `has_issues` |

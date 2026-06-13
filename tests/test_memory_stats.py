@@ -36,10 +36,12 @@ def test_build_memory_stats_isolates_collector_failures(app):
 
 def test_stream_stats_without_active_service():
     """Stream stats report zeros when no stream service singleton exists."""
-    import services.ffmpeg_stream_service as ffmpeg_mod
     import services.mediaflow_stream_service as mediaflow_mod
+    import services.transcode_stream_service as transcode_mod
 
-    with patch.object(ffmpeg_mod, "_ffmpeg_service", None), patch.object(mediaflow_mod, "_mediaflow_service", None):
+    with patch.object(mediaflow_mod, "_mediaflow_service", None), patch.object(
+        transcode_mod, "_transcode_service", None
+    ):
         result = memory_stats._stream_stats()
 
     assert result == {"active_streams": 0, "total_subscribers": 0}

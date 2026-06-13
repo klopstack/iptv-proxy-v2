@@ -1,61 +1,36 @@
 """
-Stream Service Factory - provides the appropriate stream service based on configuration
+Stream Service Factory - MediaFlow passthrough and optional transcode services.
 
-This module allows switching between different stream backends:
-- ffmpeg: Uses FFmpeg for MPEG-TS remuxing (default, requires ffmpeg binary)
-- mediaflow: Uses MediaFlow Proxy for HLS/TS proxying (requires mediaflow-proxy service)
-
-Configure via STREAM_BACKEND environment variable.
+Passthrough streaming always uses MediaFlow Proxy. Per-client transcoding uses a
+local FFmpeg subprocess (see transcode_stream_service).
 """
 
 import logging
-import os
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from flask import Flask
 
-    from services.ffmpeg_stream_service import FFmpegStreamService
     from services.mediaflow_stream_service import MediaFlowStreamService
+    from services.transcode_stream_service import TranscodeStreamService
 
 logger = logging.getLogger(__name__)
 
-# Stream backend configuration
-STREAM_BACKEND = os.environ.get("STREAM_BACKEND", "ffmpeg").lower()
 
-# Type alias for stream services
-StreamService = Union["FFmpegStreamService", "MediaFlowStreamService"]
+def get_stream_service(app: Optional["Flask"] = None) -> "MediaFlowStreamService":
+    """Return the MediaFlow passthrough stream service."""
+    from services.mediaflow_stream_service import get_mediaflow_service
+
+    return get_mediaflow_service(app=app)
 
 
-def get_stream_service(app: Optional["Flask"] = None) -> StreamService:
-    """
-    Get the appropriate stream service based on configuration.
+def get_transcode_stream_service(app: Optional["Flask"] = None) -> "TranscodeStreamService":
+    """Return the FFmpeg transcode stream service."""
+    from services.transcode_stream_service import get_transcode_service
 
-    Args:
-        app: Flask application instance (optional, used for callbacks)
-
-    Returns:
-        Stream service instance (FFmpegStreamService or MediaFlowStreamService)
-
-    Environment Variables:
-        STREAM_BACKEND: "ffmpeg" (default) or "mediaflow"
-        MEDIAFLOW_PROXY_URL: URL of MediaFlow Proxy (default: http://localhost:8888)
-        MEDIAFLOW_API_PASSWORD: API password for MediaFlow Proxy (optional)
-    """
-    if STREAM_BACKEND == "mediaflow":
-        logger.info("Using MediaFlow Proxy stream backend")
-        from services.mediaflow_stream_service import get_mediaflow_service
-
-        return get_mediaflow_service(app=app)
-    else:
-        if STREAM_BACKEND != "ffmpeg":
-            logger.warning(f"Unknown STREAM_BACKEND '{STREAM_BACKEND}', defaulting to ffmpeg")
-        logger.info("Using FFmpeg stream backend")
-        from services.ffmpeg_stream_service import get_ffmpeg_service
-
-        return get_ffmpeg_service(app=app)
+    return get_transcode_service(app=app)
 
 
 def get_stream_backend_name() -> str:
-    """Get the name of the currently configured stream backend."""
-    return STREAM_BACKEND if STREAM_BACKEND in ("ffmpeg", "mediaflow") else "ffmpeg"
+    """Return the passthrough backend name (always mediaflow)."""
+    return "mediaflow"

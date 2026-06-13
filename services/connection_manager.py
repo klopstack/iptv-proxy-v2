@@ -212,6 +212,28 @@ class ConnectionManager:
             db.session.commit()
 
     @staticmethod
+    def clear_orphaned_streams_on_startup() -> int:
+        """Remove all ActiveStream rows after a container restart.
+
+        In-memory upstream connections do not survive a process restart, so any
+        persisted rows are ghosts that block credential slots until
+        STREAM_TIMEOUT_SECONDS elapses.  Intended to run from entrypoint.sh on
+        startup; split deployments should set SKIP_ORPHAN_STREAM_CLEANUP=true
+        on the API-only container so live sessions in the stream container are
+        not cleared when the API container restarts alone.
+        """
+        count = db.session.query(ActiveStream).delete(synchronize_session=False)
+        if count == 0:
+            return 0
+
+        for credential in Credential.query.all():
+            credential.active_connections = 0
+
+        db.session.commit()
+        logger.info("Cleared %s orphaned ActiveStream row(s) from prior container run", count)
+        return count
+
+    @staticmethod
     def get_connection_status(account_id: int) -> dict:
         """
         Get connection status for an account.

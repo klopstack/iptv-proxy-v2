@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     ffmpeg \
+    intel-media-va-driver \
+    vainfo \
     git \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
