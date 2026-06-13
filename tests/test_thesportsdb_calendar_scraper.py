@@ -460,6 +460,34 @@ class TestTheSportsDBCalendarScraper:
         assert "valid_entries" in stats
         assert stats["total_entries"] == 2
 
+    def test_purge_expired_cache(self, scraper):
+        """purge_expired_cache removes only entries past their TTL."""
+        import time
+
+        now = time.time()
+        scraper._cache["fresh"] = ([], now)
+        scraper._cache["stale"] = ([], now - scraper._cache_ttl - 1)
+
+        removed = scraper.purge_expired_cache()
+
+        assert removed == 1
+        assert "fresh" in scraper._cache
+        assert "stale" not in scraper._cache
+
+    def test_get_cache_stats_reports_expired(self, scraper):
+        """get_cache_stats includes a count of expired entries."""
+        import time
+
+        now = time.time()
+        scraper._cache["fresh"] = ([], now)
+        scraper._cache["stale"] = ([], now - scraper._cache_ttl - 1)
+
+        stats = scraper.get_cache_stats()
+
+        assert stats["total_entries"] == 2
+        assert stats["valid_entries"] == 1
+        assert stats["expired_entries"] == 1
+
 
 class TestCalendarHTMLParsing:
     """Tests for HTML parsing functionality."""

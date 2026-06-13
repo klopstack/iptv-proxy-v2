@@ -107,6 +107,7 @@ def get_cached_events(cache_key: str) -> Optional[List[CalendarEvent]]:
         return None
     cached_events, cached_at = _sofascore_cache[cache_key]
     if time.time() - cached_at >= CACHE_TTL_SECONDS:
+        del _sofascore_cache[cache_key]
         return None
     return list(cached_events)
 

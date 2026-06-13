@@ -183,6 +183,92 @@ class TestBuildMatchingContextFromName:
         assert ctx["date_tolerance_hours"] == 48
 
 
+class TestMlbHomeVenueTimezone:
+    def test_mlb_mascot_home_timezone(self, app, tmp_path, monkeypatch):
+        import json
+
+        from services.team_location_registry import clear_registry_cache
+
+        registry = {
+            "version": "test",
+            "entries": [
+                {
+                    "sport": "mlb",
+                    "key": "SFG",
+                    "name": "San Francisco Giants",
+                    "city": "San Francisco",
+                    "country": "US",
+                    "iana_timezone": "America/Los_Angeles",
+                    "aliases": ["giants"],
+                },
+                {
+                    "sport": "mlb",
+                    "key": "WSN",
+                    "name": "Washington Nationals",
+                    "city": "Washington, D.C.",
+                    "country": "US",
+                    "iana_timezone": "America/New_York",
+                    "aliases": ["nationals"],
+                },
+            ],
+        }
+        reg_path = tmp_path / "registry.json"
+        reg_path.write_text(json.dumps(registry), encoding="utf-8")
+        monkeypatch.setattr(
+            "services.team_location_registry.DEFAULT_REGISTRY_PATH",
+            reg_path,
+        )
+        clear_registry_cache()
+
+        channel_name = "MLB 03 | Nationals x Giants start:2026-06-10 20:45:00 stop:2026-06-11 03:30:00"
+        matchup = MatchupInfo(
+            home_team="Giants",
+            away_team="Nationals",
+            separator="x",
+            ordering_rule="us_away_home",
+            ordering_confidence=0.9,
+        )
+        extraction = {
+            "date": datetime(2026, 6, 10, 20, 45),
+            "sport": "mlb",
+            "matchup": matchup,
+            "competitors": ("Nationals", "Giants"),
+        }
+        with app.app_context():
+            ctx = build_matching_context_from_name(
+                channel_name,
+                extraction,
+                category_name="US| MLB PPV",
+            )
+        assert extraction["matchup"].home_team == "Giants"
+        assert extraction["matchup"].away_team == "Nationals"
+        assert ctx["timezone_resolution"].timezone == "America/Los_Angeles"
+
+    def test_mlb_mascot_home_timezone_bundled_registry(self, app):
+        from services.team_location_registry import clear_registry_cache
+
+        clear_registry_cache()
+        channel_name = "MLB 03 | Nationals x Giants start:2026-06-10 20:45:00 stop:2026-06-11 03:30:00"
+        extractor = PPVEventExtractor()
+        extraction = extractor.extract_all(channel_name)
+        extraction["sport"] = "mlb"
+        extraction["matchup"] = MatchupInfo(
+            home_team="Giants",
+            away_team="Nationals",
+            separator="x",
+            ordering_rule="us_away_home",
+            ordering_confidence=0.9,
+        )
+        extraction["competitors"] = ("Nationals", "Giants")
+        with app.app_context():
+            ctx = build_matching_context_from_name(
+                channel_name,
+                extraction,
+                category_name="US| MLB PPV",
+            )
+        assert ctx["timezone_resolution"].timezone == "America/Los_Angeles"
+
+
 class TestExplicitStartTokenCalendarDate:
     """Channels with start:YYYY-MM-DD must bucket on token wall-clock day."""
 

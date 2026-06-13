@@ -328,6 +328,7 @@ class SportsipyService:
             cached_time, cached_data = self._cache[cache_key]
             if (datetime.now() - cached_time).total_seconds() < self._cache_ttl:
                 return cached_data
+            del self._cache[cache_key]
 
         try:
             schedule_class = SPORTSIPY_SCHEDULE_CLASSES.get(sport)
@@ -412,6 +413,18 @@ class SportsipyService:
     def clear_cache(self):
         """Clear the schedule cache."""
         self._cache.clear()
+
+    def purge_expired(self) -> int:
+        """Remove expired schedule cache entries; return the number removed."""
+        now = datetime.now()
+        expired_keys = [
+            key
+            for key, (cached_time, _) in self._cache.items()
+            if (now - cached_time).total_seconds() >= self._cache_ttl
+        ]
+        for key in expired_keys:
+            del self._cache[key]
+        return len(expired_keys)
 
     def get_stats(self) -> Dict[str, Any]:
         """Get service statistics."""
@@ -533,6 +546,7 @@ def refresh_teams_from_sportsipy(
 
                         if existing:
                             existing.name = team.name
+                            existing.set_aliases(_generate_team_aliases(team.name, team.abbreviation))
                             if location:
                                 apply_location_to_sports_team(existing, location)
                                 source = "sportsipy+location_registry"

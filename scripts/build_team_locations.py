@@ -319,6 +319,14 @@ def _match_key_from_name(
     return None
 
 
+def _wikidata_team_aliases(label: str) -> List[str]:
+    """Mascot-style aliases for PPV channel nicknames (e.g. Giants, Nationals)."""
+    parts = label.split()
+    if len(parts) < 2:
+        return []
+    return [parts[-1]]
+
+
 def _build_wikidata_entries(
     sport: str,
     league_qid: str,
@@ -358,6 +366,7 @@ def _build_wikidata_entries(
             iana_timezone=iana,
             source=source,
             source_url=f"https://www.wikidata.org/wiki/{team_q}" if team_q else None,
+            aliases=_wikidata_team_aliases(label),
         )
         entries[key] = ent
     return list(entries.values())

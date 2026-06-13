@@ -60,3 +60,17 @@ class TestGenericClient:
             stats = get_sofascore_calendar_stats()
             assert "enabled_slugs" in stats
             assert stats["football_enabled"] is True
+
+
+class TestClientCacheEviction:
+    def test_expired_entry_deleted_on_get(self, monkeypatch):
+        from services.ppv.calendar_providers.sofascore import client
+
+        client.clear_cache()
+        monkeypatch.setattr(client.time, "time", lambda: 1_000.0)
+        client.store_cached_events("tennis:2026-06-03", [])
+        assert "tennis:2026-06-03" in client._sofascore_cache
+
+        monkeypatch.setattr(client.time, "time", lambda: 1_000.0 + client.CACHE_TTL_SECONDS + 1)
+        assert client.get_cached_events("tennis:2026-06-03") is None
+        assert "tennis:2026-06-03" not in client._sofascore_cache
