@@ -176,6 +176,7 @@ def _home_team_timezone(
             return tz
 
     try:
+        sport_key = normalize_sport_key(sport)
         from models.ppv import SportsTeam
 
         if sport_key in ("fb", "wnba", "milb") and home_team_id:
