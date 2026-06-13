@@ -83,7 +83,7 @@ class TestResolveApiKey:
 
 
 class TestCallThesportsdbApiV2Integration:
-    @patch("services.thesportsdb_retry.time.sleep")
+    @patch("services.thesportsdb_retry._sleep")
     @patch("services.thesportsdb_api.try_v2_sdk_call")
     @patch("services.thesportsdb_service.configure_thesportsdb_api_key")
     def test_retry_uses_v2_without_calling_sdk(self, _mock_configure, mock_v2, _mock_sleep):
