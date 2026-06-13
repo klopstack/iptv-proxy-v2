@@ -7,6 +7,9 @@ No live MediaFlow Proxy container is required. Environment variables
 - MEDIAFLOW_PROXY_URL: base URL for proxy requests (default http://localhost:8888)
 - MEDIAFLOW_API_PASSWORD: optional password appended to proxy query string
 """
+import threading
+import time
+from queue import Empty
 from unittest.mock import Mock, patch
 from urllib.parse import parse_qs, urlparse
 
@@ -305,6 +308,228 @@ class TestMediaFlowStreamChunks:
 
         assert not stream.is_active
         assert "Connection error" in stream.error
+
+
+class TestMediaFlowFanOut:
+    """Two subscribers on the same stream must share a single upstream pull."""
+
+    def _drain(self, queue):
+        items = []
+        while True:
+            try:
+                item = queue.get_nowait()
+            except Empty:
+                break
+            if item is None:
+                break
+            items.append(item)
+        return items
+
+    def test_two_subscribers_share_single_upstream_pull(self, mediaflow_available):
+        service, mock_get = mediaflow_available
+        # Ignore the availability-probe call made during construction.
+        mock_get.reset_mock()
+        chunks = [b"aaaa", b"bbbb"]
+        mock_get.return_value = _make_stream_response(chunks=chunks, headers={"Content-Type": "video/mp2t"})
+
+        stream, sub1 = service.subscribe(
+            account_id=1,
+            stream_id="shared",
+            format="ts",
+            upstream_url="http://upstream.example/stream.ts",
+            credential_id=1,
+            session_token="session-1",
+        )
+        stream2, sub2 = service.subscribe(
+            account_id=1,
+            stream_id="shared",
+            format="ts",
+            upstream_url="http://upstream.example/stream.ts",
+            credential_id=1,
+            session_token="session-2",
+        )
+
+        # Both subscribers attached to the same in-memory stream object.
+        assert stream2 is stream
+        assert len(stream.subscribers) == 2
+
+        # Mark both ready and drive a single upstream pull directly so the test
+        # is deterministic (no dependence on reader-thread scheduling).
+        sub1.ready = True
+        sub2.ready = True
+        assert service._pull_source(stream, stream.proxy_url) is True
+
+        # Exactly one upstream request was made for the two subscribers.
+        assert mock_get.call_count == 1
+        # Both subscribers received the full byte stream.
+        assert self._drain(sub1.queue) == chunks
+        assert self._drain(sub2.queue) == chunks
+
+    def test_stream_chunks_two_consumers_single_get(self, mediaflow_available):
+        service, mock_get = mediaflow_available
+        data = [b"x" * 100 for _ in range(40)]
+
+        def _slow_response():
+            response = Mock()
+            response.status_code = 200
+            response.headers = {"Content-Type": "video/mp2t"}
+
+            def _iter(chunk_size):
+                for chunk in data:
+                    time.sleep(0.005)
+                    yield chunk
+
+            response.iter_content = _iter
+            response.__enter__ = Mock(return_value=response)
+            response.__exit__ = Mock(return_value=False)
+            return response
+
+        # Ignore the availability-probe call made during construction.
+        mock_get.reset_mock()
+        mock_get.return_value = _slow_response()
+
+        stream, sub1 = service.subscribe(
+            account_id=2,
+            stream_id="shared2",
+            format="ts",
+            upstream_url="http://upstream.example/stream.ts",
+            credential_id=1,
+            session_token="s1",
+        )
+        _, sub2 = service.subscribe(
+            account_id=2,
+            stream_id="shared2",
+            format="ts",
+            upstream_url="http://upstream.example/stream.ts",
+            credential_id=1,
+            session_token="s2",
+        )
+
+        out1, out2 = [], []
+        t1 = threading.Thread(target=lambda: out1.extend(service.stream_chunks(stream, sub1)))
+        t2 = threading.Thread(target=lambda: out2.extend(service.stream_chunks(stream, sub2)))
+        t1.start()
+        t2.start()
+        t1.join(timeout=10)
+        t2.join(timeout=10)
+
+        # One shared reader → one upstream connection for both consumers.
+        assert mock_get.call_count == 1
+        assert len(out1) > 0
+        assert len(out2) > 0
+
+
+class TestMediaFlowPlaceholderDetection:
+    """A static placeholder TS file must be rejected and trigger failover."""
+
+    def test_placeholder_response_rejected(self, mediaflow_available):
+        service, mock_get = mediaflow_available
+        mock_get.reset_mock()
+        # Static file: fixed Content-Length + Accept-Ranges on a TS request.
+        mock_get.return_value = _make_stream_response(
+            chunks=[b"junk"],
+            headers={
+                "Content-Type": "video/mp2t",
+                "Content-Length": "14000000",
+                "Accept-Ranges": "bytes",
+                "Last-Modified": "Tue, 01 Aug 2023 12:00:00 GMT",
+            },
+        )
+
+        stream, subscriber = service.subscribe(
+            account_id=1,
+            stream_id="placeholder",
+            format="ts",
+            upstream_url="http://upstream.example/stream.ts",
+            credential_id=1,
+            session_token="session",
+        )
+
+        received = list(service.stream_chunks(stream, subscriber))
+
+        assert received == []
+        assert not stream.is_active
+        assert "upstream_placeholder" in (stream.error or "")
+
+    def test_placeholder_fails_over_to_next_source(self, mediaflow_available):
+        service, mock_get = mediaflow_available
+        mock_get.reset_mock()
+
+        placeholder = _make_stream_response(
+            chunks=[b"junk"],
+            headers={
+                "Content-Type": "video/mp2t",
+                "Content-Length": "14000000",
+                "Accept-Ranges": "bytes",
+            },
+        )
+        live = _make_stream_response(
+            chunks=[b"live-data"],
+            headers={"Content-Type": "video/mp2t"},
+        )
+        mock_get.side_effect = [placeholder, live]
+
+        stream, subscriber = service.subscribe(
+            account_id=1,
+            stream_id="primary",
+            format="ts",
+            upstream_url="http://upstream.example/primary.ts",
+            credential_id=1,
+            session_token="session",
+            fallback_sources=[
+                ("primary", "http://upstream.example/primary.ts"),
+                ("backup", "http://upstream.example/backup.ts"),
+            ],
+        )
+
+        received = list(service.stream_chunks(stream, subscriber))
+
+        assert received == [b"live-data"]
+        assert mock_get.call_count == 2
+        assert stream.active_source_index == 1
+
+    def test_live_chunked_ts_not_flagged_as_placeholder(self, mediaflow_available):
+        service, mock_get = mediaflow_available
+        mock_get.reset_mock()
+        # Live stream: no Content-Length, chunked transfer.
+        mock_get.return_value = _make_stream_response(
+            chunks=[b"live-chunk"],
+            headers={"Content-Type": "video/mp2t", "Transfer-Encoding": "chunked"},
+        )
+
+        stream, subscriber = service.subscribe(
+            account_id=1,
+            stream_id="livets",
+            format="ts",
+            upstream_url="http://upstream.example/stream.ts",
+            credential_id=1,
+            session_token="session",
+        )
+
+        received = list(service.stream_chunks(stream, subscriber))
+
+        assert received == [b"live-chunk"]
+        assert stream.error is None
+
+
+class TestMediaFlowStats:
+    def test_get_stats_reports_active_streams(self, mediaflow_available):
+        service, _ = mediaflow_available
+        service.subscribe(
+            account_id=1,
+            stream_id="stats",
+            format="ts",
+            upstream_url="http://upstream.example/stream.ts",
+            credential_id=1,
+            session_token="session",
+        )
+
+        stats = service.get_stats()
+
+        assert stats["active_streams"] == 1
+        assert stats["total_subscribers"] == 1
+        assert len(stats["streams"]) == 1
+        assert stats["streams"][0]["key"] == "1:stats:ts"
 
 
 class TestMediaFlowServiceSingleton:

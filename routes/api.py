@@ -668,8 +668,9 @@ def _log_dashboard_summary_timings(timings: dict) -> None:
 
 
 def _build_dashboard_stream_stats():
-    """Active sessions and optional multiplexer totals (FFmpeg backend)."""
-    from models import ActiveStream
+    """Active sessions, credential utilization, live streams, and multiplexer totals."""
+    from models import ActiveStream, Credential
+    from services.connection_manager import ConnectionManager
     from services.stream_service_factory import get_stream_backend_name, get_stream_service
 
     active_sessions = ActiveStream.query.count()
@@ -684,11 +685,64 @@ def _build_dashboard_stream_stats():
         shared_upstream = mux_stats.get("active_streams", 0)
         subscribers = mux_stats.get("total_subscribers", 0)
 
+    accounts = []
+    for account in Account.query.order_by(Account.id).all():
+        status = ConnectionManager.get_connection_status(account.id)
+        if status.get("error"):
+            continue
+        if not status.get("credentials"):
+            continue
+        accounts.append(
+            {
+                "id": account.id,
+                "name": account.name,
+                "enabled": account.enabled,
+                "total_max_connections": status["total_max_connections"],
+                "total_active_connections": status["total_active_connections"],
+                "available_connections": status["available_connections"],
+                "credentials": status["credentials"],
+            }
+        )
+
+    cred_by_id = {}
+    account_names = {}
+    active_streams = []
+    for stream in ConnectionManager.get_active_streams():
+        cred_id = stream["credential_id"]
+        if cred_id not in cred_by_id:
+            cred = db.session.get(Credential, cred_id)
+            cred_by_id[cred_id] = cred
+        cred = cred_by_id[cred_id]
+        account_id = cred.account_id if cred else None
+        if account_id is not None and account_id not in account_names:
+            account = db.session.get(Account, account_id)
+            account_names[account_id] = account.name if account else None
+        active_streams.append(
+            {
+                "stream_id": stream["stream_id"],
+                "credential_id": cred_id,
+                "credential_username": cred.username if cred else None,
+                "account_id": account_id,
+                "account_name": account_names.get(account_id),
+                "client_ip": stream["client_ip"],
+                "started_at": stream["started_at"],
+                "last_activity": stream["last_activity"],
+            }
+        )
+
+    total_max_connections = sum(a["total_max_connections"] for a in accounts)
+    total_active_connections = sum(a["total_active_connections"] for a in accounts)
+
     return {
         "active_sessions": active_sessions,
         "shared_upstream": shared_upstream,
         "subscribers": subscribers,
         "backend": backend,
+        "total_max_connections": total_max_connections,
+        "total_active_connections": total_active_connections,
+        "available_connections": total_max_connections - total_active_connections,
+        "accounts": accounts,
+        "active_streams": active_streams,
     }
 
 

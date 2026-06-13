@@ -588,6 +588,68 @@ class TestChannelHealthService:
             assert result["success"] is False
             assert "disabled" in result["message"]
 
+    def test_count_active_viewing_excludes_scanner_streams(self, app, health_test_account):
+        """Scanner/manual-test ActiveStream rows must not count as client viewing."""
+        from models import ActiveStream
+        from services.channel_health_service import ChannelHealthService
+
+        with app.app_context():
+            credential = Credential.query.filter_by(account_id=health_test_account).first()
+
+            db.session.add_all(
+                [
+                    ActiveStream(
+                        credential_id=credential.id,
+                        stream_id="health_check_12345",
+                        session_token="scan-token",
+                    ),
+                    ActiveStream(
+                        credential_id=credential.id,
+                        stream_id="manual_test_12345",
+                        session_token="manual-token",
+                    ),
+                ]
+            )
+            db.session.commit()
+
+            assert ChannelHealthService.count_active_viewing_sessions(health_test_account) == 0
+
+            db.session.add(
+                ActiveStream(
+                    credential_id=credential.id,
+                    stream_id="12345",
+                    session_token="viewer-token",
+                )
+            )
+            db.session.commit()
+
+            assert ChannelHealthService.count_active_viewing_sessions(health_test_account) == 1
+
+    def test_scheduled_scan_pauses_during_viewing(self, app, health_test_account, test_channel):
+        """A scheduled scan pass skips accounts with active client viewing."""
+        from models import ActiveStream
+        from services.channel_health_service import ChannelHealthService
+
+        with app.app_context():
+            ChannelHealthConfig.set("scanning_enabled", "true")
+            ChannelHealthConfig.set("pause_scan_during_viewing", "true")
+
+            credential = Credential.query.filter_by(account_id=health_test_account).first()
+            db.session.add(
+                ActiveStream(
+                    credential_id=credential.id,
+                    stream_id="12345",
+                    session_token="viewer-token",
+                )
+            )
+            db.session.commit()
+
+            result = ChannelHealthService.run_scheduled_scan_pass()
+
+            account_summary = next(s for s in result["accounts"] if s["account_id"] == health_test_account)
+            assert account_summary["scanned"] == 0
+            assert "active viewing" in account_summary["message"]
+
     @patch("services.channel_health_service.ChannelHealthService.check_channel_health")
     def test_scan_channels_success(self, mock_check, app, health_test_account, test_channel):
         """Test successful channel scanning."""

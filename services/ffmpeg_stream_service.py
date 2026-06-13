@@ -18,6 +18,7 @@ No buffering is needed - ffmpeg's dump_extra ensures decoders can sync at any ke
 """
 
 import logging
+import os
 import secrets
 import subprocess
 import threading
@@ -36,7 +37,10 @@ logger = logging.getLogger(__name__)
 CHUNK_SIZE = 65536  # 64KB chunks - matches ffmpeg's typical output buffer
 SUBSCRIBER_QUEUE_SIZE = 100  # Max chunks buffered per subscriber (~6.4MB)
 SUBSCRIBER_TIMEOUT = 10  # Seconds to wait for a chunk before checking stream status
-STREAM_IDLE_TIMEOUT = 30  # Seconds with no subscribers before closing stream
+# Seconds with no subscribers before closing the shared upstream. Configurable
+# via env; default 0 closes immediately on the last subscriber leaving so the
+# credential slot frees right away on a channel zap (see idle-timeout-policy).
+STREAM_IDLE_TIMEOUT = int(os.environ.get("STREAM_IDLE_TIMEOUT", "0"))
 
 
 @dataclass
@@ -177,8 +181,13 @@ class FFmpegStreamService:
 
             if stream and stream.is_active:
                 logger.info(
-                    f"Client {client_ip} joining existing ffmpeg stream {stream_key} "
-                    f"({len(stream.subscribers)} existing subscribers)"
+                    "stream_join backend=ffmpeg stream_key=%s worker_pid=%s credential_id=%s "
+                    "subscriber_count=%s client=%s",
+                    stream_key,
+                    os.getpid(),
+                    stream.credential_id,
+                    len(stream.subscribers),
+                    client_ip,
                 )
             else:
                 if stream and not stream.is_active:
@@ -202,8 +211,14 @@ class FFmpegStreamService:
                 self._start_ffmpeg(stream)
 
                 logger.info(
-                    f"Created new ffmpeg stream {stream_key} "
-                    f"(source index {active_source_index}, upstream stream {active_stream_id})"
+                    "stream_create backend=ffmpeg stream_key=%s worker_pid=%s credential_id=%s "
+                    "source_index=%s upstream_stream=%s client=%s",
+                    stream_key,
+                    os.getpid(),
+                    credential_id,
+                    active_source_index,
+                    active_stream_id,
+                    client_ip,
                 )
 
                 if on_stream_started:
@@ -563,9 +578,16 @@ class FFmpegStreamService:
         except Exception as e:
             logger.debug(f"FFmpeg error monitor ended for {stream.stream_key}: {e}")
 
-    def _close_stream(self, stream: FFmpegStream, invoke_callback: bool = True) -> None:
+    def _close_stream(self, stream: FFmpegStream, invoke_callback: bool = True, reason: str = "closed") -> None:
         """Close a stream and cleanup."""
-        logger.info(f"Closing ffmpeg stream {stream.stream_key}")
+        logger.info(
+            "stream_close backend=ffmpeg stream_key=%s worker_pid=%s reason=%s " "subscriber_count=%s bytes=%s",
+            stream.stream_key,
+            os.getpid(),
+            reason,
+            len(stream.subscribers),
+            stream.bytes_received,
+        )
 
         stream.is_active = False
 
@@ -624,14 +646,13 @@ class FFmpegStreamService:
                     # This ensures streams close even if ffmpeg is still trying to reconnect
                     idle_time = stream.last_subscriber_left_at or stream.last_activity
                     idle_seconds = (now - idle_time).total_seconds()
-                    if idle_seconds > STREAM_IDLE_TIMEOUT:
-                        logger.info(f"FFmpeg stream {stream_key} idle for {idle_seconds:.1f}s, closing")
-                        streams_to_close.append(stream)
+                    if idle_seconds >= STREAM_IDLE_TIMEOUT:
+                        streams_to_close.append((stream, "idle"))
                 elif not stream.is_active:
-                    streams_to_close.append(stream)
+                    streams_to_close.append((stream, "upstream_end"))
 
-            for stream in streams_to_close:
-                self._close_stream(stream)
+            for stream, reason in streams_to_close:
+                self._close_stream(stream, reason=reason)
 
     # Compatibility methods to match StreamMultiplexer interface
     def get_idle_stream_count(self, account_id: int) -> int:

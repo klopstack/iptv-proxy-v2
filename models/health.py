@@ -198,6 +198,11 @@ class ChannelHealthConfig(db.Model):  # type: ignore[name-defined]
         "min_hours_apart": ("6", "Minimum hours between failures to count as distinct failure periods"),
         # Number of connections to always keep available for client requests
         "reserved_connections": ("1", "Number of connections to always reserve for client requests"),
+        # Skip scanning an account entirely while a client is actively viewing it
+        "pause_scan_during_viewing": (
+            "true",
+            "Skip health scanning for an account while a client is actively watching it",
+        ),
         # How many seconds to analyze a stream before making a determination
         "analysis_duration_seconds": ("10", "Seconds to analyze stream for health check"),
         # Whether to auto-disable channels marked as down

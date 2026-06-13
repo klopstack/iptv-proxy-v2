@@ -39,7 +39,14 @@ class TestDashboardSummary:
         assert "shared_upstream" in streams
         assert "subscribers" in streams
         assert "backend" in streams
+        assert "total_max_connections" in streams
+        assert "total_active_connections" in streams
+        assert "available_connections" in streams
+        assert "accounts" in streams
+        assert "active_streams" in streams
         assert isinstance(streams["active_sessions"], int)
+        assert isinstance(streams["accounts"], list)
+        assert isinstance(streams["active_streams"], list)
 
     def test_dashboard_summary_overview_scheduler(self, client):
         data = api_data(client.get("/api/dashboard/summary"))
@@ -57,6 +64,7 @@ class TestDashboardSummary:
                 username="dashuser",
                 password="dashpass",
                 enabled=True,
+                max_connections=2,
             )
             db.session.add(cred)
             db.session.flush()
@@ -71,7 +79,21 @@ class TestDashboardSummary:
             db.session.commit()
 
         data = api_data(client.get("/api/dashboard/summary"))
-        assert data["streams"]["active_sessions"] == 1
+        streams = data["streams"]
+        assert streams["active_sessions"] == 1
+        assert streams["total_active_connections"] == 1
+        assert streams["total_max_connections"] >= 2
+        assert streams["available_connections"] == streams["total_max_connections"] - 1
+        assert len(streams["accounts"]) == 1
+        assert streams["accounts"][0]["name"] == sample_account["name"]
+        dash_cred = next(c for c in streams["accounts"][0]["credentials"] if c["username"] == "dashuser")
+        assert dash_cred["active_connections"] == 1
+        assert dash_cred["max_connections"] == 2
+        assert len(streams["active_streams"]) == 1
+        assert streams["active_streams"][0]["stream_id"] == "100"
+        assert streams["active_streams"][0]["credential_username"] == "dashuser"
+        assert streams["active_streams"][0]["account_name"] == sample_account["name"]
+        assert "session_token" not in streams["active_streams"][0]
 
     def test_channel_health_summary_matches_dashboard(self, client, app):
         health = client.get("/api/channel-health/summary")

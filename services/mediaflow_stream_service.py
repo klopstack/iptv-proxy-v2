@@ -13,6 +13,12 @@ route through it. This approach:
 1. Offloads stream handling to a dedicated, optimized proxy
 2. Provides better buffering than direct ffmpeg piping
 3. Supports both HLS and direct TS streams
+
+Multiplexing model (mirrors FFmpegStreamService):
+A single background reader thread per stream key pulls from MediaFlow/upstream
+exactly once and fans the bytes out to every subscriber's queue. Additional
+clients watching the same channel share that one upstream connection instead of
+each opening their own, conserving provider connection slots.
 """
 
 import logging
@@ -22,6 +28,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from queue import Empty, Queue
 from typing import TYPE_CHECKING, Callable, Dict, Generator, List, Optional, Tuple
 from urllib.parse import urlencode
 
@@ -42,7 +49,10 @@ MEDIAFLOW_API_PASSWORD = os.environ.get("MEDIAFLOW_API_PASSWORD", "")
 CHUNK_SIZE = 65536  # 64KB chunks
 SUBSCRIBER_QUEUE_SIZE = 100
 SUBSCRIBER_TIMEOUT = 10
-STREAM_IDLE_TIMEOUT = 30
+# Seconds with no subscribers before closing the shared upstream. Configurable
+# via env; default 0 closes immediately on the last subscriber leaving so the
+# credential slot frees right away (see idle-timeout-policy).
+STREAM_IDLE_TIMEOUT = int(os.environ.get("STREAM_IDLE_TIMEOUT", "0"))
 
 
 class _MediaFlowSourceError(Exception):
@@ -55,9 +65,11 @@ class StreamSubscriber:
 
     subscriber_id: str
     client_ip: Optional[str]
+    queue: "Queue[Optional[bytes]]"
     joined_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     bytes_sent: int = 0
     active: bool = True
+    ready: bool = False  # Set to True when stream_chunks() starts consuming
 
 
 @dataclass
@@ -83,11 +95,17 @@ class MediaFlowStream:
 
     # MediaFlow proxy URL (constructed from upstream)
     proxy_url: Optional[str] = None
+    # Base URL clients use to reach this proxy (for HLS manifest rewriting).
+    proxy_base_url: Optional[str] = None
 
     # Failover chain: list of (stream_id, upstream_url)
     fallback_sources: List[tuple[str, str]] = field(default_factory=list)
     active_source_index: int = 0
     failover_lock: threading.Lock = field(default_factory=threading.Lock)
+
+    # Single shared upstream reader
+    reader_thread: Optional[threading.Thread] = None
+    reader_started: bool = False
 
     # Thread safety
     lock: threading.Lock = field(default_factory=threading.Lock)
@@ -107,8 +125,9 @@ class MediaFlowStreamService:
     """
     Manages streams using MediaFlow Proxy for HLS/TS handling.
 
-    This service generates proxy URLs that route streams through MediaFlow Proxy,
-    which handles buffering, reconnection, and stream manipulation.
+    A single reader thread per stream pulls bytes from MediaFlow once and fans
+    them out to all subscribers, so multiple clients on the same channel share
+    one upstream connection.
 
     Usage:
         service = MediaFlowStreamService(app=app)
@@ -241,8 +260,13 @@ class MediaFlowStreamService:
 
             if stream and stream.is_active:
                 logger.info(
-                    f"Client {client_ip} joining existing MediaFlow stream {stream_key} "
-                    f"({len(stream.subscribers)} existing subscribers)"
+                    "stream_join backend=mediaflow stream_key=%s worker_pid=%s credential_id=%s "
+                    "subscriber_count=%s client=%s",
+                    stream_key,
+                    os.getpid(),
+                    stream.credential_id,
+                    len(stream.subscribers),
+                    client_ip,
                 )
             else:
                 if stream and not stream.is_active:
@@ -269,8 +293,14 @@ class MediaFlowStreamService:
                 self._streams[stream_key] = stream
 
                 logger.info(
-                    f"Created new MediaFlow stream {stream_key} "
-                    f"(source index {active_source_index}, upstream stream {active_stream_id})"
+                    "stream_create backend=mediaflow stream_key=%s worker_pid=%s credential_id=%s "
+                    "source_index=%s upstream_stream=%s client=%s",
+                    stream_key,
+                    os.getpid(),
+                    credential_id,
+                    active_source_index,
+                    active_stream_id,
+                    client_ip,
                 )
                 logger.debug(f"MediaFlow proxy URL: {proxy_url[:100]}...")
 
@@ -281,10 +311,12 @@ class MediaFlowStreamService:
             subscriber = StreamSubscriber(
                 subscriber_id=secrets.token_hex(16),
                 client_ip=client_ip,
+                queue=Queue(maxsize=SUBSCRIBER_QUEUE_SIZE),
             )
 
             with stream.lock:
                 stream.subscribers[subscriber.subscriber_id] = subscriber
+                stream.last_subscriber_left_at = None
 
             logger.info(
                 f"Subscriber {subscriber.subscriber_id[:8]}... joined MediaFlow stream {stream_key} "
@@ -316,12 +348,59 @@ class MediaFlowStreamService:
         proxy_base_url: Optional[str] = None,
     ) -> Generator[bytes, None, None]:
         """
-        Generator that yields chunks for a subscriber by proxying through MediaFlow.
+        Yield chunks for a subscriber by draining its queue.
 
-        Tries fallback sources in order on connection failure.
+        The shared reader thread (started on the first subscriber) performs the
+        single upstream pull and pushes bytes into every subscriber's queue.
         """
+        # Mark ready before starting the reader so the first subscriber never
+        # misses the opening bytes.
+        subscriber.ready = True
+        self._ensure_reader_started(stream, proxy_base_url)
+
+        try:
+            while subscriber.active:
+                try:
+                    chunk = subscriber.queue.get(timeout=SUBSCRIBER_TIMEOUT)
+                    if chunk is None:
+                        logger.debug(f"Subscriber {subscriber.subscriber_id[:8]}... received end signal")
+                        break
+                    subscriber.bytes_sent += len(chunk)
+                    yield chunk
+                except Empty:
+                    # Drain any buffered chunks first; only stop once the queue is
+                    # empty AND the shared reader has gone inactive.
+                    if not stream.is_active:
+                        break
+                    # Otherwise keep waiting for the next chunk
+        except GeneratorExit:
+            logger.debug(f"Subscriber {subscriber.subscriber_id[:8]}... generator closed")
+        finally:
+            subscriber.active = False
+
+    def _ensure_reader_started(self, stream: MediaFlowStream, proxy_base_url: Optional[str]) -> None:
+        """Start the single shared upstream reader thread exactly once."""
+        with stream.lock:
+            if proxy_base_url and not stream.proxy_base_url:
+                stream.proxy_base_url = proxy_base_url
+            if stream.reader_started:
+                return
+            stream.reader_started = True
+
+        thread = threading.Thread(
+            target=self._reader_loop,
+            args=(stream,),
+            name=f"MediaFlow-{stream.stream_key}",
+            daemon=True,
+        )
+        stream.reader_thread = thread
+        thread.start()
+
+    def _reader_loop(self, stream: MediaFlowStream) -> None:
+        """Pull from the upstream once and fan bytes out to all subscribers."""
         start_index = stream.active_source_index
         last_error: Optional[str] = None
+        success = False
 
         for source_index in range(start_index, len(stream.fallback_sources)):
             source_stream_id, upstream_url = stream.fallback_sources[source_index]
@@ -338,14 +417,12 @@ class MediaFlowStreamService:
                     )
 
             url = stream.proxy_url or upstream_url
-            logger.info(
-                f"Starting MediaFlow stream for subscriber {subscriber.subscriber_id[:8]}... " f"URL: {url[:100]}..."
-            )
+            logger.info(f"MediaFlow reader pulling {stream.stream_key} from {url[:100]}...")
 
             try:
-                yielded = yield from self._stream_chunks_from_url(stream, subscriber, url, proxy_base_url)
-                if yielded:
-                    return
+                if self._pull_source(stream, url):
+                    success = True
+                    break
             except _MediaFlowSourceError as e:
                 last_error = str(e)
                 logger.warning(
@@ -356,18 +433,39 @@ class MediaFlowStreamService:
                 )
                 continue
 
-        stream.error = last_error or "All stream sources unavailable"
-        stream.is_active = False
-        subscriber.active = False
+        if not success:
+            stream.error = last_error or "All stream sources unavailable"
 
-    def _stream_chunks_from_url(
-        self,
-        stream: MediaFlowStream,
-        subscriber: StreamSubscriber,
-        url: str,
-        proxy_base_url: Optional[str],
-    ) -> Generator[bytes, None, bool]:
-        """Stream from a single MediaFlow/upstream URL. Raises _MediaFlowSourceError on failure."""
+        stream.is_active = False
+        self._signal_end(stream)
+        logger.info(
+            "stream_reader_end backend=mediaflow stream_key=%s bytes=%s error=%s",
+            stream.stream_key,
+            stream.bytes_received,
+            stream.error,
+        )
+
+    @staticmethod
+    def _is_placeholder_response(stream: MediaFlowStream, response_headers) -> bool:
+        """Heuristic: a live MPEG-TS stream is chunked with no fixed length.
+
+        A response carrying a fixed ``Content-Length`` together with
+        ``Accept-Ranges: bytes`` on a non-HLS request is almost certainly a
+        static placeholder file (the provider's "channel unavailable" clip)
+        rather than a live stream, so it should trigger failover.
+        """
+        if stream.format == "m3u8":
+            return False
+        has_length = "Content-Length" in response_headers
+        accepts_ranges = response_headers.get("Accept-Ranges", "").lower() == "bytes"
+        return has_length and accepts_ranges
+
+    def _pull_source(self, stream: MediaFlowStream, url: str) -> bool:
+        """Pull from a single MediaFlow/upstream URL, fanning out to subscribers.
+
+        Returns True when the source produced data (or completed a manifest).
+        Raises _MediaFlowSourceError when the source should be failed over.
+        """
         headers = {
             "User-Agent": stream.user_agent,
             "Accept": "*/*",
@@ -381,15 +479,26 @@ class MediaFlowStreamService:
                 if response.status_code != 200:
                     raise _MediaFlowSourceError(f"Upstream returned {response.status_code}")
 
+                if self._is_placeholder_response(stream, response.headers):
+                    logger.warning(
+                        "upstream_placeholder backend=mediaflow stream_key=%s content_length=%s "
+                        "last_modified=%s content_type=%s",
+                        stream.stream_key,
+                        response.headers.get("Content-Length"),
+                        response.headers.get("Last-Modified"),
+                        response.headers.get("Content-Type"),
+                    )
+                    raise _MediaFlowSourceError("upstream_placeholder: static file served instead of live stream")
+
                 if "Content-Type" in response.headers:
                     stream.content_type = response.headers["Content-Type"]
 
-                rewrite_manifest = stream.format == "m3u8" and proxy_base_url and self._mediaflow_available
+                rewrite_manifest = stream.format == "m3u8" and stream.proxy_base_url and self._mediaflow_available
                 chunk_count = 0
                 manifest_parts: list[bytes] = []
 
                 for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                    if not subscriber.active or not stream.is_active:
+                    if not stream.is_active:
                         return True
 
                     if chunk:
@@ -401,21 +510,19 @@ class MediaFlowStreamService:
                             manifest_parts.append(chunk)
                             continue
 
-                        subscriber.bytes_sent += len(chunk)
-                        yield chunk
+                        self._distribute(stream, chunk)
 
-                if rewrite_manifest and manifest_parts and proxy_base_url:
+                if rewrite_manifest and manifest_parts and stream.proxy_base_url:
                     manifest_bytes = b"".join(manifest_parts)
                     try:
                         manifest_text = manifest_bytes.decode("utf-8")
-                        manifest_text = rewrite_hls_manifest(manifest_text, MEDIAFLOW_PROXY_URL, proxy_base_url)
+                        manifest_text = rewrite_hls_manifest(manifest_text, MEDIAFLOW_PROXY_URL, stream.proxy_base_url)
                         manifest_bytes = manifest_text.encode("utf-8")
                     except Exception as e:
                         logger.warning(f"Failed to rewrite HLS manifest, sending original: {e}")
 
-                    subscriber.bytes_sent += len(manifest_bytes)
                     stream.bytes_received = len(manifest_bytes)
-                    yield manifest_bytes
+                    self._distribute(stream, manifest_bytes)
                     return True
 
                 if chunk_count == 0:
@@ -432,14 +539,50 @@ class MediaFlowStreamService:
         except Exception as e:
             raise _MediaFlowSourceError(str(e)) from e
         finally:
-            logger.info(
-                f"Subscriber {subscriber.subscriber_id[:8]}... source stream ended "
-                f"({subscriber.bytes_sent} bytes sent)"
-            )
+            logger.info(f"MediaFlow source stream ended for {stream.stream_key} ({stream.bytes_received} bytes)")
 
-    def _close_stream(self, stream: MediaFlowStream, invoke_callback: bool = True) -> None:
+    def _distribute(self, stream: MediaFlowStream, chunk: bytes) -> None:
+        """Push a chunk to every ready subscriber, dropping for slow ones."""
+        with stream.lock:
+            any_ready = any(s.ready and s.active for s in stream.subscribers.values())
+            if not any_ready:
+                # No subscriber consuming yet - drop (live stream resyncs at next segment)
+                return
+
+            dead_subscribers = []
+            for sub_id, subscriber in stream.subscribers.items():
+                if not subscriber.active:
+                    dead_subscribers.append(sub_id)
+                    continue
+                if not subscriber.ready:
+                    continue
+                try:
+                    subscriber.queue.put_nowait(chunk)
+                except Exception:
+                    # Queue full - drop this chunk for this subscriber; they catch up
+                    pass
+
+            for sub_id in dead_subscribers:
+                stream.subscribers.pop(sub_id, None)
+
+    def _signal_end(self, stream: MediaFlowStream) -> None:
+        """Signal end-of-stream to all subscribers so their generators finish.
+
+        We only enqueue the ``None`` sentinel here; we deliberately do not flip
+        ``subscriber.active`` so a consumer that has not yet entered its drain
+        loop still drains any buffered chunks before seeing the sentinel.
+        """
+        with stream.lock:
+            for subscriber in stream.subscribers.values():
+                try:
+                    subscriber.queue.put_nowait(None)
+                except Exception:
+                    pass
+
+    def _close_stream(self, stream: MediaFlowStream, invoke_callback: bool = True, reason: str = "closed") -> None:
         """Close a stream and cleanup resources."""
         stream.is_active = False
+        self._signal_end(stream)
 
         # Call cleanup callback
         if invoke_callback and stream.on_stream_closed:
@@ -452,7 +595,14 @@ class MediaFlowStreamService:
             except Exception as e:
                 logger.error(f"Error in stream closed callback: {e}")
 
-        logger.info(f"Closed MediaFlow stream {stream.stream_key} " f"(received: {stream.bytes_received} bytes)")
+        logger.info(
+            "stream_close backend=mediaflow stream_key=%s worker_pid=%s reason=%s subscriber_count=%s bytes=%s",
+            stream.stream_key,
+            os.getpid(),
+            reason,
+            len(stream.subscribers),
+            stream.bytes_received,
+        )
 
     def _cleanup_loop(self) -> None:
         """Background thread that cleans up idle streams."""
@@ -470,30 +620,28 @@ class MediaFlowStreamService:
                 time.sleep(0.1)
 
     def _cleanup_idle_streams(self) -> None:
-        """Close streams that have been idle (no subscribers) for too long."""
+        """Close streams that have no subscribers or have errored out."""
         now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         with self._lock:
-            streams_to_close = []
+            streams_to_close: list[tuple[str, str]] = []
 
             for stream_key, stream in self._streams.items():
-                # Check if stream has no subscribers and has been idle
+                # Close streams whose last subscriber has left.
                 if not stream.subscribers and stream.last_subscriber_left_at:
                     idle_seconds = (now - stream.last_subscriber_left_at).total_seconds()
-                    if idle_seconds > STREAM_IDLE_TIMEOUT:
-                        streams_to_close.append(stream_key)
-                        logger.info(f"Stream {stream_key} idle for {idle_seconds:.0f}s, marking for closure")
+                    if idle_seconds >= STREAM_IDLE_TIMEOUT:
+                        streams_to_close.append((stream_key, "idle"))
+                        continue
 
-                # Also close streams that have errors
+                # Also close streams that have errored or gone inactive.
                 if not stream.is_active or stream.error:
-                    if stream_key not in streams_to_close:
-                        streams_to_close.append(stream_key)
-                        logger.info(f"Stream {stream_key} has error or inactive, marking for closure")
+                    streams_to_close.append((stream_key, "upstream_end" if stream.error else "inactive"))
 
-            for stream_key in streams_to_close:
-                if stream_key in self._streams:
-                    stream = self._streams.pop(stream_key)
-                    self._close_stream(stream)
+            for stream_key, reason in streams_to_close:
+                closing_stream = self._streams.pop(stream_key, None)
+                if closing_stream is not None:
+                    self._close_stream(closing_stream, reason=reason)
 
     def get_idle_stream_count(self, account_id: int) -> int:
         """MediaFlow has no multiplexer idle release; always report zero idle streams."""
@@ -502,8 +650,38 @@ class MediaFlowStreamService:
     def release_idle_streams_for_account(
         self, account_id: int, credential_id: Optional[int] = None, max_to_release: int = 1
     ) -> int:
-        """No-op — credential shortage handling uses other strategies for MediaFlow."""
-        return 0
+        """Release idle (subscriber-less) streams to free a credential slot."""
+        released = 0
+        with self._lock:
+            for stream in list(self._streams.values()):
+                if released >= max_to_release:
+                    break
+                if stream.account_id == account_id and not stream.subscribers:
+                    if credential_id is None or stream.credential_id == credential_id:
+                        self._streams.pop(stream.stream_key, None)
+                        self._close_stream(stream, reason="released")
+                        released += 1
+        return released
+
+    def get_stats(self) -> dict:
+        """Get service statistics (shape matches FFmpegStreamService.get_stats)."""
+        with self._lock:
+            total_subscribers = sum(len(s.subscribers) for s in self._streams.values())
+            total_bytes = sum(s.bytes_received for s in self._streams.values())
+            return {
+                "active_streams": len(self._streams),
+                "total_subscribers": total_subscribers,
+                "total_bytes_received": total_bytes,
+                "streams": [
+                    {
+                        "key": s.stream_key,
+                        "subscribers": len(s.subscribers),
+                        "bytes_received": s.bytes_received,
+                        "is_active": s.is_active,
+                    }
+                    for s in self._streams.values()
+                ],
+            }
 
 
 # Global instance
