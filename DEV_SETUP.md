@@ -9,7 +9,7 @@ For development with automatic code reloading when you make changes:
 docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
 # Or with MediaFlow backend
-STREAM_BACKEND=mediaflow docker-compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.mediaflow.yml up -d
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 ```
 
 ## What's Mounted

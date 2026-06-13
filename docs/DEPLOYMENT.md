@@ -253,7 +253,7 @@ Alternatively vendor the files under `static/vendor/` and serve them locally (no
 
 ## Database migrations
 
-Schema is managed by **Alembic** (via Flask-Migrate). On container start, [`entrypoint.sh`](../entrypoint.sh) runs `flask db upgrade`.
+Schema is managed by **Alembic** (via Flask-Migrate). On container start, [`entrypoint.sh`](../entrypoint.sh) runs `flask db upgrade` and clears orphaned `ActiveStream` rows left from the previous container run (in-memory streams do not survive a restart, but DB rows do). In a split deployment, set `SKIP_ORPHAN_STREAM_CLEANUP=true` on the API-only service so an API restart does not clear sessions owned by `iptv-proxy-stream`.
 
 ### Fresh install
 

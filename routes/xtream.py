@@ -118,6 +118,38 @@ def _validate_preferred_languages(value):
     return json.dumps(langs)
 
 
+def _parse_transcode_fields(data, *, for_create: bool = False) -> dict:
+    from services.transcode_profile import validate_transcode_fields
+
+    enabled = data.get("transcode_enabled", False) if for_create else data.get("transcode_enabled")
+    if enabled is None and not for_create:
+        return {}
+
+    fields = {}
+    if "transcode_enabled" in data or for_create:
+        fields["transcode_enabled"] = bool(data.get("transcode_enabled", False))
+    if "transcode_max_height" in data:
+        fields["transcode_max_height"] = data.get("transcode_max_height")
+    if "transcode_max_bitrate_kbps" in data:
+        fields["transcode_max_bitrate_kbps"] = data.get("transcode_max_bitrate_kbps")
+    if "transcode_audio_channels" in data:
+        fields["transcode_audio_channels"] = data.get("transcode_audio_channels")
+    if "transcode_audio_bitrate_kbps" in data:
+        fields["transcode_audio_bitrate_kbps"] = data.get("transcode_audio_bitrate_kbps")
+
+    if fields.get("transcode_enabled") or any(
+        k in fields for k in ("transcode_max_height", "transcode_max_bitrate_kbps")
+    ):
+        validate_transcode_fields(
+            transcode_enabled=fields.get("transcode_enabled", False),
+            transcode_max_height=fields.get("transcode_max_height", 720),
+            transcode_max_bitrate_kbps=fields.get("transcode_max_bitrate_kbps", 8000),
+            transcode_audio_channels=fields.get("transcode_audio_channels", 2),
+            transcode_audio_bitrate_kbps=fields.get("transcode_audio_bitrate_kbps", 128),
+        )
+    return fields
+
+
 def _serialize_xtream_credential(credential):
     from services.language_preference_service import parse_preferred_languages
 
@@ -132,6 +164,11 @@ def _serialize_xtream_credential(credential):
         "ppv_rename_timezone": credential.ppv_rename_timezone,
         "preferred_languages": preferred,
         "language_fallback": credential.language_fallback or "unknown",
+        "transcode_enabled": credential.transcode_enabled,
+        "transcode_max_height": credential.transcode_max_height,
+        "transcode_max_bitrate_kbps": credential.transcode_max_bitrate_kbps,
+        "transcode_audio_channels": credential.transcode_audio_channels,
+        "transcode_audio_bitrate_kbps": credential.transcode_audio_bitrate_kbps,
         "enabled": credential.enabled,
         "description": credential.description,
         "created_at": serialize_utc_iso(credential.created_at) if hasattr(credential, "created_at") else None,
@@ -800,7 +837,8 @@ def xtream_live_stream(username, password, stream_id, ext="ts"):
         return jsonify({"error": "Stream not found or not accessible"}), 404
 
     # Redirect to internal stream proxy using the channel's owning account
-    internal_url = f"/stream/{channel.account_id}/{stream_id}.{ext}"
+    stream_ext = "ts" if xtream_cred.transcode_enabled else ext
+    internal_url = f"/stream/{channel.account_id}/{stream_id}.{stream_ext}?xc={xtream_cred.id}"
 
     return redirect(internal_url)
 
@@ -864,6 +902,7 @@ def create_xtream_credential():
         ppv_rename_timezone = _validate_ppv_rename_timezone(data.get("ppv_rename_timezone"))
         preferred_languages = _validate_preferred_languages(data.get("preferred_languages"))
         language_fallback = _validate_language_fallback(data.get("language_fallback"))
+        transcode_fields = _parse_transcode_fields(data, for_create=True)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 
@@ -879,6 +918,7 @@ def create_xtream_credential():
         language_fallback=language_fallback,
         enabled=data.get("enabled", True),
         description=data.get("description", ""),
+        **transcode_fields,
     )
 
     db.session.add(credential)
@@ -927,6 +967,33 @@ def update_xtream_credential(credential_id):
     if "language_fallback" in data:
         try:
             credential.language_fallback = _validate_language_fallback(data.get("language_fallback"))
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+
+    transcode_keys = (
+        "transcode_enabled",
+        "transcode_max_height",
+        "transcode_max_bitrate_kbps",
+        "transcode_audio_channels",
+        "transcode_audio_bitrate_kbps",
+    )
+    if any(k in data for k in transcode_keys):
+        try:
+            merged = {
+                "transcode_enabled": data.get("transcode_enabled", credential.transcode_enabled),
+                "transcode_max_height": data.get("transcode_max_height", credential.transcode_max_height),
+                "transcode_max_bitrate_kbps": data.get(
+                    "transcode_max_bitrate_kbps", credential.transcode_max_bitrate_kbps
+                ),
+                "transcode_audio_channels": data.get("transcode_audio_channels", credential.transcode_audio_channels),
+                "transcode_audio_bitrate_kbps": data.get(
+                    "transcode_audio_bitrate_kbps", credential.transcode_audio_bitrate_kbps
+                ),
+            }
+            _parse_transcode_fields(merged, for_create=True)
+            for key in transcode_keys:
+                if key in data:
+                    setattr(credential, key, data[key])
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
 

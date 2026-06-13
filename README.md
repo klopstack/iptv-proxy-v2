@@ -448,7 +448,7 @@ python app.py  # Will recreate database
 | `PORT` | `8000` | Server port |
 | `DEBUG` | `False` | Enable debug mode |
 | `PUID` / `PGID` | `1000` | Container user for file ownership (Docker Compose) |
-| `MEDIAFLOW_API_PASSWORD` | _(empty)_ | MediaFlow proxy API password when `STREAM_BACKEND=mediaflow` |
+| `MEDIAFLOW_API_PASSWORD` | _(empty)_ | MediaFlow proxy API password (required for streaming) |
 
 ## Project Structure
 

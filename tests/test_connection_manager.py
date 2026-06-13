@@ -346,6 +346,43 @@ class TestCleanupStaleConnections:
             assert ActiveStream.query.filter_by(session_token="token1").first() is not None
 
 
+class TestClearOrphanedStreamsOnStartup:
+    """Tests for ConnectionManager.clear_orphaned_streams_on_startup"""
+
+    def test_clears_all_active_streams_and_resets_counts(self, app, account_with_credentials):
+        account_id, cred1_id, cred2_id = account_with_credentials
+        with app.app_context():
+            db.session.add_all(
+                [
+                    ActiveStream(
+                        credential_id=cred1_id,
+                        stream_id="111",
+                        session_token="orphan1",
+                    ),
+                    ActiveStream(
+                        credential_id=cred2_id,
+                        stream_id="222",
+                        session_token="orphan2",
+                    ),
+                ]
+            )
+            for cred_id in (cred1_id, cred2_id):
+                cred = db.session.get(Credential, cred_id)
+                cred.active_connections = 1
+            db.session.commit()
+
+            cleared = ConnectionManager.clear_orphaned_streams_on_startup()
+
+            assert cleared == 2
+            assert ActiveStream.query.count() == 0
+            assert db.session.get(Credential, cred1_id).active_connections == 0
+            assert db.session.get(Credential, cred2_id).active_connections == 0
+
+    def test_noop_when_no_active_streams(self, app):
+        with app.app_context():
+            assert ConnectionManager.clear_orphaned_streams_on_startup() == 0
+
+
 # ============================================================================
 # Get Connection Status Tests
 # ============================================================================

@@ -46,6 +46,7 @@
                             <th>Source</th>
                             <th>Filters</th>
                             <th>Collapse Dupes</th>
+                            <th>Transcode</th>
                             <th>Status</th>
                             <th>Description</th>
                             <th>Actions</th>
@@ -211,6 +212,48 @@
                         </select>
                         <div class="form-text">
                             Controls behavior when broadcast language cannot be detected or no preferred match exists.
+                        </div>
+                    </div>
+
+                    <hr>
+                    <h6 class="mb-3">Stream Transcoding</h6>
+                    <p class="form-text mb-3">
+                        Re-encode streams for bandwidth-limited clients (e.g. mobile/RV). Outputs MPEG-TS via hardware or software FFmpeg.
+                    </p>
+
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="credential-transcode-enabled">
+                            <label class="form-check-label" for="credential-transcode-enabled">
+                                Enable Transcoding
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="transcode-options">
+                        <div class="mb-3">
+                            <label for="credential-transcode-max-height" class="form-label">Max Resolution (height)</label>
+                            <select class="form-select" id="credential-transcode-max-height">
+                                <option value="480">480p</option>
+                                <option value="720" selected>720p</option>
+                                <option value="1080">1080p</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="credential-transcode-max-bitrate" class="form-label">Max Bitrate (kbps)</label>
+                            <input type="number" class="form-control" id="credential-transcode-max-bitrate"
+                                   min="500" max="50000" step="100" value="8000">
+                            <div class="form-text">Total video+audio budget; e.g. 8000 for ~8 Mbps links</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="credential-transcode-stereo" checked>
+                                <label class="form-check-label" for="credential-transcode-stereo">
+                                    Downmix to stereo audio
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </form>

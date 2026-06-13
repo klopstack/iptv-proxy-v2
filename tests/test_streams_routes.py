@@ -326,9 +326,7 @@ class TestProxyStream:
         assert response_m3u8.status_code in [200, 302, 502, 503]
 
     def test_proxy_stream_m3u8_serves_buffered_mediaflow_manifest(self, app, client, test_account, monkeypatch):
-        """MediaFlow backend should return a buffered m3u8 manifest (not redirect)."""
-        monkeypatch.setattr("routes.streams.get_stream_backend_name", lambda: "mediaflow")
-
+        """MediaFlow should return a buffered m3u8 manifest (not redirect)."""
         manifest = (
             "#EXTM3U\n#EXTINF:10.0,\n"
             "http://localhost:8888/proxy/hls/segment.ts?d=https%3A%2F%2Fprovider.example%2Fseg.ts\n"

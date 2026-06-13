@@ -45,6 +45,24 @@ with app.app_context():
     SyncMetadata.delete(SYNC_KEY_SCHEDULER_HEARTBEAT)
 '
 
+# In-memory stream state does not survive a container restart, but ActiveStream
+# DB rows do. Those ghosts block credential slots until STREAM_TIMEOUT_SECONDS
+# (default 300s) elapses. Clear them on startup unless this is the API-only
+# service in a split deployment (set SKIP_ORPHAN_STREAM_CLEANUP=true there).
+if [ "${SKIP_ORPHAN_STREAM_CLEANUP:-false}" != "true" ]; then
+    echo "Clearing orphaned active stream sessions from prior container run..."
+    python -c '
+from app import app
+from services.connection_manager import ConnectionManager
+with app.app_context():
+    cleared = ConnectionManager.clear_orphaned_streams_on_startup()
+    if cleared:
+        print(f"Cleared {cleared} orphaned active stream session(s)")
+    else:
+        print("No orphaned active stream sessions to clear")
+'
+fi
+
 # Background scheduler in its own process (not inside a gunicorn worker).
 # Long EPG syncs were triggering gunicorn worker timeouts (600s) and SIGKILL.
 if [ "${DISABLE_SCHEDULER:-false}" != "true" ]; then

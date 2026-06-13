@@ -73,7 +73,7 @@ class TestAlembicMigrations:
         head = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
         conn.close()
         assert version_count == 1
-        assert head == "b2c3d4e5f6a7"
+        assert head == "c4d5e6f7a8b9"
 
     @pytest.mark.sqlite_only
     def test_upgrade_adds_accounts_column_with_foreign_key_children(self):
@@ -103,7 +103,7 @@ class TestAlembicMigrations:
             head = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
             conn.close()
             assert "ppv_show_unmatched_live" in columns
-            assert head == "b2c3d4e5f6a7"
+            assert head == "c4d5e6f7a8b9"
         finally:
             for suffix in ("", "-wal", "-shm"):
                 p = Path(f"{path}{suffix}")
@@ -132,7 +132,7 @@ class TestAlembicMigrations:
             conn = sqlite3.connect(path)
             head = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
             conn.close()
-            assert head == "b2c3d4e5f6a7"
+            assert head == "c4d5e6f7a8b9"
         finally:
             for suffix in ("", "-wal", "-shm"):
                 p = Path(f"{path}{suffix}")

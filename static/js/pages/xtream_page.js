@@ -107,12 +107,17 @@ function displayCredentials(credentials) {
             ? '<span class="badge bg-warning">Yes</span>'
             : '<span class="badge bg-secondary">No</span>';
 
+        const transcodeBadge = cred.transcode_enabled
+            ? `<span class="badge bg-primary">${cred.transcode_max_height || 720}p</span>`
+            : '<span class="badge bg-secondary">Off</span>';
+
         return `
             <tr>
                 <td><code>${escapeHtml(cred.username)}</code></td>
                 <td>${source}</td>
                 <td>${filtersBadge}</td>
                 <td>${collapseBadge}</td>
+                <td>${transcodeBadge}</td>
                 <td>${statusBadge}</td>
                 <td>${escapeHtml(cred.description || '')}</td>
                 <td>
@@ -142,6 +147,10 @@ function saveCredential() {
     const ppvRenameTimezone = document.getElementById('credential-ppv-rename-timezone').value.trim();
     const preferredLanguages = document.getElementById('credential-preferred-languages').value.trim();
     const languageFallback = document.getElementById('credential-language-fallback').value;
+    const transcodeEnabled = document.getElementById('credential-transcode-enabled').checked;
+    const transcodeMaxHeight = parseInt(document.getElementById('credential-transcode-max-height').value, 10);
+    const transcodeMaxBitrate = parseInt(document.getElementById('credential-transcode-max-bitrate').value, 10);
+    const transcodeStereo = document.getElementById('credential-transcode-stereo').checked;
 
     if (!username) {
         showFormError('Username is required');
@@ -169,6 +178,11 @@ function saveCredential() {
         ppv_rename_timezone: ppvRenameTimezone || null,
         preferred_languages: preferredLanguages || 'en',
         language_fallback: languageFallback,
+        transcode_enabled: transcodeEnabled,
+        transcode_max_height: transcodeMaxHeight,
+        transcode_max_bitrate_kbps: transcodeMaxBitrate,
+        transcode_audio_channels: transcodeStereo ? 2 : 1,
+        transcode_audio_bitrate_kbps: 128,
     };
 
     if (password) {
@@ -224,6 +238,10 @@ function editCredential(id) {
                 : (cred.preferred_languages || 'en');
             document.getElementById('credential-preferred-languages').value = langs;
             document.getElementById('credential-language-fallback').value = cred.language_fallback || 'unknown';
+            document.getElementById('credential-transcode-enabled').checked = !!cred.transcode_enabled;
+            document.getElementById('credential-transcode-max-height').value = cred.transcode_max_height || 720;
+            document.getElementById('credential-transcode-max-bitrate').value = cred.transcode_max_bitrate_kbps || 8000;
+            document.getElementById('credential-transcode-stereo').checked = (cred.transcode_audio_channels || 2) === 2;
 
             if (cred.account_id) {
                 document.getElementById('source-account').checked = true;

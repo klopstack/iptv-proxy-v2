@@ -81,18 +81,20 @@ def _sofascore_stats() -> Dict[str, Any]:
 
 def _stream_stats() -> Dict[str, Any]:
     """Read existing stream service stats without creating the singleton."""
-    import services.ffmpeg_stream_service as ffmpeg_mod
     import services.mediaflow_stream_service as mediaflow_mod
+    import services.transcode_stream_service as transcode_mod
 
-    service = ffmpeg_mod._ffmpeg_service or mediaflow_mod._mediaflow_service
-    get_stats = getattr(service, "get_stats", None)
-    if service is None or get_stats is None:
-        return {"active_streams": 0, "total_subscribers": 0}
-    stats = get_stats()
-    return {
-        "active_streams": stats.get("active_streams", 0),
-        "total_subscribers": stats.get("total_subscribers", 0),
-    }
+    active_streams = 0
+    total_subscribers = 0
+    for mod in (mediaflow_mod, transcode_mod):
+        service = getattr(mod, "_mediaflow_service", None) or getattr(mod, "_transcode_service", None)
+        get_stats = getattr(service, "get_stats", None) if service else None
+        if get_stats is None:
+            continue
+        stats = get_stats()
+        active_streams += stats.get("active_streams", 0)
+        total_subscribers += stats.get("total_subscribers", 0)
+    return {"active_streams": active_streams, "total_subscribers": total_subscribers}
 
 
 def build_memory_stats() -> Dict[str, Any]:
