@@ -1,15 +1,16 @@
 {
-  "built_at": "2026-06-10",
-  "entry_count": 5222,
+  "built_at": "2026-06-14",
+  "entry_count": 5556,
   "coverage_by_sport": {
-    "fb": 25,
+    "fb": 344,
     "milb": 120,
     "mlb": 30,
     "nba": 30,
     "ncaab": 4698,
     "ncaaf": 253,
     "nfl": 33,
-    "nhl": 33
+    "nhl": 33,
+    "wnba": 15
   },
   "sources": [
     "https://raw.githubusercontent.com/greerreNFL/Stadiums/main/data/stadiums.csv",
@@ -23,14 +24,38 @@
   ],
   "tsdb_coverage": {
     "fb": {
-      "total": 25,
-      "with_city": 25,
-      "with_iana_timezone": 12,
+      "total": 344,
+      "with_city": 335,
+      "with_iana_timezone": 195,
       "by_league": {
-        "English Premier League": 25
+        "English Premier League": 20,
+        "English League Championship": 24,
+        "English League 1": 24,
+        "English League 2": 24,
+        "Spanish La Liga": 20,
+        "Italian Serie A": 20,
+        "German Bundesliga": 18,
+        "French Ligue 1": 18,
+        "Dutch Eredivisie": 18,
+        "Scottish Premiership": 12,
+        "American Major League Soccer": 30,
+        "Mexican Primera League": 18,
+        "English Womens Super League": 12,
+        "UEFA Womens Champions League": 70,
+        "American NWSL": 16
+      },
+      "city_pct": 97.4,
+      "tz_pct": 56.7
+    },
+    "wnba": {
+      "total": 15,
+      "with_city": 15,
+      "with_iana_timezone": 11,
+      "by_league": {
+        "WNBA": 15
       },
       "city_pct": 100.0,
-      "tz_pct": 48.0
+      "tz_pct": 73.3
     }
   }
 }
