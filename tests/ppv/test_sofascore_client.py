@@ -34,7 +34,7 @@ class TestSofaScoreRegistry:
 
 
 class TestGenericClient:
-    def test_fetch_events_for_slug_uses_cache(self, app):
+    def test_fetch_events_for_slug_uses_cache(self, app, sofascore_fixture_date_in_window):
         with app.app_context():
             Settings.set(SETTING_PPV_SOFASCORE_CALENDAR_ENABLED, "true")
             clear_sofascore_tennis_calendar_cache()
