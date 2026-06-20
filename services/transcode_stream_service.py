@@ -402,6 +402,9 @@ class TranscodeStreamService:
             to_close = []
             for stream_key, stream in self._streams.items():
                 if not stream.subscribers:
+                    if not stream.is_active or stream.error:
+                        to_close.append((stream, "upstream_end" if stream.error else "inactive"))
+                        continue
                     idle_time = stream.last_subscriber_left_at or stream.last_activity
                     if (now - idle_time).total_seconds() >= TRANSCODE_STREAM_IDLE_TIMEOUT:
                         to_close.append((stream, "idle"))

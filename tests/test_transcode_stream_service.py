@@ -66,7 +66,7 @@ def software_profile(monkeypatch):
 
 class TestTranscodeIdleTimeout:
     def test_cleanup_uses_transcode_idle_timeout(self, software_profile, monkeypatch):
-        monkeypatch.setenv("TRANSCODE_STREAM_IDLE_TIMEOUT", "30")
+        monkeypatch.setenv("TRANSCODE_STREAM_IDLE_TIMEOUT", "60")
         import services.transcode_stream_service as tss
 
         importlib.reload(tss)
@@ -83,7 +83,7 @@ class TestTranscodeIdleTimeout:
             credential_id=1,
             session_token="sess",
             transcode_profile=software_profile,
-            last_subscriber_left_at=now - timedelta(seconds=10),
+            last_subscriber_left_at=now - timedelta(seconds=45),
         )
         stale = TranscodeStream(
             stream_key="1:stale:ts:t:fp",
@@ -94,7 +94,7 @@ class TestTranscodeIdleTimeout:
             credential_id=1,
             session_token="sess",
             transcode_profile=software_profile,
-            last_subscriber_left_at=now - timedelta(seconds=31),
+            last_subscriber_left_at=now - timedelta(seconds=61),
         )
         with service._lock:
             service._streams[recent.stream_key] = recent
