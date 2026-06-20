@@ -23,7 +23,33 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-TRANSCODE_CHUNK_SIZE = int(os.environ.get("TRANSCODE_CHUNK_SIZE", "8192"))
+_DEFAULT_TRANSCODE_CHUNK_SIZE = 8192
+
+
+def _parse_transcode_chunk_size() -> int:
+    raw = os.environ.get("TRANSCODE_CHUNK_SIZE")
+    if raw is None:
+        return _DEFAULT_TRANSCODE_CHUNK_SIZE
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(
+            "Invalid TRANSCODE_CHUNK_SIZE %r; using default %d",
+            raw,
+            _DEFAULT_TRANSCODE_CHUNK_SIZE,
+        )
+        return _DEFAULT_TRANSCODE_CHUNK_SIZE
+    if value <= 0:
+        logger.warning(
+            "TRANSCODE_CHUNK_SIZE must be positive; got %d, using default %d",
+            value,
+            _DEFAULT_TRANSCODE_CHUNK_SIZE,
+        )
+        return _DEFAULT_TRANSCODE_CHUNK_SIZE
+    return value
+
+
+TRANSCODE_CHUNK_SIZE = _parse_transcode_chunk_size()
 SUBSCRIBER_QUEUE_SIZE = 100
 SUBSCRIBER_TIMEOUT = 10
 STREAM_IDLE_TIMEOUT = int(os.environ.get("STREAM_IDLE_TIMEOUT", "0"))

@@ -81,6 +81,16 @@ class TestTranscodeChunkSize:
         importlib.reload(tss)
         assert tss.TRANSCODE_CHUNK_SIZE == 4096
 
+    @pytest.mark.parametrize("invalid_value", ["not-a-number", "0", "-1"])
+    def test_transcode_chunk_size_invalid_env_falls_back_to_default(self, monkeypatch, invalid_value):
+        monkeypatch.setenv("TRANSCODE_CHUNK_SIZE", invalid_value)
+        import importlib
+
+        import services.transcode_stream_service as tss
+
+        importlib.reload(tss)
+        assert tss.TRANSCODE_CHUNK_SIZE == 8192
+
     def test_ffmpeg_popen_uses_transcode_chunk_size(self, monkeypatch, software_profile):
         monkeypatch.setenv("TRANSCODE_CHUNK_SIZE", "4096")
         import importlib
