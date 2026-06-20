@@ -423,7 +423,7 @@ class TranscodeStreamService:
         transcode_profile: Optional[TranscodeProfile] = None,
     ) -> Optional[TranscodeStream]:
         """Return an idle-pending stream from the same client suitable for credential reuse."""
-        if not client_ip or STREAM_IDLE_TIMEOUT <= 0:
+        if not client_ip or TRANSCODE_STREAM_IDLE_TIMEOUT <= 0:
             return None
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -442,7 +442,10 @@ class TranscodeStreamService:
                 idle_since = stream.last_subscriber_left_at
                 if not idle_since:
                     continue
-                if STREAM_IDLE_TIMEOUT > 0 and (now - idle_since).total_seconds() >= STREAM_IDLE_TIMEOUT:
+                if (
+                    TRANSCODE_STREAM_IDLE_TIMEOUT > 0
+                    and (now - idle_since).total_seconds() >= TRANSCODE_STREAM_IDLE_TIMEOUT
+                ):
                     continue
                 return stream
         return None
