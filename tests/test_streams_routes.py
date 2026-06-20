@@ -17,7 +17,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from models import Account, ActiveStream, Credential, db
+from models import Account, ActiveStream, Credential, XtreamCredential, db
 from services.stream_test_helpers import classify_error_and_get_status
 
 
@@ -348,6 +348,93 @@ class TestProxyStream:
         assert response.headers.get("Content-Length") is not None
         assert response.content_type == "application/vnd.apple.mpegurl"
         assert b"/stream/mediaflow/" in response.data or b"iptv" in response.data
+
+
+class TestProxyVodStream:
+    """Tests for upstream VOD movie proxy endpoint."""
+
+    @pytest.fixture
+    def vod_xtream_cred(self, app, test_account):
+        with app.app_context():
+            cred = XtreamCredential(
+                username="vod_user",
+                password="vod_pass",
+                account_id=test_account,
+                enabled=True,
+                vod_passthrough=True,
+            )
+            db.session.add(cred)
+            db.session.commit()
+            db.session.refresh(cred)
+            yield cred
+
+    def test_vod_proxy_requires_xc(self, app, client, test_account, vod_xtream_cred):
+        response = client.get(f"/stream/{test_account}/vod/1000.mp4")
+        assert response.status_code == 403
+
+    def test_vod_proxy_rejects_disabled_passthrough(self, app, client, test_account, vod_xtream_cred):
+        with app.app_context():
+            from routes.streams import _load_vod_passthrough_credential
+
+            cred = db.session.get(XtreamCredential, vod_xtream_cred.id)
+            cred.vod_passthrough = False
+            db.session.commit()
+            assert db.session.get(XtreamCredential, vod_xtream_cred.id).vod_passthrough is False
+            assert _load_vod_passthrough_credential(str(vod_xtream_cred.id), test_account) is None
+
+            response = client.get(f"/stream/{test_account}/vod/1000.mp4?xc={vod_xtream_cred.id}")
+
+        assert response.status_code == 403
+
+    def test_vod_proxy_forwards_range(self, app, client, test_account, test_account_with_credential, vod_xtream_cred):
+        _, provider_cred_id = test_account_with_credential
+        mock_response = Mock()
+        mock_response.status_code = 206
+        mock_response.headers = {"Content-Range": "bytes 0-1023/5000", "Content-Length": "1024"}
+        mock_response.iter_content = Mock(return_value=[b"chunk"])
+        mock_response.close = Mock()
+
+        with patch("routes.streams.ConnectionManager.get_available_credential") as mock_get_cred, patch(
+            "routes.streams.ConnectionManager.acquire_connection",
+            return_value=("session-token", None),
+        ), patch("routes.streams.ConnectionManager.release_connection"), patch(
+            "routes.streams.requests.request", return_value=mock_response
+        ) as mock_request:
+            mock_get_cred.return_value = type(
+                "Cred", (), {"id": provider_cred_id, "username": "cred_user", "password": "cred_pass"}
+            )()
+
+            response = client.get(
+                f"/stream/{test_account}/vod/1000.mp4?xc={vod_xtream_cred.id}",
+                headers={"Range": "bytes=0-1023"},
+            )
+
+        assert response.status_code == 206
+        mock_request.assert_called_once()
+        assert mock_request.call_args.kwargs["headers"]["Range"] == "bytes=0-1023"
+
+    def test_vod_proxy_upstream_error_status(
+        self, app, client, test_account, test_account_with_credential, vod_xtream_cred
+    ):
+        _, provider_cred_id = test_account_with_credential
+        mock_response = Mock()
+        mock_response.status_code = 404
+        mock_response.headers = {}
+        mock_response.close = Mock()
+
+        with patch("routes.streams.ConnectionManager.get_available_credential") as mock_get_cred, patch(
+            "routes.streams.ConnectionManager.acquire_connection",
+            return_value=("session-token", None),
+        ), patch("routes.streams.ConnectionManager.release_connection"), patch(
+            "routes.streams.requests.request", return_value=mock_response
+        ):
+            mock_get_cred.return_value = type(
+                "Cred", (), {"id": provider_cred_id, "username": "cred_user", "password": "cred_pass"}
+            )()
+
+            response = client.get(f"/stream/{test_account}/vod/1000.mp4?xc={vod_xtream_cred.id}")
+
+        assert response.status_code == 404
 
 
 # ============================================================================

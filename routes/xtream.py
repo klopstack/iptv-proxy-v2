@@ -894,7 +894,7 @@ def xtream_movie_stream(username, password, stream_id, ext="mp4"):
     VOD/Movie stream URL for Xtream clients.
     Proxies upstream movie when vod_passthrough is enabled on the credential.
     """
-    logger.info(f"Xtream movie request: username={username}, password={password}, stream_id={stream_id}")
+    logger.info(f"Xtream movie request: username={username}, stream_id={stream_id}")
 
     xtream_cred = XtreamCredential.query.filter_by(username=username, password=password, enabled=True).first()
     if not xtream_cred:
