@@ -78,7 +78,8 @@ class TestTranscodeProfile:
         assert "qsv=hw@va" in joined
         assert "extra_hw_frames=" in joined
         assert "format=qsv" in joined
-        assert "scale_qsv" in joined
+        assert "scale=w=-2:h=min(ih\\,720)" in joined
+        assert "scale_qsv" not in joined
         assert "-hwaccel" not in args
         assert "-preset" in args
         assert args[args.index("-preset") + 1] == "veryfast"
