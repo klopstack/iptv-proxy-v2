@@ -26,7 +26,9 @@ logger = logging.getLogger(__name__)
 CHUNK_SIZE = 65536
 SUBSCRIBER_QUEUE_SIZE = 100
 SUBSCRIBER_TIMEOUT = 10
-STREAM_IDLE_TIMEOUT = int(os.environ.get("STREAM_IDLE_TIMEOUT", "0"))
+# Seconds with no subscribers before tearing down FFmpeg. Separate from passthrough
+# STREAM_IDLE_TIMEOUT so transcode can stay warm briefly after channel zaps.
+TRANSCODE_STREAM_IDLE_TIMEOUT = int(os.environ.get("TRANSCODE_STREAM_IDLE_TIMEOUT", "30"))
 
 
 @dataclass
@@ -401,7 +403,7 @@ class TranscodeStreamService:
             for stream_key, stream in self._streams.items():
                 if not stream.subscribers:
                     idle_time = stream.last_subscriber_left_at or stream.last_activity
-                    if (now - idle_time).total_seconds() >= STREAM_IDLE_TIMEOUT:
+                    if (now - idle_time).total_seconds() >= TRANSCODE_STREAM_IDLE_TIMEOUT:
                         to_close.append((stream, "idle"))
                 elif not stream.is_active:
                     to_close.append((stream, "upstream_end"))

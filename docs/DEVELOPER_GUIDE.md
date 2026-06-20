@@ -120,6 +120,7 @@ Passthrough streaming uses MediaFlow Proxy (required). Per-client transcoding us
 | `MEDIAFLOW_PROXY_URL` | MediaFlow Proxy base URL |
 | `MEDIAFLOW_API_PASSWORD` | API password for MediaFlow Proxy |
 | `TRANSCODE_HWACCEL` | Hardware encoder selection for transcode (`auto` default) |
+| `TRANSCODE_STREAM_IDLE_TIMEOUT` | Seconds FFmpeg transcode stays warm after last subscriber leaves (default `30`; passthrough uses `STREAM_IDLE_TIMEOUT`) |
 
 ```bash
 pytest tests/test_stream_service_factory.py tests/test_mediaflow_stream_service.py tests/test_transcode_profile.py -v --no-cov
