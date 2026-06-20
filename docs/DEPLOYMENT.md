@@ -175,6 +175,7 @@ environment:
   - MEDIAFLOW_PROXY_URL=http://mediaflow-proxy:8888
   - MEDIAFLOW_API_PASSWORD=${MEDIAFLOW_API_PASSWORD}
   - STREAM_IDLE_TIMEOUT=0
+  - TRANSCODE_STREAM_IDLE_TIMEOUT=30
 volumes:
   - ${FOLDER_FOR_DATA}/iptv-proxy-v2:/app/data
 networks:
