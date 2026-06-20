@@ -60,7 +60,7 @@ class TestReassignConnection:
 
 class TestTranscodeIdleReuse:
     def test_find_idle_stream_same_client_different_channel(self, software_profile, monkeypatch):
-        monkeypatch.setattr("services.transcode_stream_service.STREAM_IDLE_TIMEOUT", 30)
+        monkeypatch.setattr("services.transcode_stream_service.TRANSCODE_STREAM_IDLE_TIMEOUT", 30)
         service = TranscodeStreamService()
         stream_a, sub_a = service.subscribe(
             account_id=1,
@@ -84,7 +84,7 @@ class TestTranscodeIdleReuse:
         assert found.last_client_ip == "192.168.1.10"
 
     def test_find_idle_stream_rejects_different_client(self, software_profile, monkeypatch):
-        monkeypatch.setattr("services.transcode_stream_service.STREAM_IDLE_TIMEOUT", 30)
+        monkeypatch.setattr("services.transcode_stream_service.TRANSCODE_STREAM_IDLE_TIMEOUT", 30)
         service = TranscodeStreamService()
         stream_a, sub_a = service.subscribe(
             account_id=1,
@@ -108,7 +108,8 @@ class TestTranscodeIdleReuse:
             is None
         )
 
-    def test_find_idle_stream_disabled_when_timeout_zero(self, software_profile):
+    def test_find_idle_stream_disabled_when_timeout_zero(self, software_profile, monkeypatch):
+        monkeypatch.setattr("services.transcode_stream_service.TRANSCODE_STREAM_IDLE_TIMEOUT", 0)
         service = TranscodeStreamService()
         stream_a, sub_a = service.subscribe(
             account_id=1,
@@ -192,7 +193,7 @@ class TestMediaFlowIdleReuse:
 
 class TestTryReuseIdleConnection:
     def test_reuses_session_without_new_acquire(self, app, account_with_single_slot, software_profile, monkeypatch):
-        monkeypatch.setattr("services.transcode_stream_service.STREAM_IDLE_TIMEOUT", 30)
+        monkeypatch.setattr("services.transcode_stream_service.TRANSCODE_STREAM_IDLE_TIMEOUT", 30)
         account_id, cred_id = account_with_single_slot
         service = TranscodeStreamService()
 
@@ -245,7 +246,7 @@ class TestTryReuseIdleConnection:
             assert reused_token is None
 
     def test_expired_idle_window_not_reused(self, app, account_with_single_slot, software_profile, monkeypatch):
-        monkeypatch.setattr("services.transcode_stream_service.STREAM_IDLE_TIMEOUT", 5)
+        monkeypatch.setattr("services.transcode_stream_service.TRANSCODE_STREAM_IDLE_TIMEOUT", 5)
         account_id, cred_id = account_with_single_slot
         service = TranscodeStreamService()
 
