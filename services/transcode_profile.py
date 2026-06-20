@@ -199,8 +199,8 @@ class TranscodeProfile:
                     upstream_url,
                     "-vf",
                     (
-                        f"format=nv12,hwupload=extra_hw_frames={_QSV_HWUPLOAD_FRAMES},"
-                        f"format=qsv,scale_qsv=w=-2:h=min(ih\\,{height})"
+                        f"scale=w=-2:h=min(ih\\,{height}),format=nv12,"
+                        f"hwupload=extra_hw_frames={_QSV_HWUPLOAD_FRAMES},format=qsv"
                     ),
                     "-c:v",
                     "h264_qsv",
