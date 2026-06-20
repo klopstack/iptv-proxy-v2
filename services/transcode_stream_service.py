@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-CHUNK_SIZE = 65536
+TRANSCODE_CHUNK_SIZE = int(os.environ.get("TRANSCODE_CHUNK_SIZE", "8192"))
 SUBSCRIBER_QUEUE_SIZE = 100
 SUBSCRIBER_TIMEOUT = 10
 STREAM_IDLE_TIMEOUT = int(os.environ.get("STREAM_IDLE_TIMEOUT", "0"))
@@ -244,7 +244,7 @@ class TranscodeStreamService:
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                bufsize=CHUNK_SIZE,
+                bufsize=TRANSCODE_CHUNK_SIZE,
             )
             stream.reader_thread = threading.Thread(
                 target=self._ffmpeg_reader,
@@ -269,7 +269,7 @@ class TranscodeStreamService:
             while stream.is_active and stream.process and stream.process.poll() is None:
                 if stream.process.stdout is None:
                     break
-                chunk = stream.process.stdout.read(CHUNK_SIZE)
+                chunk = stream.process.stdout.read(TRANSCODE_CHUNK_SIZE)
                 if not chunk:
                     break
                 stream.bytes_received += len(chunk)
