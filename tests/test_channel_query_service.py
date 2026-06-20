@@ -642,6 +642,127 @@ def test_multi_account_xtream_stream_routes_to_channel_account(app, client):
         assert f"/stream/{acc2.id}/555.ts" in response.headers["Location"]
 
 
+def test_channel_for_xtream_stream_matches_full_list(app, test_account, test_category):
+    """Single-stream lookup agrees with channels_for_xtream for accessible streams."""
+    with app.app_context():
+        ch = Channel(
+            account_id=test_account,
+            stream_id="9001",
+            name="Fast Path Channel",
+            cleaned_name="Fast Path Channel",
+            category_id=test_category,
+            is_active=True,
+            is_visible=True,
+        )
+        db.session.add(ch)
+        db.session.commit()
+
+        cred = XtreamCredential(
+            username="fast",
+            password="fast",
+            account_id=test_account,
+            enabled=True,
+            use_filters=False,
+            collapse_duplicates=False,
+        )
+        db.session.add(cred)
+        db.session.commit()
+
+        account = db.session.get(Account, test_account)
+        found = ChannelQueryService.channel_for_xtream_stream(cred, account, None, 9001)
+        all_channels = ChannelQueryService.channels_for_xtream(cred, account, None)
+
+        assert found is not None
+        assert found.stream_id == "9001"
+        assert any(c.stream_id == "9001" for c in all_channels)
+
+
+def test_channel_for_xtream_stream_rejects_inaccessible(app, test_account, test_category):
+    """Single-stream lookup returns None when channel fails visibility rules."""
+    with app.app_context():
+        ch = Channel(
+            account_id=test_account,
+            stream_id="9002",
+            name="Inactive Channel",
+            cleaned_name="Inactive Channel",
+            category_id=test_category,
+            is_active=False,
+            is_visible=True,
+        )
+        db.session.add(ch)
+        db.session.commit()
+
+        cred = XtreamCredential(
+            username="fast2",
+            password="fast2",
+            account_id=test_account,
+            enabled=True,
+            use_filters=False,
+            collapse_duplicates=False,
+        )
+        db.session.add(cred)
+        db.session.commit()
+
+        account = db.session.get(Account, test_account)
+        assert ChannelQueryService.channel_for_xtream_stream(cred, account, None, 9002) is None
+
+
+def test_channel_for_xtream_stream_respects_playlist_tag_filter(app, test_account, test_category):
+    """Playlist tag include rules are enforced on single-stream lookup."""
+    with app.app_context():
+        hd_tag = Tag(name="HD")
+        db.session.add(hd_tag)
+        db.session.flush()
+
+        tagged = Channel(
+            account_id=test_account,
+            stream_id="9010",
+            name="Tagged",
+            cleaned_name="Tagged",
+            category_id=test_category,
+            is_active=True,
+            is_visible=True,
+        )
+        untagged = Channel(
+            account_id=test_account,
+            stream_id="9011",
+            name="Untagged",
+            cleaned_name="Untagged",
+            category_id=test_category,
+            is_active=True,
+            is_visible=True,
+        )
+        db.session.add_all([tagged, untagged])
+        db.session.flush()
+        db.session.add(ChannelTag(account_id=test_account, stream_id="9010", tag_id=hd_tag.id))
+        db.session.commit()
+
+        cfg = PlaylistConfig(
+            name="HD Only",
+            include_accounts=json.dumps([test_account]),
+            include_tags=json.dumps([hd_tag.id]),
+            enabled=True,
+        )
+        db.session.add(cfg)
+        db.session.commit()
+
+        cred = XtreamCredential(
+            username="tagged",
+            password="tagged",
+            playlist_config_id=cfg.id,
+            enabled=True,
+        )
+        db.session.add(cred)
+        db.session.commit()
+
+        found = ChannelQueryService.channel_for_xtream_stream(cred, None, cfg, 9010)
+        blocked = ChannelQueryService.channel_for_xtream_stream(cred, None, cfg, 9011)
+
+        assert found is not None
+        assert found.stream_id == "9010"
+        assert blocked is None
+
+
 def test_load_tags_for_account_channels(app):
     """Single-account tag loader returns stream_id -> tag name lists."""
     with app.app_context():

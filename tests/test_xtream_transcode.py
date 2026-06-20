@@ -33,7 +33,7 @@ def test_xtream_live_redirect_includes_xc_and_forces_ts(app, client, xtream_cred
     channel.stream_id = "1001"
     channel.account_id = account.id
 
-    with patch("routes.xtream.get_channels_for_credential", return_value=[channel]):
+    with patch("routes.xtream.get_channel_for_credential_stream", return_value=channel):
         response = client.get(f"/live/{cred.username}/{cred.password}/1001.m3u8", follow_redirects=False)
 
     assert response.status_code == 302
@@ -51,7 +51,7 @@ def test_xtream_live_passthrough_keeps_format(app, client, xtream_cred_with_tran
     channel.stream_id = "1001"
     channel.account_id = account.id
 
-    with patch("routes.xtream.get_channels_for_credential", return_value=[channel]):
+    with patch("routes.xtream.get_channel_for_credential_stream", return_value=channel):
         response = client.get(f"/live/{cred.username}/{cred.password}/1001.m3u8", follow_redirects=False)
 
     assert response.status_code == 302
