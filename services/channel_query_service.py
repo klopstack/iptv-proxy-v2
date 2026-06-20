@@ -839,12 +839,8 @@ class ChannelQueryService:
         if account:
             query = query.filter(Channel.account_id == account.id)
         elif playlist_config:
-            include_accounts = (
-                json.loads(playlist_config.include_accounts) if playlist_config.include_accounts else []
-            )
-            exclude_accounts = (
-                json.loads(playlist_config.exclude_accounts) if playlist_config.exclude_accounts else []
-            )
+            include_accounts = json.loads(playlist_config.include_accounts) if playlist_config.include_accounts else []
+            exclude_accounts = json.loads(playlist_config.exclude_accounts) if playlist_config.exclude_accounts else []
             if include_accounts:
                 query = query.filter(Channel.account_id.in_(include_accounts))
             if exclude_accounts:

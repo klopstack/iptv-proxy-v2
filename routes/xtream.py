@@ -2,8 +2,9 @@
 Xtream Codes API output routes
 Emulates Xtream Codes API format for client compatibility
 """
+
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from functools import wraps
 
 from flask import Blueprint, jsonify, redirect, request
