@@ -18,7 +18,7 @@ import requests
 from flask import Blueprint, Response, abort, current_app, render_template, request, stream_with_context
 from werkzeug.exceptions import HTTPException
 
-from models import Account, db
+from models import Account, Credential, db
 from services.connection_manager import STREAM_TIMEOUT_SECONDS, ConnectionManager
 from services.hls_manifest_service import rewrite_hls_manifest
 from services.mediaflow_stream_service import MEDIAFLOW_API_PASSWORD, MEDIAFLOW_PROXY_URL
@@ -409,6 +409,44 @@ def _subscribe_to_stream(
     )
 
 
+def _try_reuse_idle_connection(
+    stream_service: Any,
+    account_id: int,
+    stream_id: str,
+    client_ip: str | None,
+    transcode_profile: Any,
+) -> tuple[int | None, str | None]:
+    """
+    Reuse a same-client idle-pending stream's credential for a new channel.
+
+    Returns (credential_id, session_token) when reuse succeeds, else (None, None).
+    """
+    if not client_ip:
+        return None, None
+
+    idle_stream = stream_service.find_idle_stream_for_client(
+        account_id=account_id,
+        client_ip=client_ip,
+        exclude_stream_id=stream_id,
+        transcode_profile=transcode_profile,
+    )
+    if not idle_stream or idle_stream.credential_id is None:
+        return None, None
+
+    session_token = idle_stream.session_token
+    credential_id = idle_stream.credential_id
+    stream_service.close_idle_stream_for_reuse(idle_stream)
+
+    if not ConnectionManager.reassign_connection(session_token, stream_id, client_ip):
+        ConnectionManager.release_connection(session_token)
+        return None, None
+
+    logger.info(
+        f"Reusing idle connection for client {client_ip} on stream {stream_id} " f"(session: {session_token[:8]}...)"
+    )
+    return credential_id, session_token
+
+
 def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
     """
     Internal function to proxy stream with credential multiplexing and stream sharing.
@@ -518,29 +556,47 @@ def _proxy_stream(account_id: int, stream_id: str, format: str) -> Response:
             headers=response_headers,
         )
 
-    # No existing stream - need to acquire a credential and create new stream
-    credential = ConnectionManager.get_available_credential(account_id)
-    if not credential:
-        # Use service to handle credential shortage
-        credential = StreamProxyService.handle_credential_shortage(account_id, stream_service)
+    # No existing stream - acquire credential (or reuse same-client idle connection)
+    credential: Any = None
+    credential_id: int | None = None
+    session_token: str | None = None
 
-    if not credential:
-        logger.warning(f"Stream request failed: no available credentials for account {account_id}")
-        abort(503, description="No available connections. All streams are in use.")
+    reused_cred_id, reused_token = _try_reuse_idle_connection(
+        stream_service, account_id, stream_id, client_ip, transcode_profile
+    )
+    if reused_cred_id and reused_token:
+        credential = db.session.get(Credential, reused_cred_id)
+        if credential and credential.enabled:
+            credential_id = reused_cred_id
+            session_token = reused_token
+        else:
+            ConnectionManager.release_connection(reused_token)
 
-    credential_id = getattr(credential, "id", None)
-    credential_username = getattr(credential, "username", "unknown")
-    logger.debug(f"Using credential: id={credential_id}, username={credential_username}")
-
-    if credential_id is None:
-        logger.error(f"Stream request failed: credential has no id for account {account_id}")
-        abort(503, description="No available connections. All streams are in use.")
-
-    # Acquire connection slot
-    session_token, error = ConnectionManager.acquire_connection(credential_id, stream_id, client_ip)
     if not session_token:
-        logger.error(f"Stream request failed: could not acquire connection - {error}")
-        abort(503, description=f"Could not acquire connection: {error}")
+        credential = ConnectionManager.get_available_credential(account_id)
+        if not credential:
+            # Use service to handle credential shortage
+            credential = StreamProxyService.handle_credential_shortage(account_id, stream_service)
+
+        if not credential:
+            logger.warning(f"Stream request failed: no available credentials for account {account_id}")
+            abort(503, description="No available connections. All streams are in use.")
+
+        credential_id = getattr(credential, "id", None)
+        credential_username = getattr(credential, "username", "unknown")
+        logger.debug(f"Using credential: id={credential_id}, username={credential_username}")
+
+        if credential_id is None:
+            logger.error(f"Stream request failed: credential has no id for account {account_id}")
+            abort(503, description="No available connections. All streams are in use.")
+
+        # Acquire connection slot
+        session_token, error = ConnectionManager.acquire_connection(credential_id, stream_id, client_ip)
+        if not session_token:
+            logger.error(f"Stream request failed: could not acquire connection - {error}")
+            abort(503, description=f"Could not acquire connection: {error}")
+    else:
+        logger.debug(f"Reused credential: id={credential_id}, username={getattr(credential, 'username', 'unknown')}")
 
     # Build upstream URL chain with optional backup failover
     user_agent = account.user_agent or "okhttp/3.14.9"

@@ -158,6 +158,32 @@ class ConnectionManager:
         return True
 
     @staticmethod
+    def reassign_connection(session_token: str, stream_id: str, client_ip: Optional[str] = None) -> bool:
+        """
+        Retarget an existing connection slot to a new stream without releasing it.
+
+        Used when the same client switches channels during an idle-pending window.
+        """
+        if not session_token:
+            return False
+
+        active_stream = ActiveStream.query.filter_by(session_token=session_token).first()
+        if not active_stream:
+            logger.warning(f"No active stream found to reassign for session {session_token[:8]}...")
+            return False
+
+        active_stream.stream_id = stream_id
+        if client_ip is not None:
+            active_stream.client_ip = client_ip
+        active_stream.last_activity = datetime.now(timezone.utc).replace(tzinfo=None)
+        db.session.commit()
+
+        logger.info(
+            f"Reassigned connection session {session_token[:8]}... to stream {stream_id} " f"(client: {client_ip})"
+        )
+        return True
+
+    @staticmethod
     def update_activity(session_token: str) -> bool:
         """
         Update last activity timestamp for a stream (heartbeat).
