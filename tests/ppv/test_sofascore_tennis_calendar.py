@@ -103,7 +103,7 @@ class TestFetchTennisEventsForDate:
             assert fetch_tennis_events_for_date("2026-06-03") == []
             mock_get.assert_not_called()
 
-    def test_cache_hit_skips_second_http(self, app):
+    def test_cache_hit_skips_second_http(self, app, sofascore_fixture_date_in_window):
         Settings.set(SETTING_PPV_SOFASCORE_CALENDAR_ENABLED, "true")
         payload = _load_fixture()
         mock_response = MagicMock()

@@ -114,17 +114,50 @@ class TranscodeProfile:
             )
 
         output_tail = [
+            "-map",
+            "0:v:0?",
+            "-map",
+            "0:a:0?",
             "-c:a",
             "aac",
+            "-profile:a",
+            "aac_low",
             "-ac",
             audio_ch,
+            "-ar",
+            "48000",
             "-b:a",
             audio_br,
+            "-muxdelay",
+            "0",
+            "-muxpreload",
+            "0",
+            "-avoid_negative_ts",
+            "make_zero",
             "-f",
             "mpegts",
             "-mpegts_flags",
-            "+pat_pmt_at_frames",
+            "+pat_pmt_at_frames+resend_headers+initial_discontinuity",
             "pipe:1",
+        ]
+
+        video_tail = [
+            "-profile:v",
+            "main",
+            "-level",
+            "4.0",
+            "-b:v",
+            v_bitrate,
+            "-maxrate",
+            maxrate,
+            "-bufsize",
+            bufsize,
+            "-g",
+            "50",
+            "-keyint_min",
+            "50",
+            "-sc_threshold",
+            "0",
         ]
 
         if mode == "vaapi":
@@ -144,15 +177,8 @@ class TranscodeProfile:
                     f"format=nv12,hwupload,scale_vaapi=w=-2:h=min(ih\\,{height})",
                     "-c:v",
                     "h264_vaapi",
-                    "-b:v",
-                    v_bitrate,
-                    "-maxrate",
-                    maxrate,
-                    "-bufsize",
-                    bufsize,
-                    "-g",
-                    "50",
                 ]
+                + video_tail
                 + output_tail
             )
 
@@ -180,15 +206,8 @@ class TranscodeProfile:
                     "h264_qsv",
                     "-preset",
                     "veryfast",
-                    "-b:v",
-                    v_bitrate,
-                    "-maxrate",
-                    maxrate,
-                    "-bufsize",
-                    bufsize,
-                    "-g",
-                    "50",
                 ]
+                + video_tail
                 + output_tail
             )
 
@@ -205,15 +224,10 @@ class TranscodeProfile:
                 "libx264",
                 "-preset",
                 "veryfast",
-                "-b:v",
-                v_bitrate,
-                "-maxrate",
-                maxrate,
-                "-bufsize",
-                bufsize,
-                "-g",
-                "50",
+                "-pix_fmt",
+                "yuv420p",
             ]
+            + video_tail
             + output_tail
         )
 

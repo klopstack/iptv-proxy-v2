@@ -57,6 +57,8 @@ class TestTranscodeProfile:
         assert "test-ua" in args
         assert "mpegts" in args
         assert "+genpts+discardcorrupt" in args
+        assert "resend_headers" in " ".join(args)
+        assert "48000" in args
 
     def test_build_ffmpeg_args_vaapi_uses_sw_decode_hw_encode(self, vaapi_encoder):
         profile = TranscodeProfile(True, 720, 8000, 2, 128)

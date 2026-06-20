@@ -79,6 +79,31 @@ class TestTranscodeStreamKeys:
 
 @pytest.mark.skipif(not FFMPEG_AVAILABLE, reason="ffmpeg not available")
 class TestTranscodeStreamIntegration:
+    def test_subscribe_defers_ffmpeg_until_stream_chunks(self, software_profile, test_video):
+        service = TranscodeStreamService()
+        service.start()
+        try:
+            stream, subscriber = service.subscribe(
+                account_id=1,
+                stream_id="test",
+                format="ts",
+                upstream_url=str(test_video),
+                credential_id=1,
+                session_token="sess",
+                transcode_profile=software_profile,
+                user_agent="test",
+            )
+            assert stream.process is None
+            assert not stream.ffmpeg_started
+
+            chunks = list(service.stream_chunks(stream, subscriber))
+            service.unsubscribe(stream, subscriber)
+
+            assert stream.ffmpeg_started
+            assert sum(len(c) for c in chunks) > 0
+        finally:
+            service.stop()
+
     def test_transcode_produces_mpegts_output(self, software_profile, test_video, tmp_path):
         service = TranscodeStreamService()
         service.start()
@@ -105,5 +130,7 @@ class TestTranscodeStreamIntegration:
                         break
             service.unsubscribe(stream, subscriber)
             assert output.stat().st_size > 0
+            with output.open("rb") as f:
+                assert f.read(1) == b"\x47"
         finally:
             service.stop()

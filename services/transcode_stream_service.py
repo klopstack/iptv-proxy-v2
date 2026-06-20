@@ -65,6 +65,7 @@ class TranscodeStream:
 
     process: Optional[subprocess.Popen] = None
     reader_thread: Optional[threading.Thread] = None
+    ffmpeg_started: bool = False
     lock: threading.Lock = field(default_factory=threading.Lock)
     subscribers: Dict[str, StreamSubscriber] = field(default_factory=dict)
     last_subscriber_left_at: Optional[datetime] = None
@@ -169,7 +170,6 @@ class TranscodeStreamService:
                     on_stream_closed=on_stream_closed,
                 )
                 self._streams[stream_key] = stream
-                self._start_ffmpeg(stream)
 
                 logger.info(
                     "stream_create backend=transcode stream_key=%s worker_pid=%s "
@@ -189,6 +189,7 @@ class TranscodeStreamService:
                 subscriber_id=secrets.token_hex(16),
                 client_ip=client_ip,
                 queue=Queue(maxsize=SUBSCRIBER_QUEUE_SIZE),
+                ready=True,
             )
             with stream.lock:
                 stream.subscribers[subscriber.subscriber_id] = subscriber
@@ -208,7 +209,10 @@ class TranscodeStreamService:
         subscriber: StreamSubscriber,
         proxy_base_url: Optional[str] = None,
     ) -> Generator[bytes, None, None]:
+        # Mirror MediaFlow: mark ready and start the encoder only when a client
+        # generator is consuming, so PAT/PMT and the first keyframe are not dropped.
         subscriber.ready = True
+        self._ensure_ffmpeg_started(stream)
         try:
             while subscriber.active and stream.is_active:
                 try:
@@ -222,6 +226,14 @@ class TranscodeStreamService:
                         break
         finally:
             subscriber.active = False
+
+    def _ensure_ffmpeg_started(self, stream: TranscodeStream) -> None:
+        """Start FFmpeg exactly once when the first subscriber begins consuming."""
+        with stream.lock:
+            if stream.ffmpeg_started or not stream.is_active:
+                return
+            stream.ffmpeg_started = True
+        self._start_ffmpeg(stream)
 
     def _start_ffmpeg(self, stream: TranscodeStream) -> None:
         cmd = stream.transcode_profile.build_ffmpeg_args(stream.upstream_url, stream.user_agent)
@@ -308,7 +320,9 @@ class TranscodeStreamService:
             stream.error = None
             stream.is_active = True
             stream.bytes_received = 0
-            self._start_ffmpeg(stream)
+            with stream.lock:
+                stream.ffmpeg_started = False
+            self._ensure_ffmpeg_started(stream)
             return True
 
     def _terminate_ffmpeg_process(self, stream: TranscodeStream) -> None:
