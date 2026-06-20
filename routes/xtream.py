@@ -711,19 +711,33 @@ def get_simple_data_table(xtream_cred, account, playlist_config):
 # ============================================================================
 
 
-def get_channels_for_credential(xtream_cred, account, playlist_config):
-    """Get filtered channels for a credential via ChannelQueryService."""
-
+def _collapse_duplicates_fn(xtream_cred):
     def _collapse(channels, account_id=None):
         if account_id is not None:
             return collapse_duplicate_channels(channels, account_id)
         return collapse_duplicate_channels_multi_account(channels)
 
+    return _collapse if xtream_cred.collapse_duplicates else None
+
+
+def get_channels_for_credential(xtream_cred, account, playlist_config):
+    """Get filtered channels for a credential via ChannelQueryService."""
     return ChannelQueryService.channels_for_xtream(
         xtream_cred,
         account,
         playlist_config,
-        collapse_duplicates_fn=_collapse if xtream_cred.collapse_duplicates else None,
+        collapse_duplicates_fn=_collapse_duplicates_fn(xtream_cred),
+    )
+
+
+def get_channel_for_credential_stream(xtream_cred, account, playlist_config, stream_id):
+    """Verify a single stream is accessible without loading the full channel list."""
+    return ChannelQueryService.channel_for_xtream_stream(
+        xtream_cred,
+        account,
+        playlist_config,
+        stream_id,
+        collapse_duplicates_fn=_collapse_duplicates_fn(xtream_cred),
     )
 
 
@@ -823,17 +837,11 @@ def xtream_live_stream(username, password, stream_id, ext="ts"):
     else:
         return jsonify({"error": "No account or playlist config associated"}), 400
 
-    # Verify stream exists and is accessible for this credential
-    channels = get_channels_for_credential(xtream_cred, account, playlist_config)
-    logger.info(f"Found {len(channels)} accessible channels for credential {xtream_cred.username}")
-    channel = next((ch for ch in channels if ch.stream_id == str(stream_id)), None)
+    # Verify stream exists and is accessible for this credential (single-stream lookup)
+    channel = get_channel_for_credential_stream(xtream_cred, account, playlist_config, stream_id)
 
     if not channel:
-        logger.warning(f"Stream {stream_id} not found in {len(channels)} accessible channels")
-        # Log first few channel IDs for debugging
-        if channels:
-            sample_ids = [ch.stream_id for ch in channels[:10]]
-            logger.info(f"Sample channel IDs: {sample_ids}")
+        logger.warning(f"Stream {stream_id} not found or not accessible for credential {xtream_cred.username}")
         return jsonify({"error": "Stream not found or not accessible"}), 404
 
     # Redirect to internal stream proxy using the channel's owning account

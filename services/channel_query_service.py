@@ -744,8 +744,6 @@ class ChannelQueryService:
         """Merge channels from multiple accounts per playlist config rules."""
         include_accounts = json.loads(playlist_config.include_accounts) if playlist_config.include_accounts else []
         exclude_accounts = json.loads(playlist_config.exclude_accounts) if playlist_config.exclude_accounts else []
-        include_tags = json.loads(playlist_config.include_tags) if playlist_config.include_tags else []
-        exclude_tags = json.loads(playlist_config.exclude_tags) if playlist_config.exclude_tags else []
 
         query = db.session.query(Channel).filter(Channel.is_active.is_(True))
         if include_accounts:
@@ -755,37 +753,7 @@ class ChannelQueryService:
 
         channels = query.order_by(Channel.name).all()
 
-        if include_tags or exclude_tags:
-            # Playlist configs may store tag IDs (int) or tag names (str)
-            use_ids = ChannelQueryService._tags_are_ids(include_tags, exclude_tags)
-            if use_ids:
-                tags_map = ChannelQueryService._load_tag_ids_for_channels(channels)
-                filtered = []
-                for ch in channels:
-                    key = (ch.account_id, ch.stream_id)
-                    ch_tag_ids = tags_map.get(key, set())
-                    if ChannelQueryService.apply_tag_filter_by_id(
-                        ch_tag_ids,
-                        include_tags,
-                        exclude_tags,
-                        playlist_config.tag_match_mode or "any",
-                    ):
-                        filtered.append(ch)
-                channels = filtered
-            else:
-                tags_map = ChannelQueryService._load_tag_names_for_channels(channels)
-                filtered = []
-                for ch in channels:
-                    key = (ch.account_id, ch.stream_id)
-                    tag_names = tags_map.get(key, set())
-                    if ChannelQueryService.apply_tag_filter(
-                        tag_names,
-                        include_tags,
-                        exclude_tags,
-                        playlist_config.tag_match_mode or "any",
-                    ):
-                        filtered.append(ch)
-                channels = filtered
+        channels = ChannelQueryService._filter_channels_by_playlist_tags(channels, playlist_config)
 
         if apply_filters:
             by_account: dict = {}
@@ -815,6 +783,162 @@ class ChannelQueryService:
         channels = ChannelQueryService.exclude_linked_backup_targets(channels)
 
         return channels
+
+    @staticmethod
+    def _filter_channels_by_playlist_tags(
+        channels: List[Channel],
+        playlist_config: PlaylistConfig,
+    ) -> List[Channel]:
+        """Apply playlist include/exclude tag rules to an already-scoped channel list."""
+        include_tags = json.loads(playlist_config.include_tags) if playlist_config.include_tags else []
+        exclude_tags = json.loads(playlist_config.exclude_tags) if playlist_config.exclude_tags else []
+        if not include_tags and not exclude_tags:
+            return channels
+
+        use_ids = ChannelQueryService._tags_are_ids(include_tags, exclude_tags)
+        if use_ids:
+            tags_map = ChannelQueryService._load_tag_ids_for_channels(channels)
+            filtered = []
+            for ch in channels:
+                key = (ch.account_id, ch.stream_id)
+                ch_tag_ids = tags_map.get(key, set())
+                if ChannelQueryService.apply_tag_filter_by_id(
+                    ch_tag_ids,
+                    include_tags,
+                    exclude_tags,
+                    playlist_config.tag_match_mode or "any",
+                ):
+                    filtered.append(ch)
+            return filtered
+
+        tags_map = ChannelQueryService._load_tag_names_for_channels(channels)
+        filtered = []
+        for ch in channels:
+            key = (ch.account_id, ch.stream_id)
+            tag_names = tags_map.get(key, set())
+            if ChannelQueryService.apply_tag_filter(
+                tag_names,
+                include_tags,
+                exclude_tags,
+                playlist_config.tag_match_mode or "any",
+            ):
+                filtered.append(ch)
+        return filtered
+
+    @staticmethod
+    def _query_xtream_stream_candidates(
+        stream_id: str,
+        account: Optional[Account],
+        playlist_config: Optional[PlaylistConfig],
+    ) -> List[Channel]:
+        """Load active channel rows matching stream_id within credential scope."""
+        query = db.session.query(Channel).filter(
+            Channel.is_active.is_(True),
+            Channel.stream_id == stream_id,
+        )
+        if account:
+            query = query.filter(Channel.account_id == account.id)
+        elif playlist_config:
+            include_accounts = (
+                json.loads(playlist_config.include_accounts) if playlist_config.include_accounts else []
+            )
+            exclude_accounts = (
+                json.loads(playlist_config.exclude_accounts) if playlist_config.exclude_accounts else []
+            )
+            if include_accounts:
+                query = query.filter(Channel.account_id.in_(include_accounts))
+            if exclude_accounts:
+                query = query.filter(~Channel.account_id.in_(exclude_accounts))
+        else:
+            return []
+        return query.all()
+
+    @staticmethod
+    def _expand_channel_siblings(channels: List[Channel]) -> List[Channel]:
+        """Include duplicate/language siblings needed for collapse and language preference."""
+        if not channels:
+            return []
+
+        by_id = {ch.id: ch for ch in channels}
+        for ch in channels:
+            cleaned = ch.cleaned_name or ch.name
+            siblings = (
+                db.session.query(Channel)
+                .filter(
+                    Channel.account_id == ch.account_id,
+                    Channel.is_active.is_(True),
+                    db.or_(Channel.cleaned_name == cleaned, Channel.name == cleaned),
+                )
+                .all()
+            )
+            for sibling in siblings:
+                by_id[sibling.id] = sibling
+        return list(by_id.values())
+
+    @staticmethod
+    def channel_for_xtream_stream(
+        xtream_cred: XtreamCredential,
+        account: Optional[Account],
+        playlist_config: Optional[PlaylistConfig],
+        stream_id: Union[int, str],
+        *,
+        collapse_duplicates_fn=None,
+    ) -> Optional[Channel]:
+        """Verify one stream is accessible without loading the full channel list."""
+        stream_id_str = str(stream_id)
+        preferred_languages = xtream_cred.preferred_languages
+        language_fallback = xtream_cred.language_fallback or "unknown"
+        needs_sibling_expansion = xtream_cred.collapse_duplicates or preferred_languages is not None
+
+        candidates = ChannelQueryService._query_xtream_stream_candidates(
+            stream_id_str,
+            account,
+            playlist_config,
+        )
+        if not candidates:
+            return None
+
+        if needs_sibling_expansion:
+            candidates = ChannelQueryService._expand_channel_siblings(candidates)
+
+        if account:
+            channels = ChannelQueryService.channels_for_account_candidates(
+                account.id,
+                candidates,
+                apply_filters=xtream_cred.use_filters,
+                apply_ppv_visibility=True,
+                exclude_linked_backups=True,
+                preferred_languages=preferred_languages,
+                language_fallback=language_fallback,
+            )
+            if xtream_cred.collapse_duplicates and collapse_duplicates_fn:
+                channels = collapse_duplicates_fn(channels, account.id)
+        elif playlist_config:
+            candidates = ChannelQueryService._filter_channels_by_playlist_tags(candidates, playlist_config)
+            if not candidates:
+                return None
+
+            lang_prefs = preferred_languages
+            if lang_prefs is None:
+                lang_prefs = playlist_config.preferred_languages
+            lang_fallback = language_fallback
+            if lang_prefs is None and playlist_config.language_fallback:
+                lang_fallback = playlist_config.language_fallback
+
+            channels = ChannelQueryService.channels_for_multi_account_candidates(
+                candidates,
+                apply_filters=True,
+                apply_ppv_visibility=True,
+                exclude_linked_backups=True,
+                preferred_languages=lang_prefs,
+                language_fallback=lang_fallback,
+            )
+            if xtream_cred.collapse_duplicates and collapse_duplicates_fn:
+                channels = collapse_duplicates_fn(channels)
+        else:
+            return None
+
+        return next((ch for ch in channels if ch.stream_id == stream_id_str), None)
 
     @staticmethod
     def channels_for_xtream(

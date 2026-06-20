@@ -1141,6 +1141,15 @@ class TestXtreamStreamURLs:
             # Should redirect to internal stream proxy when found
             assert response.status_code == 302
 
+    def test_live_stream_uses_fast_path_not_full_channel_list(self, app, client, xtream_credential, test_channels):
+        """Tune-in should verify one stream without loading the full channel list."""
+        with app.app_context():
+            with patch("routes.xtream.get_channels_for_credential") as mock_all_channels:
+                response = client.get("/live/xtream_user/xtream_pass/1000.ts")
+
+            assert response.status_code == 302
+            mock_all_channels.assert_not_called()
+
     def test_live_stream_type_mismatch_fix(self, app, client, xtream_credential, test_channels):
         """Test that stream_id integer from route matches string in database"""
         with app.app_context():
