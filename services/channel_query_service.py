@@ -755,6 +755,26 @@ class ChannelQueryService:
 
         channels = ChannelQueryService._filter_channels_by_playlist_tags(channels, playlist_config)
 
+        return ChannelQueryService._apply_playlist_config_channel_rules(
+            channels,
+            playlist_config,
+            apply_filters=apply_filters,
+            apply_ppv_visibility=apply_ppv_visibility,
+            preferred_languages=preferred_languages,
+            language_fallback=language_fallback,
+        )
+
+    @staticmethod
+    def _apply_playlist_config_channel_rules(
+        channels: List[Channel],
+        playlist_config: PlaylistConfig,
+        *,
+        apply_filters: bool = True,
+        apply_ppv_visibility: bool = True,
+        preferred_languages: Optional[Union[str, List[str]]] = None,
+        language_fallback: Optional[str] = None,
+    ) -> List[Channel]:
+        """Apply playlist visibility rules shared by full-list and single-stream paths."""
         if apply_filters:
             by_account: dict = {}
             for ch in channels:
@@ -780,9 +800,7 @@ class ChannelQueryService:
             language_fallback=lang_fallback,
         )
 
-        channels = ChannelQueryService.exclude_linked_backup_targets(channels)
-
-        return channels
+        return ChannelQueryService.exclude_linked_backup_targets(channels)
 
     @staticmethod
     def _filter_channels_by_playlist_tags(
@@ -847,7 +865,7 @@ class ChannelQueryService:
                 query = query.filter(~Channel.account_id.in_(exclude_accounts))
         else:
             return []
-        return query.all()
+        return query.order_by(Channel.name).all()
 
     @staticmethod
     def _expand_channel_siblings(channels: List[Channel]) -> List[Channel]:
@@ -914,20 +932,13 @@ class ChannelQueryService:
             if not candidates:
                 return None
 
-            lang_prefs = preferred_languages
-            if lang_prefs is None:
-                lang_prefs = playlist_config.preferred_languages
-            lang_fallback = language_fallback
-            if lang_prefs is None and playlist_config.language_fallback:
-                lang_fallback = playlist_config.language_fallback
-
-            channels = ChannelQueryService.channels_for_multi_account_candidates(
+            channels = ChannelQueryService._apply_playlist_config_channel_rules(
                 candidates,
+                playlist_config,
                 apply_filters=True,
                 apply_ppv_visibility=True,
-                exclude_linked_backups=True,
-                preferred_languages=lang_prefs,
-                language_fallback=lang_fallback,
+                preferred_languages=preferred_languages,
+                language_fallback=language_fallback,
             )
             if xtream_cred.collapse_duplicates and collapse_duplicates_fn:
                 channels = collapse_duplicates_fn(channels)
