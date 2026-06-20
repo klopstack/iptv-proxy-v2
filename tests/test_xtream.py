@@ -994,7 +994,7 @@ class TestXtreamPlayerAPI:
         assert "PPV - Historical" not in category_names
 
     def test_get_vod_categories(self, app, client, xtream_credential):
-        """VOD is not supported; return empty list for client compatibility."""
+        """VOD passthrough disabled by default; return empty list for client compatibility."""
         with app.app_context():
             response = client.get(
                 "/player_api.php",
@@ -1007,8 +1007,31 @@ class TestXtreamPlayerAPI:
             assert response.status_code == 200
             assert response.json == []
 
+    def test_get_vod_categories_passthrough(self, app, client, xtream_credential, test_account, monkeypatch):
+        """When vod_passthrough is enabled, return upstream categories unchanged."""
+        with app.app_context():
+            cred = db.session.get(XtreamCredential, xtream_credential.id)
+            cred.vod_passthrough = True
+            db.session.commit()
+
+            monkeypatch.setattr(
+                "routes.xtream.fetch_vod_categories",
+                lambda account: [{"category_id": "10", "category_name": "Action Movies"}],
+            )
+
+            response = client.get(
+                "/player_api.php",
+                query_string={
+                    "username": "xtream_user",
+                    "password": "xtream_pass",
+                    "action": "get_vod_categories",
+                },
+            )
+            assert response.status_code == 200
+            assert response.json == [{"category_id": "10", "category_name": "Action Movies"}]
+
     def test_get_vod_streams(self, app, client, xtream_credential):
-        """VOD is not supported; return empty list for client compatibility."""
+        """VOD passthrough disabled by default; return empty list for client compatibility."""
         with app.app_context():
             response = client.get(
                 "/player_api.php",
@@ -1020,6 +1043,39 @@ class TestXtreamPlayerAPI:
             )
             assert response.status_code == 200
             assert response.json == []
+
+    def test_get_vod_streams_passthrough(self, app, client, xtream_credential, monkeypatch):
+        """When vod_passthrough is enabled, return upstream movie titles unchanged."""
+        with app.app_context():
+            cred = db.session.get(XtreamCredential, xtream_credential.id)
+            cred.vod_passthrough = True
+            db.session.commit()
+
+            upstream_streams = [
+                {"stream_id": 201, "name": "US| Die Hard (1988)", "category_id": "10"},
+            ]
+
+            def fake_fetch(account, *, category_id=None):
+                assert category_id == "10"
+                return upstream_streams
+
+            monkeypatch.setattr("routes.xtream.fetch_vod_streams", fake_fetch)
+            monkeypatch.setattr(
+                "routes.xtream.rewrite_vod_stream_icons",
+                lambda streams, proxy_base: streams,
+            )
+
+            response = client.get(
+                "/player_api.php",
+                query_string={
+                    "username": "xtream_user",
+                    "password": "xtream_pass",
+                    "action": "get_vod_streams",
+                    "category_id": "10",
+                },
+            )
+            assert response.status_code == 200
+            assert response.json[0]["name"] == "US| Die Hard (1988)"
 
     def test_get_series_categories(self, app, client, xtream_credential):
         """Series is not supported; return empty list for client compatibility."""
@@ -1187,11 +1243,22 @@ class TestXtreamStreamURLs:
             assert response.status_code == 302
 
     def test_movie_stream(self, app, client, xtream_credential):
-        """Test movie stream URL (not implemented)"""
+        """Movie stream URL returns 404 when VOD passthrough is disabled."""
         with app.app_context():
             response = client.get("/movie/xtream_user/xtream_pass/1000.mp4")
             assert response.status_code == 404
             assert "VOD not available" in response.json["error"]
+
+    def test_movie_stream_passthrough(self, app, client, xtream_credential, test_account):
+        """Movie stream URL redirects to internal VOD proxy when passthrough is enabled."""
+        with app.app_context():
+            cred = db.session.get(XtreamCredential, xtream_credential.id)
+            cred.vod_passthrough = True
+            db.session.commit()
+
+            response = client.get("/movie/xtream_user/xtream_pass/1000.mp4")
+            assert response.status_code == 302
+            assert f"/stream/{test_account}/vod/1000.mp4?xc={xtream_credential.id}" in response.location
 
     def test_series_stream(self, app, client, xtream_credential):
         """Test series stream URL (not implemented)"""

@@ -46,6 +46,7 @@
                             <th>Source</th>
                             <th>Filters</th>
                             <th>Collapse Dupes</th>
+                            <th>VOD</th>
                             <th>Transcode</th>
                             <th>Status</th>
                             <th>Description</th>
@@ -171,6 +172,19 @@
                         <label for="credential-description" class="form-label">Description</label>
                         <textarea class="form-control" id="credential-description" rows="2"></textarea>
                         <div class="form-text">Optional notes about this credential</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="credential-vod-passthrough">
+                            <label class="form-check-label" for="credential-vod-passthrough">
+                                Pass Through VOD Titles
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            For account-linked credentials, expose upstream movie categories and titles via Xtream VOD API.
+                            Requires a single account source (not playlist configs).
+                        </div>
                     </div>
 
                     <div class="mb-3">

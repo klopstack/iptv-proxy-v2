@@ -208,6 +208,9 @@ class XtreamCredential(db.Model):  # type: ignore[name-defined]
     use_filters = db.Column(db.Boolean, default=True)
     collapse_duplicates = db.Column(db.Boolean, default=False)
 
+    # Pass through upstream VOD catalog (movie titles/categories) for account-linked credentials
+    vod_passthrough = db.Column(db.Boolean, default=False)
+
     # IANA timezone override for PPV rename {start_time}/{date} tokens (None = use account default)
     ppv_rename_timezone = db.Column(db.String(50), nullable=True)
 

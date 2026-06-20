@@ -337,6 +337,104 @@ def proxy_stream_m3u8(account_id: int, stream_id: str):
     return _proxy_stream(account_id, stream_id, "m3u8")
 
 
+@streams_bp.route("/stream/<int:account_id>/vod/<stream_id>.<ext>", methods=["GET", "HEAD"])
+def proxy_vod_stream(account_id: int, stream_id: str, ext: str):
+    """Proxy an upstream VOD/movie file using the next available credential."""
+    from services.connection_manager import ConnectionManager
+    from services.xtream_vod_service import build_vod_upstream_url
+
+    client_ip = request.remote_addr
+    logger.info(f"VOD stream request: account={account_id}, stream={stream_id}, ext={ext}, client={client_ip}")
+
+    account = db.session.get(Account, account_id)
+    if not account:
+        abort(404, description="Account not found")
+    if not account.enabled:
+        abort(403, description="Account is disabled")
+
+    if not _load_vod_passthrough_credential(request.args.get("xc"), account_id):
+        abort(403, description="VOD passthrough not enabled for this credential")
+
+    credential = ConnectionManager.get_available_credential(account_id)
+    if not credential:
+        abort(503, description="No available connections. All streams are in use.")
+
+    credential_id = getattr(credential, "id", None)
+    if credential_id is None:
+        abort(503, description="No available connections. All streams are in use.")
+
+    session_token, error = ConnectionManager.acquire_connection(credential_id, f"vod:{stream_id}", client_ip)
+    if not session_token:
+        abort(503, description=f"Could not acquire connection: {error}")
+
+    upstream_url = build_vod_upstream_url(account, credential, stream_id, ext)
+    user_agent = account.user_agent or "okhttp/3.14.9"
+    headers = {"User-Agent": user_agent}
+    range_header = request.headers.get("Range")
+    if range_header:
+        headers["Range"] = range_header
+
+    connection_released = False
+
+    def release_connection_once():
+        nonlocal connection_released
+        if not connection_released:
+            ConnectionManager.release_connection(session_token)
+            connection_released = True
+
+    try:
+        upstream = requests.request(
+            request.method,
+            upstream_url,
+            headers=headers,
+            stream=True,
+            timeout=(UPSTREAM_CONNECT_TIMEOUT, UPSTREAM_READ_TIMEOUT),
+            allow_redirects=True,
+        )
+    except requests.RequestException as exc:
+        release_connection_once()
+        logger.error("VOD upstream request failed for account %s stream %s: %s", account_id, stream_id, exc)
+        abort(502, description="Failed to reach upstream VOD stream")
+
+    if upstream.status_code >= 400:
+        release_connection_once()
+        logger.warning(
+            "VOD upstream returned %s for account %s stream %s",
+            upstream.status_code,
+            account_id,
+            stream_id,
+        )
+        return Response(status=upstream.status_code)
+
+    passthrough_headers = {
+        key: value
+        for key, value in upstream.headers.items()
+        if key.lower() not in {"transfer-encoding", "connection", "content-encoding"}
+    }
+
+    if request.method == "HEAD":
+        release_connection_once()
+        upstream.close()
+        return Response(status=upstream.status_code, headers=passthrough_headers)
+
+    def generate() -> Generator[bytes, None, None]:
+        last_beat = time.monotonic()
+        try:
+            for chunk in upstream.iter_content(chunk_size=CHUNK_SIZE):
+                if chunk:
+                    last_beat = _heartbeat_if_due(session_token, last_beat)
+                    yield chunk
+        finally:
+            upstream.close()
+            release_connection_once()
+
+    return Response(
+        stream_with_context(generate()),
+        status=upstream.status_code,
+        headers=passthrough_headers,
+    )
+
+
 def _load_transcode_profile(xc_param: str | None):
     """Load transcode profile from Xtream credential id query param."""
     from models.account import XtreamCredential
@@ -352,6 +450,30 @@ def _load_transcode_profile(xc_param: str | None):
     if not cred or not cred.enabled:
         return None
     return TranscodeProfile.from_xtream_credential(cred)
+
+
+def _load_vod_passthrough_credential(xc_param: str | None, account_id: int):
+    """Load Xtream credential authorized for VOD passthrough on this account."""
+    from models.account import XtreamCredential
+    from services.xtream_vod_service import vod_passthrough_available
+
+    if not xc_param:
+        return None
+    try:
+        cred_id = int(xc_param)
+    except ValueError:
+        return None
+    cred = db.session.get(XtreamCredential, cred_id)
+    if not cred or not cred.enabled or cred.account_id != account_id:
+        return None
+    account = db.session.get(Account, account_id)
+    if not vod_passthrough_available(
+        vod_passthrough=cred.vod_passthrough,
+        account=account,
+        account_id=cred.account_id,
+    ):
+        return None
+    return cred
 
 
 def _resolve_stream_service(app, transcode_profile):
