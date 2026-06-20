@@ -418,7 +418,7 @@ class TranscodeStreamService:
         transcode_profile: Optional[TranscodeProfile] = None,
     ) -> Optional[TranscodeStream]:
         """Return an idle-pending stream from the same client suitable for credential reuse."""
-        if not client_ip:
+        if not client_ip or STREAM_IDLE_TIMEOUT <= 0:
             return None
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)

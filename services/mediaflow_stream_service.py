@@ -653,7 +653,7 @@ class MediaFlowStreamService:
         transcode_profile=None,
     ) -> Optional[MediaFlowStream]:
         """Return an idle-pending stream from the same client suitable for credential reuse."""
-        if not client_ip:
+        if not client_ip or STREAM_IDLE_TIMEOUT <= 0:
             return None
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)

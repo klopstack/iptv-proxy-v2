@@ -8,7 +8,6 @@ from models import ActiveStream, Credential, db
 from routes.streams import _try_reuse_idle_connection
 from services.connection_manager import ConnectionManager
 from services.mediaflow_stream_service import MediaFlowStreamService
-from services.transcode_profile import TranscodeProfile
 from services.transcode_stream_service import TranscodeStreamService
 
 
@@ -21,7 +20,7 @@ def software_profile(monkeypatch):
 
     importlib.reload(tp)
     tp._encoder_mode = None
-    return TranscodeProfile(True, 480, 2000, 2, 64)
+    return tp.TranscodeProfile(True, 480, 2000, 2, 64)
 
 
 @pytest.fixture
@@ -84,7 +83,8 @@ class TestTranscodeIdleReuse:
         assert found is stream_a
         assert found.last_client_ip == "192.168.1.10"
 
-    def test_find_idle_stream_rejects_different_client(self, software_profile):
+    def test_find_idle_stream_rejects_different_client(self, software_profile, monkeypatch):
+        monkeypatch.setattr("services.transcode_stream_service.STREAM_IDLE_TIMEOUT", 30)
         service = TranscodeStreamService()
         stream_a, sub_a = service.subscribe(
             account_id=1,
@@ -102,6 +102,30 @@ class TestTranscodeIdleReuse:
             service.find_idle_stream_for_client(
                 account_id=1,
                 client_ip="192.168.1.99",
+                exclude_stream_id="200",
+                transcode_profile=software_profile,
+            )
+            is None
+        )
+
+    def test_find_idle_stream_disabled_when_timeout_zero(self, software_profile):
+        service = TranscodeStreamService()
+        stream_a, sub_a = service.subscribe(
+            account_id=1,
+            stream_id="100",
+            format="ts",
+            upstream_url="http://example/a.ts",
+            credential_id=5,
+            session_token="sess-a",
+            transcode_profile=software_profile,
+            client_ip="192.168.1.10",
+        )
+        service.unsubscribe(stream_a, sub_a)
+
+        assert (
+            service.find_idle_stream_for_client(
+                account_id=1,
+                client_ip="192.168.1.10",
                 exclude_stream_id="200",
                 transcode_profile=software_profile,
             )
@@ -167,7 +191,8 @@ class TestMediaFlowIdleReuse:
 
 
 class TestTryReuseIdleConnection:
-    def test_reuses_session_without_new_acquire(self, app, account_with_single_slot, software_profile):
+    def test_reuses_session_without_new_acquire(self, app, account_with_single_slot, software_profile, monkeypatch):
+        monkeypatch.setattr("services.transcode_stream_service.STREAM_IDLE_TIMEOUT", 30)
         account_id, cred_id = account_with_single_slot
         service = TranscodeStreamService()
 
