@@ -69,6 +69,7 @@ class TranscodeStream:
     lock: threading.Lock = field(default_factory=threading.Lock)
     subscribers: Dict[str, StreamSubscriber] = field(default_factory=dict)
     last_subscriber_left_at: Optional[datetime] = None
+    last_client_ip: Optional[str] = None
     on_stream_closed: Optional[Callable[["TranscodeStream"], None]] = None
 
     def __hash__(self):
@@ -202,6 +203,7 @@ class TranscodeStreamService:
             stream.subscribers.pop(subscriber.subscriber_id, None)
             if not stream.subscribers:
                 stream.last_subscriber_left_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                stream.last_client_ip = subscriber.client_ip
 
     def stream_chunks(
         self,
@@ -407,6 +409,42 @@ class TranscodeStreamService:
                     to_close.append((stream, "upstream_end"))
             for stream, reason in to_close:
                 self._close_stream(stream, reason=reason)
+
+    def find_idle_stream_for_client(
+        self,
+        account_id: int,
+        client_ip: Optional[str],
+        exclude_stream_id: str,
+        transcode_profile: Optional[TranscodeProfile] = None,
+    ) -> Optional[TranscodeStream]:
+        """Return an idle-pending stream from the same client suitable for credential reuse."""
+        if not client_ip:
+            return None
+
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._lock:
+            for stream in self._streams.values():
+                if stream.account_id != account_id:
+                    continue
+                if stream.stream_id == exclude_stream_id:
+                    continue
+                if stream.subscribers or not stream.is_active:
+                    continue
+                if stream.last_client_ip != client_ip:
+                    continue
+                if transcode_profile and stream.transcode_profile.fingerprint() != transcode_profile.fingerprint():
+                    continue
+                idle_since = stream.last_subscriber_left_at
+                if not idle_since:
+                    continue
+                if STREAM_IDLE_TIMEOUT > 0 and (now - idle_since).total_seconds() >= STREAM_IDLE_TIMEOUT:
+                    continue
+                return stream
+        return None
+
+    def close_idle_stream_for_reuse(self, stream: TranscodeStream) -> None:
+        """Close an idle stream without releasing its credential slot."""
+        self._close_stream(stream, invoke_callback=False, reason="channel_switch_reuse")
 
     def get_idle_stream_count(self, account_id: int) -> int:
         count = 0

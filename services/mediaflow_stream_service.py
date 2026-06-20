@@ -113,6 +113,7 @@ class MediaFlowStream:
     # Subscribers
     subscribers: Dict[str, StreamSubscriber] = field(default_factory=dict)
     last_subscriber_left_at: Optional[datetime] = None
+    last_client_ip: Optional[str] = None
 
     # Cleanup callback
     on_stream_closed: Optional[Callable[["MediaFlowStream"], None]] = None
@@ -335,6 +336,7 @@ class MediaFlowStreamService:
             # Track when last subscriber left for idle detection
             if not stream.subscribers:
                 stream.last_subscriber_left_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                stream.last_client_ip = subscriber.client_ip
 
         logger.info(
             f"Subscriber {subscriber.subscriber_id[:8]}... left MediaFlow stream {stream.stream_key} "
@@ -643,9 +645,49 @@ class MediaFlowStreamService:
                 if closing_stream is not None:
                     self._close_stream(closing_stream, reason=reason)
 
+    def find_idle_stream_for_client(
+        self,
+        account_id: int,
+        client_ip: Optional[str],
+        exclude_stream_id: str,
+        transcode_profile=None,
+    ) -> Optional[MediaFlowStream]:
+        """Return an idle-pending stream from the same client suitable for credential reuse."""
+        if not client_ip:
+            return None
+
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        with self._lock:
+            for stream in self._streams.values():
+                if stream.account_id != account_id:
+                    continue
+                if stream.stream_id == exclude_stream_id:
+                    continue
+                if stream.subscribers or not stream.is_active:
+                    continue
+                if stream.last_client_ip != client_ip:
+                    continue
+                idle_since = stream.last_subscriber_left_at
+                if not idle_since:
+                    continue
+                if STREAM_IDLE_TIMEOUT > 0 and (now - idle_since).total_seconds() >= STREAM_IDLE_TIMEOUT:
+                    continue
+                return stream
+        return None
+
+    def close_idle_stream_for_reuse(self, stream: MediaFlowStream) -> None:
+        """Close an idle stream without releasing its credential slot."""
+        with self._lock:
+            self._streams.pop(stream.stream_key, None)
+        self._close_stream(stream, invoke_callback=False, reason="channel_switch_reuse")
+
     def get_idle_stream_count(self, account_id: int) -> int:
-        """MediaFlow has no multiplexer idle release; always report zero idle streams."""
-        return 0
+        count = 0
+        with self._lock:
+            for stream in self._streams.values():
+                if stream.account_id == account_id and not stream.subscribers:
+                    count += 1
+        return count
 
     def release_idle_streams_for_account(
         self, account_id: int, credential_id: Optional[int] = None, max_to_release: int = 1
