@@ -64,6 +64,83 @@ def software_profile(monkeypatch):
     return TranscodeProfile(True, 480, 2000, 2, 64)
 
 
+class TestTranscodeChunkSize:
+    def test_default_transcode_chunk_size(self, monkeypatch):
+        monkeypatch.delenv("TRANSCODE_CHUNK_SIZE", raising=False)
+        import importlib
+
+        import services.transcode_stream_service as tss
+
+        importlib.reload(tss)
+        assert tss.TRANSCODE_CHUNK_SIZE == 8192
+
+    def test_transcode_chunk_size_from_env(self, monkeypatch):
+        monkeypatch.setenv("TRANSCODE_CHUNK_SIZE", "4096")
+        import importlib
+
+        import services.transcode_stream_service as tss
+
+        importlib.reload(tss)
+        assert tss.TRANSCODE_CHUNK_SIZE == 4096
+
+    @pytest.mark.parametrize("invalid_value", ["not-a-number", "0", "-1"])
+    def test_transcode_chunk_size_invalid_env_falls_back_to_default(self, monkeypatch, invalid_value):
+        monkeypatch.setenv("TRANSCODE_CHUNK_SIZE", invalid_value)
+        import importlib
+
+        import services.transcode_stream_service as tss
+
+        importlib.reload(tss)
+        assert tss.TRANSCODE_CHUNK_SIZE == 8192
+
+    def test_ffmpeg_popen_uses_transcode_chunk_size(self, monkeypatch, software_profile):
+        monkeypatch.setenv("TRANSCODE_CHUNK_SIZE", "4096")
+        import importlib
+
+        import services.transcode_stream_service as tss
+
+        importlib.reload(tss)
+
+        captured = {}
+
+        class FakeStdout:
+            def read(self, size):
+                return b""
+
+        class FakeProcess:
+            stdout = FakeStdout()
+            stderr = None
+
+            def poll(self):
+                return 0
+
+            def terminate(self):
+                pass
+
+            def wait(self, timeout=None):
+                return 0
+
+        def fake_popen(cmd, stdout=None, stderr=None, bufsize=None):
+            captured["bufsize"] = bufsize
+            return FakeProcess()
+
+        monkeypatch.setattr(subprocess, "Popen", fake_popen)
+
+        service = tss.TranscodeStreamService()
+        stream = tss.TranscodeStream(
+            stream_key="1:test:ts:t:fp",
+            account_id=1,
+            stream_id="test",
+            format="ts",
+            upstream_url="http://example/stream.ts",
+            credential_id=1,
+            session_token="sess",
+            transcode_profile=software_profile,
+        )
+        service._start_ffmpeg(stream)
+        assert captured["bufsize"] == 4096
+
+
 class TestTranscodeIdleTimeout:
     def test_cleanup_uses_transcode_idle_timeout(self, software_profile, monkeypatch):
         monkeypatch.setenv("TRANSCODE_STREAM_IDLE_TIMEOUT", "60")
