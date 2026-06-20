@@ -850,9 +850,13 @@ class ChannelQueryService:
         playlist_config: Optional[PlaylistConfig],
     ) -> List[Channel]:
         """Load active channel rows matching stream_id within credential scope."""
-        query = db.session.query(Channel).filter(
-            Channel.is_active.is_(True),
-            Channel.stream_id == stream_id,
+        query = (
+            db.session.query(Channel)
+            .options(db.joinedload(Channel.category))
+            .filter(
+                Channel.is_active.is_(True),
+                Channel.stream_id == stream_id,
+            )
         )
         if account:
             query = query.filter(Channel.account_id == account.id)
@@ -878,6 +882,7 @@ class ChannelQueryService:
             cleaned = ch.cleaned_name or ch.name
             siblings = (
                 db.session.query(Channel)
+                .options(db.joinedload(Channel.category))
                 .filter(
                     Channel.account_id == ch.account_id,
                     Channel.is_active.is_(True),
