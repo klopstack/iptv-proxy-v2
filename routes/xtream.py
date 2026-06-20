@@ -38,6 +38,12 @@ from services.ppv.ordering import (
 )
 from services.ppv.visibility import PPVVisibilityService
 from services.url_service import get_proxy_base_url
+from services.xtream_vod_service import (
+    fetch_vod_categories,
+    fetch_vod_streams,
+    rewrite_vod_stream_icons,
+    vod_passthrough_available,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +167,7 @@ def _serialize_xtream_credential(credential):
         "playlist_config_id": credential.playlist_config_id,
         "use_filters": credential.use_filters,
         "collapse_duplicates": credential.collapse_duplicates,
+        "vod_passthrough": credential.vod_passthrough,
         "ppv_rename_timezone": credential.ppv_rename_timezone,
         "preferred_languages": preferred,
         "language_fallback": credential.language_fallback or "unknown",
@@ -291,8 +298,8 @@ def player_api():
         "get_short_epg": get_short_epg,
         "get_simple_data_table": get_simple_data_table,
         # Live-only proxy: VOD/series clients (e.g. IPTVnator) expect empty lists, not errors
-        "get_vod_categories": get_empty_list,
-        "get_vod_streams": get_empty_list,
+        "get_vod_categories": get_vod_categories,
+        "get_vod_streams": get_vod_streams,
         "get_series_categories": get_empty_list,
         "get_series": get_empty_list,
     }
@@ -308,6 +315,43 @@ def player_api():
 def get_empty_list(xtream_cred, account, playlist_config):
     """Return an empty list for unsupported VOD/series actions."""
     return jsonify([])
+
+
+@require_xtream_auth
+def get_vod_categories(xtream_cred, account, playlist_config):
+    """Return upstream VOD categories when passthrough is enabled."""
+    if not vod_passthrough_available(
+        vod_passthrough=xtream_cred.vod_passthrough,
+        account=account,
+        account_id=xtream_cred.account_id,
+    ):
+        return jsonify([])
+
+    try:
+        return jsonify(fetch_vod_categories(account))
+    except Exception as exc:
+        logger.error("Failed to fetch upstream VOD categories for account %s: %s", account.id, exc)
+        return jsonify([])
+
+
+@require_xtream_auth
+def get_vod_streams(xtream_cred, account, playlist_config):
+    """Return upstream VOD streams with original titles when passthrough is enabled."""
+    if not vod_passthrough_available(
+        vod_passthrough=xtream_cred.vod_passthrough,
+        account=account,
+        account_id=xtream_cred.account_id,
+    ):
+        return jsonify([])
+
+    category_id = request.args.get("category_id")
+    try:
+        streams = fetch_vod_streams(account, category_id=category_id)
+        proxy_base = get_proxy_base_url()
+        return jsonify(rewrite_vod_stream_icons(streams, proxy_base=proxy_base))
+    except Exception as exc:
+        logger.error("Failed to fetch upstream VOD streams for account %s: %s", account.id, exc)
+        return jsonify([])
 
 
 @require_xtream_auth
@@ -848,10 +892,31 @@ def xtream_live_stream(username, password, stream_id, ext="ts"):
 def xtream_movie_stream(username, password, stream_id, ext="mp4"):
     """
     VOD/Movie stream URL for Xtream clients.
-    VOD not implemented - return not found.
+    Proxies upstream movie when vod_passthrough is enabled on the credential.
     """
     logger.info(f"Xtream movie request: username={username}, password={password}, stream_id={stream_id}")
-    return jsonify({"error": "VOD not available"}), 404
+
+    xtream_cred = XtreamCredential.query.filter_by(username=username, password=password, enabled=True).first()
+    if not xtream_cred:
+        return jsonify({"error": "Invalid credentials"}), 401
+
+    account = None
+    if xtream_cred.account_id:
+        account = db.session.get(Account, xtream_cred.account_id)
+        if not account or not account.enabled:
+            return jsonify({"error": "Account disabled"}), 403
+    else:
+        return jsonify({"error": "VOD not available"}), 404
+
+    if not vod_passthrough_available(
+        vod_passthrough=xtream_cred.vod_passthrough,
+        account=account,
+        account_id=xtream_cred.account_id,
+    ):
+        return jsonify({"error": "VOD not available"}), 404
+
+    internal_url = f"/stream/{account.id}/vod/{stream_id}.{ext}?xc={xtream_cred.id}"
+    return redirect(internal_url)
 
 
 @xtream_bp.route("/series/<username>/<password>/<int:stream_id>.<ext>", methods=["GET"])
@@ -913,6 +978,7 @@ def create_xtream_credential():
         playlist_config_id=data.get("playlist_config_id"),
         use_filters=data.get("use_filters", True),
         collapse_duplicates=data.get("collapse_duplicates", False),
+        vod_passthrough=bool(data.get("vod_passthrough", False)),
         ppv_rename_timezone=ppv_rename_timezone,
         preferred_languages=preferred_languages,
         language_fallback=language_fallback,
@@ -950,6 +1016,8 @@ def update_xtream_credential(credential_id):
         credential.use_filters = data["use_filters"]
     if "collapse_duplicates" in data:
         credential.collapse_duplicates = data["collapse_duplicates"]
+    if "vod_passthrough" in data:
+        credential.vod_passthrough = bool(data["vod_passthrough"])
     if "enabled" in data:
         credential.enabled = data["enabled"]
     if "description" in data:

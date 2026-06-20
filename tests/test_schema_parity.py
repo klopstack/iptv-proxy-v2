@@ -106,6 +106,12 @@ class TestSchemaParity:
         assert "category_tag_grouping" in columns
         conn.close()
 
+    def test_xtream_vod_passthrough_column(self, migrated_db):
+        conn = sqlite3.connect(migrated_db)
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(xtream_credentials)").fetchall()}
+        assert "vod_passthrough" in columns
+        conn.close()
+
     def test_xtream_transcode_columns(self, migrated_db):
         conn = sqlite3.connect(migrated_db)
         columns = {row[1] for row in conn.execute("PRAGMA table_info(xtream_credentials)").fetchall()}

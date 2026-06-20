@@ -107,6 +107,10 @@ function displayCredentials(credentials) {
             ? '<span class="badge bg-warning">Yes</span>'
             : '<span class="badge bg-secondary">No</span>';
 
+        const vodBadge = cred.vod_passthrough
+            ? '<span class="badge bg-info">VOD</span>'
+            : '<span class="badge bg-secondary">No</span>';
+
         const transcodeBadge = cred.transcode_enabled
             ? `<span class="badge bg-primary">${cred.transcode_max_height || 720}p</span>`
             : '<span class="badge bg-secondary">Off</span>';
@@ -117,6 +121,7 @@ function displayCredentials(credentials) {
                 <td>${source}</td>
                 <td>${filtersBadge}</td>
                 <td>${collapseBadge}</td>
+                <td>${vodBadge}</td>
                 <td>${transcodeBadge}</td>
                 <td>${statusBadge}</td>
                 <td>${escapeHtml(cred.description || '')}</td>
@@ -142,6 +147,7 @@ function saveCredential() {
     const playlistConfigId = sourceType === 'playlist' ? document.getElementById('credential-playlist-config-id').value : null;
     const useFilters = document.getElementById('credential-use-filters').checked;
     const collapseDuplicates = document.getElementById('credential-collapse-duplicates').checked;
+    const vodPassthrough = document.getElementById('credential-vod-passthrough').checked;
     const enabled = document.getElementById('credential-enabled').checked;
     const description = document.getElementById('credential-description').value.trim();
     const ppvRenameTimezone = document.getElementById('credential-ppv-rename-timezone').value.trim();
@@ -173,6 +179,7 @@ function saveCredential() {
         playlist_config_id: playlistConfigId ? parseInt(playlistConfigId, 10) : null,
         use_filters: useFilters,
         collapse_duplicates: collapseDuplicates,
+        vod_passthrough: vodPassthrough,
         enabled,
         description,
         ppv_rename_timezone: ppvRenameTimezone || null,
@@ -230,6 +237,7 @@ function editCredential(id) {
             document.getElementById('password-help-text').textContent = 'Leave blank to keep existing password';
             document.getElementById('credential-use-filters').checked = cred.use_filters;
             document.getElementById('credential-collapse-duplicates').checked = cred.collapse_duplicates;
+            document.getElementById('credential-vod-passthrough').checked = cred.vod_passthrough;
             document.getElementById('credential-enabled').checked = cred.enabled;
             document.getElementById('credential-description').value = cred.description || '';
             document.getElementById('credential-ppv-rename-timezone').value = cred.ppv_rename_timezone || '';
