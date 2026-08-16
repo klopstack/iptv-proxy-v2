@@ -7,6 +7,7 @@ from unittest.mock import patch
 from models import Event
 from services.ppv.enrichment.types import calendar_event_source
 from services.tennis.espn_calendar import (
+    ESPN_TENNIS_TOURS,
     EVENT_SOURCE_ESPN,
     clear_espn_tennis_calendar_cache,
     competition_to_calendar_event,
@@ -126,6 +127,82 @@ class TestFetchEspnTennisEvents:
 
         assert len(first) == len(second) == 3
         assert _player_names(second) == _player_names(first)
+
+    def test_one_tour_failure_keeps_other_tour_events(self):
+        clear_espn_tennis_calendar_cache()
+        wta_payload = _load_fixture("espn_tennis_scoreboard_20260603_wta.json")
+
+        def scoreboard_side_effect(tour, date_str, session=None):
+            if tour == "atp":
+                raise RuntimeError("ESPN 503")
+            return wta_payload
+
+        with patch("services.tennis.espn_calendar._is_date_in_espn_window", return_value=True):
+            with patch(
+                "services.tennis.espn_calendar._fetch_scoreboard",
+                side_effect=scoreboard_side_effect,
+            ):
+                events = fetch_espn_tennis_events_for_date("2026-06-03", force_refresh=True)
+
+        assert len(events) == 3
+        assert "Anna Kalinskaya" in _player_names(events)
+
+    def test_partial_result_is_not_cached(self):
+        clear_espn_tennis_calendar_cache()
+        wta_payload = _load_fixture("espn_tennis_scoreboard_20260603_wta.json")
+        atp_payload = _load_fixture("espn_tennis_scoreboard_20260603_wta.json")
+
+        def failing_atp(tour, date_str, session=None):
+            if tour == "atp":
+                raise RuntimeError("ESPN 503")
+            return wta_payload
+
+        def both_tours(tour, date_str, session=None):
+            return wta_payload if tour == "wta" else atp_payload
+
+        with patch("services.tennis.espn_calendar._is_date_in_espn_window", return_value=True):
+            with patch(
+                "services.tennis.espn_calendar._fetch_scoreboard",
+                side_effect=failing_atp,
+            ):
+                partial = fetch_espn_tennis_events_for_date("2026-06-03", force_refresh=True)
+            with patch(
+                "services.tennis.espn_calendar._fetch_scoreboard",
+                side_effect=both_tours,
+            ) as recovered_fetch:
+                recovered = fetch_espn_tennis_events_for_date("2026-06-03")
+
+        assert len(partial) == 3
+        # The partial result must not be served from cache: the next call retries both tours.
+        assert recovered_fetch.call_count == len(ESPN_TENNIS_TOURS)
+        assert len(recovered) == 6
+
+    def test_empty_partial_result_falls_back_to_cache(self):
+        clear_espn_tennis_calendar_cache()
+        wta_payload = _load_fixture("espn_tennis_scoreboard_20260603_wta.json")
+
+        def both_tours(tour, date_str, session=None):
+            return wta_payload if tour == "wta" else {"events": []}
+
+        def empty_wta_failing_atp(tour, date_str, session=None):
+            if tour == "atp":
+                raise RuntimeError("ESPN 503")
+            return {"events": []}
+
+        with patch("services.tennis.espn_calendar._is_date_in_espn_window", return_value=True):
+            with patch(
+                "services.tennis.espn_calendar._fetch_scoreboard",
+                side_effect=both_tours,
+            ):
+                first = fetch_espn_tennis_events_for_date("2026-06-03", force_refresh=True)
+            with patch(
+                "services.tennis.espn_calendar._fetch_scoreboard",
+                side_effect=empty_wta_failing_atp,
+            ):
+                second = fetch_espn_tennis_events_for_date("2026-06-03", force_refresh=True)
+
+        # Nothing was actually observed, so the previous result stands rather than an empty one.
+        assert len(first) == len(second) == 3
 
 
 class TestSourceNormalization:

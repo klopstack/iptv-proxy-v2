@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from services.thesportsdb_calendar_scraper import CACHE_KEY_VERSION, CalendarEvent, TheSportsDBCalendarScraper
 
@@ -235,6 +236,34 @@ class TestTheSportsDBCalendarScraper:
         sports_called = {call.kwargs.get("s") for call in mock_call_api.call_args_list}
         assert "Fighting" in sports_called
         assert "Tennis" in sports_called
+
+    @patch("services.thesportsdb_calendar_scraper.TheSportsDBCalendarScraper._rate_limit")
+    @patch("services.thesportsdb_retry.call_thesportsdb_api")
+    def test_fetch_api_events_one_sport_failing_keeps_the_others(self, mock_call_api, mock_rate_limit, scraper):
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+        def per_sport(fn, date, s="", before_attempt=None):
+            if s == "Fighting":
+                raise requests.ConnectionError("boom")
+            return {
+                "events": [
+                    {
+                        "idEvent": f"id-{s}",
+                        "strEvent": f"{s} event",
+                        "strLeague": s,
+                        "strTime": "19:05:00",
+                        "strHomeTeam": "Team A",
+                        "strAwayTeam": "Team B",
+                    }
+                ]
+            }
+
+        mock_call_api.side_effect = per_sport
+
+        events = scraper._fetch_api_events_for_date(today)
+
+        assert events, "surviving sports should still produce events"
+        assert all(e.event_id != "id-Fighting" for e in events)
 
     def test_is_date_in_api_supplement_window(self, scraper):
         today = datetime.now(timezone.utc).date()

@@ -19,6 +19,7 @@ from services.thesportsdb_calendar_scraper import (
     MAX_API_SUPPLEMENT_DAYS_BACK,
     CalendarEvent,
 )
+from services.thesportsdb_retry import fetch_per_source
 
 logger = logging.getLogger(__name__)
 
@@ -206,18 +207,39 @@ def fetch_espn_tennis_events_for_date(
         stale_events = cached_events
         del _espn_cache[cache_key]
 
-    events: List[CalendarEvent] = []
-    try:
-        for tour in ESPN_TENNIS_TOURS:
-            payload = _fetch_scoreboard(tour, date_str, session=session)
-            events.extend(parse_scoreboard_payload(payload, tour=tour, fallback_date=date_str))
-    except Exception as exc:
-        logger.warning("ESPN tennis scoreboard fetch failed for %s: %s", date_str, exc)
+    def _fetch_tour(tour: str) -> List[CalendarEvent]:
+        payload = _fetch_scoreboard(tour, date_str, session=session)
+        return parse_scoreboard_payload(payload, tour=tour, fallback_date=date_str)
+
+    def _log_tour_failure(tour: str, exc: Exception) -> None:
+        logger.warning(
+            "ESPN tennis scoreboard fetch failed for %s (%s): %s",
+            date_str,
+            tour.upper(),
+            exc,
+        )
+
+    events, failed_tours = fetch_per_source(ESPN_TENNIS_TOURS, _fetch_tour, on_error=_log_tour_failure)
+
+    if failed_tours and not events:
+        # No tour returned a match and at least one failed, so "no tennis today" is not
+        # something this call can assert. Prefer a previous result over nothing.
         if stale_events is not None:
             return list(stale_events)
         if cache_key in _espn_cache:
             return list(_espn_cache[cache_key][0])
         return []
+
+    if failed_tours:
+        # Partial result: return what succeeded, but do not cache it under the full TTL
+        # or the missing tour stays missing until the entry expires.
+        logger.debug(
+            "Fetched %d ESPN tennis events for %s (%s unavailable, not cached)",
+            len(events),
+            date_str,
+            ", ".join(t.upper() for t in failed_tours),
+        )
+        return events
 
     _espn_cache[cache_key] = (events, time.time())
     logger.debug("Fetched %d ESPN tennis events for %s", len(events), date_str)
