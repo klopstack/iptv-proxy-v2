@@ -5,13 +5,14 @@ from __future__ import annotations
 import logging
 import random
 import time
-from typing import Any, Callable, Optional, TypeVar, cast
+from typing import Any, Callable, Iterable, List, Optional, Tuple, TypeVar, cast
 
 import requests
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+S = TypeVar("S")
 
 MAX_RETRIES = 4
 INITIAL_BACKOFF_SECONDS = 2.0
@@ -67,6 +68,31 @@ def is_retryable_html_page(html: str) -> bool:
             return True
 
     return False
+
+
+def fetch_per_source(
+    sources: Iterable[S],
+    fetch_one: Callable[[S], List[T]],
+    *,
+    on_error: Optional[Callable[[S, Exception], None]] = None,
+) -> Tuple[List[T], List[S]]:
+    """
+    Run ``fetch_one`` for each source, collecting successes and recording failures.
+
+    One source failing never discards another source's results. Returns
+    ``(items, failed_sources)`` so the caller decides what a partial result
+    means (serve stale data, skip caching, log and move on, ...).
+    """
+    items: List[T] = []
+    failed: List[S] = []
+    for source in sources:
+        try:
+            items.extend(fetch_one(source))
+        except Exception as exc:
+            failed.append(source)
+            if on_error is not None:
+                on_error(source, exc)
+    return items, failed
 
 
 def call_thesportsdb_api(

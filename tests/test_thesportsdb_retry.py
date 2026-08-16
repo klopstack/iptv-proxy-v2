@@ -10,6 +10,7 @@ from services.thesportsdb_retry import (
     MAX_BACKOFF_SECONDS,
     backoff_delay,
     call_thesportsdb_api,
+    fetch_per_source,
     fetch_url_with_retry,
     is_retryable_html_page,
     is_retryable_http_status,
@@ -30,6 +31,41 @@ class TestRetryableDetection:
     def test_html_block_page(self):
         assert is_retryable_html_page("<html>Just a moment...</html>") is True
         assert is_retryable_html_page("<html><table><a href='/event/1'>Game</a></table></html>") is False
+
+
+class TestFetchPerSource:
+    def test_all_sources_succeed(self):
+        items, failed = fetch_per_source(["a", "b"], lambda source: [f"{source}1", f"{source}2"])
+        assert items == ["a1", "a2", "b1", "b2"]
+        assert failed == []
+
+    def test_one_source_failing_keeps_the_others(self):
+        def fetch_one(source):
+            if source == "b":
+                raise requests.ConnectionError("boom")
+            return [source]
+
+        items, failed = fetch_per_source(["a", "b", "c"], fetch_one)
+        assert items == ["a", "c"]
+        assert failed == ["b"]
+
+    def test_on_error_receives_source_and_exception(self):
+        seen = []
+
+        def fetch_one(source):
+            raise ValueError(f"bad {source}")
+
+        items, failed = fetch_per_source(
+            ["x", "y"], fetch_one, on_error=lambda source, exc: seen.append((source, str(exc)))
+        )
+        assert items == []
+        assert failed == ["x", "y"]
+        assert seen == [("x", "bad x"), ("y", "bad y")]
+
+    def test_empty_sources(self):
+        items, failed = fetch_per_source([], lambda source: [source])
+        assert items == []
+        assert failed == []
 
 
 class TestCallThesportsdbApi:

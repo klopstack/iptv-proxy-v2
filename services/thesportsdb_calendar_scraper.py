@@ -605,7 +605,7 @@ class TheSportsDBCalendarScraper:
 
         from thesportsdb import events as tsdb_events
 
-        from services.thesportsdb_retry import call_thesportsdb_api
+        from services.thesportsdb_retry import call_thesportsdb_api, fetch_per_source
         from services.thesportsdb_service import parse_thesportsdb_api_response
 
         sports_to_fetch: List[str]
@@ -614,37 +614,42 @@ class TheSportsDBCalendarScraper:
         else:
             sports_to_fetch = list(API_SUPPLEMENT_SPORTS)
 
-        api_events: List[CalendarEvent] = []
-        for sport_name in sports_to_fetch:
-            try:
-                result = call_thesportsdb_api(
-                    tsdb_events.eventsDay,
-                    date,
-                    s=sport_name,
-                    before_attempt=self._rate_limit,
+        def _fetch_one_sport(sport_name: str) -> List[CalendarEvent]:
+            result = call_thesportsdb_api(
+                tsdb_events.eventsDay,
+                date,
+                s=sport_name,
+                before_attempt=self._rate_limit,
+            )
+            payload = parse_thesportsdb_api_response(result)
+            if payload is None:
+                logger.debug(
+                    f"API eventsDay returned non-JSON for {date} sport={sport_name} "
+                    f"after retries (type={type(result).__name__})"
                 )
-                payload = parse_thesportsdb_api_response(result)
-                if payload is None:
-                    logger.debug(
-                        f"API eventsDay returned non-JSON for {date} sport={sport_name} "
-                        f"after retries (type={type(result).__name__})"
-                    )
+                return []
+
+            events_list = payload.get("events") or []
+            if not isinstance(events_list, list):
+                logger.debug(f"API eventsDay unexpected events payload for {date} sport={sport_name}")
+                return []
+
+            sport_events: List[CalendarEvent] = []
+            for raw in events_list:
+                if not isinstance(raw, dict):
                     continue
+                event = self._api_event_to_calendar_event(raw, date)
+                if event:
+                    sport_events.append(event)
+            return sport_events
 
-                events_list = payload.get("events") or []
-                if not isinstance(events_list, list):
-                    logger.debug(f"API eventsDay unexpected events payload for {date} sport={sport_name}")
-                    continue
-
-                for raw in events_list:
-                    if not isinstance(raw, dict):
-                        continue
-                    event = self._api_event_to_calendar_event(raw, date)
-                    if event:
-                        api_events.append(event)
-            except Exception as e:
-                logger.warning(f"API eventsDay failed for {date} sport={sport_name}: {e}")
-
+        api_events, _failed_sports = fetch_per_source(
+            sports_to_fetch,
+            _fetch_one_sport,
+            on_error=lambda sport_name, exc: logger.warning(
+                f"API eventsDay failed for {date} sport={sport_name}: {exc}"
+            ),
+        )
         return api_events
 
     def _fetch_milb_events_for_date(self, date: str, sport: str = "") -> List[CalendarEvent]:
